@@ -1,0 +1,4 @@
+2026-03-12 09:14:02 [INFO] device paired: Galaxy-S24 (192.168.1.14)
+2026-03-12 09:14:05 [INFO] heartbeat OK rtt=12ms
+2026-03-12 09:15:31 [WARN] wifi signal dropped to -78dBm
+2026-03-12 09:15:33 [INFO] resuming transfer from chunk #842
