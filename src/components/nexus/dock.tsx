@@ -7,7 +7,7 @@ import { useProd } from "@/lib/prod-store"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Smartphone, FolderOpen, ArrowLeftRight, HardDrive, Settings2, MonitorSmartphone,
-  MessagesSquare, Bot, MousePointer2, Video, ShieldCheck, Zap,
+  MessagesSquare, Bot, MousePointer2, Video, ShieldCheck, Zap, Shield,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -21,6 +21,7 @@ const ITEMS: { id: ViewId; label: string; icon: LucideIcon }[] = [
   { id: "media", label: "الوسائط", icon: Video },
   { id: "guard", label: "الحماية", icon: ShieldCheck },
   { id: "prod", label: "الإنتاجية", icon: Zap },
+  { id: "security", label: "الأمان", icon: Shield },
   { id: "simulator", label: "هاتف افتراضي", icon: Bot },
   { id: "settings", label: "الإعدادات", icon: Settings2 },
 ]
