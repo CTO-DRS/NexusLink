@@ -103,3 +103,106 @@ model NexusPhone {
   dndSource String? // pc | phone
   updatedAt DateTime @updatedAt
 }
+
+// ===== NexusLink — المرحلة 9: طبقة الإنتاجية =====
+
+model ProdClip {
+  id         String   @id @default(cuid())
+  deviceId   String
+  deviceName String
+  kind       String   @default("text") // text | image | file
+  content    String   @default("") // نص أو dataUrl مصغّر للصور
+  fileName   String? // للملفات: الاسم الحقيقي على الجهاز المصدر
+  filePath   String? // مسار افتراضي للملف على الجهاز المصدر
+  size       Int      @default(0)
+  mode       String   @default("manual") // auto | manual
+  received   Boolean  @default(false) // استُلم فعلياً على جهاز آخر (نسخ بايتات)
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model SyncPair {
+  id         String    @id @default(cuid())
+  deviceA    String
+  folderA    String
+  deviceB    String
+  folderB    String
+  active     Boolean   @default(true)
+  autoSync   Boolean   @default(true)
+  lastSyncAt DateTime?
+  lastCount  Int       @default(0)
+  lastBytes  Int       @default(0)
+  running    Boolean   @default(false)
+  progress   Int       @default(0) // 0..100
+  createdAt  DateTime  @default(now())
+
+  events SyncEvent[]
+}
+
+model SyncEvent {
+  id      String   @id @default(cuid())
+  pairId  String
+  pair    SyncPair @relation(fields: [pairId], references: [id], onDelete: Cascade)
+  relPath String
+  action  String // new-A2B | new-B2A | upd-A2B | upd-B2A | conflict | skip
+  bytes   Int      @default(0)
+  at      DateTime @default(now())
+
+  @@index([pairId, at])
+}
+
+model HandoffItem {
+  id         String    @id @default(cuid())
+  deviceId   String
+  deviceName String
+  kind       String    @default("link") // link | video | article
+  title      String
+  url        String
+  position   Int       @default(0) // ثانية للتوقف في الفيديو
+  status     String    @default("new") // new | opened
+  openedOn   String?   // اسم الجهاز الذي فتحه
+  openedAt   DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([createdAt])
+}
+
+model NetProfile {
+  id          String   @id @default(cuid())
+  name        String
+  icon        String   @default("home") // home | briefcase | coffee | laptop
+  networkName String
+  photoSync   Boolean  @default(true)
+  notifs      Boolean  @default(true)
+  clipboard   Boolean  @default(true)
+  folderSync  Boolean  @default(true)
+  builtin     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model ProdState {
+  id              String   @id @default("main")
+  network         String   @default("منزل-5GHz")
+  activeProfileId String?
+  clipMode        String   @default("auto") // auto | manual
+  photoSync       Boolean  @default(true)
+  photoTarget     String   @default("/Pictures/FromPhone")
+  photoLastAt     DateTime @default(now())
+  notifsPaused    Boolean  @default(false)
+  seedVer         Int      @default(0)
+  updatedAt       DateTime @updatedAt
+}
+
+model ProdBackup {
+  id            String   @id @default(cuid())
+  label         String
+  sizeBytes     Int      @default(0)
+  devicesCount  Int      @default(0)
+  profilesCount Int      @default(0)
+  pairsCount    Int      @default(0)
+  dataJson      String
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+}

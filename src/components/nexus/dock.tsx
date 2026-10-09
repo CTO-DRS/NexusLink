@@ -3,10 +3,11 @@
 import { useNexus, type ViewId } from "@/lib/store"
 import { useComms } from "@/lib/comms-store"
 import { useGuard } from "@/lib/guard-store"
+import { useProd } from "@/lib/prod-store"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Smartphone, FolderOpen, ArrowLeftRight, HardDrive, Settings2, MonitorSmartphone,
-  MessagesSquare, Bot, MousePointer2, Video, ShieldCheck,
+  MessagesSquare, Bot, MousePointer2, Video, ShieldCheck, Zap,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -19,6 +20,7 @@ const ITEMS: { id: ViewId; label: string; icon: LucideIcon }[] = [
   { id: "remote", label: "التحكم", icon: MousePointer2 },
   { id: "media", label: "الوسائط", icon: Video },
   { id: "guard", label: "الحماية", icon: ShieldCheck },
+  { id: "prod", label: "الإنتاجية", icon: Zap },
   { id: "simulator", label: "هاتف افتراضي", icon: Bot },
   { id: "settings", label: "الإعدادات", icon: Settings2 },
 ]
@@ -30,6 +32,7 @@ export function Dock() {
   const liveCall = useComms((s) => s.liveCall)
   const ringing = useGuard((s) => s.ringing)
   const lostActive = useGuard((s) => s.lost.active)
+  const unseenClips = useProd((s) => s.unseenClips)
   const activeCount = transfers.filter((t) => t.status === "active" || t.status === "queued").length
   const commsBadge = unreadNotifs + unreadMsgs
 
@@ -75,6 +78,11 @@ export function Dock() {
                   {it.id === "guard" && (ringing || lostActive) && (
                     <span className="absolute -top-1 -end-1 w-4 h-4 rounded-full bg-red-500 grid place-items-center">
                       <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                    </span>
+                  )}
+                  {it.id === "prod" && unseenClips > 0 && (
+                    <span className="absolute -top-1 -end-1 min-w-4 h-4 px-1 rounded-full bg-violet-500 text-[9px] font-bold text-white grid place-items-center">
+                      {unseenClips > 9 ? "9+" : unseenClips}
                     </span>
                   )}
                 </button>

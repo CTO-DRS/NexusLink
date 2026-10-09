@@ -2,11 +2,12 @@
 
 import { useNexus } from "@/lib/store"
 import { useComms } from "@/lib/comms-store"
+import { useProd } from "@/lib/prod-store"
 import { syncDnd } from "@/hooks/use-comms"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { Sun, Moon, Link2, Smartphone, BellOff, Bell, MessageSquareText } from "lucide-react"
+import { Sun, Moon, Link2, Smartphone, BellOff, Bell, MessageSquareText, Zap } from "lucide-react"
 
 export function TopBar() {
   const { theme, toggleTheme, devices, setView } = useNexus()
@@ -15,6 +16,8 @@ export function TopBar() {
   const unreadMsgs = useComms((s) => s.conversations.reduce((acc, c) => acc + c.unread, 0))
   const connected = devices.filter((d) => d.state === "connected" && d.kind !== "desktop")
   const livePhone = devices.find((d) => d.kind === "phone" && d.state === "connected")
+  const prodNetwork = useProd((s) => s.state.network)
+  const prodProfile = useProd((s) => s.profile)
 
   return (
     <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/80 border-b">
@@ -70,6 +73,28 @@ export function TopBar() {
               </Button>
             </TooltipTrigger>
             <TooltipContent>{unreadNotifs} إشعار و {unreadMsgs} رسالة غير مقروءة</TooltipContent>
+          </Tooltip>
+
+          {/* ملف الشبكة النشط — الإنتاجية */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-xl gap-1.5 px-2.5 hidden md:flex"
+                onClick={() => setView("prod")}
+                aria-label="ملف تعريف الشبكة النشط"
+              >
+                <Zap className="w-3.5 h-3.5 text-violet-500" />
+                <span className="text-[11px] font-medium">{prodNetwork}</span>
+                {prodProfile && <span className="text-[10px] text-violet-600 dark:text-violet-400 font-bold">· {prodProfile.name}</span>}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {prodProfile
+                ? `الملف الشخصي «${prodProfile.name}» مطبق على شبكة ${prodNetwork}`
+                : `شبكة ${prodNetwork} — لا ملف تعريف مطابق`}
+            </TooltipContent>
           </Tooltip>
 
           <Badge

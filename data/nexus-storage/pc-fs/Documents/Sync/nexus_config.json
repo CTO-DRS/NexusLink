@@ -1,0 +1,6 @@
+{
+  "app": "NexusLink",
+  "version": "2.4.1",
+  "protocol": "Nexus/1.2",
+  "heartbeat_ms": 5000
+}
