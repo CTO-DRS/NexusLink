@@ -30,3 +30,76 @@ model Post {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// ===== NexusLink — طبقة الاتصالات الشخصية =====
+
+model NexusNotification {
+  id         String   @id @default(cuid())
+  appId      String
+  appName    String
+  title      String
+  body       String
+  deviceId   String   @default("galaxy-s24")
+  actionable Boolean  @default(true)
+  // new | read | replied | muted | hidden | archived
+  status     String   @default("new")
+  replyText  String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model NexusFilter {
+  id           String    @id @default("main")
+  hiddenApps   String    @default("[]") // JSON: appId[]
+  grouping     Boolean   @default(true)
+  quietUntil   DateTime?
+  soundEnabled Boolean   @default(true)
+}
+
+model NexusConversation {
+  id          String         @id @default(cuid())
+  address     String         @unique
+  contactName String?
+  unread      Int            @default(0)
+  updatedAt   DateTime       @updatedAt
+  messages    NexusMessage[]
+}
+
+model NexusMessage {
+  id             String            @id @default(cuid())
+  conversationId String
+  conversation   NexusConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  body           String
+  direction      String // in | out
+  status         String            @default("delivered") // sending | sent | delivered | read
+  createdAt      DateTime          @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model NexusContact {
+  id       String  @id @default(cuid())
+  name     String
+  phone    String  @unique
+  email    String?
+  favorite Boolean @default(false)
+}
+
+model NexusCallLog {
+  id          String   @id @default(cuid())
+  number      String
+  contactName String?
+  direction   String // in | out | missed
+  startedAt   DateTime
+  durationSec Int      @default(0)
+
+  @@index([startedAt])
+}
+
+model NexusPhone {
+  id        String   @id @default("main")
+  dnd       Boolean  @default(false)
+  dndSource String? // pc | phone
+  updatedAt DateTime @updatedAt
+}

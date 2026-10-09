@@ -160,3 +160,12 @@
 .nexus-enter {
   animation: nexus-float-up 0.35s ease-out both;
 }
+
+@keyframes nexus-call-pulse {
+  0% { box-shadow: 0 0 0 0 oklch(0.72 0.17 155 / 50%); }
+  70% { box-shadow: 0 0 0 16px oklch(0.72 0.17 155 / 0%); }
+  100% { box-shadow: 0 0 0 0 oklch(0.72 0.17 155 / 0%); }
+}
+.nexus-call-pulse {
+  animation: nexus-call-pulse 1.6s ease-out infinite;
+}
