@@ -206,3 +206,39 @@ model ProdBackup {
 
   @@index([createdAt])
 }
+// ============ المرحلة 10 — تقوية الأمان ============
+
+model AuditEvent {
+  id       String   @id @default(cuid())
+  at       DateTime @default(now())
+  actor    String   // الكمبيوتر | Galaxy-S24 | جهاز غريب
+  deviceId String?
+  action   String   // kex | transfer | perm-denied | lock | unlock | wipe | alert | settings | trust
+  detail   String
+  severity String   @default("info") // info | warn | critical
+  stealth  Boolean  @default(false)
+
+  @@index([at])
+}
+
+model PermRule {
+  id       String  @id @default(cuid())
+  feature  String  // file_transfer | clipboard | notifications | remote_input | media | camera | microphone | system_commands | contacts | screen_mirror
+  deviceId String
+  enabled  Boolean @default(false)
+  updatedAt DateTime @updatedAt
+
+  @@unique([feature, deviceId])
+}
+
+model SecState {
+  id           String   @id @default("main")
+  stealthMode  Boolean  @default(false)
+  autoLockSec  Int      @default(60)
+  blocked      String   @default("[]") // JSON: أجهزة محظورة
+  rotations    Int      @default(0)
+  framesSent   Int      @default(0)
+  bytesOnWire  Int      @default(0)
+  seedVer      Int      @default(0)
+  updatedAt    DateTime @updatedAt
+}

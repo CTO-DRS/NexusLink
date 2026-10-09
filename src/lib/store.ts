@@ -2,7 +2,7 @@
 import { create } from "zustand"
 import type { FsEntry, NexusDevice, TransferJob } from "./nexus/types"
 
-export type ViewId = "devices" | "files" | "transfers" | "storage" | "comms" | "simulator" | "remote" | "media" | "guard" | "prod" | "settings"
+export type ViewId = "devices" | "files" | "transfers" | "storage" | "comms" | "simulator" | "remote" | "media" | "guard" | "prod" | "security" | "settings"
 export type SortKey = "name" | "size" | "mtime" | "category"
 export type ViewMode = "grid" | "list"
 

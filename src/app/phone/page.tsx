@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import {
   Video, Mic, Baby, Gamepad2, Camera, Flashlight, RefreshCcw, ArrowLeft,
-  Play, Pause, SkipForward, SkipBack, Images, Cast, Link2, Square, Loader2, ShieldCheck, Zap,
+  Play, Pause, SkipForward, SkipBack, Images, Cast, Link2, Square, Loader2, ShieldCheck, Zap, LockKeyhole,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -14,9 +14,10 @@ import { getMediaSocket, mediaRole, rtcSignal, slideshowCmd, castCmd } from "@/l
 import { blobToDataUrl } from "@/lib/media-engine"
 import { usePhoneGuard, GuardPhoneTab, GuardOverlays } from "@/components/nexus/guard/phone-guard"
 import { PhoneProdTab } from "@/components/nexus/prod/phone-prod"
+import { PhoneSecTab } from "@/components/nexus/sec/phone-sec"
 import { cn } from "@/lib/utils"
 
-type PhoneTab = "cam" | "mic" | "baby" | "remote" | "guard" | "prod"
+type PhoneTab = "cam" | "mic" | "baby" | "remote" | "guard" | "prod" | "sec"
 
 export default function PhonePage() {
   const [tab, setTab] = useState<PhoneTab>("cam")
@@ -212,6 +213,7 @@ export default function PhonePage() {
     { id: "remote", label: "ريموت", icon: Gamepad2 },
     { id: "guard", label: "حماية", icon: ShieldCheck },
     { id: "prod", label: "إنتاجية", icon: Zap },
+    { id: "sec", label: "أمان", icon: LockKeyhole },
   ]
 
   return (
@@ -382,6 +384,9 @@ export default function PhonePage() {
 
         {/* ==== إنتاجية ==== */}
         {tab === "prod" && <PhoneProdTab />}
+
+        {/* ==== الأمان (المرحلة 10) ==== */}
+        {tab === "sec" && <PhoneSecTab />}
       </main>
 
       {/* طبقات الحماية ملء الشاشة: رن / فقدان / مسح / إضاءة */}

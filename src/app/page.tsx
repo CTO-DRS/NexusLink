@@ -17,6 +17,7 @@ import { RemoteView } from "@/components/nexus/remote/remote-view"
 import { MediaView } from "@/components/nexus/media/media-view"
 import { GuardView } from "@/components/nexus/guard/guard-view"
 import { ProdView } from "@/components/nexus/prod/prod-view"
+import { SecView } from "@/components/nexus/sec/sec-view"
 import { LockScreen } from "@/components/nexus/guard/lock-screen"
 import { CallOverlay } from "@/components/nexus/comms/call-overlay"
 import { CommsToaster } from "@/components/nexus/comms/comms-toaster"
@@ -90,6 +91,7 @@ export default function NexusPage() {
           {view === "media" && <MediaView />}
           {view === "guard" && <GuardView />}
           {view === "prod" && <ProdView />}
+          {view === "security" && <SecView />}
           {view === "simulator" && <SimulatorView />}
           {view === "settings" && <SettingsView />}
         </div>
