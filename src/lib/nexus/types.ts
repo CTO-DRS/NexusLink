@@ -13,7 +13,7 @@ export interface FsEntry {
   mime?: string
 }
 
-export type DeviceKind = "phone" | "tablet" | "desktop"
+export type DeviceKind = "phone" | "tablet" | "desktop" | "tv"
 export type ConnState = "connected" | "offline" | "pairing"
 export type ConnMode = "wifi" | "hotspot" | "usb"
 
