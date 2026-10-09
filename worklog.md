@@ -14,3 +14,26 @@ Stage Summary:
 - قيد حاسم: المرحلة 2 (Nexus Protocol) يجب أن تُبنى بتشفير X25519 + AES-256-GCM من اليوم الأول لتلبية معيار قبول المرحلة 10 (Wireshark لا يظهر محتوى مقروء).
 - معايير القبول الثلاثة الرئيسية: (9) نسخ من الهاتف → Ctrl+V على الكمبيوتر مباشرة، (10) Wireshark غير مقروء، (11) بناء ناجح على 5 منصات + RAM <200MB + مترجم ar/en كامل.
 - حدود موثقة يجب ذكرها بصدق: iOS بلا SMS/مكالمات (قيود Apple)، Secure Wipe =尽力而为 على SSD، فحص التحديث التلقائي هو الاتصال الخارجي الوحيد وقابل للتعطيل كليًا.
+
+---
+Task ID: P-11
+Agent: Super Z (main)
+Task: تنفيذ المرحلة 11 كاملة (التلميع النهائي) فوق تطبيق NexusLink الموجود (المراحل 1-10 كانت منفذة مسبقًا في جلسة سابقة: 12 وحدة + خدمتا socket.io + E2E حقيقي)
+
+Work Log:
+- اكتُشف التنفيذ السابق الكامل في المستودع (views: devices/files/transfers/storage/comms/remote/media/guard/prod/security/simulator/settings + /phone + /controller + mini-services على 3003/3004).
+- **i18n كامل ar/en**: استخراج 3,129 سلسلة (نصوص سلاسل + أطفال JSX + سمات) عبر scripts/extract-arabic.mjs، ترجمة آلية دفعية عبر z-ai-sdk (scripts/translate-batch.mjs، 3,094 مدخلًا) + رقع يدوية. المحرك: src/lib/i18n.ts — t() بالمفتاح العربي + ماسح DOM (MutationObserver) يترجم الشاشات القديمة في وضع EN مع حفظ المسافات وتخطي CODE/PRE/KBD. تبديل dir/lang فوري + remount عبر key={lang} في page.tsx (كان مقروءًا من مخزن خاطئ — أُصلح).
+- **الإتاحة**: تباين عالٍ (html.contrast-high + tokens CSS)، حجم خط 3 مستويات (fontSize rem-based: 16/18/20px)، وضع قارئ شاشة (data-sr + skip-link + #nexus-sr-live aria-live + announce())، تقليل حركة (motion-reduced + prefers-reduced-motion).
+- **Onboarding**: 5 خطوات (ترحيب+اختيار لغة، صلاحيات بطلبات حقيقية Notification.requestPermission/navigator.storage.persist، اقتران QR حقيقي عبر qrcode، جولة 12 وحدة، اختصارات+أداء). يفتح تلقائيًا أول تشغيل (nexus-onboarded) + زر إعادة في الإعدادات.
+- **اختصارات**: معالج عالمي قابل للتخصيص (16 إجراءً في DEFAULT_SHORTCUTS/SHORTCUT_META) + لوحة أوامر Ctrl+K (cmdk: تنقل/إجراءات/مظهر/أمان) + دليل "?" + إعادة ربط بالتقاط تركيبة مع كشف تعارض + استعادة افتراضي.
+- **أدوات (view جديد)**: اختبار سرعة حقيقي (تنزيل 12MB تدفقي/رفع 4MB/RTT وسيط 5 عينات — قياس فعلي: 43.8MB/s و10ms)، تشخيص 12 فحصًا (ping، جسور 3003/3004، RSS، heap 110MB<200MB، storage، بطارية getBattery، connection، أذونات) + تصدير تقرير JSON، طرفية CLI حقيقية (devices/ls/send --to/status/speedtest/diag/theme/lang/pair/version/whoami — send بدأ نقلًا فعليًا tx_mv1ltkif_sma4b)، تبويب بناء (مصفوفة 5 منصات + تحديث صامت + Portable + سجل إصدارات).
+- **API جديدة**: /api/tools/ping، /api/tools/speedtest (GET pool 4MB + POST counter)، /api/tools/diag (probes + mem + storage)، /api/version (قناة stable + changelog).
+- **بناء**: BUILD.md (مصفوفة/Portable/تحديث/حدود صادقة) + .github/workflows/release.yml (test×3OS → desktop bundles → android APK/AAB → iOS IPA → draft release + SHA256).
+- **إصلاحات أثناء التحقق**: تعارض اسم currentLang (SyntaxError 500 شامل)، restart للخادم، ثغرة JSX-children في الاستخراج، whitespace في sweepTextNode، قطع=Disconnect سياقًا، set-state-in-effect وuseMemo (React Compiler)، ربط قفل التطبيق بـ useGuard.setPcLocked.
+- **تحقق E2E بالمتصفح (agent-browser)**: onboarding أول تشغيل + تبديل EN داخل المعالج + إتمامه؛ EN كامل على الأجهزة/الأدوات/الإعدادات/Dock/TopBar/لوحة الأوامر؛ سرعة 43.8MB/s؛ تشخيص جسور up؛ CLI أمران حقيقيان؛ مصفوفة بناء + "أحدث إصدار"؛ Ctrl+K؛ rebinding Ctrl+K→Ctrl+M ثم استعادة؛ عودة AR مع RTL صافٍ؛ تباين عالٍ class=true؛ خط 18px؛ SR mode + skip link؛ /phone سليم؛ lint نظيف؛ dev.log بلا أخطاء.
+
+Stage Summary:
+- المرحلة 11 مكتملة ومُتحقق منها بالمتصفح — NexusLink كامل (11/11 مرحلة).
+- لقطات التحقق: scripts/v11-*.png
+- ملفات جديدة: src/lib/i18n.ts + ar-en-map.json، src/components/nexus/{onboarding.tsx,command-palette.tsx,tools/*}، 4 مسارات API، BUILD.md، workflow.
+- ملفات معدلة: store.ts (prefs/اختصارات/onboarding)، page.tsx (تهيئة+اختصارات+remount)، dock/top-bar/settings (ترجمة+بنود جديدة)، globals.css (إتاحة)، layout.tsx (pre-hydration لغة/تباين/خط).

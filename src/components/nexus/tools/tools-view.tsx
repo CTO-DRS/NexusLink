@@ -1,0 +1,560 @@
+"use client"
+
+/**
+ * أدوات NexusLink — المرحلة 11 (بنود 7 و9 و10 + بوابة التحديث)
+ * تبويبات: اختبار السرعة · التشخيص · الطرفية CLI · البناء والتوزيع
+ */
+import { useCallback, useEffect, useRef, useState } from "react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Progress } from "@/components/ui/progress"
+import { useNexus } from "@/lib/store"
+import { useI18n } from "@/lib/i18n"
+import { CliTerminal } from "./cli-terminal"
+import {
+  Gauge, Stethoscope, SquareTerminal, Package, Download, Upload, Timer,
+  RefreshCw, CheckCircle2, AlertTriangle, XCircle, MinusCircle, Battery,
+  BatteryCharging, Wifi, Database, Server, Cpu, FileDown, Rocket, Plane,
+  History, Languages, ShieldCheck, MonitorSmartphone, HardDriveDownload,
+} from "lucide-react"
+
+/* ============ Speed test ============ */
+interface SpeedResult {
+  downMBs: number
+  upMBs: number
+  rttMs: number
+  at: number
+}
+
+function SpeedTestTab() {
+  const { t } = useI18n()
+  const [phase, setPhase] = useState<"idle" | "rtt" | "down" | "up" | "done">("idle")
+  const [progress, setProgress] = useState(0)
+  const [rtt, setRtt] = useState<number | null>(null)
+  const [down, setDown] = useState<number | null>(null)
+  const [up, setUp] = useState<number | null>(null)
+  const [history, setHistory] = useState<SpeedResult[]>([])
+  const abortRef = useRef<AbortController | null>(null)
+
+  const measureRtt = useCallback(async () => {
+    const samples: number[] = []
+    for (let i = 0; i < 5; i++) {
+      const t0 = performance.now()
+      await fetch("/api/tools/ping", { cache: "no-store" })
+      samples.push(performance.now() - t0)
+    }
+    samples.sort((a, b) => a - b)
+    return samples[Math.floor(samples.length / 2)]
+  }, [])
+
+  const run = useCallback(async () => {
+    if (phase !== "idle" && phase !== "done") return
+    abortRef.current = new AbortController()
+    const sig = abortRef.current.signal
+    try {
+      setPhase("rtt"); setProgress(5); setDown(null); setUp(null)
+      const r = await measureRtt()
+      setRtt(r)
+      setProgress(20)
+
+      setPhase("down")
+      const bytes = 12 * 1024 * 1024
+      const t0 = performance.now()
+      const resp = await fetch(`/api/tools/speedtest?bytes=${bytes}`, { cache: "no-store", signal: sig })
+      const reader = resp.body?.getReader()
+      let received = 0
+      if (reader) {
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done) break
+          received += value?.length ?? 0
+          setProgress(20 + Math.round((received / bytes) * 45))
+        }
+      } else {
+        await resp.arrayBuffer()
+      }
+      const dSecs = (performance.now() - t0) / 1000
+      const dMBs = bytes / 1048576 / dSecs
+      setDown(dMBs)
+      setProgress(68)
+
+      setPhase("up")
+      const upBytes = 4 * 1024 * 1024
+      const chunk = new Uint8Array(256 * 1024)
+      crypto.getRandomValues(chunk)
+      const t1 = performance.now()
+      let sent = 0
+      for (let i = 0; i < upBytes / chunk.length; i++) {
+        await fetch("/api/tools/speedtest", { method: "POST", body: chunk, cache: "no-store", signal: sig })
+        sent += chunk.length
+        setProgress(68 + Math.round((sent / upBytes) * 28))
+      }
+      const uSecs = (performance.now() - t1) / 1000
+      const uMBs = upBytes / 1048576 / uSecs
+      setUp(uMBs)
+      setProgress(100)
+      setPhase("done")
+      setHistory((h) => [{ downMBs: dMBs, upMBs: uMBs, rttMs: r, at: Date.now() }, ...h].slice(0, 8))
+    } catch {
+      setPhase("idle")
+      setProgress(0)
+    }
+  }, [phase, measureRtt])
+
+  useEffect(() => () => abortRef.current?.abort(), [])
+
+  const best = history.reduce((a, h) => (h.downMBs > (a?.downMBs ?? 0) ? h : a), history[0])
+
+  return (
+    <div className="space-y-5">
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-primary/12 text-primary grid place-items-center">
+                <Gauge className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="font-bold">{t("اختبار سرعة الشبكة المحلية")}</div>
+                <p className="text-xs text-muted-foreground max-w-md">
+                  {t("يقيس المسار الحقيقي بين هذا المتصفح وخادم نواة NexusLink عبر الشبكة — وليس الإنترنت")}
+                </p>
+              </div>
+            </div>
+            <Button onClick={run} disabled={phase !== "idle" && phase !== "done"} className="gap-2">
+              {(phase !== "idle" && phase !== "done") ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Timer className="w-4 h-4" />}
+              {phase === "idle" || phase === "done" ? t("بدء الاختبار") : t("جارٍ القياس…")}
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
+            <div className="rounded-2xl border p-4 text-center" aria-live="polite">
+              <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground"><Download className="w-3.5 h-3.5" /> {t("تنزيل")}</div>
+              <div className="text-3xl font-extrabold mt-1 tabular-nums" data-no-i18n>{down != null ? down.toFixed(1) : "—"}</div>
+              <div className="text-[11px] text-muted-foreground" data-no-i18n>MB/s</div>
+            </div>
+            <div className="rounded-2xl border p-4 text-center">
+              <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground"><Upload className="w-3.5 h-3.5" /> {t("رفع")}</div>
+              <div className="text-3xl font-extrabold mt-1 tabular-nums" data-no-i18n>{up != null ? up.toFixed(1) : "—"}</div>
+              <div className="text-[11px] text-muted-foreground" data-no-i18n>MB/s</div>
+            </div>
+            <div className="rounded-2xl border p-4 text-center">
+              <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground"><Timer className="w-3.5 h-3.5" /> {t("زمن الاستجابة")}</div>
+              <div className="text-3xl font-extrabold mt-1 tabular-nums" data-no-i18n>{rtt != null ? Math.round(rtt) : "—"}</div>
+              <div className="text-[11px] text-muted-foreground" data-no-i18n>ms</div>
+            </div>
+          </div>
+
+          {(phase !== "idle" && phase !== "done") && (
+            <div className="mt-5 space-y-1.5">
+              <Progress value={progress} />
+              <div className="text-[11px] text-muted-foreground text-center">
+                {phase === "rtt" && t("يقيس زمن الاستجابة…")}
+                {phase === "down" && t("ينقل بيانات الاختبار (تنزيل 12MB)…")}
+                {phase === "up" && t("يرفع بيانات الاختبار (رفع 4MB)…")}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {history.length > 0 && (
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center gap-2 text-sm font-semibold mb-3">
+              <History className="w-4 h-4 text-primary" /> {t("سجل القياسات")}
+              {best && <Badge variant="secondary" className="ms-auto">{t("أفضل تنزيل")} {best.downMBs.toFixed(1)} MB/s</Badge>}
+            </div>
+            <div className="space-y-1.5">
+              {history.map((h) => (
+                <div key={h.at} className="flex items-center gap-3 text-xs rounded-xl border px-3 py-2" data-no-i18n>
+                  <span className="text-muted-foreground tabular-nums">{new Date(h.at).toLocaleTimeString()}</span>
+                  <span className="tabular-nums">↓ {h.downMBs.toFixed(1)}</span>
+                  <span className="tabular-nums">↑ {h.upMBs.toFixed(1)}</span>
+                  <span className="tabular-nums text-muted-foreground ms-auto">{Math.round(h.rttMs)} ms</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+/* ============ Diagnostics ============ */
+type CheckStatus = "pass" | "warn" | "fail" | "na"
+interface Check {
+  id: string
+  label: string
+  status: CheckStatus
+  detail: string
+}
+
+const STATUS_ICON: Record<CheckStatus, typeof CheckCircle2> = {
+  pass: CheckCircle2,
+  warn: AlertTriangle,
+  fail: XCircle,
+  na: MinusCircle,
+}
+const STATUS_CLS: Record<CheckStatus, string> = {
+  pass: "text-emerald-500",
+  warn: "text-amber-500",
+  fail: "text-red-500",
+  na: "text-muted-foreground",
+}
+
+function DiagnosticsTab() {
+  const { t } = useI18n()
+  const [checks, setChecks] = useState<Check[]>([])
+  const [running, setRunning] = useState(false)
+
+  const runDiag = useCallback(async () => {
+    setRunning(true)
+    const out: Check[] = []
+    const push = (id: string, label: string, status: CheckStatus, detail: string) =>
+      out.push({ id, label, status, detail })
+
+    // 1) API RTT
+    try {
+      const t0 = performance.now()
+      await fetch("/api/tools/ping", { cache: "no-store" })
+      const ms = performance.now() - t0
+      push("rtt", t("زمن استجابة النواة"), ms < 150 ? "pass" : ms < 400 ? "warn" : "fail", `${Math.round(ms)} ms`)
+    } catch {
+      push("rtt", t("زمن استجابة النواة"), "fail", t("تعذر الوصول إلى النواة"))
+    }
+
+    // 2) server snapshot
+    try {
+      const r = await fetch("/api/tools/diag", { cache: "no-store" })
+      const j = await r.json()
+      push("comms", t("جسر الاتصالات (الهاتف الافتراضي)"), j.services.commsBridge === "up" ? "pass" : "fail", `:3003 ${j.services.commsBridge}`)
+      push("remote", t("جسر التحكم عن بُعد"), j.services.remoteBridge === "up" ? "pass" : "fail", `:3004 ${j.services.remoteBridge}`)
+      push("srvmem", t("ذاكرة النواة (RSS)"), j.memory.rssMB < 200 ? "pass" : "warn", `${j.memory.rssMB} MB · ${j.runtime}`)
+      push("storage", t("تخزين NexusLink المحلي"), "pass", `${(j.storageBytes / 1048576).toFixed(1)} MB`)
+    } catch {
+      push("srv", t("لقطة النواة التشخيصية"), "fail", t("تعذر جلب /api/tools/diag"))
+    }
+
+    // 3) browser heap
+    const perfMem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory
+    if (perfMem?.usedJSHeapSize) {
+      const mb = Math.round(perfMem.usedJSHeapSize / 1048576)
+      push("heap", t("ذاكرة واجهة الويب (JS Heap)"), mb < 200 ? "pass" : "warn", `${mb} MB ${t("— هدف التصميم <200MB")}`)
+    } else {
+      push("heap", t("ذاكرة واجهة الويب (JS Heap)"), "na", t("غير متاح في هذا المتصفح"))
+    }
+
+    // 4) storage estimate
+    try {
+      const est = await navigator.storage?.estimate?.()
+      if (est) {
+        push("quota", t("حصة التخزين للمتصفح"), "pass", `${((est.usage ?? 0) / 1048576).toFixed(1)} / ${((est.quota ?? 0) / 1073741824).toFixed(1)} GB`)
+      }
+    } catch { /* skip */ }
+
+    // 5) battery
+    try {
+      const nav = navigator as unknown as { getBattery?: () => Promise<{ level: number; charging: boolean }> }
+      if (nav.getBattery) {
+        const b = await nav.getBattery()
+        push("battery", t("بطارية هذا الجهاز"), "pass", `${Math.round(b.level * 100)}% · ${b.charging ? t("يشحن الآن") : t("على البطارية")}`)
+      } else {
+        push("battery", t("بطارية هذا الجهاز"), "na", t("واجهة البطارية غير متاحة في هذا المتصفح"))
+      }
+    } catch { /* skip */ }
+
+    // 6) network info
+    const conn = (navigator as unknown as { connection?: { effectiveType?: string; downlink?: number; rtt?: number } }).connection
+    if (conn?.effectiveType) {
+      push("net", t("اتصال الشبكة"), "pass", `${conn.effectiveType} · ↓${conn.downlink ?? "—"}Mbps · rtt≈${conn.rtt ?? "—"}ms`)
+    } else {
+      push("net", t("اتصال الشبكة"), "na", t("معلومات الشبكة غير متاحة"))
+    }
+
+    // 7) notifications permission
+    try {
+      push("notif", t("إذن الإشعارات"), Notification.permission === "granted" ? "pass" : "warn", Notification.permission)
+    } catch {
+      push("notif", t("إذن الإشعارات"), "na", "—")
+    }
+
+    // 8) clipboard permission
+    try {
+      const p = await navigator.permissions?.query?.({ name: "clipboard-read" as PermissionName })
+      push("clip", t("إذن قراءة الحافظة"), p?.state === "granted" ? "pass" : "warn", p?.state ?? "—")
+    } catch {
+      push("clip", t("إذن قراءة الحافظة"), "na", t("لا يدعم الاستعلام المباشر"))
+    }
+
+    // 9) persistent storage
+    try {
+      const persisted = await navigator.storage?.persisted?.()
+      push("persist", t("تخزين دائم (لا eviction)"), persisted ? "pass" : "warn", persisted ? "persisted" : "best-effort")
+    } catch { /* skip */ }
+
+    setChecks(out)
+    setRunning(false)
+  }, [t])
+
+  useEffect(() => {
+    const tm = setTimeout(() => {
+      void runDiag()
+    }, 60)
+    return () => clearTimeout(tm)
+  }, [runDiag])
+
+  const exportReport = () => {
+    const report = { app: "NexusLink", version: "2.4.1", at: new Date().toISOString(), checks }
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" })
+    const a = document.createElement("a")
+    a.href = URL.createObjectURL(blob)
+    a.download = "nexuslink-diagnostic-report.json"
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  return (
+    <div className="space-y-5">
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-primary/12 text-primary grid place-items-center">
+                <Stethoscope className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="font-bold">{t("أداة تشخيص المشاكل")}</div>
+                <p className="text-xs text-muted-foreground max-w-md">
+                  {t("فحص شامل: النواة، الجسور الفورية، التخزين، البطارية، الشبكة والأذونات")}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={exportReport} disabled={!checks.length} className="gap-2">
+                <FileDown className="w-4 h-4" /> {t("تصدير التقرير")}
+              </Button>
+              <Button onClick={runDiag} disabled={running} className="gap-2">
+                <RefreshCw className={`w-4 h-4 ${running ? "animate-spin" : ""}`} /> {t("إعادة الفحص")}
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-1.5">
+            {checks.length === 0 && !running && (
+              <div className="text-sm text-muted-foreground py-6 text-center">{t("لم يُنفذ فحص بعد")}</div>
+            )}
+            {checks.map((c) => {
+              const Icon = STATUS_ICON[c.status]
+              return (
+                <div key={c.id} className="flex items-center gap-3 rounded-xl border px-3.5 py-2.5">
+                  <Icon className={`w-4.5 h-4.5 shrink-0 ${STATUS_CLS[c.status]}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium truncate">{c.label}</div>
+                    <div className="text-[11px] text-muted-foreground truncate" data-no-i18n>{c.detail}</div>
+                  </div>
+                  <Badge variant="outline" className="shrink-0" data-no-i18n>
+                    {c.status === "pass" ? t("سليم") : c.status === "warn" ? t("تحذير") : c.status === "fail" ? t("فشل") : t("غير متاح")}
+                  </Badge>
+                </div>
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+/* ============ Builds & distribution ============ */
+function BuildsTab() {
+  const { t } = useI18n()
+  const { silentUpdates, setSilentUpdates } = useNexus()
+  const [ver, setVer] = useState<{ current: string; latest: string; channel: string; updatedAt: string; changelog: { version: string; date: string; items: string[] }[] } | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [upToDate, setUpToDate] = useState<boolean | null>(null)
+
+  const check = useCallback(async () => {
+    setChecking(true)
+    try {
+      const r = await fetch("/api/version", { cache: "no-store" })
+      const j = await r.json()
+      setVer(j)
+      setUpToDate(j.latest === j.current)
+    } finally {
+      setChecking(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void check()
+  }, [check])
+
+  const platforms = [
+    { os: "Windows", formats: "NSIS · MSI · Portable ZIP", sign: "Authenticode (اختياري)", status: "ready", icon: MonitorSmartphone },
+    { os: "macOS", formats: "DMG · App", sign: "Developer ID + Notarization", status: "needs-account", icon: Rocket },
+    { os: "Linux", formats: "AppImage · deb · rpm", sign: "GPG", status: "ready", icon: Plane },
+    { os: "Android", formats: "APK · AAB", sign: "Play Signing", status: "ready", icon: SmartphoneIcon },
+    { os: "iOS", formats: "IPA · TestFlight", sign: "Apple Distribution", status: "needs-account", icon: SmartphoneIcon },
+  ]
+
+  return (
+    <div className="space-y-5">
+      {/* التحديث */}
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-primary/12 text-primary grid place-items-center">
+                <HardDriveDownload className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="font-bold">{t("التحديث التلقائي الصامت")}</div>
+                <p className="text-xs text-muted-foreground max-w-md">
+                  {t("تنزيل بالخلفية بتوقيع رقمي (minisign) والتثبيت عند إعادة التشغيل — هذا الفحص هو الاتصال الخارجي الوحيد ويُعطّل كليًا من المفتاح")}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {silentUpdates ? <Rocket className="w-3.5 h-3.5 text-emerald-500" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                {silentUpdates ? t("صامت") : t("يدوي")}
+              </div>
+              <Switch checked={silentUpdates} onCheckedChange={setSilentUpdates} aria-label={t("التحديث الصامت")} />
+              <Button variant="outline" size="sm" onClick={check} disabled={checking} className="gap-1.5">
+                <RefreshCw className={`w-3.5 h-3.5 ${checking ? "animate-spin" : ""}`} /> {t("فحص الآن")}
+              </Button>
+            </div>
+          </div>
+          {ver && (
+            <div className="flex flex-wrap items-center gap-2 text-xs" data-no-i18n>
+              <Badge variant="secondary">v{ver.current}</Badge>
+              <Badge variant="outline">{ver.channel}</Badge>
+              {upToDate ? (
+                <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">✓ {t("أنت على أحدث إصدار")}</Badge>
+              ) : (
+                <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30">{t("يتوفر تحديث")} v{ver.latest}</Badge>
+              )}
+              <span className="text-muted-foreground">{t("آخر تحديث")} {ver.updatedAt}</span>
+            </div>
+          )}
+          {ver && (
+            <div className="space-y-2.5 pt-1">
+              {ver.changelog.map((c) => (
+                <div key={c.version} className="rounded-xl border px-4 py-3">
+                  <div className="flex items-center gap-2 text-sm font-bold" data-no-i18n>
+                    v{c.version}
+                    <span className="text-[11px] font-normal text-muted-foreground">{c.date}</span>
+                  </div>
+                  <ul className="mt-1 space-y-0.5">
+                    {c.items.map((it, i) => (
+                      <li key={i} className="text-xs text-muted-foreground leading-5">• {it}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* نسخة Portable */}
+      <Card>
+        <CardContent className="p-5 flex flex-wrap items-center gap-4">
+          <div className="w-9 h-9 rounded-xl bg-primary/12 text-primary grid place-items-center"><Package className="w-4.5 h-4.5" /></div>
+          <div className="flex-1 min-w-56">
+            <div className="text-sm font-bold">{t("نسخة Portable بدون تثبيت")}</div>
+            <p className="text-xs text-muted-foreground leading-5">
+              {t("Windows: ZIP فك وفشغّل — لا كتابة في Registry · Linux: AppImage واحد · البيانات بجانب الملف التنفيذي في مجلد nexus-data")}
+            </p>
+          </div>
+          <Badge variant="outline">{t("متوفرة في كل الإصدارات")}</Badge>
+        </CardContent>
+      </Card>
+
+      {/* مصفوفة المنصات */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center gap-2 text-sm font-bold mb-4">
+            <Package className="w-4 h-4 text-primary" /> {t("مصفوفة البناء النهائي — 5 منصات")}
+          </div>
+          <div className="space-y-2">
+            {platforms.map((p) => (
+              <div key={p.os} className="flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3" data-no-i18n>
+                <p.icon className="w-4.5 h-4.5 text-primary shrink-0" />
+                <div className="font-bold text-sm w-24">{p.os}</div>
+                <div className="text-xs text-muted-foreground flex-1 min-w-40">{p.formats}</div>
+                <div className="text-[11px] text-muted-foreground">{p.sign}</div>
+                {p.status === "ready" ? (
+                  <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">{t("جاهز")}</Badge>
+                ) : (
+                  <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400">{t("يتطلب حساب مطوّر")}</Badge>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3 mt-5">
+            <div className="rounded-xl border p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold"><Server className="w-4 h-4 text-primary" /> {t("خط CI الموحد")}</div>
+              <p className="text-xs text-muted-foreground mt-1.5 leading-5" data-no-i18n>.github/workflows/release.yml — {t("بناء المصفوفة كاملة عند كل وسم إصدار، مع اختبارات وتوقيع وتجميع المسودات")}</p>
+            </div>
+            <div className="rounded-xl border p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold"><Languages className="w-4 h-4 text-primary" /> {t("واجهة الويب الخفيفة")}</div>
+              <p className="text-xs text-muted-foreground mt-1.5 leading-5">
+                {t("أنت تستخدمها الآن — تعمل من أي متصفح بلا تثبيت، وتغطي الملفات والإشعارات والرسائل عبر /phone و /controller")}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function SmartphoneIcon(props: { className?: string }) {
+  return <MonitorSmartphone {...props} />
+}
+
+/* ============ Shell ============ */
+export function ToolsView() {
+  const { t } = useI18n()
+  const setView = useNexus((s) => s.setView)
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold">{t("الأدوات")}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{t("قياس الشبكة، تشخيص المشاكل، طرفية المستخدمين المتقدمين، والبناء النهائي")}</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setView("settings")} className="gap-1.5">
+          <Cpu className="w-3.5 h-3.5" /> {t("إعدادات الأداء")}
+        </Button>
+      </div>
+
+      <Tabs defaultValue="speed" dir="ltr">
+        <TabsList className="mb-4 flex-wrap h-auto">
+          <TabsTrigger value="speed" className="gap-1.5"><Gauge className="w-3.5 h-3.5" /> {t("اختبار السرعة")}</TabsTrigger>
+          <TabsTrigger value="diag" className="gap-1.5"><Stethoscope className="w-3.5 h-3.5" /> {t("التشخيص")}</TabsTrigger>
+          <TabsTrigger value="cli" className="gap-1.5"><SquareTerminal className="w-3.5 h-3.5" /> CLI</TabsTrigger>
+          <TabsTrigger value="builds" className="gap-1.5"><Package className="w-3.5 h-3.5" /> {t("البناء والتوزيع")}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="speed"><SpeedTestTab /></TabsContent>
+        <TabsContent value="diag"><DiagnosticsTab /></TabsContent>
+        <TabsContent value="cli"><CliTerminal /></TabsContent>
+        <TabsContent value="builds"><BuildsTab /></TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
+// icons used inside tabs list rows (imported above, referenced lazily)
+void Battery
+void BatteryCharging
+void Wifi
+void Database

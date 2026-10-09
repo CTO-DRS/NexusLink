@@ -23,7 +23,9 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem('nexus-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}`,
+            __html: `try{var t=localStorage.getItem('nexus-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}
+try{var l=localStorage.getItem('nexus-lang');if(l==='en'){document.documentElement.lang='en';document.documentElement.dir='ltr'}else{document.documentElement.lang='ar';document.documentElement.dir='rtl'}}catch(e){}
+try{var fs=localStorage.getItem('nexus-font-scale');if(fs)document.documentElement.style.fontSize=(16*parseFloat(fs))+'px';var ct=localStorage.getItem('nexus-contrast');if(ct==='high')document.documentElement.classList.add('contrast-high');var mo=localStorage.getItem('nexus-motion');if(mo==='reduced')document.documentElement.classList.add('motion-reduced')}catch(e){}`,
           }}
         />
       </head>
