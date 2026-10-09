@@ -14,10 +14,12 @@ import { PreviewModal } from "@/components/nexus/preview-modal"
 import { CommsView } from "@/components/nexus/comms-view"
 import { SimulatorView } from "@/components/nexus/comms/simulator-view"
 import { RemoteView } from "@/components/nexus/remote/remote-view"
+import { MediaView } from "@/components/nexus/media/media-view"
 import { CallOverlay } from "@/components/nexus/comms/call-overlay"
 import { CommsToaster } from "@/components/nexus/comms/comms-toaster"
 import { useCommsBridge } from "@/hooks/use-comms"
 import { useRemoteBridge } from "@/hooks/use-remote-bridge"
+import { useMediaBridge } from "@/hooks/use-media-bridge"
 
 export default function NexusPage() {
   const { view, theme, setDevices, setTransfers } = useNexus()
@@ -26,6 +28,8 @@ export default function NexusPage() {
   useCommsBridge()
   // جسر التحكم عن بُعد: أوامر الهاتف الواردة (لمس/كيبورد/وسائط/نظام)
   useRemoteBridge()
+  // جسر الوسائط والكاميرا: بث الهاتف الحقيقي + التنبيهات
+  useMediaBridge()
 
   // sync theme class from the pre-hydration script
   useEffect(() => {
@@ -74,6 +78,7 @@ export default function NexusPage() {
           {view === "storage" && <StorageView />}
           {view === "comms" && <CommsView />}
           {view === "remote" && <RemoteView />}
+          {view === "media" && <MediaView />}
           {view === "simulator" && <SimulatorView />}
           {view === "settings" && <SettingsView />}
         </div>

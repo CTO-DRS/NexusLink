@@ -11,13 +11,13 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog"
 import {
-  Smartphone, Tablet, Monitor, Wifi, Usb, QrCode, Unplug, Trash2,
+  Smartphone, Tablet, Monitor, Tv, Wifi, Usb, QrCode, Unplug, Trash2,
   Signal, BatteryMedium, ShieldCheck, Plus, RefreshCcw, ChevronLeft,
 } from "lucide-react"
 import { toast } from "sonner"
 import type { NexusDevice } from "@/lib/nexus/types"
 
-const kindIcon = (k: string) => (k === "phone" ? Smartphone : k === "tablet" ? Tablet : Monitor)
+const kindIcon = (k: string) => (k === "phone" ? Smartphone : k === "tablet" ? Tablet : k === "tv" ? Tv : Monitor)
 const modeLabel = (m: string) => (m === "wifi" ? "واي فاي" : m === "hotspot" ? "نقطة اتصال" : "USB")
 
 function DeviceCard({ d }: { d: NexusDevice }) {

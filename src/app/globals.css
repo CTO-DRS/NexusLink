@@ -216,3 +216,12 @@
 .nexus-cursor-shadow {
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
 }
+
+@keyframes nexus-kenburns {
+  0% { transform: scale(1) translate(0, 0); }
+  50% { transform: scale(1.07) translate(-1.2%, 1%); }
+  100% { transform: scale(1) translate(0, 0); }
+}
+.nexus-kenburns {
+  animation: nexus-kenburns 18s ease-in-out infinite;
+}

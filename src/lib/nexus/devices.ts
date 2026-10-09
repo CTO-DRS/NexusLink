@@ -7,7 +7,10 @@ interface Store {
   pairingIssuedAt: number
 }
 
-const g = globalThis as unknown as { __nexusStore?: Store }
+const g = globalThis as unknown as { __nexusStore?: Store; __nexusStoreVersion?: number }
+
+// v3: + Nexus-TV + Redmi-Note13 متصل (طبقة الوسائط والكاميرا)
+const SEED_VERSION = 3
 
 function seed(): Store {
   return {
@@ -31,10 +34,16 @@ function seed(): Store {
         pairedAt: Date.now() - 30 * 864e5, trusted: true,
       },
       {
-        id: "redmi-note13", name: "Redmi-Note13", kind: "phone", state: "offline",
+        id: "redmi-note13", name: "Redmi-Note13", kind: "phone", state: "connected",
         mode: "hotspot", ip: "192.168.43.7", battery: 92, storageTotal: 128 * 1024 ** 3,
-        storageUsed: 103 * 1024 ** 3, lastSeen: Date.now() - 72e5, rttMs: 40,
+        storageUsed: 103 * 1024 ** 3, lastSeen: Date.now(), rttMs: 40,
         pairedAt: Date.now() - 60 * 864e5, trusted: true,
+      },
+      {
+        id: "nexus-tv", name: "Nexus-TV", kind: "tv", state: "connected",
+        mode: "wifi", ip: "192.168.1.50", battery: 100, storageTotal: 32 * 1024 ** 3,
+        storageUsed: 12 * 1024 ** 3, lastSeen: Date.now(), rttMs: 8,
+        pairedAt: Date.now() - 45 * 864e5, trusted: true,
       },
     ],
     pairingSecret: null,
@@ -43,7 +52,10 @@ function seed(): Store {
 }
 
 export function store(): Store {
-  if (!g.__nexusStore) g.__nexusStore = seed()
+  if (!g.__nexusStore || g.__nexusStoreVersion !== SEED_VERSION) {
+    g.__nexusStore = seed()
+    g.__nexusStoreVersion = SEED_VERSION
+  }
   return g.__nexusStore
 }
 
