@@ -5,7 +5,7 @@ import { useComms } from "@/lib/comms-store"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Smartphone, FolderOpen, ArrowLeftRight, HardDrive, Settings2, MonitorSmartphone,
-  MessagesSquare, Bot,
+  MessagesSquare, Bot, MousePointer2,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -15,6 +15,7 @@ const ITEMS: { id: ViewId; label: string; icon: LucideIcon }[] = [
   { id: "transfers", label: "النقل", icon: ArrowLeftRight },
   { id: "storage", label: "التخزين", icon: HardDrive },
   { id: "comms", label: "الاتصالات", icon: MessagesSquare },
+  { id: "remote", label: "التحكم", icon: MousePointer2 },
   { id: "simulator", label: "هاتف افتراضي", icon: Bot },
   { id: "settings", label: "الإعدادات", icon: Settings2 },
 ]
