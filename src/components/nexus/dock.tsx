@@ -2,10 +2,11 @@
 
 import { useNexus, type ViewId } from "@/lib/store"
 import { useComms } from "@/lib/comms-store"
+import { useGuard } from "@/lib/guard-store"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Smartphone, FolderOpen, ArrowLeftRight, HardDrive, Settings2, MonitorSmartphone,
-  MessagesSquare, Bot, MousePointer2, Video,
+  MessagesSquare, Bot, MousePointer2, Video, ShieldCheck,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -17,6 +18,7 @@ const ITEMS: { id: ViewId; label: string; icon: LucideIcon }[] = [
   { id: "comms", label: "الاتصالات", icon: MessagesSquare },
   { id: "remote", label: "التحكم", icon: MousePointer2 },
   { id: "media", label: "الوسائط", icon: Video },
+  { id: "guard", label: "الحماية", icon: ShieldCheck },
   { id: "simulator", label: "هاتف افتراضي", icon: Bot },
   { id: "settings", label: "الإعدادات", icon: Settings2 },
 ]
@@ -26,6 +28,8 @@ export function Dock() {
   const unreadNotifs = useComms((s) => s.notifications.filter((n) => n.status === "new").length)
   const unreadMsgs = useComms((s) => s.conversations.reduce((acc, c) => acc + c.unread, 0))
   const liveCall = useComms((s) => s.liveCall)
+  const ringing = useGuard((s) => s.ringing)
+  const lostActive = useGuard((s) => s.lost.active)
   const activeCount = transfers.filter((t) => t.status === "active" || t.status === "queued").length
   const commsBadge = unreadNotifs + unreadMsgs
 
@@ -66,6 +70,11 @@ export function Dock() {
                   {it.id === "simulator" && liveCall && (
                     <span className="absolute -top-1 -end-1 w-4 h-4 rounded-full bg-emerald-500 text-[9px] font-bold text-white grid place-items-center">
                       <PhoneCallDot />
+                    </span>
+                  )}
+                  {it.id === "guard" && (ringing || lostActive) && (
+                    <span className="absolute -top-1 -end-1 w-4 h-4 rounded-full bg-red-500 grid place-items-center">
+                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
                     </span>
                   )}
                 </button>
