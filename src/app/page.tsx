@@ -16,6 +16,7 @@ import { SimulatorView } from "@/components/nexus/comms/simulator-view"
 import { RemoteView } from "@/components/nexus/remote/remote-view"
 import { MediaView } from "@/components/nexus/media/media-view"
 import { GuardView } from "@/components/nexus/guard/guard-view"
+import { ProdView } from "@/components/nexus/prod/prod-view"
 import { LockScreen } from "@/components/nexus/guard/lock-screen"
 import { CallOverlay } from "@/components/nexus/comms/call-overlay"
 import { CommsToaster } from "@/components/nexus/comms/comms-toaster"
@@ -23,6 +24,7 @@ import { useCommsBridge } from "@/hooks/use-comms"
 import { useRemoteBridge } from "@/hooks/use-remote-bridge"
 import { useMediaBridge } from "@/hooks/use-media-bridge"
 import { useGuardBridge } from "@/hooks/use-guard-bridge"
+import { useProdBridge } from "@/hooks/use-prod-bridge"
 
 export default function NexusPage() {
   const { view, theme, setDevices, setTransfers } = useNexus()
@@ -35,6 +37,8 @@ export default function NexusPage() {
   useMediaBridge()
   // جسر الحماية: منارة القرب + القفل التلقائي + أوامر الهاتف
   useGuardBridge()
+  // جسر الإنتاجية: الحافظة الموحدة + التسليم + المزامنة + ملفات الشبكات
+  useProdBridge()
 
   // sync theme class from the pre-hydration script
   useEffect(() => {
@@ -85,6 +89,7 @@ export default function NexusPage() {
           {view === "remote" && <RemoteView />}
           {view === "media" && <MediaView />}
           {view === "guard" && <GuardView />}
+          {view === "prod" && <ProdView />}
           {view === "simulator" && <SimulatorView />}
           {view === "settings" && <SettingsView />}
         </div>

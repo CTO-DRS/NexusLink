@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { useComms, relTime } from "@/lib/comms-store"
+import { useProd } from "@/lib/prod-store"
 import { quickReplyToNotification } from "@/hooks/use-comms"
 import { appMeta } from "@/lib/nexus/comms-types"
 import { Button } from "@/components/ui/button"
@@ -89,10 +90,13 @@ function ToastCard({ toastId }: { toastId: string }) {
 
 export function CommsToaster() {
   const toasts = useComms((s) => s.toasts)
+  // بوابة الملف الشخصي: ملفات مثل «التركيز» يمكنها إسكات الإشعارات الفورية (تُسجل بصمت في المركز)
+  const notifsPaused = useProd((s) => (s.profile ? !s.profile.notifs : false))
+  const shown = notifsPaused ? [] : toasts.slice(-3)
   return (
     <div className="fixed bottom-24 start-4 z-[80] flex flex-col gap-2" aria-live="polite">
       <AnimatePresence>
-        {toasts.slice(-3).map((t) => (
+        {shown.map((t) => (
           <ToastCard key={t.id} toastId={t.id} />
         ))}
       </AnimatePresence>
