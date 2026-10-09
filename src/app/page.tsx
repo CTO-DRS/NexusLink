@@ -11,9 +11,17 @@ import { TransfersView } from "@/components/nexus/transfers-view"
 import { StorageView } from "@/components/nexus/storage-view"
 import { SettingsView } from "@/components/nexus/settings-view"
 import { PreviewModal } from "@/components/nexus/preview-modal"
+import { CommsView } from "@/components/nexus/comms-view"
+import { SimulatorView } from "@/components/nexus/comms/simulator-view"
+import { CallOverlay } from "@/components/nexus/comms/call-overlay"
+import { CommsToaster } from "@/components/nexus/comms/comms-toaster"
+import { useCommsBridge } from "@/hooks/use-comms"
 
 export default function NexusPage() {
   const { view, theme, setDevices, setTransfers } = useNexus()
+
+  // جسر الاتصالات: أحداث فورية (إشعارات، SMS، مكالمات، DND)
+  useCommsBridge()
 
   // sync theme class from the pre-hydration script
   useEffect(() => {
@@ -60,11 +68,15 @@ export default function NexusPage() {
           {view === "files" && <FilesView />}
           {view === "transfers" && <TransfersView />}
           {view === "storage" && <StorageView />}
+          {view === "comms" && <CommsView />}
+          {view === "simulator" && <SimulatorView />}
           {view === "settings" && <SettingsView />}
         </div>
       </main>
       <Dock />
       <PreviewModal />
+      <CallOverlay />
+      <CommsToaster />
       <Toaster position="bottom-center" richColors />
     </div>
   )
