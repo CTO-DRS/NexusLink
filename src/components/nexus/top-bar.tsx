@@ -3,14 +3,16 @@
 import { useNexus } from "@/lib/store"
 import { useComms } from "@/lib/comms-store"
 import { useProd } from "@/lib/prod-store"
+import { useI18n } from "@/lib/i18n"
 import { syncDnd } from "@/hooks/use-comms"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { Sun, Moon, Link2, Smartphone, BellOff, Bell, MessageSquareText, Zap } from "lucide-react"
+import { Sun, Moon, Link2, Smartphone, BellOff, Bell, MessageSquareText, Zap, Languages, Search } from "lucide-react"
 
 export function TopBar() {
-  const { theme, toggleTheme, devices, setView } = useNexus()
+  const { theme, toggleTheme, devices, setView, setPaletteOpen } = useNexus()
+  const { t, lang, setLang } = useI18n()
   const phone = useComms((s) => s.phone)
   const unreadNotifs = useComms((s) => s.notifications.filter((n) => n.status === "new").length)
   const unreadMsgs = useComms((s) => s.conversations.reduce((acc, c) => acc + c.unread, 0))
@@ -28,11 +30,46 @@ export function TopBar() {
           </div>
           <div className="leading-tight">
             <div className="font-bold text-[15px] tracking-tight">NexusLink</div>
-            <div className="text-[10px] text-muted-foreground -mt-0.5">منصة إدارة الأجهزة الموحدة</div>
+            <div className="text-[10px] text-muted-foreground -mt-0.5">{t("منصة إدارة الأجهزة الموحدة")}</div>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* لوحة الأوامر */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-xl gap-1.5 px-2.5 hidden sm:flex"
+                onClick={() => setPaletteOpen(true)}
+                aria-label={`${t("لوحة الأوامر")} (Ctrl+K)`}
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline text-[11px] font-medium">{t("بحث وأوامر")}</span>
+                <kbd className="hidden lg:inline-flex items-center rounded border bg-muted px-1 font-mono text-[9px]" data-no-i18n>Ctrl+K</kbd>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("لوحة الأوامر")} — Ctrl+K</TooltipContent>
+          </Tooltip>
+
+          {/* تبديل اللغة */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-xl gap-1.5 px-2.5"
+                onClick={() => setLang(lang === "ar" ? "en" : "ar")}
+                aria-label={t("تبديل اللغة")}
+              >
+                <Languages className="w-3.5 h-3.5" />
+                <span className="text-[11px] font-bold" data-no-i18n>{lang === "ar" ? "EN" : "ع"}</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("تبديل اللغة")} — Ctrl+Shift+E</TooltipContent>
+          </Tooltip>
+
           {/* مزامنة وضع عدم الإزعاج */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -41,38 +78,38 @@ export function TopBar() {
                 size="sm"
                 className={`h-8 rounded-xl gap-1.5 px-2.5 ${phone.dnd && phone.dndSource === "phone" ? "bg-amber-500 hover:bg-amber-600" : ""}`}
                 onClick={() => syncDnd(!phone.dnd)}
-                aria-label="مزامنة وضع عدم الإزعاج مع الهاتف"
+                aria-label={t("مزامنة وضع عدم الإزعاج مع الهاتف")}
               >
                 {phone.dnd ? <BellOff className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
-                <span className="hidden md:inline text-[11px] font-medium">عدم الإزعاج</span>
+                <span className="hidden md:inline text-[11px] font-medium">{t("عدم الإزعاج")}</span>
                 {phone.dnd && phone.dndSource && (
                   <span className="hidden md:inline text-[9px] opacity-80">
-                    ({phone.dndSource === "pc" ? "من الكمبيوتر" : "من الهاتف"})
+                    ({phone.dndSource === "pc" ? t("من الكمبيوتر") : t("من الهاتف")})
                   </span>
                 )}
               </Button>
             </TooltipTrigger>
             <TooltipContent>
               {phone.dnd
-                ? `مفعّل على الهاتف ${phone.dndSource === "pc" ? "(بمزامنة من الكمبيوتر)" : "(من الهاتف)"} — اضغط للإيقاف`
-                : "مزامنة وضع عدم الإزعاج مع الهاتف"}
+                ? `${t("مفعّل على الهاتف")} ${phone.dndSource === "pc" ? `(${t("بمزامنة من الكمبيوتر")})` : `(${t("من الهاتف")})`} — ${t("اضغط للإيقاف")}`
+                : t("مزامنة وضع عدم الإزعاج مع الهاتف")}
             </TooltipContent>
           </Tooltip>
 
           {/* الإشعارات غير المقروءة */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 rounded-xl gap-1.5 px-2.5 relative" onClick={() => setView("comms")} aria-label="فتح الإشعارات">
+              <Button variant="outline" size="sm" className="h-8 rounded-xl gap-1.5 px-2.5 relative" onClick={() => setView("comms")} aria-label={t("فتح الإشعارات")}>
                 <MessageSquareText className="w-3.5 h-3.5" />
-                <span className="hidden md:inline text-[11px] font-medium">الاتصالات</span>
+                <span className="hidden md:inline text-[11px] font-medium">{t("الاتصالات")}</span>
                 {unreadNotifs + unreadMsgs > 0 && (
-                  <span className="absolute -top-1.5 -end-1.5 min-w-4.5 h-4.5 px-1 rounded-full bg-red-500 text-[9px] font-bold text-white grid place-items-center">
+                  <span className="absolute -top-1.5 -end-1.5 min-w-4.5 h-4.5 px-1 rounded-full bg-red-500 text-[9px] font-bold text-white grid place-items-center" data-no-i18n>
                     {unreadNotifs + unreadMsgs > 99 ? "99+" : unreadNotifs + unreadMsgs}
                   </span>
                 )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{unreadNotifs} إشعار و {unreadMsgs} رسالة غير مقروءة</TooltipContent>
+            <TooltipContent>{unreadNotifs} {t("إشعار و")} {unreadMsgs} {t("رسالة غير مقروءة")}</TooltipContent>
           </Tooltip>
 
           {/* ملف الشبكة النشط — الإنتاجية */}
@@ -83,17 +120,17 @@ export function TopBar() {
                 size="sm"
                 className="h-8 rounded-xl gap-1.5 px-2.5 hidden md:flex"
                 onClick={() => setView("prod")}
-                aria-label="ملف تعريف الشبكة النشط"
+                aria-label={t("ملف تعريف الشبكة النشط")}
               >
                 <Zap className="w-3.5 h-3.5 text-violet-500" />
-                <span className="text-[11px] font-medium">{prodNetwork}</span>
-                {prodProfile && <span className="text-[10px] text-violet-600 dark:text-violet-400 font-bold">· {prodProfile.name}</span>}
+                <span className="text-[11px] font-medium" data-no-i18n>{prodNetwork}</span>
+                {prodProfile && <span className="text-[10px] text-violet-600 dark:text-violet-400 font-bold" data-no-i18n>· {prodProfile.name}</span>}
               </Button>
             </TooltipTrigger>
             <TooltipContent>
               {prodProfile
-                ? `الملف الشخصي «${prodProfile.name}» مطبق على شبكة ${prodNetwork}`
-                : `شبكة ${prodNetwork} — لا ملف تعريف مطابق`}
+                ? `${t("الملف الشخصي «")}${prodProfile.name}» ${t("مطبق على شبكة")} ${prodNetwork}`
+                : `${t("شبكة")} ${prodNetwork} — ${t("لا ملف تعريف مطابق")}`}
             </TooltipContent>
           </Tooltip>
 
@@ -103,22 +140,22 @@ export function TopBar() {
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 nexus-live" />
             <span className="text-[11px] font-medium">
-              {connected.length > 0 ? `${connected.length} جهاز متصل` : "لا توجد أجهزة متصلة"}
+              {connected.length > 0 ? `${connected.length} ${t("جهاز متصل")}` : t("لا توجد أجهزة متصلة")}
             </span>
           </Badge>
           {livePhone && (
-            <Badge variant="secondary" className="gap-1.5 hidden lg:flex">
+            <Badge variant="secondary" className="gap-1 hidden lg:flex" data-no-i18n>
               <Smartphone className="w-3 h-3" />
               {livePhone.name} · {livePhone.rttMs}ms
             </Badge>
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="تبديل المظهر">
+              <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={t("تبديل المظهر")}>
                 {theme === "dark" ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{theme === "dark" ? "المظهر الفاتح" : "المظهر الداكن"}</TooltipContent>
+            <TooltipContent>{theme === "dark" ? t("المظهر الفاتح") : t("المظهر الداكن")}</TooltipContent>
           </Tooltip>
         </div>
       </div>
