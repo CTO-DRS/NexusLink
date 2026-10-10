@@ -1,0 +1,256 @@
+# NexusLink — عقد بروتوكول الوكيل (Device Agent Contract)
+
+> **هذا المستند هو المصدر الوحيد للحقيقة** لبناء تطبيق Flutter (وكيل الجهاز).
+> استُخرج حرفيًا من كود السيرفر الفعلي (المراحل 1–11) بتاريخ 2026-10-10.
+> القاعدة: Flutter يطابق هذا العقد **حرفيًا** — أي فجوة تُضاف إلى السيرفر لا لعميل جديد.
+
+---
+
+## 1. طوبولوجيا السيرفر الفعلية (مؤكدة بالفحص الحي)
+
+| المنفذ | العملية | الدور | بروتوكول |
+|--------|---------|-------|----------|
+| **81** | caddy | المدخل العام: أي طلب يحمل `?XTransformPort=<port>` يُحوَّل إلى `localhost:<port>`؛ غير ذلك → 3000 | HTTP/WS proxy |
+| **3000** | next dev | واجهة الويب + كل REST APIs تحت `/api/*` | HTTP |
+| **3003** | bun `mini-services/comms-service` | جسر الاتصالات (هاتف افتراضي + انعكاس إشعارات/SMS/مكالمات/DND) | socket.io v4 |
+| **3004** | bun `mini-services/remote-service` | جسر التحكم عن بُعد (إدخال/طاقة/WOL/حافظة) | socket.io v4 |
+| **3005** | داخل عملية Next (`ensureMediaBridge`) | الوسائط والكاميرا: إشارات WebRTC، مصراع، بث، مراقبة | socket.io v4 |
+| **3006** | داخل عملية Next (`ensureGuardBridge`) | الحماية: منارة القرب، رن/فقدان/مسح/منبهات/إعدادات سريعة | socket.io v4 |
+| **3007** | داخل عملية Next (`ensureProdBridge`) | الإنتاجية: الحافظة الموحدة، تسليم الروابط، مزامنة الصور | socket.io v4 |
+| **3009** | داخل عملية Next (`ensureSecurityBridge`) | قناة E2E المشفرة: ترحيل إطارات AES-GCM عمياء + صلاحيات + تدقيق + مسح آمن + قفل عن بُعد | socket.io v4 |
+
+**خصائص socket.io الموحدة في كل الجسور:**
+- `path: "/"` (يقبل أي مسار بما فيه `/socket.io/` — مؤكد بالفحص: `GET :3003/socket.io/?EIO=4&transport=polling` أعاد handshake صالحًا)
+- `cors: { origin: "*", methods: ["GET","POST"] }` — لا توكن، لا مصادقة على مستوى socket (الثقة تُدار عبر سجل الأجهزة في جسر 3009 فقط)
+- `pingInterval: 25000, pingTimeout: 60000`
+
+**للـ Flutter Agent:** اتصل **مباشرة** بمنافذ الجسور `ws://<SERVER_IP>:<port>/` (بدون Caddy) — هذا مطابق لطريقة استماع السيرفر. `SERVER_IP` يأتي من الاقتران/mDNS/الإدخال اليدوي.
+
+---
+
+## 2. نماذج البيانات الأساسية (من `src/lib/nexus/types.ts`)
+
+```ts
+interface NexusDevice {
+  id: string            // "galaxy-s24" — slug من الاسم عند الاقتران
+  name: string          // "Galaxy-S24"
+  kind: "phone" | "tablet" | "desktop" | "tv"
+  state: "connected" | "offline" | "pairing"
+  mode: "wifi" | "hotspot" | "usb"
+  ip: string
+  battery: number
+  storageTotal: number; storageUsed: number
+  lastSeen: number; rttMs: number; pairedAt: number
+  trusted: boolean
+}
+
+interface FsEntry {
+  name: string
+  path: string          // مسار افتراضي يبدأ بـ "/" دائمًا
+  type: "dir" | "file"
+  size: number          // dirs = 0
+  mtime: number         // epoch ms
+  ext: string           // بدون نقطة، "" للمجلدات
+  category: "image"|"video"|"audio"|"pdf"|"text"|"apk"|"zip"|"other"
+  mime?: string
+}
+
+interface TransferJob {
+  id: string            // "tx_<ts36>_<rand5>"
+  deviceId: string; deviceName: string
+  direction: "out" | "in"   // out: هذا الجهاز → عن بُعد، in: العكس
+  fileName: string; srcPath: string; destPath: string
+  totalBytes: number; transferred: number
+  status: "queued"|"active"|"paused"|"done"|"error"
+  speedBps: number
+  chunksTotal: number; chunksDone: number; chunkSize: number  // 256KB
+  startedAt: number; error?: string
+}
+```
+
+**سجل الأجهزة الحالي (seed v3):** `pc-office`, `galaxy-s24`, `ipad-pro`, `redmi-note13`, `nexus-tv`.
+**الجذر الافتراضي للأجهزة:** `galaxy-s24` و`redmi-note13` → `data/nexus-storage/media`، `pc-office` → `pc-fs`، `ipad-pro` → `tab-fs`.
+**الاستقبال:** اتجاه `in` يكتب في `pc-fs/Downloads`، اتجاه `out` يكتب في `media/Download` (نقل حقيقي بايتات مع `.nexuspart` + resume).
+
+---
+
+## 3. REST APIs (على :3000 — أو عبر Caddy :81)
+
+### 3.1 الأجهزة والاقتران
+| Endpoint | الشكل الفعلي |
+|----------|--------------|
+| `GET /api/devices` | → `{ devices: NexusDevice[] }` (مع heartbeatBump: تحديث lastSeen/rtt/battery للمتصل) |
+| `POST /api/devices` | body `{action: "connect"|"disconnect"|"forget", id}` → `{ok, device?}` |
+| `POST /api/devices` | body `{action: "pair", name, kind?}` → يسجّل جهازًا جديدًا: `id = name→slug`، `ip = 192.168.1.{50+rand100}`، `trusted: true` → `{ok, device}`. **ملاحظة: لا يتحقق من سر QR إطلاقًا (فجوة G-1)** |
+| `POST /api/devices` | body `{action: "send-file", deviceId, deviceName?, direction: "out"|"in", srcDeviceId, srcPath, fileName}` → `{ok, job: TransferJob}` أو `{error}` 400 |
+| `GET /api/devices/qr` | → `{qr: dataURL-PNG, code: "<6 أحرف من السر>"}`؛ حمولة QR نص JSON: `{v:1, proto:"Nexus/1.2", host:"192.168.1.2", port:7420, secret:<32hex>, ts}` (**فجوة G-2: لا مستمع على 7420، والسر لا يُتحقق منه في pair**) |
+
+### 3.2 الملفات (نظام الملفات الافتراضي الحقيقي)
+| Endpoint | الشكل الفعلي |
+|----------|--------------|
+| `GET /api/fs?device=<id>&path=/<vp>&q=<بحث>` | → `{entries: FsEntry[], path}` (الاستعلام `q` يبحث تعاوديًا حتى 200 نتيجة) |
+| `POST /api/fs` | `{op: "mkdir"|"rename"|"delete"|"copy"|"move"|"zip"|"extract", deviceId, path?, name?, paths?, dest?, zipName?}` → `{ok, message}` (رسائل بالعربية) |
+| `PUT /api/fs` | `{deviceId, path}` → `{bytes, count, dirs}` (إحصاء تعاودي) |
+| `GET /api/thumb?device=&path=` | → صورة `image/webp` 420×420 (sharp، cache داخلي) — للمصغرات |
+| `GET /api/preview?device=&path=&download=1` | → بث الملف الكامل مع دعم `Range` كامل (فيديو/صوت seek) |
+| `POST /api/apk` | `{deviceId, path}` → فحص APK حقيقي (unzip -l) → `{ok, fileName, entries, files[], manifest?}` |
+
+### 3.3 النقل
+| Endpoint | الشكل الفعلي |
+|----------|--------------|
+| `GET /api/transfer` | → `{jobs: TransferJob[]}` (الأحدث أولًا) |
+| `POST /api/transfer` | `{action: "pause"|"resume"|"cancel"|"verify", id}` → `{ok, job?}` / verify → `{ok, hash?}` (MD5 مبتور 8 خانات) |
+
+### 3.4 الاتصالات الشخصية (Persistence عبر Prisma/SQLite)
+| Endpoint | الشكل الفعلي |
+|----------|--------------|
+| `GET /api/comms/bootstrap` | → `{notifications[], filter, conversations[], contacts[], calllog[], phone:{dnd,dndSource}}` — تحميل أولي كامل |
+| `POST /api/comms/notifications` | **هذا هو ingest من الهاتف**: `{appId, appName?, title, body, actionable?}` → يمر عبر قواعد الفلترة (`evaluateIngest`) → `{ok, notification}` (status: new/hidden/...) |
+| `GET /api/comms/notifications` | → `{notifications[]}` آخر 60 |
+| `POST /api/comms/sms` | `{op:"incoming", address, body}` → إنشاء محادثة/رسالة → `{conversation, message}`؛ `{op:"status", messageId, status}` → تحديث الحالة |
+| `POST /api/comms/calls` | `{op:"missed", number, contactName?}` → سجل مكالمات |
+| `POST /api/comms/phone` | `{dnd, dndSource}` → مزامنة DND |
+| `/api/comms/contacts`, `/api/comms/filter`, `/api/comms/notifications/action` | قراءة/تحديث جهات الاتصال والفلترة واتخاذ إجراء على إشعار |
+
+### 3.5 أخرى
+- `GET /api/tools/ping` · `GET /api/tools/speedtest` (pool 4MB) · `GET /api/tools/diag` · `GET /api/version`
+- `POST /api/security/wipe` · `GET /api/security/audit` · `GET /api/security/pcap` · `GET /api/security/recv`
+- `GET /api/prod/state|pairs|photos|profiles|network|clipboard|handoff|backup` + POST نظيراتها
+- `GET|POST /api/{guard,media,remote,prod,security}/boot` — إقلاع الجسور idempotent داخل عملية Next (هاتف يستطيع استدعاءها لضمان عمل الجسور)
+
+---
+
+## 4. خريطة أحداث socket.io الكاملة (العقد الحرفي)
+
+### 4.1 جسر 3003 — الاتصالات
+**Server → Client (الهاتف يستمع):**
+| الحدث | الحمولة |
+|-------|---------|
+| `bridge:hello` | `{phone:{name, dnd, autoMode, battery}, at}` |
+| `phone:log` | `{id, text, kind: "info"|"in"|"out"|"ok", at}` |
+| `notif:mirror` | `{notification:{id, appId, appName, title, body, actionable, status, replyText, createdAt}}` (يُبث بعد ingest واجتياز الفلترة فقط) |
+| `sms:incoming` | `{conversation:{id,address,contactName,unread}, message:{id,body,direction:"in",status,createdAt}}` |
+| `sms:status` | `{messageId, status: "sent"|"delivered"}` |
+| `call:incoming` | `{callId, number, contactName?, at}` (timeout 20s → missed) |
+| `call:state` | `{callId, state: "ringing"|"active"|"ended", missed?/busy?/rejected?, durationSec?}` |
+| `dnd:state` | `{enabled, source: "phone"|"pc"}` |
+
+**Client → Server (أحداث تراقب سلوك "الهاتف"):**
+| الحدث | الحمولة | ملاحظة للوكيل الحقيقي |
+|-------|---------|------------------------|
+| `phone:reply-action` | `{notifId, appId, appName?, text}` | رد سريع على إشعار — الوكيل ينفذه عبر Notification Action |
+| `phone:sms-send` | `{messageId, address, body, contactName?}` | إرسال SMS من الكمبيوتر — الوكيل يستخدم SmsManager ثم يبث `sms:status` بنفس التوقيت |
+| `phone:call-dial` | `{callId, number, contactName?}` | الاتصال من الكمبيوتر |
+| `phone:call-answer` / `phone:call-reject` | `{callId}` | الرد/الرفض من الكمبيوتر |
+| `phone:call-end` | `{callId, durationSec, direction, number, contactName?}` | إنهاء مكالمة جارية |
+| `phone:dnd-set` | `{enabled}` | مزامنة DND من الكمبيوتر |
+| `phone:simulate` | `{kind: "whatsapp"|...|"sms"|"call"|"dnd"}` | خاص بالمحاكي — الوكيل الحقيقي لا يستخدمه |
+| `phone:auto-mode` | `{enabled}` | خاص بالمحاكي |
+
+### 4.2 جسر 3004 — التحكم عن بُعد (الهاتف = controller، الكمبيوتر = desktop)
+**Server → Client:**
+| الحدث | الحمولة |
+|-------|---------|
+| `rc:hello` | `{desktop:{name, mac, power}, at}` — عند الاتصال |
+| `rc:log` | `{id, text, kind, at}` |
+| `rc:controller-online` | `{name, at}` — broadcast عند تسجيل هاتف |
+| `desktop:state` | `{power}` (relay) |
+| `desktop:clipboard` | `{text, at?}` — دفع حافظة PC→هاتف (الهاتف ينسخها محليًا) |
+| `desktop:wake` | `{source: "input"|"wol", ev?/mac?/packet?}` |
+| `rc:pong` | `{t}` — قياس RTT |
+| `rc:rejected` | `{reason: "off"|"hibernating"|"mac"|"already-on", ev}` |
+
+**Client → Server (الهاتف يرسل):**
+- تسجيل: `rc:hello-controller {name}` · `desktop:register {name, mac}` (للكمبيوتر)
+- `desktop:state {power}` · `desktop:clipboard {text, at?}`
+- `rc:ping {t}`
+- أحداث الإدخال (تُرحَّل broadcast مع بوابة الطاقة): `rc:move {dx, dy}` · `rc:click {button: "left"|"right"}` · `rc:scroll {dy}` · `rc:pinch {scale}` · `rc:key {key?, special?, modifiers?}` · `rc:gamepad {kind: "button"|"axis", button?, action?, ...}` · `rc:presenter {action: "next"|"prev"|"black"|"laser-on"|"laser-off", value?}` · `rc:media {action: "toggle"|"play"|"pause"|"next"|"prev"|"mute"|"unmute"|"volume", value?}` · `rc:clipboard {direction: "toPc"|"pull", text?}`
+- `rc:power {action: "shutdown"|"restart"|"sleep"|"hibernate"|"lock"|"unlock"}`
+- `rc:wol {mac}` — تحقق صارم من MAC وإعادة صياغة الحزمة 6×FF+MAC×16
+
+### 4.3 جسر 3005 — الوسائط والكاميرا
+**Client → Server:** `media:role {role: "pc"|"phone"|"tv", name?}` (الهاتف يسجل role=phone) · `rtc:offer/rtc:answer/rtc:ice` `{kind: "cam"|"mic"|"baby", ...SDP/ICE}` (ترحيل شفاف broadcast مع حقن kind وfrom) · `cam:state` · `cam:shutter {timer 0..30}` · `cam:captured {name, device}` · `sec:motion {source?, level?}` · `baby:alert {from?, level?}` · `cast:cmd {...}` · `cast:state {...}` · `slideshow:cmd {...}` · `media:ping {t}`
+**Server → Client:** `media:hello {at, port}` · `media:role-ack {role, at}` · `media:log {id,text,kind,at}` · `media:phone-online {name, at}` · نفس أحداث الترحيل أعلاه · `media:pong {t}`
+
+### 4.4 جسر 3006 — الحماية
+**Server → Client:** `guard:hello {prox:{enabled,thresholdRssi,graceSec,autoUnlock,state,rssi,source}, phoneGuardOnline, at}` · `guard:phone-online {online}` · `guard:settings {enabled, thresholdRssi, graceSec, autoUnlock}` · `prox:state {state: "near"|"grace"|"locked"|"disabled", rssi, source, leftMs?, settings}` (نبضة كل 1s) · `pc:lock {reason: "manual"|"weak-signal"|"no-beacon", at}` · `pc:unlock {reason}` · `dev:log {id, text, kind, at}`
+**Client → Server:**
+- الهاتف يسجّل: `guard:hello-phone {name}` → يبث `guard:phone-online {online:true}`
+- منارة القرب الحقيقية: `prox:beacon {rssi, device?}` — **كل ≤ 8 ثوانٍ** (REAL_FRESH_MS=8000) وإلا تُعتبر المنارة ميتة (grace → lock). `prox:sim {rssi}` من الكمبيوتر فقط ولا يعمل عند وجود هاتف حقيقي
+- أوامر PC→هاتف (الوكيل يستمع وينفذ ثم يبث `dev:state`/`dev:acked`): `dev:ring` / `dev:ring-stop` / `dev:light {on}` / `dev:lost {on, message}` / `dev:lost-off` / `dev:wipe` / `dev:alarm {action:"add"|"toggle", time, label?, enabled?}` / `dev:qs {key, value}` (wifi/bluetooth/sound/...) / `dev:app {...}`
+- تقارير الهاتف: `dev:state {...}` (relay) · `dev:sync-request` · `dev:acked {text}`
+
+### 4.5 جسر 3007 — الإنتاجية
+**Server → Client:** `prod:hello {at}` · `prod:log {id,text,kind,at}` · `clip:new {id, deviceId, deviceName, kind, content, fileName?, filePath?, size, mode, received, createdAt(ms)}` · `clip:cleared {at}` · `hand:new {id, deviceId, deviceName, kind, title, url, position, status, createdAt}` · `hand:opened {id, openedOn, at}` · `photo:new {name, bytes, device, at}` · `net:changed {network, profile, auto, at}`
+**Client → Server:**
+- `clip:push {deviceId, deviceName, kind: "text"|"image"|"file", content (نص أو dataURL مصغر للصور ≤4MB), fileName?, filePath?, size?, mode: "auto"|"manual"}` → يُخزن في Prisma ويبث `clip:new` للجميع — **هذه هي الحافظة الموحدة؛ الهاتف يراقب نظام الحافظة (mode=auto) ويدفع هنا**
+- `clip:clear`
+- `hand:push {id?, deviceId, deviceName, kind: "link"|"video"|"article", title, url, position?}` → `hand:new`؛ الفتح على الكمبيوتر: `hand:opened {id, openedOn}`
+- `photo:new-request` — يولّد صورة على "الهاتف" (محاكاة) ويزامنها
+- `net:set {network}` — تغيير الشبكة وتطبيق ملف التعريف
+
+### 4.6 جسر 3009 — قناة الأمان E2E (الأهم للوكيل)
+**دورة حياة العميل (هاتف):**
+1. الاتصال → `sec:hello {port, suite, peers, stealth, counters}`
+2. إعلان الهوية: `sec:announce {role: "phone", deviceId, name, pub: <b64 X25519>, eph: <b64 ephemeral>}`
+   - جهاز **محظور** → `sec:rejected {reason:"blocked"}` + قطع
+   - جهاز **غير معروف في السجل** → `sec:pending-trust {alertId, probeId}` + تنبيه على الكمبيوتر (القناة لا تعمل قبل قرار المستخدم)
+   - جهاز **موثوق** → تبادل `kex:peer {deviceId, name, role, pub, eph, sid}` بين كل الأطراف + `sec:peers`
+3. تدوير الجلسة: `kex:update {eph, epoch}` → ترحيل للأقران
+4. إرسال مشفر: `sec:frame {to: <deviceId>, from, kind, iv, ct, seq, stealth?}` — **ترحيل عمياء**؛ السيرفر لا يفك أبدًا؛ يُسجل بايت الإطار في WireTap
+   - الهدف غير متصل → `sec:nack {seq, reason:"peer-offline"}`
+5. القفل عن بُعد: الكمبيوتر يبث `sec:lock-cmd` لكل الأدوار phone — الهاتف ينفذ ويُبلغ `sec:lock-state`
+6. الهاتف يسجل تدقيقًا: `sec:audit {actor, action, detail, severity}`
+
+**أحداث إضافية:** `sec:capture-get/clear` + `sec:capture {frames[]}` (WireTap) · `sec:stranger-probe {name}` · `sec:trust-decision {alertId, deviceId, name, decision: "block"|"once"|"trust"}` · `sec:perm-set {feature, deviceId, enabled}` / `sec:perm-get` → `perm:rules` (الميزات: file_transfer, clipboard, notifications, remote_input, media, camera, microphone, system_commands, contacts, screen_mirror) · `audit:get/clear` → `audit:list` · `wipe:list` → `wipe:files` · `wipe:run {deviceId, vPath, passes: 3|7, stealth}` → `wipe:progress {…, file}` ثم `wipe:done` · `sec:stealth-set {on}` → `sec:stealth`
+
+---
+
+## 5. عقد التشفير E2E (من `src/lib/nexus/e2e-crypto.ts` — مطابق للـ Dart)
+
+| العنصر | القيمة الدقيقة |
+|--------|----------------|
+| المجموعة | `X25519 · HKDF-SHA256 · AES-256-GCM` (SUITE) + `PBKDF2(150k)` للـ PIN |
+| الهوية | X25519 keypair؛ `pub` 32B يُبث b64 |
+| مفتاح الجلسة | `HKDF-SHA256(ikm=ECDH(shared), salt="nexuslink-v1\|{idA}\|{idB}" بترتيب معجمي، info="nexuslink-e2e-session", L=32)` |
+| الإطار | `{iv: b64(12B عشوائي), ct: b64, seq}` مع `AAD = "{aad}\|{seq}"` وtagLength=128 |
+| الإعادة | `seq` يرفع حصراً؛ `seq <= lastSeq` → `REPLAY_DETECTED` |
+| SAS | `sha256("{idA-مفروز}\|{hex(pubA)}\|{idB-مفروز}\|{hex(pubB)}")` → 4 إيموجي (من مصفوفة 32) + 6 hex بأنيق `xxx-xxx` |
+| البصمة | `sha256(pub)` أول 8 بايت → hex UPPER مجمّعة `XXXX XXXX XXXX XXXX` |
+| PIN/النمط | PBKDF2-SHA256 بـ 150,000 تكرار، salt 16B عشوائي، مقارنة زمن-ثابت |
+
+---
+
+## 6. دورة الاقتران الحالية والفجوات المرصودة
+
+**الموجود فعليًا:**
+1. الكمبيوتر يولّد QR: `GET /api/devices/qr` → `secret` عشوائي 32-hex يُخزن في الذاكرة + `code` أول 6 أحرف.
+2. حمولة QR: `{v:1, proto:"Nexus/1.2", host, port:7420, secret, ts}`.
+3. إتمام: `POST /api/devices {action:"pair", name, kind}` — **يتجاهل السر تمامًا** ويسجل الجهاز.
+
+**الفجوات (G) التي تفرض تعديل السيرفر قبل/أثناء بناء الوكيل:**
+| # | الفجوة | الأثر على الوكيل | الإصلاح المقترح (جانب السيرفر) |
+|---|--------|------------------|-------------------------------|
+| G-1 | `pair` لا يتحقق من سر QR | أي جهاز على الشبكة يسجل نفسه بلا سر | endpoint جديد `POST /api/pair/claim {secret, name, kind, pub}` يتحقق من السر (عمر ≤ 5 دقائق)، يسجل الجهاز، يعيد `{device, ports:{rest,comms,remote,media,guard,prod,sec}, proto}` |
+| G-2 | QR يعلن `port:7420` ولا يوجد مستمع | الهاتف يفشل في الاتصال بالمنفذ المعلن | تصحيح الحمولة لتشمل المنافذ الفعلية + IP الحقيقي للسيرفر (وليس `192.168.1.2` الثابت) |
+| G-3 | لا اكتشاف تلقائي (mDNS/NSD غير موجود في السيرفر) | Flutter له bonsoir/nsd لكن لا مصدر يعلن نفسه | خدمة اكتشاف UDP خفيفة (مثلًا :7421): الهاتف يبث `NEXUS_DISCOVER_V1` → السيرفر يرد JSON `{name, proto, ports}` — بديل عملي لـ mDNS بلا تبعيات native |
+| G-4 | سجل الأجهزة في الذاكرة فقط (يُعاد seed عند restart) | الجهاز المقترن يختفي بعد إعادة تشغيل السيرفر | إبقاءه مقبولًا للمعاينة؛ التوثيق بصدق في الوكيل |
+| G-5 | الوكيل الحقيقي لا يملك دورًا مخصصًا في 3003 (العميل الحالي هو سطح المكتب ومحاكي الهاتف مدمج بالسيرفر) | تعارض منطقي: من يرسل الإشعارات؟ | عند وصول وكيل حقيقي: هو **مصدر** `POST /api/comms/notifications` و`sms` و`calls` (ingest) ومستمع لأحداث `phone:*`؛ يُوقف `autoMode` في المحاكي (`phone:auto-mode {enabled:false}`) لتجنب التكرار |
+
+---
+
+## 7. حزمة اتصال الوكيل (ما يجب أن يفعله تطبيق Flutter حرفيًا)
+
+1. **اكتشاف/اقتران**: UDP discovery (بعد G-3) أو إدخال IP يدوي → جلب QR من الكمبيوتر أو عرض QR من الهاتف → تبادل السر → `POST /api/pair/claim` (بعد G-1) → حفظ `{serverName, ip, ports, deviceId, secret?, pub}` في drift/SQLite.
+2. **طبقة الاتصالات**: 3 اتصالات socket.io دائمة (إعادة اتصال تلقائي):
+   - `:3003` كمصدر ingest عبر REST + مستمع `phone:*` (رد سريع/SMS/مكالمات/DND).
+   - `:3006` كمنارة قرب (`prox:beacon` كل 5s) + منفذ أوامر `dev:*`.
+   - `:3009` كطرف E2E (`sec:announce` → `kex:peer` → `sec:frame`) — مستمع `sec:lock-cmd`.
+   - حسب المرحلة: `:3004` (تحكم)، `:3005` (كاميرا WebRTC)، `:3007` (حافظة/تسليم).
+3. **الصلاحيات**: كل أذونات Android تُطلب وقت الاستخدام بشرح ar/en؛ Foreground Service دائم للمنارة والمراقبة.
+4. **المرآة**: الإشعارات (NotificationListenerService) → `POST /api/comms/notifications`؛ الرسائل/SMS → `POST /api/comms/sms {op:"incoming"}`؛ المكالمات → `POST /api/comms/calls {op:"missed"|"in"|"out"}`.
+5. **تقرير الحالة**: بطارية/تخزين/RTT → عبر `dev:state` (3006) وتحديثات REST عند الاقتران.
+
+---
+
+*مصادر الاستخراج: mini-services/comms-service/index.ts · mini-services/remote-service/index.ts · src/lib/nexus/{types,devices,transfer-engine,fs-server,e2e-crypto,security-bridge,guard-bridge,media-bridge,productivity-bridge}.ts · src/app/api/**/route.ts · prisma/schema.prisma · Caddyfile · فحص حي بالمنافذ.*

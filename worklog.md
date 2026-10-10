@@ -37,3 +37,20 @@ Stage Summary:
 - لقطات التحقق: scripts/v11-*.png
 - ملفات جديدة: src/lib/i18n.ts + ar-en-map.json، src/components/nexus/{onboarding.tsx,command-palette.tsx,tools/*}، 4 مسارات API، BUILD.md، workflow.
 - ملفات معدلة: store.ts (prefs/اختصارات/onboarding)، page.tsx (تهيئة+اختصارات+remount)، dock/top-bar/settings (ترجمة+بنود جديدة)، globals.css (إتاحة)، layout.tsx (pre-hydration لغة/تباين/خط).
+
+---
+Task ID: FA-1
+Agent: Super Z (main)
+Task: القاعدة الذهبية — تشريح مستودع السيرفر واستخراج العقد الفعلي قبل كتابة أي كود Flutter (وكيل الجهاز)
+
+Work Log:
+- فحص حي: منافذ 3000 (Next) + 3003/3004 (bun mini-services) + 3005/3006/3007 (جسور داخل عملية Next) + 81 (Caddy) + 3009 (جسر الأمان، يقلع عند الطلب).
+- قراءة كاملة: mini-services/{comms,remote}-service/index.ts، src/lib/nexus/{types,devices,transfer-engine,fs-server,e2e-crypto,security-bridge,guard-bridge,media-bridge,productivity-bridge}.ts، مسارات api/{devices,devices/qr,fs,transfer,thumb,preview,apk,comms/*,*/boot}، prisma/schema.prisma، Caddyfile، sec-socket/comms-socket.
+- فك شفرة XTransformPort: Caddy :81 يوجه أي طلب فيه ?XTransformPort=<port> إلى localhost:<port>؛ غير ذلك → 3000. الفحص المباشر لـ 3003 أعاد handshake صالحًا (socket.io path "/"، cors *، ping 25s/60s).
+- استخراج خرائط أحداث كاملة للجسور الستة + أشكال REST + نماذج البيانات + عقد التشفير (X25519+HKDF(salt="nexuslink-v1|idA|idB",info="nexuslink-e2e-session")+AES-256-GCM AAD="{aad}|{seq}"+SAS+PBKDF2 150k) + دورة الاقتران QR.
+- رصد 5 فجوات موثقة: G-1 pair لا يتحقق من سر QR، G-2 QR يعلن 7420 بلا مستمع + IP ثابت، G-3 لا اكتشاف تلقائي (يُقترح UDP :7421)، G-4 سجل أجهزة في الذاكرة، G-5 دور الوكيل الحقيقي في 3003 غير مخصص (يجب إيقاف autoMode بالمحاكي عند وصول وكيل حقيقي).
+- توثيق كل ما سبق في docs/protocol-contract.md (المصدر الوحيد للحقيقة لمراحل Flutter).
+
+Stage Summary:
+- العقد مستخرج حرفيًا ومكتمل: 8 منافذ، 6 جسور socket.io، ~120 حدثًا/endpoint، عقد تشفير دقيق بالبايت، 5 فجوات مقترح إصلاحها على السيرفر نفسه.
+- جاهز لاستلام المهمة المرحلية المحددة للـ Flutter Agent — أي كود اتصال سيطابق docs/protocol-contract.md حرفيًا.
