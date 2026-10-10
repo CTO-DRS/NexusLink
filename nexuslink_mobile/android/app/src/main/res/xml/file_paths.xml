@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- مسارات FileProvider لفتح الملفات المستلمة بمشاهداتها الافتراضية -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-path name="downloads" path="Download/NexusLink/" />
+    <external-path name="external_downloads" path="Download/" />
+    <cache-path name="cache" path="/" />
+    <external-cache-path name="external_cache" path="/" />
+    <files-path name="files" path="/" />
+    <external-files-path name="external_files" path="/" />
+</paths>

@@ -34,6 +34,9 @@ dependencies:
   # ---- الأذونات (طلب وقت الاستخدام) ----
   permission_handler: ^11.3.1
 
+  # ---- نقل الملفات: منتقي الملفات/المجلدات ----
+  file_picker: ^8.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

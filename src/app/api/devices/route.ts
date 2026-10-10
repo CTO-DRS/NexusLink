@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
+import { promises as fs } from "fs"
 import { store, heartbeatBump } from "@/lib/nexus/devices"
-import { startTransfer } from "@/lib/nexus/transfer-engine"
+import { startTransfer, createAgentOfferJob, jobs } from "@/lib/nexus/transfer-engine"
+import { resolveSafe, ensureDeviceRoot, mimeOf } from "@/lib/nexus/fs-server"
+import { isAgentOnline, getAgentDeviceId, guardEmitToAgent } from "@/lib/nexus/guard-bridge"
 import type { NexusDevice } from "@/lib/nexus/types"
 
 export const dynamic = "force-dynamic"
@@ -48,6 +51,8 @@ export async function POST(req: NextRequest) {
         if (typeof body.storageTotal === "number") exists.storageTotal = body.storageTotal
         if (typeof body.storageUsed === "number") exists.storageUsed = body.storageUsed
         if (typeof body.ip === "string" && body.ip) exists.ip = body.ip
+        // سجّل جذرًا فعليًا للوكيل (مرآة ملفاته قابلة للتصفح من الويب)
+        try { ensureDeviceRoot(exists.id) } catch { /* معرّف غير قياسي — تجاهل */ }
         return NextResponse.json({ ok: true, device: exists })
       }
       const stableId =
@@ -70,13 +75,58 @@ export async function POST(req: NextRequest) {
         trusted: true,
       }
       s.devices.push(d)
+      // جذر فعلي لمرآة ملفات الوكيل الجديد
+      try { ensureDeviceRoot(d.id) } catch { /* معرّف غير قياسي — تجاهل */ }
       return NextResponse.json({ ok: true, device: d })
     }
     case "send-file": {
+      const direction = body.direction === "in" ? "in" : "out"
+      const targetId = String(body.deviceId ?? "")
+
+      // وكيل حقيقي متصل؟ → عرض نقل حقيقي عبر جسر الحماية (tx:offer) بدل النسخ المحلية:
+      // الهاتف يُبلّغ المستخدم → قبول → ينزّل نفسه بالبايتات عبر /api/preview مع Range.
+      if (
+        direction === "out" &&
+        isAgentOnline() &&
+        getAgentDeviceId() === targetId
+      ) {
+        try {
+          const srcAbs = resolveSafe(body.srcDeviceId, body.srcPath)
+          const st = await fs.stat(srcAbs)
+          if (!st.isFile()) throw new Error("ليس ملفًا")
+          const srcName = store().devices.find((x) => x.id === body.srcDeviceId)?.name ?? body.srcDeviceId
+          const job = createAgentOfferJob({
+            deviceId: targetId,
+            deviceName: s.devices.find((x) => x.id === targetId)?.name ?? targetId,
+            srcDeviceId: body.srcDeviceId,
+            srcVPath: body.srcPath,
+            fileName: body.fileName,
+            totalBytes: st.size,
+            mime: mimeOf(srcAbs),
+          })
+          const offered = guardEmitToAgent("tx:offer", {
+            id: job.id,
+            fileName: job.fileName,
+            size: job.totalBytes,
+            mime: job.mime,
+            from: srcName,
+            srcDeviceId: body.srcDeviceId,
+            srcVPath: body.srcPath,
+            device: targetId,
+            at: Date.now(),
+          })
+          if (offered) return NextResponse.json({ ok: true, job })
+          // فشل الإرسال (انقطع الوكيل لحظيًا) → تسقط إلى النسخ المحلية
+          jobs().delete(job.id)
+        } catch {
+          /* ملف مصدر غير صالح — تسقط للنسخ المحلية التي تُعيد الخطأ نفسه */
+        }
+      }
+
       const job = await startTransfer({
         deviceId: body.deviceId,
         deviceName: body.deviceName || body.deviceId,
-        direction: body.direction === "in" ? "in" : "out",
+        direction,
         srcDeviceId: body.srcDeviceId,
         srcVPath: body.srcPath,
         fileName: body.fileName,

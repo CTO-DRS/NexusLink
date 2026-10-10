@@ -27,6 +27,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import type { FsEntry } from "@/lib/nexus/types"
+import { pickSendTarget } from "@/lib/nexus/pick-target"
 
 const QUICK_DIRS = [
   { path: "/", label: "الذاكرة الداخلية", icon: HardDrive },
@@ -109,18 +110,21 @@ export function FilesView() {
   }
 
   const sendToDevice = async (entry: FsEntry, direction: "in" | "out") => {
-    const targetName = direction === "in" ? "PC-OFFICE" : "Galaxy-S24"
+    const target = direction === "in"
+      ? (s.devices.find((d) => d.id === "pc-office") ?? { id: "pc-office", name: "PC-OFFICE" })
+      : (await pickSendTarget(s.activeDeviceId))
+    if (!target) { toast.error("لا يوجد هاتف/جهاز متصل للإرسال إليه"); return }
     const res = await fetch("/api/devices", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action: "send-file", deviceId: direction === "in" ? "pc-office" : "galaxy-s24",
-        deviceName: targetName, direction,
+        action: "send-file", deviceId: target.id,
+        deviceName: target.name, direction,
         srcDeviceId: s.activeDeviceId, srcPath: entry.path, fileName: entry.name,
       }),
     })
     const j = await res.json()
     if (j.ok) {
-      toast.success(`بدأ النقل: ${entry.name} ← ${targetName}`, {
+      toast.success(`بدأ النقل: ${entry.name} ← ${target.name}`, {
         action: { label: "عرض النقل", onClick: () => s.setView("transfers") },
       })
     } else toast.error(j.error || "فشل بدء النقل")

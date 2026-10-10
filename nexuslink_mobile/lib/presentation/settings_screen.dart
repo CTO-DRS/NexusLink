@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/protocol.dart';
 import '../domain/models.dart';
 import '../state/providers.dart';
+import '../state/transfer_providers.dart';
 
 /// الإعدادات: المظهر (داكن/فاتح/نظام)، اللغة (ar/en)، معلومات الهوية، حالة الخدمة.
 class SettingsScreen extends ConsumerWidget {
@@ -16,7 +19,14 @@ class SettingsScreen extends ConsumerWidget {
     final identity = ref.watch(deviceIdentityProvider);
     final conn = ref.watch(connectionProvider).value;
     final agentState = ref.watch(agentStateProvider);
+    final tx = ref.watch(txSettingsProvider);
     final cs = Theme.of(context).colorScheme;
+    final lastScanLabel = tx.photoLastSyncSec <= 0
+        ? '—'
+        : DateTime.fromMillisecondsSinceEpoch(tx.photoLastSyncSec * 1000)
+            .toIso8601String()
+            .substring(0, 16)
+            .replaceFirst('T', ' ');
 
     return Scaffold(
       appBar: AppBar(title: Text('settings.title'.tr())),
@@ -69,6 +79,58 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 14),
 
+          // ==== نقل الملفات (إعدادات المرحلة الجديدة) ====
+          _Header('settings.transfers'.tr()),
+          Card(
+            child: Column(children: [
+              SwitchListTile(
+                secondary: const Icon(Icons.verified_user_rounded),
+                title: Text('tx.autoAcceptTitle'.tr()),
+                subtitle: Text('tx.autoAcceptSubtitle'.tr(), style: const TextStyle(fontSize: 12)),
+                value: tx.autoAcceptTrusted,
+                onChanged: (v) => ref
+                    .read(txSettingsProvider.notifier)
+                    .update(tx.copyWith(autoAcceptTrusted: v)),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.content_copy_rounded),
+                title: Text('tx.autoCopyTitle'.tr()),
+                subtitle: Text('tx.autoCopySubtitle'.tr(), style: const TextStyle(fontSize: 12)),
+                value: tx.autoCopyText,
+                onChanged: (v) =>
+                    ref.read(txSettingsProvider.notifier).update(tx.copyWith(autoCopyText: v)),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.photo_camera_back_rounded),
+                title: Text('tx.photoSyncTitle'.tr()),
+                subtitle: Text('tx.photoSyncSubtitle'.tr(), style: const TextStyle(fontSize: 12)),
+                value: tx.photoSyncEnabled,
+                onChanged: (v) async {
+                  await ref
+                      .read(txSettingsProvider.notifier)
+                      .update(tx.copyWith(photoSyncEnabled: v));
+                  if (v) {
+                    // امسح فورًا عند التفعيل (إلا فلا يُمسح إلا عند الاتصال التالي)
+                    ref.read(photoSyncControllerProvider.notifier).scanNow();
+                  }
+                },
+              ),
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.schedule_rounded),
+                title: Text('tx.photoLastScan'.tr()),
+                subtitle: Text(lastScanLabel, style: const TextStyle(fontSize: 12)),
+                trailing: TextButton(
+                  onPressed: tx.photoSyncEnabled
+                      ? () => ref.read(photoSyncControllerProvider.notifier).scanNow()
+                      : null,
+                  child: Text('tx.scanNow'.tr()),
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 14),
+
           // ==== حالة الخدمة الخلفية ====
           _Header('status.service'.tr()),
           Card(
@@ -102,17 +164,17 @@ class SettingsScreen extends ConsumerWidget {
                 ListTile(
                   leading: const Icon(Icons.badge_rounded),
                   title: Text('settings.deviceName'.tr()),
-                  subtitle: Text(id.name, textDirection: TextDirection.ltr),
+                  subtitle: Text(id.name, textDirection: ui.TextDirection.ltr),
                 ),
                 ListTile(
                   leading: const Icon(Icons.fingerprint_rounded),
                   title: Text('settings.deviceId'.tr()),
-                  subtitle: Text(id.stableId.isEmpty ? '—' : id.stableId, textDirection: TextDirection.ltr),
+                  subtitle: Text(id.stableId.isEmpty ? '—' : id.stableId, textDirection: ui.TextDirection.ltr),
                 ),
                 ListTile(
                   leading: const Icon(Icons.android_rounded),
                   title: const Text('OS'),
-                  subtitle: Text(id.os, textDirection: TextDirection.ltr),
+                  subtitle: Text(id.os, textDirection: ui.TextDirection.ltr),
                 ),
               ]),
             ),

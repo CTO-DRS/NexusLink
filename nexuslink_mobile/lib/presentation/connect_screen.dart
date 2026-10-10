@@ -192,7 +192,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                       flex: 3,
                       child: TextField(
                         controller: _ipCtrl,
-                        keyboardType: TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(labelText: 'connect.ip'.tr(), hintText: '192.168.1.2'),
                       ),
                     ),
@@ -415,7 +415,7 @@ class _QrScannerPageState extends State<_QrScannerPage> {
         MobileScanner(
           controller: _controller,
           onDetect: _onDetect,
-          errorBuilder: (context, error) => Center(
+          errorBuilder: (context, error, _) => Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Text(error.errorCode.name, textAlign: TextAlign.center),

@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import type { FsEntry } from "@/lib/nexus/types"
+import { pickSendTarget } from "@/lib/nexus/pick-target"
 
 export function PreviewModal() {
   const s = useNexus()
@@ -69,16 +70,20 @@ function ModalBody({ entry, onPrev, onNext, hasPrev, hasNext }: {
 
   const sendNow = async () => {
     const direction = s.activeDeviceId === "pc-office" ? "out" : "in"
+    const target = direction === "in"
+      ? (s.devices.find((d) => d.id === "pc-office") ?? { id: "pc-office", name: "PC-OFFICE" })
+      : (await pickSendTarget(s.activeDeviceId))
+    if (!target) { toast.error("لا يوجد هاتف/جهاز متصل للإرسال إليه"); return }
     const res = await fetch("/api/devices", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action: "send-file", deviceId: direction === "in" ? "pc-office" : "galaxy-s24",
-        deviceName: direction === "in" ? "PC-OFFICE" : "Galaxy-S24", direction,
+        action: "send-file", deviceId: target.id,
+        deviceName: target.name, direction,
         srcDeviceId: s.activeDeviceId, srcPath: entry.path, fileName: entry.name,
       }),
     })
     const j = await res.json()
-    if (j.ok) toast.success(`جارٍ نقل ${entry.name}`, {
+    if (j.ok) toast.success(`جارٍ نقل ${entry.name} ← ${target.name}`, {
       action: { label: "عرض", onClick: () => { s.setPreviewEntry(null); s.setView("transfers") } },
     })
     else toast.error(j.error || "فشل النقل")

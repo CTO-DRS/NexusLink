@@ -132,3 +132,112 @@ export function verifyChunkHash(jobId: string): { ok: boolean; hash?: string } {
   const h = createHash("md5").update(`${job.id}:${job.chunksDone}:${job.totalBytes}`).digest("hex")
   return { ok: true, hash: h.slice(0, 8) }
 }
+
+// ============================================================================
+// النقل الحقيقي عبر وكيل الجهاز (هاتف Flutter) — إشارات tx:* على جسر الحماية
+// ============================================================================
+
+/** آخر عيّنة تقدم لكل مهمة وكيل (لحساب السرعة بسلاسة). */
+const g2 = globalThis as unknown as { __nexusTxSamples?: Map<string, { at: number; transferred: number }> }
+function txSamples(): Map<string, { at: number; transferred: number }> {
+  if (!g2.__nexusTxSamples) g2.__nexusTxSamples = new Map()
+  return g2.__nexusTxSamples
+}
+
+/** إنشاء مهمة عرض إرسال (كمبيوتر → هاتف حقيقي): تبقى queued حتى يقبل الوكيل. */
+export function createAgentOfferJob(opts: {
+  deviceId: string
+  deviceName: string
+  srcDeviceId: string
+  srcVPath: string
+  fileName: string
+  totalBytes: number
+  mime?: string
+}): TransferJob {
+  const id = `tx_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
+  const job: TransferJob = {
+    id,
+    deviceId: opts.deviceId,
+    deviceName: opts.deviceName,
+    direction: "out",
+    fileName: opts.fileName,
+    srcPath: opts.srcVPath,
+    destPath: "NexusLink/", // مجلد الاستقبال على الهاتف
+    totalBytes: opts.totalBytes,
+    transferred: 0,
+    status: "queued",
+    speedBps: 0,
+    chunksTotal: Math.max(1, Math.ceil(opts.totalBytes / CHUNK)),
+    chunksDone: 0,
+    chunkSize: CHUNK,
+    startedAt: Date.now(),
+    agent: true,
+    srcDeviceId: opts.srcDeviceId,
+    mime: opts.mime,
+  }
+  jobs().set(id, job)
+  return job
+}
+
+/**
+ * تطبيق أحداث الوكيل على سجل المهام (يُستدعى من جسر الحماية عند وصول
+ * tx:accept / tx:reject / tx:progress / tx:state من الهاتف).
+ */
+export function applyAgentTx(event: string, d: Record<string, unknown>): TransferJob | null {
+  const id = String(d?.id ?? "")
+  const job = jobs().get(id)
+  if (!job) return null
+
+  switch (event) {
+    case "tx:accept": {
+      if (job.status === "queued" || job.status === "paused") job.status = "active"
+      break
+    }
+    case "tx:reject": {
+      job.status = "error"
+      job.error = "رفض الجهاز الاستلام"
+      break
+    }
+    case "tx:progress": {
+      const tr = Number(d?.transferred)
+      if (Number.isFinite(tr)) {
+        job.transferred = Math.max(0, Math.min(job.totalBytes, Math.floor(tr)))
+        job.chunksDone = Math.min(job.chunksTotal, Math.ceil((job.transferred / Math.max(1, job.totalBytes)) * job.chunksTotal))
+      }
+      const now = Date.now()
+      const prev = txSamples().get(id)
+      if (prev && now > prev.at) {
+        const inst = ((job.transferred - prev.transferred) / (now - prev.at)) * 1000
+        job.speedBps = prev.transferred <= job.transferred
+          ? Math.max(0, Math.round(job.speedBps ? job.speedBps * 0.6 + inst * 0.4 : inst))
+          : job.speedBps
+      }
+      txSamples().set(id, { at: now, transferred: job.transferred })
+      if (job.status === "queued" || job.status === "paused") job.status = "active"
+      break
+    }
+    case "tx:state": {
+      const st = String(d?.state ?? "")
+      if (st === "done") {
+        job.transferred = job.totalBytes
+        job.chunksDone = job.chunksTotal
+        job.status = "done"
+        job.speedBps = 0
+      } else if (st === "failed") {
+        job.status = "error"
+        job.error = String(d?.error ?? "فشل النقل على الجهاز")
+        job.speedBps = 0
+      } else if (st === "cancelled") {
+        job.status = "error"
+        job.error = "أُلغيت بواسطة المستخدم"
+        job.speedBps = 0
+        jobs().delete(id)
+      } else if (st === "paused") {
+        job.status = "paused"
+        job.speedBps = 0
+      }
+      break
+    }
+  }
+  return job
+}

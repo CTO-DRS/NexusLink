@@ -7,7 +7,8 @@
     "connect": "Connect",
     "devices": "Devices",
     "log": "Log",
-    "settings": "Settings"
+    "settings": "Settings",
+    "transfers": "Transfers"
   },
   "status": {
     "online": "Online",
@@ -54,9 +55,22 @@
     "battery": "Battery",
     "rtt": "RTT",
     "storage": "Storage",
-    "state": {"connected": "Connected", "offline": "Offline", "pairing": "Pairing"},
-    "mode": {"wifi": "Wi-Fi", "hotspot": "Hotspot", "usb": "USB"},
-    "kind": {"phone": "Phone", "tablet": "Tablet", "desktop": "Desktop", "tv": "TV"}
+    "state": {
+      "connected": "Connected",
+      "offline": "Offline",
+      "pairing": "Pairing"
+    },
+    "mode": {
+      "wifi": "Wi-Fi",
+      "hotspot": "Hotspot",
+      "usb": "USB"
+    },
+    "kind": {
+      "phone": "Phone",
+      "tablet": "Tablet",
+      "desktop": "Desktop",
+      "tv": "TV"
+    }
   },
   "log": {
     "title": "Activity log",
@@ -76,7 +90,8 @@
     "serviceStopped": "Persistent connection service is stopped",
     "deviceInfo": "Your identity on the network",
     "deviceId": "Stable ID",
-    "deviceName": "Device name"
+    "deviceName": "Device name",
+    "transfers": "File transfers"
   },
   "perms": {
     "notificationsTitle": "Notification permission",
@@ -86,5 +101,55 @@
     "noNetwork": "No network connection",
     "timeout": "Connection timed out",
     "server": "Server error: {code}"
+  },
+  "tx": {
+    "send": "Send files",
+    "pickFiles": "Pick files",
+    "pickFolder": "Pick folder",
+    "needConnect": "Connect to the server first from the Connect tab to enable transfers",
+    "pendingShares": "Shares waiting to be sent",
+    "shareText": "Shared text: “{preview}”",
+    "shareFiles": "{n} file(s) shared from another app",
+    "sendViaNexus": "Send via NexusLink",
+    "dismiss": "Dismiss",
+    "incoming": "Incoming files — awaiting your approval",
+    "fromServer": "From {from} — will be saved to Download/NexusLink",
+    "fromServerShort": "From computer",
+    "toServer": "To server",
+    "accept": "Accept",
+    "reject": "Reject",
+    "quick": "Quick texts & links",
+    "quickText": "Text",
+    "quickLink": "Link",
+    "copy": "Copy",
+    "copied": "Copied to clipboard",
+    "copyPath": "Copy path",
+    "open": "Open",
+    "queue": "Transfer queue",
+    "queueEmpty": "Nothing in flight — pick files to send, or wait for an incoming one",
+    "waiting": "Waiting…",
+    "paused": "Paused — will resume from the same point",
+    "pause": "Pause",
+    "resume": "Resume",
+    "cancel": "Cancel",
+    "history": "Transfer history (stored in SQLite)",
+    "historyEmpty": "No history yet",
+    "clearFinished": "Clear finished",
+    "done": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "retry": "Retry",
+    "enqueued": "{n} task(s) added to the send queue",
+    "folderConfirmTitle": "Send whole folder?",
+    "folderConfirmBody": "{n} file(s) from this folder (including subfolders) will be uploaded to the Downloads folder of your device mirror on the server.",
+    "sendAll": "Send all",
+    "autoAcceptTitle": "Auto-accept from trusted server",
+    "autoAcceptSubtitle": "Incoming computer files start downloading immediately without asking",
+    "autoCopyTitle": "Auto-copy texts and links",
+    "autoCopySubtitle": "Any text or link arriving from the computer goes straight to the clipboard",
+    "photoSyncTitle": "Auto-upload new camera photos",
+    "photoSyncSubtitle": "When connected, the service watches DCIM via WorkManager and uploads new shots",
+    "photoLastScan": "Last photo scan",
+    "scanNow": "Scan now"
   }
 }
