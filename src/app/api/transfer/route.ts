@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { jobs, verifyChunkHash } from "@/lib/nexus/transfer-engine"
+import { abortSession, uploadSessions } from "@/lib/nexus/upload-sessions"
+import { guardEmitToAgent } from "@/lib/nexus/guard-bridge"
 
 export const dynamic = "force-dynamic"
 
@@ -15,11 +17,25 @@ export async function POST(req: NextRequest) {
   switch (action) {
     case "pause":
       job.status = "paused"
+      // مهمة تنزيل على وكيل حقيقي → أبلغ الهاتف بإيقاف التنزيل
+      if (job.agent && !job.uploadId) guardEmitToAgent("tx:pause", { id })
+      // جلسة رفع من هاتف → PUT التالي يُرفض بـ paused فيوقف الطابور عنده
+      if (job.uploadId) {
+        for (const s of uploadSessions().values()) if (s.jobId === id) { /* الحالة على المهمة تكفي */ }
+      }
       return NextResponse.json({ ok: true, job })
     case "resume":
       job.status = "active"
+      if (job.agent && !job.uploadId) guardEmitToAgent("tx:resume", { id })
       return NextResponse.json({ ok: true, job })
     case "cancel":
+      // جلسة رفع → أجهض الجزئي وامسح المهمة
+      if (job.uploadId) {
+        await abortSession(job.uploadId, "أُلغيت بواسطة المستخدم")
+        return NextResponse.json({ ok: true })
+      }
+      // تنزيل لدى وكيل حقيقي → اطلب منه إيقاف التنزيل
+      if (job.agent) guardEmitToAgent("tx:cancel", { id })
       job.status = "error"
       job.error = "أُلغيت بواسطة المستخدم"
       jobs().delete(id)

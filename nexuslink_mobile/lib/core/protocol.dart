@@ -30,6 +30,29 @@ class GuardEvents {
   static const String devAlarm = 'dev:alarm';
   static const String devQs = 'dev:qs';
   static const String devApp = 'dev:app';
+
+  // أحداث نقل الملفات الحقيقية على نفس القناة الدائمة (عقد §8):
+  // السيرفر → الهاتف: عرض ملف قادم + أوامر تحكم من الكمبيوتر
+  // الهاتف → السيرفر: قرار القبول/الرفض + تقدم + حالة
+  static const String txOffer = 'tx:offer';
+  static const String txAccept = 'tx:accept';
+  static const String txReject = 'tx:reject';
+  static const String txProgress = 'tx:progress';
+  static const String txState = 'tx:state';
+  static const String txPause = 'tx:pause';
+  static const String txResume = 'tx:resume';
+  static const String txCancel = 'tx:cancel';
+}
+
+/// أحداث جسر الإنتاجية 3007 — النصوص/الروابط السريعة والحافظة الموحدة.
+class ProdEvents {
+  static const String hello = 'prod:hello';
+  static const String log = 'prod:log';
+  static const String clipNew = 'clip:new';
+  static const String clipClear = 'clip:cleared';
+  static const String handNew = 'hand:new';
+  static const String handOpened = 'hand:opened';
+  static const String photoNew = 'photo:new';
 }
 
 /// أحداث جسر الاتصالات 3003 (سيلزمها المرحلة القادمة — محفوظة هنا كعقد).
@@ -56,4 +79,22 @@ class Timeouts {
   static const Duration socketConnect = Duration(seconds: 10);
   static const Duration beaconEvery = Duration(seconds: 5);
   static const Duration stateReportEvery = Duration(seconds: 30);
+}
+
+/// ثوابت نقل الملفات — مطابقة لعقد السيرفر (§8).
+class TxProtocol {
+  /// حجم القطعة الافتراضي للرفع (السيرفر يقبل حتى 8MB).
+  static const int uploadChunk = 2 * 1024 * 1024; // 2MB
+
+  /// مجلد الوجهة الافتراضي داخل مرآة الجهاز على السيرفر.
+  static const String uploadDir = '/Downloads';
+
+  /// مجلد الاستقبال المحلي على الهاتف (تنشر فيه Kotlin عبر MediaStore).
+  static const String recvDirName = 'NexusLink';
+
+  /// مهلة قطعة الرفع الواحدة.
+  static const Duration chunkTimeout = Duration(seconds: 30);
+
+  /// إرسال tx:progress مُخفّف (كل هذا القدر أو كل قطعة، أيهما أبطأ).
+  static const Duration progressEvery = Duration(milliseconds: 800);
 }

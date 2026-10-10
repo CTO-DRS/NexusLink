@@ -18,6 +18,13 @@ class AgentChannel {
       .where((e) => e != null)
       .map((e) => e!);
 
+  /// كل الأحداث الخام من الخدمة الأصلية (حالات + نقل tx + صور + مشاركة).
+  /// كل عنصر: {kind: 'state'|'tx'|'photos'|'share', ...}
+  Stream<Map<Object?, Object?>> get rawEvents => _events
+      .receiveBroadcastStream()
+      .map((e) => (e as Map?)?.cast<Object?, Object?>() ?? const <Object?, Object?>{})
+      .where((m) => m.isNotEmpty);
+
   /// بدء الوكيل الخلفي. القيم تُمرَّر كما هي إلى الـ Intent Extras.
   Future<bool> start({
     required ServerEndpoint endpoint,
@@ -52,7 +59,7 @@ class AgentChannel {
   /// آخر حالة معروفة داخل الخدمة (للمزامنة عند إعادة فتح الواجهة).
   Future<String> lastState() async {
     try {
-      return '${await _ch.invokeMethod<String>('lastState') ?? 'stopped'}';
+      return await _ch.invokeMethod<String>('lastState') ?? 'stopped';
     } catch (_) {
       return 'stopped';
     }

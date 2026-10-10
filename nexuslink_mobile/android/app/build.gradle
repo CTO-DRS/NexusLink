@@ -54,4 +54,8 @@ dependencies {
     // عميل socket.io الرسمي (Java) — يعمل داخل الـ Foreground Service
     implementation "io.socket:socket.io-client:2.1.0"
     // OkHttp يأتي مع socket.io-client (WebSocket transport)
+    // مراقبة الصور الدورية عبر WorkManager (البند 6)
+    implementation "androidx.work:work-runtime-ktx:2.9.1"
+    // FileProvider + أدوات core (لفتح الملفات المستلمة)
+    implementation "androidx.core:core-ktx:1.13.1"
 }

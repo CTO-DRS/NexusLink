@@ -1,0 +1,815 @@
+{
+  "elements": {
+    "NexusDatabase": {
+      "id": {
+        "library_uri": "package:driftgen/nexus_db.dart",
+        "name": "NexusDatabase"
+      },
+      "declaration": {
+        "source_uri": "package:driftgen/nexus_db.dart",
+        "offset": 3069,
+        "name": "NexusDatabase"
+      },
+      "references": [
+        {
+          "library_uri": "package:driftgen/nexus_db.dart",
+          "name": "trusted_servers"
+        },
+        {
+          "library_uri": "package:driftgen/nexus_db.dart",
+          "name": "transfer_history"
+        }
+      ],
+      "type": "database",
+      "tables": [
+        {
+          "library_uri": "package:driftgen/nexus_db.dart",
+          "name": "trusted_servers"
+        },
+        {
+          "library_uri": "package:driftgen/nexus_db.dart",
+          "name": "transfer_history"
+        }
+      ],
+      "views": [],
+      "includes": [],
+      "queries": [],
+      "schema_version": 2,
+      "daos": []
+    },
+    "trusted_servers": {
+      "id": {
+        "library_uri": "package:driftgen/nexus_db.dart",
+        "name": "trusted_servers"
+      },
+      "declaration": {
+        "source_uri": "package:driftgen/nexus_db.dart",
+        "offset": 244,
+        "name": "TrustedServers"
+      },
+      "references": [],
+      "type": "table",
+      "columns": [
+        {
+          "sqlType": {
+            "builtin": "int"
+          },
+          "nullable": false,
+          "nameInSql": "id",
+          "nameInDart": "id",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 291,
+            "name": "id"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": null,
+          "constraints": [
+            {
+              "type": "primary",
+              "is_auto_increment": true
+            }
+          ],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": false,
+          "nameInSql": "server_key",
+          "nameInDart": "serverKey",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 374,
+            "name": "serverKey"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// مفتاح فريد: \"host:port\"",
+          "constraints": [
+            {
+              "type": "unique"
+            }
+          ],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": false,
+          "nameInSql": "name",
+          "nameInDart": "name",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 474,
+            "name": "name"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// اسم السيرفر المعروض (من QR أو mDNS أو يدوي)",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": false,
+          "nameInSql": "host",
+          "nameInDart": "host",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 510,
+            "name": "host"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": null,
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "int"
+          },
+          "nullable": false,
+          "nameInSql": "port",
+          "nameInDart": "port",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 587,
+            "name": "port"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// منفذ الوصول (بوابة 81 أو REST 3000)",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": false,
+          "nameInSql": "mode",
+          "nameInDart": "mode",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 649,
+            "name": "mode"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// gateway | direct",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": false,
+          "nameInSql": "device_id",
+          "nameInDart": "deviceId",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 744,
+            "name": "deviceId"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// معرّفنا لدى السيرفر (ناتج الاقتران — NexusDevice.id)",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": false,
+          "nameInSql": "device_name",
+          "nameInDart": "deviceName",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 813,
+            "name": "deviceName"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// اسم جهازنا كما سجّلناه",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": true,
+          "nameInSql": "pairing_secret",
+          "nameInDart": "pairingSecret",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 926,
+            "name": "pairingSecret"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// سر الاقتران الأخير (للعرض فقط؛ السيرفر يولّد سرًا جديدًا لكل QR)",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "dateTime"
+          },
+          "nullable": false,
+          "nameInSql": "paired_at",
+          "nameInDart": "pairedAt",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 986,
+            "name": "pairedAt"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": null,
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "dateTime"
+          },
+          "nullable": false,
+          "nameInSql": "last_used_at",
+          "nameInDart": "lastUsedAt",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 1033,
+            "name": "lastUsedAt"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": null,
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "bool"
+          },
+          "nullable": false,
+          "nameInSql": "is_last_used",
+          "nameInDart": "isLastUsed",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 1078,
+            "name": "isLastUsed"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": {
+            "elements": [
+              "const ",
+              {
+                "lexeme": "Constant",
+                "import_uri": "package:drift/src/runtime/query_builder/query_builder.dart"
+              },
+              "(false)"
+            ]
+          },
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": null,
+          "constraints": [],
+          "customConstraints": null
+        }
+      ],
+      "existing_data_class": null,
+      "table_constraints": [],
+      "custom_parent_class": null,
+      "interfaces_for_row_class": [],
+      "fixed_entity_info_name": null,
+      "base_dart_name": "TrustedServers",
+      "row_class_name": "TrustedServer",
+      "companion_class_name": null,
+      "without_rowid": false,
+      "strict": false,
+      "write_default_constraints": true,
+      "custom_constraints": [],
+      "attached_indices": []
+    },
+    "transfer_history": {
+      "id": {
+        "library_uri": "package:driftgen/nexus_db.dart",
+        "name": "transfer_history"
+      },
+      "declaration": {
+        "source_uri": "package:driftgen/nexus_db.dart",
+        "offset": 1342,
+        "name": "TransferHistory"
+      },
+      "references": [],
+      "type": "table",
+      "columns": [
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": false,
+          "nameInSql": "id",
+          "nameInDart": "id",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 1476,
+            "name": "id"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// معرّف مستقر محليًا (نفسه taskId لدى السيرفر للرفع — يجعل الاستئناف idempotent)",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": false,
+          "nameInSql": "server_key",
+          "nameInDart": "serverKey",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 1553,
+            "name": "serverKey"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// \"host:port\" للسيرفر الذي تخصه المهمة",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": false,
+          "nameInSql": "kind",
+          "nameInDart": "kind",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 1618,
+            "name": "kind"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// upload | download",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": false,
+          "nameInSql": "file_name",
+          "nameInDart": "fileName",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 1654,
+            "name": "fileName"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": null,
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": true,
+          "nameInSql": "mime",
+          "nameInDart": "mime",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 1693,
+            "name": "mime"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": null,
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "bigInt"
+          },
+          "nullable": false,
+          "nameInSql": "size_bytes",
+          "nameInDart": "sizeBytes",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 1740,
+            "name": "sizeBytes"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": null,
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "bigInt"
+          },
+          "nullable": false,
+          "nameInSql": "transferred_bytes",
+          "nameInDart": "transferredBytes",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 1782,
+            "name": "transferredBytes"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": {
+            "elements": [
+              "const ",
+              {
+                "lexeme": "Constant",
+                "import_uri": "package:drift/src/runtime/query_builder/query_builder.dart"
+              },
+              "(",
+              {
+                "lexeme": "BigInt",
+                "import_uri": "dart:core"
+              },
+              ".zero)"
+            ]
+          },
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": null,
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": false,
+          "nameInSql": "state",
+          "nameInDart": "state",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 1931,
+            "name": "state"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// queued | active | paused | done | failed | cancelled",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": true,
+          "nameInSql": "local_path",
+          "nameInDart": "localPath",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 2010,
+            "name": "localPath"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// الرفع: مسار الملف المصدر على الهاتف",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": true,
+          "nameInSql": "temp_path",
+          "nameInDart": "tempPath",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 2126,
+            "name": "tempPath"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// التنزيل: مسار الجزئي المحلي (.nexuspart) الذي يُستأنف منه",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": true,
+          "nameInSql": "final_path",
+          "nameInDart": "finalPath",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 2245,
+            "name": "finalPath"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// المسار النهائي بعد الإكمال (محلي منشور / افتراضي على السيرفر)",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": true,
+          "nameInSql": "remote_v_path",
+          "nameInDart": "remoteVPath",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 2364,
+            "name": "remoteVPath"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// الرفع: مجلد الوجهة الافتراضي؛ التنزيل: مسار المصدر الافتراضي",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": true,
+          "nameInSql": "src_device_id",
+          "nameInDart": "srcDeviceId",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 2469,
+            "name": "srcDeviceId"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// التنزيل: الجهاز الافتراضي المصدر على السيرفر",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": true,
+          "nameInSql": "offer_id",
+          "nameInDart": "offerId",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 2597,
+            "name": "offerId"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// التنزيل: معرّف مهمة السيرفر (tx_…) — لإعادة الربط بعد إعادة التشغيل",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": true,
+          "nameInSql": "from_name",
+          "nameInDart": "fromName",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 2682,
+            "name": "fromName"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": "/// التنزيل: اسم المُرسل (للعرض)",
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "bool"
+          },
+          "nullable": false,
+          "nameInSql": "auto_accepted",
+          "nameInDart": "autoAccepted",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 2733,
+            "name": "autoAccepted"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": {
+            "elements": [
+              "const ",
+              {
+                "lexeme": "Constant",
+                "import_uri": "package:drift/src/runtime/query_builder/query_builder.dart"
+              },
+              "(false)"
+            ]
+          },
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": null,
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "string"
+          },
+          "nullable": true,
+          "nameInSql": "error",
+          "nameInDart": "error",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 2814,
+            "name": "error"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": null,
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "dateTime"
+          },
+          "nullable": false,
+          "nameInSql": "started_at",
+          "nameInDart": "startedAt",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 2866,
+            "name": "startedAt"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": null,
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "dateTime"
+          },
+          "nullable": false,
+          "nameInSql": "updated_at",
+          "nameInDart": "updatedAt",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 2914,
+            "name": "updatedAt"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": null,
+          "constraints": [],
+          "customConstraints": null
+        },
+        {
+          "sqlType": {
+            "builtin": "dateTime"
+          },
+          "nullable": true,
+          "nameInSql": "completed_at",
+          "nameInDart": "completedAt",
+          "declaration": {
+            "source_uri": "package:driftgen/nexus_db.dart",
+            "offset": 2962,
+            "name": "completedAt"
+          },
+          "typeConverter": null,
+          "clientDefaultCode": null,
+          "defaultArgument": null,
+          "overriddenJsonName": null,
+          "referenceName": null,
+          "documentationComment": null,
+          "constraints": [],
+          "customConstraints": null
+        }
+      ],
+      "existing_data_class": null,
+      "table_constraints": [],
+      "custom_parent_class": null,
+      "interfaces_for_row_class": [],
+      "fixed_entity_info_name": null,
+      "base_dart_name": "TransferHistory",
+      "row_class_name": "TransferRecord",
+      "companion_class_name": null,
+      "without_rowid": false,
+      "strict": false,
+      "write_default_constraints": true,
+      "custom_constraints": [],
+      "attached_indices": []
+    }
+  },
+  "imports": [
+    "package:drift/drift.dart",
+    "package:drift/native.dart",
+    "package:path/path.dart"
+  ]
+}

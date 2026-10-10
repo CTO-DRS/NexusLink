@@ -1,7 +1,7 @@
 // NexusLink — server-side virtual device filesystem engine.
 // Each paired device maps to a real directory on disk, so list/ops/previews
 // work against real bytes (not mocks).
-import { promises as fs } from "fs"
+import { promises as fs, mkdirSync } from "fs"
 import path from "path"
 import type { FsCategory, FsEntry } from "./types"
 
@@ -12,6 +12,26 @@ export const DEVICE_ROOTS: Record<string, string> = {
   "pc-office": path.join(DATA_ROOT, "pc-fs"),
   "ipad-pro": path.join(DATA_ROOT, "tab-fs"),
   "redmi-note13": path.join(DATA_ROOT, "media"),
+}
+
+/**
+ * وكيل حقيقي (هاتف Flutter) لا يملك جذرًا في القرص مسبقًا — نُنشئ له مجلدًا
+ * فعليًا تحت agents/<deviceId> ونسجّله في الخريطة (idempotent). هذا يجعل
+ * ملفات الهاتف المرفوعة قابلة للتصفح من واجهة الويب تحت جهازه.
+ */
+export function ensureDeviceRoot(deviceId: string): string {
+  const id = String(deviceId || "").trim()
+  if (!id || !/^[a-z0-9][a-z0-9_-]*$/i.test(id)) {
+    throw new Error("معرّف جهاز غير صالح")
+  }
+  if (!DEVICE_ROOTS[id]) {
+    const root = path.join(DATA_ROOT, "agents", id)
+    DEVICE_ROOTS[id] = root
+    // mkdir متزامن هنا آمن: يُستدعى من مسارات API عند الاقتران/الرفع فقط
+    mkdirSync(root, { recursive: true })
+    mkdirSync(path.join(root, "Downloads"), { recursive: true })
+  }
+  return DEVICE_ROOTS[id]
 }
 
 const MIME: Record<string, string> = {

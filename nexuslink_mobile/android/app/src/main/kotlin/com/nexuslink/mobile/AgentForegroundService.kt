@@ -3,6 +3,7 @@ package com.nexuslink.mobile
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -18,24 +19,22 @@ import io.socket.emitter.Emitter
 import org.json.JSONObject
 
 /**
- * AgentForegroundService — قلب "وكيل الجهاز" (البند 6 من المهمة).
+ * AgentForegroundService — قلب "وكيل الجهاز".
  *
- * خدمة أمامية (Foreground Service, type=dataSync) تملك اتصال socket.io دائمًا
- * مع جسر الحماية (منفذ 3006 — القناة الحاضنة للجهاز في بروتوكول Nexus):
- *  · تسجيل الحضور: guard:hello-phone
- *  · منارة القرب كل 5 ثوانٍ: prox:beacon (أولوية للهاتف الحقيقي على المحاكاة)
- *  · تقرير حالة كل 30 ثانية: dev:state (بطارية/معرّف)
- *  · الاستماع لأوامر الكمبيوتر: dev:ring|light|lost|wipe|alarm|qs… (إقرار الآن، تنفيذ كامل في مرحلة الحماية)
- *  · إعادة اتصال تلقائي مدمجة + حارس دوري (watchdog) كل 15 ثانية
+ * خدمة أمامية (Foreground Service, type=dataSync) تملك اتصالين socket.io دائمين:
+ *  · جسر الحماية 3006 (القناة الحاضنة): حضور guard:hello-phone {name, deviceId}،
+ *    منارة prox:beacon كل 5s، تقرير dev:state كل 30s، أوامر dev:*،
+ *    وعروض نقل الملفات tx:offer → إشعار نظام (قبول/رفض) + بث إلى الواجهة.
+ *  · جسر الإنتاجية 3007: النصوص/الروابط السريعة clip:new و hand:new → بث إلى
+ *    الواجهة + إشعار نظام عندما تكون الواجهة غير حية.
  *
- * نمط الوصول (مطابق لعقد docs/protocol-contract.md):
- *  · gateway → ws://host:81 مع ?XTransformPort=3006 (نفس نمط عميل الويب عبر Caddy)
- *  · direct  → ws://host:3006 مباشرة
+ * إعادة اتصال تلقائية مدمجة + watchdog كل 15 ثانية — START_STICKY.
  */
 class AgentForegroundService : Service() {
 
     companion object {
         const val CHANNEL_ID = "nexus_agent_channel"
+        const val TX_CHANNEL_ID = "nexus_tx_channel"
         const val NOTIF_ID = 4201
 
         private const val BEACON_MS = 5_000L
@@ -50,9 +49,33 @@ class AgentForegroundService : Service() {
         @Volatile
         var currentServerKey: String? = null
             private set
+
+        /** هل واجهة Flutter حية؟ (تُضبط من Dart عبر setUiAlive) */
+        @Volatile
+        var uiAlive: Boolean = false
+
+        /** مخزن عروض النقل الأخيرة — تُصبّ في الواجهة عند إعادة فتحها. */
+        val offerBacklog = ArrayDeque<JSONObject>()
+        private const val BACKLOG_MAX = 20
+
+        fun stashOffer(o: JSONObject) {
+            synchronized(offerBacklog) {
+                offerBacklog.addLast(JSONObject(o.toString()))
+                while (offerBacklog.size > BACKLOG_MAX) offerBacklog.removeFirst()
+            }
+        }
+
+        fun drainOffers(): List<JSONObject> {
+            synchronized(offerBacklog) {
+                val out = ArrayList<JSONObject>(offerBacklog)
+                offerBacklog.clear()
+                return out
+            }
+        }
     }
 
     private var socket: Socket? = null
+    private var prodSocket: Socket? = null
 
     private var host = ""
     private var port = 81
@@ -71,6 +94,7 @@ class AgentForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        createTxChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -87,13 +111,14 @@ class AgentForegroundService : Service() {
         startForegroundCompat()
         setState("connecting")
         connect()
+        connectProd()
 
         // إعادة البدء إن قتلها النظام
         return START_STICKY
     }
 
     // ------------------------------------------------------------------
-    // الاتصال الدائم
+    // الاتصال الدائم — جسر الحماية 3006
     // ------------------------------------------------------------------
 
     private fun connect() {
@@ -121,6 +146,24 @@ class AgentForegroundService : Service() {
                 s.on(cmd) { args -> main.post { ackCommand(cmd, args) } }
             }
 
+            // عروض نقل الملفات (عقد §8): إشعار نظام + بث إلى الواجهة
+            s.on(AgentBridge.EV_TX_OFFER) { args ->
+                val data = args.firstOrNull() as? JSONObject ?: return@on
+                main.post { handleTxOffer(data) }
+            }
+            // أوامر الكمبيوتر على مهام التنزيل — تُبث للواجهة فقط (المحرك يعيش فيها)
+            for (ev in listOf(AgentBridge.EV_TX_PAUSE, AgentBridge.EV_TX_RESUME, AgentBridge.EV_TX_CANCEL)) {
+                s.on(ev) { args ->
+                    val data = args.firstOrNull() as? JSONObject ?: return@on
+                    main.post {
+                        MainActivity.pushDataEvent("txcmd", mapOf(
+                            "event" to ev,
+                            "id" to data.optString("id"),
+                        ))
+                    }
+                }
+            }
+
             s.connect()
             startWatchdog()
         } catch (e: Exception) {
@@ -129,13 +172,179 @@ class AgentForegroundService : Service() {
         }
     }
 
+    // ------------------------------------------------------------------
+    // جسر الإنتاجية 3007 — النصوص/الروابط السريعة
+    // ------------------------------------------------------------------
+
+    private fun connectProd() {
+        val prodPort = AgentBridge.PROD_PORT
+        val url = if (mode == "gateway") "http://$host:$port" else "http://$host:$prodPort"
+        try {
+            val opts = IO.Options()
+            opts.reconnection = true
+            opts.reconnectionDelay = 2_000
+            opts.reconnectionDelayMax = 15_000
+            opts.timeout = 10_000
+            if (mode == "gateway") {
+                opts.query = "XTransformPort=$prodPort"
+            }
+            val s = IO.socket(url, opts)
+            prodSocket = s
+
+            s.on(Socket.EVENT_CONNECT) {
+                android.util.Log.i(TAG, "prod bridge online")
+            }
+            s.on(AgentBridge.EV_CLIP_NEW) { args ->
+                val data = args.firstOrNull() as? JSONObject ?: return@on
+                main.post {
+                    MainActivity.pushDataEvent("clip", mapOf(
+                        "id" to data.optString("id"),
+                        "deviceId" to data.optString("deviceId"),
+                        "deviceName" to data.optString("deviceName"),
+                        "kind" to data.optString("kind"),
+                        "content" to data.optString("content"),
+                        "fileName" to if (data.has("fileName")) data.optString("fileName") else null,
+                        "size" to data.optLong("size"),
+                        "mode" to data.optString("mode"),
+                        "createdAt" to data.optLong("createdAt"),
+                    ))
+                    if (!uiAlive && data.optString("kind") == "text") {
+                        notifyTx(
+                            id = 7300 + (data.optString("id").hashCode() and 0x7fffffff) % 300,
+                            title = "نص من ${data.optString("deviceName", "الكمبيوتر")}",
+                            body = data.optString("content").take(160),
+                            offerId = null,
+                        )
+                    }
+                }
+            }
+            s.on(AgentBridge.EV_HAND_NEW) { args ->
+                val data = args.firstOrNull() as? JSONObject ?: return@on
+                main.post {
+                    MainActivity.pushDataEvent("hand", mapOf(
+                        "id" to data.optString("id"),
+                        "deviceId" to data.optString("deviceId"),
+                        "deviceName" to data.optString("deviceName"),
+                        "kind" to data.optString("kind"),
+                        "title" to data.optString("title"),
+                        "url" to data.optString("url"),
+                        "status" to data.optString("status"),
+                        "createdAt" to data.optLong("createdAt"),
+                    ))
+                    if (!uiAlive) {
+                        notifyTx(
+                            id = 7600 + (data.optString("id").hashCode() and 0x7fffffff) % 300,
+                            title = "رابط من ${data.optString("deviceName", "الكمبيوتر")}",
+                            body = data.optString("title").ifEmpty { data.optString("url") }.take(160),
+                            offerId = null,
+                        )
+                    }
+                }
+            }
+            s.connect()
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "prod connect failed", e)
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // عروض النقل tx:offer
+    // ------------------------------------------------------------------
+
+    private fun handleTxOffer(data: JSONObject) {
+        stashOffer(data)
+        MainActivity.pushDataEvent("tx", mapOf(
+            "id" to data.optString("id"),
+            "fileName" to data.optString("fileName"),
+            "size" to data.optLong("size"),
+            "mime" to if (data.has("mime")) data.optString("mime") else null,
+            "from" to data.optString("from"),
+            "srcDeviceId" to data.optString("srcDeviceId"),
+            "srcVPath" to data.optString("srcVPath"),
+            "at" to data.optLong("at"),
+        ))
+        val id = data.optString("id").hashCode() and 0x7fffffff
+        val sizeMb = data.optLong("size") / (1024.0 * 1024.0)
+        val sizeLabel = if (sizeMb >= 1024) {
+            String.format("%.1fGB", sizeMb / 1024)
+        } else String.format("%.1fMB", sizeMb)
+        notifyTx(
+            id = id,
+            title = "ملف وارد من ${data.optString("from", "الكمبيوتر")}",
+            body = "${data.optString("fileName")} — $sizeLabel",
+            offerId = data.optString("id"),
+        )
+    }
+
+    /** إشعار نقل: قبول يفتح التطبيق، رفض يُرسل مباشرة عبر القناة الدائمة. */
+    private fun notifyTx(id: Int, title: String, body: String, offerId: String?) {
+        try {
+            val contentIntent = PendingIntent.getActivity(
+                this, id,
+                Intent(this, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    offerId?.let { putExtra("nexus.offerId", it) }
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+
+            val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Notification.Builder(this, TX_CHANNEL_ID)
+            } else {
+                @Suppress("DEPRECATION")
+                Notification.Builder(this)
+            }
+            builder.setContentTitle(title)
+                .setContentText(body)
+                .setSmallIcon(android.R.drawable.stat_sys_download)
+                .setContentIntent(contentIntent)
+                .setAutoCancel(true)
+
+            if (offerId != null) {
+                // قبول → افتح التطبيق ليبدأ التنزيل بالمحرك الكامل
+                builder.addAction(
+                    0, "قبول",
+                    contentIntent,
+                )
+                // رفض → الخدمة ترفض مباشرة عبر القناة الدائمة
+                val rejectIntent = PendingIntent.getService(
+                    this, id + 1,
+                    Intent(this, AgentForegroundService::class.java).apply {
+                        putExtra("nexus.action", "reject")
+                        putExtra("nexus.offerId", offerId)
+                    },
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+                builder.addAction(0, "رفض", rejectIntent)
+            }
+
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .notify(id, builder.build())
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun handleServiceAction(intent: Intent?) {
+        if (intent?.getStringExtra("nexus.action") == "reject") {
+            val offerId = intent.getStringExtra("nexus.offerId") ?: return
+            try {
+                socket?.emit(AgentBridge.EV_TX_REJECT, JSONObject().put("id", offerId))
+                (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                    .cancel(offerId.hashCode() and 0x7fffffff)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     private val onConnect = Emitter.Listener {
         main.post {
             setState("online")
-            // 1) تسجيل الحضور لدى جسر الحماية
+            // 1) تسجيل الحضور لدى جسر الحماية (بمعرّف الجهاز — يفعّل عروض النقل)
             socket?.emit(
                 AgentBridge.EV_HELLO_PHONE,
-                JSONObject().put("name", deviceName),
+                JSONObject()
+                    .put("name", deviceName)
+                    .put("deviceId", deviceId),
             )
             // 2) بدء المنارة + تقرير الحالة
             startBeacons()
@@ -225,6 +434,8 @@ class AgentForegroundService : Service() {
                         s.connect()
                         setState("reconnecting")
                     }
+                    val p = prodSocket
+                    if (p != null && !p.connected()) p.connect()
                 } catch (_: Exception) {
                 }
                 main.postDelayed(this, WATCHDOG_MS)
@@ -252,6 +463,20 @@ class AgentForegroundService : Service() {
             ).apply {
                 description = "حالة الاتصال الدائم بسيرفر NexusLink"
                 setShowBadge(false)
+            }
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .createNotificationChannel(ch)
+        }
+    }
+
+    private fun createTxChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val ch = NotificationChannel(
+                TX_CHANNEL_ID,
+                "NexusLink — نقل الملفات",
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = "عروض الملفات الواردة واكتمال الاستلام"
             }
             (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
                 .createNotificationChannel(ch)
@@ -316,9 +541,12 @@ class AgentForegroundService : Service() {
         try {
             socket?.off()
             socket?.disconnect()
+            prodSocket?.off()
+            prodSocket?.disconnect()
         } catch (_: Exception) {
         }
         socket = null
+        prodSocket = null
         setState("stopped")
         super.onDestroy()
     }
@@ -326,15 +554,30 @@ class AgentForegroundService : Service() {
     private val TAG = "NexusAgent"
 }
 
-/** ثوابت الأحداث — مرآة حرفية لجسر الحماية (3006) في عقد البروتوكول. */
+/** ثوابت الأحداث — مرآة حرفية لجسري الحماية (3006) والإنتاجية (3007) في عقد البروتوكول. */
 object AgentBridge {
     const val GUARD_PORT = 3006
+    const val PROD_PORT = 3007
 
     const val EV_HELLO_PHONE = "guard:hello-phone"
     const val EV_BEACON = "prox:beacon"
     const val EV_DEV_STATE = "dev:state"
     const val EV_DEV_ACKED = "dev:acked"
     const val EV_LOST = "dev:lost"
+
+    // نقل الملفات (عقد §8)
+    const val EV_TX_OFFER = "tx:offer"
+    const val EV_TX_ACCEPT = "tx:accept"
+    const val EV_TX_REJECT = "tx:reject"
+    const val EV_TX_PROGRESS = "tx:progress"
+    const val EV_TX_STATE = "tx:state"
+    const val EV_TX_PAUSE = "tx:pause"
+    const val EV_TX_RESUME = "tx:resume"
+    const val EV_TX_CANCEL = "tx:cancel"
+
+    // الإنتاجية (عقد §4.5)
+    const val EV_CLIP_NEW = "clip:new"
+    const val EV_HAND_NEW = "hand:new"
 
     val PC_COMMANDS = listOf(
         "dev:ring", "dev:ring-stop", "dev:light", "dev:lost", "dev:lost-off",

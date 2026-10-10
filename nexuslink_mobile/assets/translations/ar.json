@@ -7,7 +7,8 @@
     "connect": "الاتصال",
     "devices": "الأجهزة",
     "log": "السجل",
-    "settings": "الإعدادات"
+    "settings": "الإعدادات",
+    "transfers": "النقل"
   },
   "status": {
     "online": "متصل",
@@ -54,9 +55,22 @@
     "battery": "البطارية",
     "rtt": "زمن الاستجابة",
     "storage": "التخزين",
-    "state": {"connected": "متصل", "offline": "غير متصل", "pairing": "يُقترن الآن"},
-    "mode": {"wifi": "واي فاي", "hotspot": "نقطة اتصال", "usb": "USB"},
-    "kind": {"phone": "هاتف", "tablet": "لوحي", "desktop": "كمبيوتر", "tv": "تلفاز"}
+    "state": {
+      "connected": "متصل",
+      "offline": "غير متصل",
+      "pairing": "يُقترن الآن"
+    },
+    "mode": {
+      "wifi": "واي فاي",
+      "hotspot": "نقطة اتصال",
+      "usb": "USB"
+    },
+    "kind": {
+      "phone": "هاتف",
+      "tablet": "لوحي",
+      "desktop": "كمبيوتر",
+      "tv": "تلفاز"
+    }
   },
   "log": {
     "title": "سجل النشاط",
@@ -76,7 +90,8 @@
     "serviceStopped": "خدمة الاتصال الدائمة متوقفة",
     "deviceInfo": "هويتك على الشبكة",
     "deviceId": "المعرّف الثابت",
-    "deviceName": "اسم الجهاز"
+    "deviceName": "اسم الجهاز",
+    "transfers": "نقل الملفات"
   },
   "perms": {
     "notificationsTitle": "إذن الإشعارات",
@@ -86,5 +101,55 @@
     "noNetwork": "لا يوجد اتصال بالشبكة",
     "timeout": "انتهت مهلة الاتصال",
     "server": "خطأ من السيرفر: {code}"
+  },
+  "tx": {
+    "send": "إرسال ملفات",
+    "pickFiles": "اختيار ملفات",
+    "pickFolder": "اختيار مجلد",
+    "needConnect": "اتصل بالسيرفر أولًا من شاشة الاتصال لتفعيل النقل",
+    "pendingShares": "مشاركات بانتظار الإرسال",
+    "shareText": "نص مشارَك: «{preview}»",
+    "shareFiles": "{n} ملف مشارَك من تطبيق آخر",
+    "sendViaNexus": "إرسال عبر NexusLink",
+    "dismiss": "تجاهل",
+    "incoming": "ملفات واردة — بانتظار قبولك",
+    "fromServer": "من {from} — سيُحفظ في Download/NexusLink",
+    "fromServerShort": "من الكمبيوتر",
+    "toServer": "إلى السيرفر",
+    "accept": "قبول",
+    "reject": "رفض",
+    "quick": "نصوص وروابط سريعة",
+    "quickText": "نص",
+    "quickLink": "رابط",
+    "copy": "نسخ",
+    "copied": "نُسخ إلى الحافظة",
+    "copyPath": "نسخ المسار",
+    "open": "فتح",
+    "queue": "طابور النقل",
+    "queueEmpty": "لا عمليات جارية — اختر ملفات للإرسال أو انتظر ملفًا واردًا",
+    "waiting": "في الانتظار…",
+    "paused": "متوقف مؤقتًا — سيُستأنف من نفس النقطة",
+    "pause": "إيقاف مؤقت",
+    "resume": "استئناف",
+    "cancel": "إلغاء",
+    "history": "سجل النقل (محفوظ في SQLite)",
+    "historyEmpty": "لا سجل بعد",
+    "clearFinished": "مسح المنتهية",
+    "done": "مكتمل",
+    "failed": "فاشل",
+    "cancelled": "ملغى",
+    "retry": "إعادة المحاولة",
+    "enqueued": "أُضيفت {n} مهمة إلى طابور الإرسال",
+    "folderConfirmTitle": "إرسال مجلد كامل؟",
+    "folderConfirmBody": "سيُرفع {n} ملفًا من هذا المجلد (بما فيه الفرعي) إلى مجلد Downloads في مرآة جهازك على السيرفر.",
+    "sendAll": "إرسال الكل",
+    "autoAcceptTitle": "قبول تلقائي من السيرفر الموثوق",
+    "autoAcceptSubtitle": "تبدأ ملفات الكمبيوتر الواردة بالتنزيل فورًا دون سؤال",
+    "autoCopyTitle": "نسخ النصوص والروابط تلقائيًا",
+    "autoCopySubtitle": "أي نص أو رابط يصل من الكمبيوتر يُنسخ إلى الحافظة مباشرة",
+    "photoSyncTitle": "رفع صور الكاميرا الجديدة تلقائيًا",
+    "photoSyncSubtitle": "عند الاتصال تراقب الخدمة مجلد DCIM عبر WorkManager وترفع الجديد",
+    "photoLastScan": "آخر مسح للصور",
+    "scanNow": "امسح الآن"
   }
 }

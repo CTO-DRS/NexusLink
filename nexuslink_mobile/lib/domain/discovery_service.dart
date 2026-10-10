@@ -27,13 +27,10 @@ class DiscoveryService {
     if (_discovery != null) return;
     try {
       final discovery = BonsoirDiscovery(type: serviceType);
-      final ready = await discovery.ready;
-      if (!ready) {
-        debugPrint('[mdns] discovery not ready (multicast غير متاح؟)');
-        return;
-      }
+      // bonsoir 5: ready = Future<void> — يكتمل عند الجاهزية أو يرمي خطأ
+      await discovery.ready;
       _discovery = discovery;
-      await discovery.discoverServices();
+      await discovery.start();
       discovery.eventStream?.listen(_onEvent, onError: (Object e) {
         debugPrint('[mdns] stream error: $e');
         stop();
@@ -50,10 +47,11 @@ class DiscoveryService {
       case BonsoirDiscoveryEventType.discoveryServiceResolved:
         final svc = event.service;
         if (svc == null) return;
-        final host = svc.host ?? '';
+        // bonsoir 5: العنوان يأتي فقط على ResolvedBonsoirService
+        final host = (svc is ResolvedBonsoirService ? svc.host : null) ?? '';
         if (host.isEmpty) return;
         final attrs = <String, String>{
-          for (final e in svc.attributes.entries) '${e.key}': '${e.value ?? ''}',
+          for (final e in svc.attributes.entries) e.key: e.value,
         };
         // تجاهل خدماتنا السابقة بنفس الاسم+العنوان
         final server = DiscoveredServer(

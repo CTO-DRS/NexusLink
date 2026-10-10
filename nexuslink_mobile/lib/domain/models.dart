@@ -180,6 +180,196 @@ class LogEntry {
 /// حالة الوكيل الخلفي (يأتي من الـ Foreground Service عبر EventChannel).
 enum AgentLinkState { stopped, connecting, online, offline, reconnecting }
 
+/// عرض ملف قادم — مرآة حدث tx:offer على جسر الحماية (عقد §8).
+class TxOfferEvent {
+  final String id; // معرّف مهمة السيرفر tx_…
+  final String fileName;
+  final int size;
+  final String? mime;
+  final String from; // اسم الجهاز المرسل
+  final String srcDeviceId; // الجهاز الافتراضي المصدر
+  final String srcVPath; // مسار الملف الافتراضي
+  final int at;
+
+  const TxOfferEvent({
+    required this.id,
+    required this.fileName,
+    required this.size,
+    required this.from,
+    required this.srcDeviceId,
+    required this.srcVPath,
+    required this.at,
+    this.mime,
+  });
+
+  static TxOfferEvent? tryParse(Map<Object?, Object?> m) {
+    final id = '${m['id'] ?? ''}';
+    if (id.isEmpty) return null;
+    return TxOfferEvent(
+      id: id,
+      fileName: '${m['fileName'] ?? 'ملف'}',
+      size: (m['size'] as num?)?.toInt() ?? 0,
+      mime: m['mime'] as String?,
+      from: '${m['from'] ?? 'الكمبيوتر'}',
+      srcDeviceId: '${m['srcDeviceId'] ?? ''}',
+      srcVPath: '${m['srcVPath'] ?? '/'}',
+      at: (m['at'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// نص سريع وارد — مرآة حدث clip:new على جسر الإنتاجية (عقد §4.5).
+class ClipItem {
+  final String id;
+  final String deviceId;
+  final String deviceName;
+  final String kind; // text | image | file
+  final String content;
+  final String? fileName;
+  final int size;
+  final String mode; // auto | manual
+  final int createdAt;
+
+  const ClipItem({
+    required this.id,
+    required this.deviceId,
+    required this.deviceName,
+    required this.kind,
+    required this.content,
+    required this.size,
+    required this.mode,
+    required this.createdAt,
+    this.fileName,
+  });
+
+  static ClipItem? tryParse(Map<Object?, Object?> m) {
+    final id = '${m['id'] ?? ''}';
+    if (id.isEmpty) return null;
+    return ClipItem(
+      id: id,
+      deviceId: '${m['deviceId'] ?? ''}',
+      deviceName: '${m['deviceName'] ?? ''}',
+      kind: '${m['kind'] ?? 'text'}',
+      content: '${m['content'] ?? ''}',
+      fileName: m['fileName'] as String?,
+      size: (m['size'] as num?)?.toInt() ?? 0,
+      mode: '${m['mode'] ?? 'manual'}',
+      createdAt: (m['createdAt'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// رابط/تسليم وارد — مرآة حدث hand:new (عقد §4.5).
+class HandItem {
+  final String id;
+  final String deviceId;
+  final String deviceName;
+  final String kind; // link | video | article
+  final String title;
+  final String url;
+  final String status;
+  final int createdAt;
+
+  const HandItem({
+    required this.id,
+    required this.deviceId,
+    required this.deviceName,
+    required this.kind,
+    required this.title,
+    required this.url,
+    required this.status,
+    required this.createdAt,
+  });
+
+  static HandItem? tryParse(Map<Object?, Object?> m) {
+    final id = '${m['id'] ?? ''}';
+    final url = '${m['url'] ?? ''}';
+    if (id.isEmpty || url.isEmpty) return null;
+    return HandItem(
+      id: id,
+      deviceId: '${m['deviceId'] ?? ''}',
+      deviceName: '${m['deviceName'] ?? ''}',
+      kind: '${m['kind'] ?? 'link'}',
+      title: '${m['title'] ?? url}',
+      url: url,
+      status: '${m['status'] ?? 'new'}',
+      createdAt: (m['createdAt'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+
+/// مرآة حرفية لـ TransferJob في السيرفر (src/lib/nexus/types.ts).
+class TransferJob {
+  final String id;
+  final String deviceId;
+  final String deviceName;
+  final String direction; // out | in
+  final String fileName;
+  final String srcPath;
+  final String destPath;
+  final int totalBytes;
+  final int transferred;
+  final String status; // queued|active|paused|done|error
+  final int speedBps;
+  final int chunksTotal;
+  final int chunksDone;
+  final int chunkSize;
+  final int startedAt;
+  final String? error;
+  final bool agent; // يُدار بواسطة وكيل حقيقي
+  final String? uploadId;
+  final String? srcDeviceId;
+  final String? mime;
+
+  const TransferJob({
+    required this.id,
+    required this.deviceId,
+    required this.deviceName,
+    required this.direction,
+    required this.fileName,
+    required this.srcPath,
+    required this.destPath,
+    required this.totalBytes,
+    required this.transferred,
+    required this.status,
+    required this.speedBps,
+    required this.chunksTotal,
+    required this.chunksDone,
+    required this.chunkSize,
+    required this.startedAt,
+    this.error,
+    this.agent = false,
+    this.uploadId,
+    this.srcDeviceId,
+    this.mime,
+  });
+
+  factory TransferJob.fromJson(Map<String, dynamic> j) => TransferJob(
+        id: '${j['id'] ?? ''}',
+        deviceId: '${j['deviceId'] ?? ''}',
+        deviceName: '${j['deviceName'] ?? ''}',
+        direction: '${j['direction'] ?? 'out'}',
+        fileName: '${j['fileName'] ?? ''}',
+        srcPath: '${j['srcPath'] ?? ''}',
+        destPath: '${j['destPath'] ?? ''}',
+        totalBytes: (j['totalBytes'] as num?)?.toInt() ?? 0,
+        transferred: (j['transferred'] as num?)?.toInt() ?? 0,
+        status: '${j['status'] ?? 'queued'}',
+        speedBps: (j['speedBps'] as num?)?.toInt() ?? 0,
+        chunksTotal: (j['chunksTotal'] as num?)?.toInt() ?? 0,
+        chunksDone: (j['chunksDone'] as num?)?.toInt() ?? 0,
+        chunkSize: (j['chunkSize'] as num?)?.toInt() ?? 0,
+        startedAt: (j['startedAt'] as num?)?.toInt() ?? 0,
+        error: j['error'] as String?,
+        agent: j['agent'] == true,
+        uploadId: j['uploadId'] as String?,
+        srcDeviceId: j['srcDeviceId'] as String?,
+        mime: j['mime'] as String?,
+      );
+}
+
+
 class AgentEvent {
   final AgentLinkState state;
   final String serverKey;

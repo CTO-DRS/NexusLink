@@ -53,6 +53,14 @@ export interface TransferJob {
   chunkSize: number
   startedAt: number
   error?: string
+  // ---- حقول الوكيل الحقيقي (اختيارية — لا تكسر عملاء الويب الحاليين) ----
+  /** النقل يُدار بواسطة وكيل حقيقي (tx:offer / tx:progress / tx:state) */
+  agent?: boolean
+  /** معرّف جلسة الرفع من الهاتف (رقم PUT مجزّأ قابل للاستئناف) */
+  uploadId?: string
+  /** الجهاز الافتراضي مصدر الملف (لعروض الإرسال من الكمبيوتر إلى الهاتف) */
+  srcDeviceId?: string
+  mime?: string
 }
 
 export interface StorageCategory {

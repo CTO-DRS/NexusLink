@@ -5,6 +5,7 @@
 // منفذ 3006 · نفس نمط remote-bridge (مدمج، idempotent).
 import { createServer } from "http"
 import { Server as SocketServer } from "socket.io"
+import { applyAgentTx } from "./transfer-engine"
 
 const PORT = 3006
 
@@ -57,8 +58,61 @@ function log(io2: SocketServer, text: string, kind: "in" | "ok" | "info" | "warn
 }
 
 // guard ضد الإقلاع المزدوج عند hot-reload
-const g = globalThis as unknown as { __nexusGuardBooted?: boolean }
+const g = globalThis as unknown as {
+  __nexusGuardBooted?: boolean
+  __nexusGuardIo?: SocketServer | null
+  __nexusGuardAgent?: { socketId: string | null; deviceId: string | null }
+}
 const BOOT_KEY = "__nexusGuardBooted"
+
+// سجل الوكيل الحقيقي (يُخزَّن في globalThis ليبقى بعد hot-reload)
+function agentReg(): { socketId: string | null; deviceId: string | null } {
+  if (!g.__nexusGuardAgent) g.__nexusGuardAgent = { socketId: null, deviceId: null }
+  return g.__nexusGuardAgent
+}
+
+function currentIo(): SocketServer | null {
+  return io ?? g.__nexusGuardIo ?? null
+}
+
+/** بث عام على جسر الحماية (لعملاء الويب). */
+export function guardEmit(event: string, data: unknown): boolean {
+  const ioX = currentIo()
+  if (!ioX) return false
+  try {
+    ioX.emit(event, data)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** إرسال موجّه للوكيل الحقيقي (هاتف Flutter المتصل بـ guard:hello-phone). */
+export function guardEmitToAgent(event: string, data: unknown): boolean {
+  const ioX = currentIo()
+  const reg = agentReg()
+  if (!ioX || !reg.socketId) return false
+  const s = ioX.sockets?.sockets?.get(reg.socketId)
+  if (!s) return false
+  try {
+    s.emit(event, data)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** هل الوكيل الحقيقي متصل الآن؟ */
+export function isAgentOnline(): boolean {
+  const ioX = currentIo()
+  const reg = agentReg()
+  if (!ioX || !reg.socketId) return false
+  return !!ioX.sockets?.sockets?.has(reg.socketId)
+}
+
+export function getAgentDeviceId(): string | null {
+  return agentReg().deviceId
+}
 
 export function guardBridgeStatus() {
   return {
@@ -81,6 +135,7 @@ export function ensureGuardBridge() {
       pingInterval: 25000,
     })
     io = io2
+    g.__nexusGuardIo = io2
 
     io2.on("connection", (socket) => {
       socket.emit("guard:hello", {
@@ -90,8 +145,12 @@ export function ensureGuardBridge() {
       })
 
       // ==== تسجيل الأطراف ====
-      socket.on("guard:hello-phone", (d: { name?: string }) => {
+      socket.on("guard:hello-phone", (d: { name?: string; deviceId?: string }) => {
         phoneGuardOnline = true
+        // تسجيل الوكيل الحقيقي (لإرسال عروض النقل tx:offer إليه لاحقًا)
+        const reg = agentReg()
+        reg.socketId = socket.id
+        if (d?.deviceId) reg.deviceId = String(d.deviceId)
         io2.emit("dev:log", { id: uid(), text: `هاتف الحماية متصل: ${d?.name ?? "هاتف Nexus"} — منارة القرب تعمل`, kind: "ok", at: Date.now() })
         io2.emit("guard:phone-online", { online: true })
       })
@@ -101,9 +160,24 @@ export function ensureGuardBridge() {
           const socks = io2?.sockets?.sockets
           if (socks && socks.size > 0) return
           phoneGuardOnline = false
+          const reg = agentReg()
+          if (reg.socketId === socket.id) reg.socketId = null
           io2?.emit("guard:phone-online", { online: false })
         }, 1500)
       })
+
+      // ==== أحداث النقل من الوكيل → تحديث سجل المهام + ترحيل للويب ====
+      const TX_EVENTS = ["tx:accept", "tx:reject", "tx:progress", "tx:state"] as const
+      for (const ev of TX_EVENTS) {
+        socket.on(ev, (data: Record<string, unknown>) => {
+          try {
+            const job = applyAgentTx(ev, data || {})
+            socket.broadcast.emit("tx:update", { ev, job, at: Date.now() })
+          } catch {
+            /* حدث نقل تالف — تجاهل */
+          }
+        })
+      }
 
       // ==== منارة القرب ====
       socket.on("prox:beacon", (d: { rssi?: number; device?: string }) => {

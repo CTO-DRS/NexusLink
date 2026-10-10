@@ -85,3 +85,45 @@ Stage Summary:
 - طبقة اتصال الوكيل مكتملة ومطابقة للعقد حرفيًا + 3 إصلاحات سيرفر (G-2/G-3/G-6).
 - الفجوة المتبقية المتعمدة: G-1 (تحقق سر QR) مؤجلة لمرحلة الأمان كما طُلب؛ RSSI المنارة ثابت حتى مرحلة الحماية.
 - خطوة تالية منطقية: مرحلة الوسائط (كاميرا/شاشة عبر WebRTC على 3005) أو مرحلة الاتصالات (مرآة إشعارات عبر NotificationListenerService على 3003) حسب ترتيب المستخدم.
+
+---
+Task ID: FA-3
+Agent: Super Z (main)
+Task: مرحلة Flutter-2 — نقل الملفات فوق القناة المسجلة (بنفس بروتوكول السيرفر) + 6 بنود + اختبار النجاح 2GB ثنائي الاتجاه مع القتل والاستئناف
+
+Work Log:
+- القاعدة الذهبية أولًا: قراءة transfer-engine/fs-server/preview/devices/transfer routes — تبيّن أن "نقل" السيرفر الحالي نسخ محلي بين مجلدات افتراضية، ولا مسار بايتات حقيقي للهاتف. فجوات جديدة: G-8 (preview يتجاهل Range مع download=1)، G-9 (الوكيل بلا جذر ملفات)، G-10 (لا إشعار tx للهاتف)، G-11 (إيقاف/إلغاء الويب لا يصل الهاتف).
+- إصلاحات السيرفر (مطابقة العقد لا اختراعه):
+  · preview: يلبّي 206/416 دائمًا عند وجود Range (حتى مع download=1).
+  · fs-server: ensureDeviceRoot — جذر فعلي data/nexus-storage/agents/<id>/ (Downloads جاهز) يرتبط بـ pair والرفع؛ ملفات الهاتف تُتصفح من الويب تحت جهازه.
+  · guard-bridge: سجل الوكيل في globalThis (يقاوم hot-reload) عبر hello-phone {name, deviceId}، دوال guardEmitToAgent/isAgentOnline/getAgentDeviceId، ترحيل tx:accept/reject/progress/state → applyAgentTx يحدّث مهمة الويب ويبث tx:update.
+  · مسار جديد /api/fs/upload: init (taskId مستقر = idempotent استئناف، يعيد حجم .nexuspart) · PUT بايتات خام بـ offset (200/409 drift/409 paused) · complete/pause/resume/abort · GET status. مهمة TransferJob حية (direction out + agent + uploadId) تتحدث مع كل PUT.
+  · devices/send-file: الوكيل الحي → مهمة queued + tx:offer عبر الجسر (بدل النسخ المحلية)؛ تسقط للنسخة القديمة إن انقطع (توافق كامل).
+  · transfer route: pause/resume/cancel يوجّه للوكيل tx:pause/resume/cancel؛ إلغاء مهمة رفع يجهض الجزئي.
+  · types.ts: حقول اختيارية (agent/uploadId/srcDeviceId/mime) بلا كسر.
+  · ويب: pick-target.ts يختار الهدف تلقائيًا (يفضّل الوكيل الحقيقي غير المزروع) في files-view/preview-modal؛ CLI كان جاهزًا.
+- تطبيق Flutter (nexuslink_mobile):
+  · protocol.dart: أحداث tx:* (3006) + ProdEvents (3007) + TxProtocol (chunk 2MB، /Downloads، NexusLink، مخفف progress).
+  · transfer_api.dart: init/PUT/complete/pause/resume/abort/status + openRange (206) + serverJobs — أشكال مطابقة حرفيًا، استثناءات TxDrift/TxPaused.
+  · transfer_engine.dart: محرك كامل (طابور ≤2 متزامنة، سرعة EMA نافذة 3s، إيقاف/استئناف/إلغاء/إعادة، استئناف بعد القتل من الإزاحات المشتقة من الملفات نفسها، توقيف على drift/paused، تنظيف مصادر cache بعد الرفع، إشارات accept/reject/progress/state عبر TxSignaling محقونة).
+  · signaling.dart: سوكِتان UI (3006 نقل + 3007 نصوص/روابط) بنمط gateway/direct نفسه، بث offers/clips/hands/commands.
+  · native_bridge.dart: publishDownload (نشر MediaStore + إشعار نظام)، drainShare، queryNewPhotos (نسخ cache)، openPath/openUrl، cancelNotif، setUiAlive.
+  · DB v2: جدول TransferHistory (معرّف مستقر = taskId السيرفر للرفع، offsets مشتقة من الملفات) + @DataClassName(TransferRecord) + ترحيل — .g.dart أعيد توليده بإصدار مطابق 2.23.1 (driftgen).
+  · transfer_providers.dart: TxSettings محفوظة (قبول تلقائي/نسخ تلقائي/صور + علامة المسح)، EngineController (محرك لكل serverKey + restore + resumePending عند الاتصال)، SignalingController (ربط العروض مع إزالة تكرار عبر offerId + إخفاء إشعار الخدمة عند معالجة الواجهة)، quickIntake، shareIntake، PhotoSyncController.
+  · UI: شاشة النقل كاملة (عروض واردة قبول/رفض، طابور بتقدم/سرعة/إيقاف/استئناف/إلغاء، نصوص وروابط سريعة بنسخ/فتح، سجل SQLite مع إعادة محاولة، بطاقات المشاركات المعلقة، منتقي ملفات ومجلد file_picker بتأكيد عدد الملفات) + شارة عروض على تبويب Shell (5 تبويبات) + قسم إعدادات النقل + lifecycle: setUiAlive + drainShare + scanNow.
+- Kotlin/Android:
+  · الخدمة: hello-phone بـ deviceId، سوكِت ثانٍ لـ 3007 (clip/hand → بث + إشعار عند غياب الواجهة)، tx:offer → مخزن backlog (20) + بث للواجهة + إشعار (قبول يفتح التطبيق بحمولة offerId، رفض يرسل tx:reject مباشرة من الخدمة)، tx:pause/resume/cancel → بث، قناة إشعارات نقل مستقلة.
+  · MainActivity: publishDownload (MediaStore Download/NexusLink + IS_PENDING، فريد تلقائيًا، إشعار اكتمال) · drainShare (SEND/SEND_MULTIPLE → نسخ cache) · queryNewPhotos (DATE_ADDED + DCIM/Pictures + صلاحية 33/≤32) · openPath (FileProvider) · openUrl · cancelNotif · setUiAlive · backlog تصب في Dart عند فتح الواجهة.
+  · PhotoSyncWorker (WorkManager دوري 15د، نفس علامة Dart، يبلّغ الواجهة الحية فقط — الرفع عبر محرك Dart والعلامة تتقدم بعد الصف فلا فقد) + جدولة من onCreate.
+  · Manifest: READ_MEDIA_IMAGES + READ_EXTERNAL_STORAGE(≤32) + intent-filters SEND/SEND_MULTIPLE + FileProvider مع res/xml/file_paths.xml · gradle: work-runtime-ktx 2.9.1 + core-ktx.
+- التحقق:
+  · flutter analyze (SDK كامل 3.24.5/Dart 3.5.4 نُزل): **No issues found!** — من 90 ملاحظة أولى إلى صفر (بونسوار 5 API: start()/ResolvedBonsoirService، mobile_scanner errorBuilder ثلاثي، TextDirection عبر dart:ui، Int64Column/BigInt، إخفاء تعارض أسماء الصفوف).
+  · eslint نظيف على كل ملفات السيرفر/الويب المعدلة، dev.log بلا أخطاء، الأجهزة عادت للـ seed، مجلدات الاختبار حُذفت (القرص كما كان).
+  · **E2E حي (scripts/agent-tx-e2e.mjs): 27/27 ناجح** ضد السيرفر الفعلي — تسجيل idempotent + قناة 3006 بـ deviceId؛ رفع 2GB (98→177MB/s) قتل عند 40% → إعادة init أعادت نفس الجلسة والإزاحة بدقة → اكتمال → sha256 مطابق → مهمة done؛ إرسال 2GB من الويب → tx:offer خلال <5s → قبول → قتل حقيقي عند 0.70GB → الجزئي محفوظ → استئناف 206 Range → sha256 مطابق → tx:state done؛ إيقاف/إلغاء من الكمبيوتر وصلا الهاتف (tx:pause/tx:cancel)؛ PUT أثناء إيقاف الويب 409 paused ثم يعمل بعد الاستئناف؛ clip:new و hand:new وصلا عبر 3007.
+  · إنتاجية قياس مستقل: رفع 113MB/s وتنزيل 158MB/s عبر loopback على Next dev.
+
+Stage Summary:
+- بنود المرحلة الستة كلها منفذة: (1) منتقي ملفات/مجلدات + طابور تقدم/سرعة/إيقاف/إلغاء + استئناف، (2) استقبال بإشعار + قبول/رفض/تلقائي + حفظ Download/NexusLink + إشعار نظام، (3) نصوص/روابط سريعة بنسخ تلقائي/فتح، (4) مشاركة أندرويد «إرسال عبر NexusLink»، (5) سجل SQLite كامل، (6) صور تلقائية عبر WorkManager.
+- اختبار النجاح مكتمل بالبايت والhash ثنائي الاتجاه مع قتل في المنتصف — 27/27.
+- بقي متعمدًا: التشفير E2E على النقل (مرحلة الأمان عبر 3009 — الخيار الحالي LAN وثيق)، iOS-broadcast extension للـ Share (مرحلة لاحقة)، والرفع المباشر داخل الخدمة الخلفية Kotlin حين تكون الواجهة ميتة تمامًا (حاليًا: الاستئناف يبدأ مع إعادة فتح التطبيق — مقصود لأن محرك النقل يعيش في Dart).
+- خطوة تالية منطقية: مرحلة الاتصالات (NotificationListenerService مرآة الإشعارات على 3003) أو مرحلة الأمان (E2E للنقل عبر 3009) حسب ترتيب المستخدم.

@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' show Value;
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -165,7 +167,6 @@ class ConnectionStateModel {
 }
 
 class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
-  AgentLinkState _agentState = AgentLinkState.stopped;
   StreamSubscription<AgentEvent>? _eventsSub;
 
   @override
@@ -186,7 +187,6 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
 
   void _listenAgentEvents() {
     _eventsSub ??= ref.read(agentChannelProvider).events.listen((e) {
-      _agentState = e.state;
       final log = ref.read(activityLogProvider.notifier);
       switch (e.state) {
         case AgentLinkState.online:
@@ -306,7 +306,7 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
     final db = ref.read(nexusDbProvider);
     if (forgetRow && cur?.endpoint != null) {
       final row = await db.byKey(cur!.endpoint!.key);
-      if (row != null) await db.forgetRow(row.id);
+      if (row != null) await db.forget(row.id);
       ref.invalidate(trustedServersProvider);
     } else {
       await db.clearLastUsed();

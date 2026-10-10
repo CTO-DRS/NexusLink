@@ -34,7 +34,8 @@ export async function GET(req: NextRequest) {
     }
 
     const range = req.headers.get("range")
-    if (range && !download) {
+    // Range مُلبّى أيضًا مع download=1 — يحتاجه وكيل الجهاز لاستئناف التنزيل
+    if (range) {
       const m = range.match(/bytes=(\d*)-(\d*)/)
       if (m) {
         const start = m[1] ? parseInt(m[1], 10) : 0
