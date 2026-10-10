@@ -1,0 +1,90 @@
+{
+  "app": {
+    "title": "NexusLink",
+    "tagline": "Device Agent — your local network only"
+  },
+  "nav": {
+    "connect": "Connect",
+    "devices": "Devices",
+    "log": "Log",
+    "settings": "Settings"
+  },
+  "status": {
+    "online": "Online",
+    "offline": "Offline",
+    "connecting": "Connecting…",
+    "reconnecting": "Reconnecting…",
+    "service": "Background service running"
+  },
+  "connect": {
+    "title": "Connect to server",
+    "subtitle": "Pick one way: auto-discovery, scan the QR shown on your computer, or enter the address manually",
+    "auto": "Auto-discovery (mDNS)",
+    "autoHint": "Looking for the _nexuslink._tcp service on your LAN",
+    "scanning": "Searching…",
+    "nothingFound": "No servers yet — make sure phone and computer share the same Wi-Fi",
+    "qr": "Scan QR code",
+    "qrHint": "Open the web app on your computer → Devices → “Show pairing QR”, then point the camera at it",
+    "manual": "Manual entry",
+    "ip": "IP address",
+    "port": "Port",
+    "portHint": "81 via gateway, or 3000 direct",
+    "connect": "Connect & pair",
+    "checking": "Checking connection…",
+    "pairing": "Registering device…",
+    "startingService": "Starting background service…",
+    "done": "Paired successfully",
+    "healthOk": "Server responds ({rtt} ms)",
+    "healthFail": "Server did not respond — check address and network",
+    "qrInvalid": "That QR is not a valid NexusLink pairing code",
+    "secret": "Pairing code",
+    "current": "Current server",
+    "disconnect": "Disconnect",
+    "trustedServers": "Trusted servers",
+    "forget": "Forget",
+    "use": "Switch to it",
+    "pairedAt": "Paired at",
+    "discoveredBy": "Source"
+  },
+  "devices": {
+    "title": "Paired devices",
+    "refresh": "Refresh",
+    "empty": "No devices yet — connect to a server first",
+    "thisDevice": "This device",
+    "battery": "Battery",
+    "rtt": "RTT",
+    "storage": "Storage",
+    "state": {"connected": "Connected", "offline": "Offline", "pairing": "Pairing"},
+    "mode": {"wifi": "Wi-Fi", "hotspot": "Hotspot", "usb": "USB"},
+    "kind": {"phone": "Phone", "tablet": "Tablet", "desktop": "Desktop", "tv": "TV"}
+  },
+  "log": {
+    "title": "Activity log",
+    "empty": "No events yet",
+    "clear": "Clear"
+  },
+  "settings": {
+    "title": "Settings",
+    "appearance": "Appearance",
+    "themeSystem": "System",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "language": "Language",
+    "about": "About",
+    "aboutBody": "NexusLink Device Agent — runs on your local network only, with no AI and no cloud services.",
+    "serviceRunning": "Persistent connection service is running (Foreground Service)",
+    "serviceStopped": "Persistent connection service is stopped",
+    "deviceInfo": "Your identity on the network",
+    "deviceId": "Stable ID",
+    "deviceName": "Device name"
+  },
+  "perms": {
+    "notificationsTitle": "Notification permission",
+    "notificationsBody": "Notifications are needed to keep the persistent connection status visible in the system bar — this prevents Android from killing the channel in the background."
+  },
+  "err": {
+    "noNetwork": "No network connection",
+    "timeout": "Connection timed out",
+    "server": "Server error: {code}"
+  }
+}

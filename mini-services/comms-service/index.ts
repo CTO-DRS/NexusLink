@@ -307,9 +307,34 @@ io.on('connection', (socket) => {
   })
 })
 
+// ==== إعلان mDNS: خدمة _nexuslink._tcp (الإصلاح G-3) ====
+// تطبيق الهاتف (وكيل Nexus) يكتشف السيرفر تلقائيًا عبر bonsoir/mDNS.
+// كل شيء داخل try/catch — فشل الـ multicast لا يوقف الجسر أبدًا.
+async function startMdns() {
+  try {
+    const { Bonjour } = await import("bonjour-service")
+    const bonjour = new Bonjour()
+    const svc = bonjour.publish({
+      name: "NEXUS-PC",
+      type: "nexuslink", // → _nexuslink._tcp
+      port: 81,          // بوابة Caddy (نفس نمط ?XTransformPort)
+      txt: {
+        proto: "Nexus/1.2", name: "NEXUS-PC",
+        gateway: "81", rest: "3000", comms: "3003", remote: "3004",
+        media: "3005", guard: "3006", prod: "3007", sec: "3009",
+      },
+    })
+    svc.on("up", () => console.log("[mdns] advertising _nexuslink._tcp (port 81)"))
+    svc.on("error", (e: Error) => console.warn("[mdns] publish error:", e.message))
+  } catch (e) {
+    console.warn("[mdns] غير متاح في هذه البيئة:", e instanceof Error ? e.message : e)
+  }
+}
+
 httpServer.listen(PORT, () => {
   console.log(`NexusLink Comms Bridge (virtual phone) on port ${PORT}`)
   scheduleAuto()
+  void startMdns()
 })
 
 process.on('SIGTERM', () => { httpServer.close(() => process.exit(0)) })

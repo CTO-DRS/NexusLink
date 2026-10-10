@@ -54,3 +54,34 @@ Work Log:
 Stage Summary:
 - العقد مستخرج حرفيًا ومكتمل: 8 منافذ، 6 جسور socket.io، ~120 حدثًا/endpoint، عقد تشفير دقيق بالبايت، 5 فجوات مقترح إصلاحها على السيرفر نفسه.
 - جاهز لاستلام المهمة المرحلية المحددة للـ Flutter Agent — أي كود اتصال سيطابق docs/protocol-contract.md حرفيًا.
+
+---
+Task ID: FA-2
+Agent: Super Z (main)
+Task: مرحلة Flutter-1 — إنشاء مشروع nexuslink_mobile وتنفيذ طبقة الاتصال كاملة (7 بنود + اختبار النجاح)
+
+Work Log:
+- إصلاحات السيرفر اللازمة للمرحلة (وفق القاعدة الذهبية):
+  · G-2: /api/devices/qr يشتق host/port من ترويسة Host (تحقق: عبر Caddy → 192.168.1.5:81، مباشرة → 127.0.0.1:3000) ويعيد payload نصيًا + خريطة منافذ الجسور + name.
+  · G-6: pair يقبل {id?, ip?, battery?, storageTotal?, storageUsed?, model?} اختياريًا — idempotent عبر id، بلا كسر للعميل القديم.
+  · G-3: comms-service يعلن NEXUS-PC._nexuslink._tcp عبر bonjour-service@1.4.4 (bun add) مع TXT كامل — try/catch كامل.
+- مشروع Flutter كامل الملفات في nexuslink_mobile/ (بلا flutter create — بيئة بلا SDK):
+  · بنية مطالَبة: presentation/domain/data + native Kotlin + core/state.
+  · pubspec بإصدارات مثبتة: riverpod 2.6.1، socket_io_client 2.0.3+1، bonsoir 5.1.0، mobile_scanner 5.2.3، drift 2.20.3، easy_localization 3.0.7، google_fonts 6.2.1، permission_handler 11.3.1.
+  · الثيم: تحويل oklch→hex عبر scripts/oklch-to-hex.mjs (primary #009B8F/#2EB5A4، خلفيات/حدود/مطات مطابقة) + IBM Plex Sans Arabic + BottomNavigationBar بأربعة تبويبات + dark/light.
+  · شاشة الاتصال: mDNS (bonsoir) + mobile_scanner QR (يفك {v,proto,host,port,secret,ts,name,ports}) + إدخال يدوي (يكتشف gateway/direct تلقائيًا بمحاولات) + فحص ping + شريط حالة حي.
+  · data: nexus_api (ping/pair/devices بأشكال مطابقة حرفيًا)، device_identity (Android ID ثابت من Kotlin)، agent_channel (MethodChannel/EventChannel)، drift جدول TrustedServers (serverKey unique، mode، deviceId، pairingSecret، isLastUsed) + .g.dart مولّد فعليًا.
+  · state: Riverpod (AsyncNotifier للاتصال: فحص→تسجيل→حفظ→بدء خدمة→online؛ StreamProvider بولينغ أجهزة 4s؛ سجل نشاط؛ اكتشاف؛ ثيم).
+  · native: MainActivity.kt (startAgent/stopAgent/lastState/deviceInfo + EventChannel) + AgentForegroundService.kt (io.socket:socket.io-client:2.1.0، gateway ?XTransformPort=3006 أو direct، guard:hello-phone، prox:beacon كل 5s، dev:state كل 30s، إقرار dev:*، watchdog 15s، إشعار دائم dataSync، START_STICKY).
+  · Manifest: FOREGROUND_SERVICE + FOREGROUND_SERVICE_DATA_SYNC + POST_NOTIFICATIONS + CHANGE_WIFI_MULTICAST_STATE + service type dataSync.
+  · gradle كامل (AGP 8.3.2/Kotlin 1.9.24/Gradle 8.4 + wrapper jar حقيقي من مستودع gradle) + ترجمات ar/en.
+- تحقق:
+  · dart analyze عبر Dart SDK 3.5.4 (نزّلته): صفر أخطاء بنية (كل الأخطاء ظاهرية = رموز Flutter غير محلولة بلا pub get).
+  · drift codegen فعلي ببنية mini-package (dart run build_runner build) — 896 سطرًا مولّدة وأُرفقت.
+  · محاكاة الوكيل E2E (scripts/agent-e2e-sim.mjs) عبر Node/socket.io-client: **14/14 ناجح** — QR حقيقي عبر البوابة، ping 5ms، pair بحقول الوكيل، ظهور فوري في GET /api/devices بstate=connected، socket.io عبر ?XTransformPort=3006 (نمط الخدمة)، phoneGuardOnline=true، منارة source=real، نبضات prox:state تتدفق، sec:announce على 3009 مقبول بلا pending-trust. جهاز المحاكاة نُسي بعد الاختبار.
+  · eslint نظيف على الملفات المعدلة + الويب يعمل.
+
+Stage Summary:
+- طبقة اتصال الوكيل مكتملة ومطابقة للعقد حرفيًا + 3 إصلاحات سيرفر (G-2/G-3/G-6).
+- الفجوة المتبقية المتعمدة: G-1 (تحقق سر QR) مؤجلة لمرحلة الأمان كما طُلب؛ RSSI المنارة ثابت حتى مرحلة الحماية.
+- خطوة تالية منطقية: مرحلة الوسائط (كاميرا/شاشة عبر WebRTC على 3005) أو مرحلة الاتصالات (مرآة إشعارات عبر NotificationListenerService على 3003) حسب ترتيب المستخدم.

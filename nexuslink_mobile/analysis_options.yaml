@@ -1,0 +1,13 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+
+linter:
+  rules:
+    prefer_const_constructors: true
+    prefer_final_locals: true
+    avoid_print: false   # السجلات عبر debugPrint فقط، لكن نسمح بالمطبوعات في الكود الأصلي
+    always_declare_return_types: true

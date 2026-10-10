@@ -35,23 +35,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
     case "pair": {
-      // body: { name, kind } — completes pairing with a freshly scanned secret
-      const exists = s.devices.find((x) => x.name === body.name)
+      // body: { name, kind, id?, ip?, battery?, storageTotal?, storageUsed?, model? }
+      // يُستدعى من وكيل الجهاز (تطبيق Flutter): id = معرّف ثابت (Android ID) يجعل
+      // إعادة التسجيل idempotent، والحقول الاختيارية تنقل الحالة الحقيقية للجهاز.
+      const exists = s.devices.find(
+        (x) => (body.id && typeof body.id === "string" && x.id === body.id) || x.name === body.name
+      )
       if (exists) {
         exists.state = "connected"
         exists.lastSeen = Date.now()
+        if (typeof body.battery === "number") exists.battery = Math.max(0, Math.min(100, body.battery))
+        if (typeof body.storageTotal === "number") exists.storageTotal = body.storageTotal
+        if (typeof body.storageUsed === "number") exists.storageUsed = body.storageUsed
+        if (typeof body.ip === "string" && body.ip) exists.ip = body.ip
         return NextResponse.json({ ok: true, device: exists })
       }
+      const stableId =
+        typeof body.id === "string" && body.id.trim()
+          ? body.id.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "")
+          : ""
       const d: NexusDevice = {
-        id: body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "device-new",
+        id: stableId || body.name?.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "device-new",
         name: body.name || "جهاز جديد",
         kind: body.kind || "phone",
         state: "connected",
         mode: "wifi",
-        ip: `192.168.1.${50 + Math.floor(Math.random() * 100)}`,
-        battery: 60 + Math.floor(Math.random() * 40),
-        storageTotal: 128 * 1024 ** 3,
-        storageUsed: 40 * 1024 ** 3,
+        ip: typeof body.ip === "string" && body.ip ? body.ip : `192.168.1.${50 + Math.floor(Math.random() * 100)}`,
+        battery: typeof body.battery === "number" ? Math.max(0, Math.min(100, body.battery)) : 60 + Math.floor(Math.random() * 40),
+        storageTotal: typeof body.storageTotal === "number" ? body.storageTotal : 128 * 1024 ** 3,
+        storageUsed: typeof body.storageUsed === "number" ? body.storageUsed : 40 * 1024 ** 3,
         lastSeen: Date.now(),
         rttMs: 8 + Math.floor(Math.random() * 20),
         pairedAt: Date.now(),

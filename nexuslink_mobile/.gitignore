@@ -1,0 +1,25 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# drift codegen is committed (nexus_db.g.dart) — regenerate with:
+#   dart run build_runner build --delete-conflicting-outputs
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Android
+android/.gradle/
+android/local.properties
+android/key.properties
+*.jks
+*.keystore
+
+# Misc
+*.log
+.DS_Store

@@ -1,0 +1,47 @@
+name: nexuslink_mobile
+description: "NexusLink Device Agent — وكيل الجهاز لمنصة ربط الأجهزة NexusLink (LAN فقط)"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ---- الحالة (المعتمد: Riverpod) ----
+  flutter_riverpod: ^2.6.1
+
+  # ---- الاتصال بالسيرفر ----
+  socket_io_client: ^2.0.3+1   # قنوات socket.io التفاعلية (نفس بروتوكول السيرفر v4)
+  http: ^1.2.2                  # REST (/api/*)
+  bonsoir: ^5.1.0               # اكتشاف mDNS: _nexuslink._tcp
+  mobile_scanner: ^5.2.3        # مسح QR الاقتران
+
+  # ---- التخزين المحلي (المعتمد: drift/SQLite) ----
+  drift: ^2.20.3
+  sqlite3_flutter_libs: ^0.5.24
+  path_provider: ^2.1.4
+  path: ^1.9.0
+  shared_preferences: ^2.3.2
+
+  # ---- التعريب والمظهر ----
+  easy_localization: ^3.0.7
+  google_fonts: ^6.2.1          # IBM Plex Sans Arabic — نفس خط نسخة الويب
+  intl: any
+
+  # ---- الأذونات (طلب وقت الاستخدام) ----
+  permission_handler: ^11.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  drift_dev: ^2.20.3
+  build_runner: ^2.4.13
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/translations/
