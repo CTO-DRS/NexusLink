@@ -127,3 +127,21 @@ Stage Summary:
 - اختبار النجاح مكتمل بالبايت والhash ثنائي الاتجاه مع قتل في المنتصف — 27/27.
 - بقي متعمدًا: التشفير E2E على النقل (مرحلة الأمان عبر 3009 — الخيار الحالي LAN وثيق)، iOS-broadcast extension للـ Share (مرحلة لاحقة)، والرفع المباشر داخل الخدمة الخلفية Kotlin حين تكون الواجهة ميتة تمامًا (حاليًا: الاستئناف يبدأ مع إعادة فتح التطبيق — مقصود لأن محرك النقل يعيش في Dart).
 - خطوة تالية منطقية: مرحلة الاتصالات (NotificationListenerService مرآة الإشعارات على 3003) أو مرحلة الأمان (E2E للنقل عبر 3009) حسب ترتيب المستخدم.
+
+---
+Task ID: FA-2-R
+Agent: Super Z (main)
+Task: إعادة تسليم نص مهمة FA-2 (طبقة الاتصال) في جلسة جديدة — تحقق كامل من الحالة المكتملة بدل إعادة البناء
+
+Work Log:
+- تبيّن أن الرسالة المعاد تسليمها هي نص مهمة FA-2 حرفيًا، وأنها (وما بعدها FA-3) منفّذتان على القرص — فاعتُمد التحقق الشامل بدل إعادة الإنشاء (لا إتلاف لعمل سليم).
+- تحقق ملفي بندًا ببند (7 بنود): pubspec (riverpod/socket_io_client/bonsoir/mobile_scanner/drift/easy_localization/google_fonts/permission_handler/file_picker) · main+app (RTL كامل + dark/light + دورة حياة setUiAlive) · theme.dart (ألوان oklch→hex مطابقة للويب + IBM Plex Sans Arabic + BottomNavigationBar) · discovery_service (bonsoir 5: ready/ResolvedBonsoirService) · connect_screen (mDNS + QR mobile_scanner بثلاث صور errorBuilder + يدوي بمحاولة gateway→direct + بطاقات خوادم موثوقة بتبديل/نسيان) · nexus_api (ping بـ pong:true + pair بالحقول الاختيارية + devices + qr) · providers (خط 5 مراحل: checking→pairing→startingService→online + استعادة آخر خادم) · nexus_db v2 (TrustedServers + TransferHistory) · device_identity (Android ID عبر MethodChannel) · AgentForegroundService.kt (586 سطرًا: سوكِتان 3006/3007، reconnection 2–15s + watchdog 15s، START_STICKY، منارة 5s، حالة 30s، عروض tx بإشعار قبول/رفض، backlog 20) · MainActivity.kt (501 سطرًا: startAgent/stopAgent/lastState/deviceInfo + pushDataEvent + مشاركات) · Manifest (dataSync + SEND/SEND_MULTIPLE + FileProvider + صلاحيات وقت الاستخدام).
+- إصلاحات السيرفر المرافقة قائمة وفعّالة: G-2 (qr يشتق host من ترويسة Host)، G-3 (comms-service يعلن _nexuslink._tcp عبر bonjour-service)، G-6 (pair يقبل id/ip/battery/storage/model اختياريًا idempotent).
+- إعادة اختبار E2E حي (scripts/agent-e2e-sim.mjs) ضد السيرفر العامل الآن: **14/14 ناجح** — QR بعنوان حقيقي 192.168.1.5:81 + خريطة منافذ + سر، ping 17ms، pair id=pixel8-e2e-agent، ظهور فوري state=connected في GET /api/devices، قناة 3006 عبر XTransformPort، phoneGuardOnline=true source=real، 6 نبضات prox:state، sec:announce مقبول على 3009.
+- flutter analyze بإصدار كامل نُزّل من جديد (3.24.5/Dart 3.5.4): **No issues found!** (20.5s) — عبر سكربت استئناف تنزيل scripts/fetch-flutter.sh (الانقطاعات المتكررة).
+- نظافة القرص: حُذف الأرشيف (693MB) بعد الفك؛ SDK بقيد /home/z/flutter (1.8GB) لجلسات قادمة.
+
+Stage Summary:
+- طبقة الاتصال (FA-2) وما بعدها (FA-3 نقل الملفات) مؤكّدتان حاليتان وسليمتان: 7/7 بنود مطابقة + 14/14 فحص حي + analyze صفر مشكلات.
+- لا تغييرات كود في هذه الجلسة — تحقق وثيقية فقط.
+- الخطوة التالية المرشّحة (حسب خلاصة FA-3): مرحلة الاتصالات (NotificationListenerService مرآة الإشعارات على 3003) أو مرحلة الأمان (E2E للنقل عبر 3009).
