@@ -5,6 +5,7 @@
     "dev": "bun --hot index.ts"
   },
   "dependencies": {
+    "bonjour-service": "^1.4.4",
     "socket.io": "^4.8.4"
   }
 }

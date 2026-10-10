@@ -223,19 +223,20 @@ interface TransferJob {
 
 ## 6. دورة الاقتران الحالية والفجوات المرصودة
 
-**الموجود فعليًا:**
-1. الكمبيوتر يولّد QR: `GET /api/devices/qr` → `secret` عشوائي 32-hex يُخزن في الذاكرة + `code` أول 6 أحرف.
-2. حمولة QR: `{v:1, proto:"Nexus/1.2", host, port:7420, secret, ts}`.
-3. إتمام: `POST /api/devices {action:"pair", name, kind}` — **يتجاهل السر تمامًا** ويسجل الجهاز.
+**الموجود فعليًا (بعد إصلاح Flutter-1):**
+1. الكمبيوتر يولّد QR: `GET /api/devices/qr` → `secret` عشوائي 32-hex + `code` أول 6 أحرف + `payload` نصي.
+2. حمولة QR: `{v:1, proto:"Nexus/1.2", host:<IP حقيقي من ترويسة الطلب>, port:<81 أو 3000>, secret, ts, name:"NEXUS-PC", ports:{rest:3000, comms:3003, remote:3004, media:3005, guard:3006, prod:3007, sec:3009, gateway:81}}`.
+3. إتمام: `POST /api/devices {action:"pair", name, kind, id?, ip?, battery?, storageTotal?, storageUsed?, model?}` → `{ok, device}` (idempotent عبر id/name).
 
-**الفجوات (G) التي تفرض تعديل السيرفر قبل/أثناء بناء الوكيل:**
-| # | الفجوة | الأثر على الوكيل | الإصلاح المقترح (جانب السيرفر) |
-|---|--------|------------------|-------------------------------|
-| G-1 | `pair` لا يتحقق من سر QR | أي جهاز على الشبكة يسجل نفسه بلا سر | endpoint جديد `POST /api/pair/claim {secret, name, kind, pub}` يتحقق من السر (عمر ≤ 5 دقائق)، يسجل الجهاز، يعيد `{device, ports:{rest,comms,remote,media,guard,prod,sec}, proto}` |
-| G-2 | QR يعلن `port:7420` ولا يوجد مستمع | الهاتف يفشل في الاتصال بالمنفذ المعلن | تصحيح الحمولة لتشمل المنافذ الفعلية + IP الحقيقي للسيرفر (وليس `192.168.1.2` الثابت) |
-| G-3 | لا اكتشاف تلقائي (mDNS/NSD غير موجود في السيرفر) | Flutter له bonsoir/nsd لكن لا مصدر يعلن نفسه | خدمة اكتشاف UDP خفيفة (مثلًا :7421): الهاتف يبث `NEXUS_DISCOVER_V1` → السيرفر يرد JSON `{name, proto, ports}` — بديل عملي لـ mDNS بلا تبعيات native |
-| G-4 | سجل الأجهزة في الذاكرة فقط (يُعاد seed عند restart) | الجهاز المقترن يختفي بعد إعادة تشغيل السيرفر | إبقاءه مقبولًا للمعاينة؛ التوثيق بصدق في الوكيل |
-| G-5 | الوكيل الحقيقي لا يملك دورًا مخصصًا في 3003 (العميل الحالي هو سطح المكتب ومحاكي الهاتف مدمج بالسيرفر) | تعارض منطقي: من يرسل الإشعارات؟ | عند وصول وكيل حقيقي: هو **مصدر** `POST /api/comms/notifications` و`sms` و`calls` (ingest) ومستمع لأحداث `phone:*`؛ يُوقف `autoMode` في المحاكي (`phone:auto-mode {enabled:false}`) لتجنب التكرار |
+**الفجوات (G) — الحالة بعد مرحلة Flutter-1:**
+| # | الفجوة | الحالة | ما نُفّذ |
+|---|--------|--------|----------|
+| G-1 | `pair` لا يتحقق من سر QR | ⏳ مؤجلة لمرحلة الأمان | التسجيل عبر pair كما هو؛ التحقق من السر سيُضاف مع مرحلة الأمان |
+| G-2 | QR يعلن `port:7420` الميت + IP ثابت | ✅ **مُصلحة** | `/api/devices/qr` يشتق host/port من ترويسة Host الواردة، ويعيد `payload` نصيًا + خريطة منافذ الجسور كاملة `ports:{rest,comms,remote,media,guard,prod,sec,gateway}` + `name:"NEXUS-PC"` |
+| G-3 | لا اكتشاف تلقائي | ✅ **مُصلحة** | comms-service يعلن `NEXUS-PC._nexuslink._tcp` عبر bonjour-service (port 81) مع TXT: proto/name/gateway/rest/comms/remote/media/guard/prod/sec — best-effort بلا إيقاف الخدمة عند فشل multicast |
+| G-4 | سجل الأجهزة في الذاكرة | مقبول | الوكيل يعيد التسجيل تلقائيًا (idempotent عبر `id` الثابت) |
+| G-5 | دور الوكيل الحقيقي في 3003 | موثق | الوكيل مصدر ingest عبر REST ومستمع `phone:*`؛ يوقف autoMode عند التشغيل |
+| G-6 | `pair` يقبل حقول الوكيل الاختيارية | ✅ **مضافة** | `{action:"pair", id?, ip?, battery?, storageTotal?, storageUsed?, model?}` — idempotent عبر `id` (Android ID)، نفس الاستجابة `{ok, device}` دون أي كسر للعميل القديم |
 
 ---
 
