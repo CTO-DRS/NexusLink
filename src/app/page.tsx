@@ -22,6 +22,7 @@ import { SecView } from "@/components/nexus/sec/sec-view"
 import { ToolsView } from "@/components/nexus/tools/tools-view"
 import { Onboarding } from "@/components/nexus/onboarding"
 import { CommandPalette, ShortcutsOverlay } from "@/components/nexus/command-palette"
+import { DesktopBridge } from "@/components/nexus/desktop-bridge"
 import { LockScreen } from "@/components/nexus/guard/lock-screen"
 import { CallOverlay } from "@/components/nexus/comms/call-overlay"
 import { CommsToaster } from "@/components/nexus/comms/comms-toaster"
@@ -198,6 +199,7 @@ export default function NexusPage() {
       <ShortcutsOverlay />
       <LockScreen />
       <Toaster position="bottom-center" richColors />
+      <DesktopBridge />
       {!onboarded && <span className="sr-only" aria-hidden />}
     </div>
   )

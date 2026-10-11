@@ -24,6 +24,11 @@ const SHORTCUT_ORDER: ShortcutAction[] = [
   "devices", "files", "transfers", "comms", "security", "tools", "settings",
 ]
 
+// اختصارات سطح المكتب فقط — تظهر في إعدادات الاختصارات داخل نافذة Tauri حصراً
+const DESKTOP_ONLY_ACTIONS: ReadonlySet<ShortcutAction> = new Set(["sendClipboard", "toggleWindow"])
+const IS_DESKTOP_WINDOW =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("desktop")
+
 function SectionTitle({ icon: Icon, title, desc }: { icon: typeof Info; title: string; desc?: string }) {
   return (
     <div className="flex items-center gap-3">
@@ -224,7 +229,7 @@ export function SettingsView() {
             </div>
           )}
           <div className="grid sm:grid-cols-2 gap-1.5">
-            {SHORTCUT_ORDER.map((a) => (
+            {SHORTCUT_ORDER.filter((a) => IS_DESKTOP_WINDOW || !DESKTOP_ONLY_ACTIONS.has(a)).map((a) => (
               <div key={a} className="flex items-center justify-between rounded-xl border px-3 py-2 gap-2">
                 <span className="text-xs font-medium truncate">{t(SHORTCUT_META[a])}</span>
                 {recording === a ? (

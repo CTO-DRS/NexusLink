@@ -7,8 +7,9 @@
 // دورة الحياة: إقلاع متسلسل بانتظار الجاهزية → مراقبة صحية → إعادة تشغيل
 // بتراجع أسّي عند الانهيار → إيقاف مؤقت/استئناف من الـ Tray → قتل نظيف عند الخروج.
 use serde_json::json;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -45,6 +46,15 @@ pub struct DesktopState {
     pub ready: AtomicBool,
     pub paused: AtomicBool,
     pub fail_streak: AtomicU32,
+    // ---- الطبقة الأصلية ----
+    /// هوية الوكيل الحقيقي (هدف الإرسال من سطح المكتب) — من status.desktop.agentId
+    pub agent_id: Mutex<String>,
+    /// مزامنة الاختصارات: القائمة المطلوبة + حالة التركيز + إظهار تلقائي عند الجاهزية
+    /// تنقية المهام/الإشعارات (None = لم تُنقّ بعد — أول جلب يزرع بلا إشعارات)
+    pub seen_tx: Mutex<Option<HashSet<String>>>,
+    pub seen_notif: Mutex<Option<HashSet<String>>>,
+    pub focused: AtomicBool,
+    pub auto_show: AtomicBool,
 }
 
 static STATE: OnceLock<DesktopState> = OnceLock::new();
@@ -109,6 +119,57 @@ fn resolve_resources(app: &AppHandle) -> PathBuf {
     }
     // وضع التطوير: الموارد في src-tauri/resources (بعد build-resources.sh)
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources")
+}
+
+/// جذر سيرفر Next (cwd الخاص بعملية next) — إليه تُنسخ ملفات السحب والإفلات
+pub fn server_root(app: &AppHandle) -> PathBuf {
+    resolve_resources(app).join("server")
+}
+
+// ---------- HTTP + الحافظة (طبقة أصلية) ----------
+
+fn http_agent() -> &'static ureq::Agent {
+    static A: OnceLock<ureq::Agent> = OnceLock::new();
+    A.get_or_init(|| ureq::AgentBuilder::new().timeout(Duration::from_secs(12)).build())
+}
+
+/// POST JSON إلى REST المحلي وإعادة الرد JSON
+pub fn post_json(path: &str, body: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let url = format!("http://127.0.0.1:{REST_PORT}{path}");
+    let resp = http_agent().post(&url).send_json(body).map_err(|e| match e {
+        ureq::Error::Status(c, r) => format!(
+            "HTTP {c}: {}",
+            r.into_string().unwrap_or_default().chars().take(120).collect::<String>()
+        ),
+        ureq::Error::Transport(t) => format!("transport: {t}"),
+    })?;
+    resp.into_json().map_err(|e| format!("json: {e}"))
+}
+
+/// قراءة نص حافظة النظام
+pub fn read_clipboard_text() -> Result<String, String> {
+    arboard::Clipboard::new()
+        .and_then(|mut c| c.get_text())
+        .map_err(|e| format!("clipboard: {e}"))
+}
+
+/// إرسال نص إلى الحافظة الموحدة — يصل للهاتف فورًا عبر prodEmit(clip:new)
+/// (هذا هو مسار Ctrl+Shift+N التعاقدي + nexus://send?text=…)
+pub fn push_clipboard_text(text: &str) -> Result<(), String> {
+    let body = json!({
+        "deviceId": "pc-office",
+        "deviceName": machine_name(),
+        "kind": "text",
+        "content": text,
+        "mode": "auto",
+    });
+    let v = post_json("/api/prod/clipboard", &body)?;
+    if v["ok"] == true {
+        println!("[clip] sent {} chars to unified clipboard", text.len());
+        Ok(())
+    } else {
+        Err(format!("server: {v}"))
+    }
 }
 
 fn emit_status(app: &AppHandle, stage: &str, ar: &str, en: &str) {
@@ -264,7 +325,7 @@ fn boot(app: &AppHandle, state: &DesktopState) -> bool {
     // 4) جاهز — افتح الواجهة وأغلق شاشة التحميل
     state.ready.store(true, Ordering::Relaxed);
     emit_status(app, "ready", "جاهز — جميع الخدمات تعمل", "Ready — all services are up");
-    open_main_full(app);
+    open_main_full(app, true);
     true
 }
 
@@ -316,6 +377,7 @@ fn monitor_tick(app: &AppHandle, state: &DesktopState) {
                 state.fail_streak.store(0, Ordering::Relaxed);
                 let online = j.pointer("/phone/online") == Some(&serde_json::Value::Bool(true));
                 crate::tray::set_state(app, if online { "connected" } else { "waiting" });
+                poll_native_events(app, state, &j);
             }
             None => {
                 let n = state.fail_streak.fetch_add(1, Ordering::Relaxed) + 1;
@@ -323,6 +385,90 @@ fn monitor_tick(app: &AppHandle, state: &DesktopState) {
                     crate::tray::set_state(app, "error");
                 } else {
                     crate::tray::set_state(app, "waiting");
+                }
+            }
+        }
+    }
+}
+
+/// معالجة حزمة desktop من الحالة الموحدة: اختصارات + وكيل + ملفات وصلت + إشعارات جديدة
+fn poll_native_events(app: &AppHandle, state: &DesktopState, j: &serde_json::Value) {
+    let Some(dt) = j.get("desktop") else { return };
+
+    // (أ) مزامنة الاختصارات من المخزن المشترك
+    if let Some(map_v) = dt.get("shortcuts").and_then(|v| v.as_object()) {
+        let map: HashMap<String, String> = map_v
+            .iter()
+            .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+            .collect();
+        crate::shortcuts::update_desired(app, crate::shortcuts::desired_from_map(&map));
+    }
+
+    // (ب) هوية الوكيل الحقيقي — هدف السحب والإفلات
+    if let Some(id) = dt.get("agentId").and_then(|v| v.as_str()) {
+        if !id.is_empty() {
+            *state.agent_id.lock().unwrap() = id.to_string();
+        }
+    }
+
+    // (ج) ملفات وصلت من الهاتف → إشعار أصلي بأزرار (حفظ في… / فتح المجلد)
+    if let Some(arr) = dt.get("transfers").and_then(|v| v.as_array()) {
+        let ids: Vec<String> = arr
+            .iter()
+            .filter_map(|t| t.get("id").and_then(|i| i.as_str()).map(String::from))
+            .collect();
+        let mut seen = state.seen_tx.lock().unwrap();
+        match seen.as_mut() {
+            None => {
+                // أول جلب بعد الإقلاع — زرع بلا إشعارات (ما مضى مضى)
+                *seen = Some(ids.into_iter().collect());
+            }
+            Some(set) => {
+                for t in arr {
+                    let Some(id) = t.get("id").and_then(|i| i.as_str()) else { continue };
+                    if set.contains(id) {
+                        continue;
+                    }
+                    if set.len() > 500 {
+                        set.clear();
+                    }
+                    set.insert(id.to_string());
+                    let name = t.get("fileName").and_then(|f| f.as_str()).unwrap_or("ملف").to_string();
+                    let dest = t.get("destPath").and_then(|f| f.as_str()).unwrap_or("").to_string();
+                    let size = t.get("totalBytes").and_then(|f| f.as_u64()).unwrap_or(0);
+                    if !dest.is_empty() {
+                        crate::notify::file_arrived(app, &dest, &name, size);
+                    }
+                }
+            }
+        }
+    }
+
+    // (د) إشعارات جديدة من الهاتف → إشعارات نظام بأزرار (رد / فتح)
+    if let Some(arr) = dt.get("notifs").and_then(|v| v.as_array()) {
+        let ids: Vec<String> = arr
+            .iter()
+            .filter_map(|n| n.get("id").and_then(|i| i.as_str()).map(String::from))
+            .collect();
+        let mut seen = state.seen_notif.lock().unwrap();
+        match seen.as_mut() {
+            None => {
+                *seen = Some(ids.into_iter().collect());
+            }
+            Some(set) => {
+                for n in arr {
+                    let Some(id) = n.get("id").and_then(|i| i.as_str()) else { continue };
+                    if set.contains(id) {
+                        continue;
+                    }
+                    if set.len() > 500 {
+                        set.clear();
+                    }
+                    set.insert(id.to_string());
+                    let app_name = n.get("appName").and_then(|f| f.as_str()).unwrap_or("الهاتف").to_string();
+                    let title = n.get("title").and_then(|f| f.as_str()).unwrap_or("").to_string();
+                    let body = n.get("body").and_then(|f| f.as_str()).unwrap_or("").to_string();
+                    crate::notify::new_message(app, id, &app_name, &title, &body);
                 }
             }
         }
@@ -374,6 +520,11 @@ pub fn start(app: AppHandle) {
         ready: AtomicBool::new(false),
         paused: AtomicBool::new(false),
         fail_streak: AtomicU32::new(0),
+        agent_id: Mutex::new("galaxy-s24".to_string()),
+        seen_tx: Mutex::new(None),
+        seen_notif: Mutex::new(None),
+        focused: AtomicBool::new(false),
+        auto_show: AtomicBool::new(!crate::settings::effective_start_hidden()),
     });
     register(st, next_spec);
     register(st, gw_spec);
@@ -433,12 +584,16 @@ pub fn toggle_pause(app: &AppHandle) {
     crate::tray::on_pause_toggled(app, now_paused);
 }
 
-/// فتح/إبراز نافذة الواجهة (أو شاشة التحميل أثناء الإقلاع)
+/// فتح/إبراز نافذة الواجهة (أو شاشة التحميل أثناء الإقلاع) — نية مستخدم صريحة
 pub fn open_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
+        if let Some(st) = STATE.get() {
+            st.auto_show.store(true, Ordering::Relaxed);
+        }
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
+        set_main_focused(app, true);
         return;
     }
     if let Some(s) = app.get_webview_window("splash") {
@@ -447,7 +602,154 @@ pub fn open_main(app: &AppHandle) {
     }
 }
 
-fn open_main_full(app: &AppHandle) {
+/// تركيز النافذة الرئيسية تغيّر — مزامنة حالة التركيز والاختصارات العالمية
+pub fn set_main_focused(app: &AppHandle, focused: bool) {
+    if let Some(st) = STATE.get() {
+        st.focused.store(focused, Ordering::Relaxed);
+    }
+    crate::shortcuts::apply_focus(app, focused);
+}
+
+pub fn is_main_focused() -> bool {
+    STATE.get().map(|s| s.focused.load(Ordering::Relaxed)).unwrap_or(false)
+}
+
+/// إظهار/إخفاء النافذة (Ctrl+Shift+D عالميًا + من الإشعارات)
+pub fn toggle_main_window(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let visible = w.is_visible().unwrap_or(false);
+        if visible && w.is_focused().unwrap_or(false) {
+            let _ = w.hide();
+            set_main_focused(app, false);
+        } else {
+            if let Some(st) = STATE.get() {
+                st.auto_show.store(true, Ordering::Relaxed);
+            }
+            let _ = w.unminimize();
+            let _ = w.show();
+            let _ = w.set_focus();
+            set_main_focused(app, true);
+        }
+    } else {
+        open_main(app);
+    }
+}
+
+/// تنقل نافذة الواجهة إلى شاشة محددة (من أزرار الإشعارات / deep-link)
+pub fn navigate_main(app: &AppHandle, view: &str) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.eval(&format!(
+            "window.location.replace('http://127.0.0.1:{REST_PORT}/?desktop=1&view={view}')"
+        ));
+        if let Some(st) = STATE.get() {
+            st.auto_show.store(true, Ordering::Relaxed);
+        }
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+        set_main_focused(app, true);
+    } else {
+        // أثناء الإقلاع — الجاهزية ستفتح النافذة قريباً
+        open_main(app);
+    }
+}
+
+/// deep-link: nexus://open | nexus://comms | nexus://transfers | nexus://send?text=…
+pub fn handle_deep_link(app: &AppHandle, urls: Vec<tauri::Url>) {
+    for u in urls {
+        let host = u.host_str().unwrap_or("").to_lowercase();
+        println!("[deeplink] {}", u);
+        match host.as_str() {
+            "send" => {
+                let mut text = String::new();
+                for (k, v) in u.query_pairs() {
+                    if k == "text" {
+                        text = v.to_string();
+                    }
+                }
+                if !text.is_empty() {
+                    let app2 = app.clone();
+                    std::thread::spawn(move || {
+                        if let Err(e) = push_clipboard_text(&text) {
+                            println!("[deeplink] send failed: {e}");
+                        }
+                    });
+                }
+                open_main(app);
+            }
+            "comms" | "notifications" => navigate_main(app, "comms"),
+            "transfers" | "files" | "devices" | "settings" => navigate_main(app, &host),
+            _ => open_main(app),
+        }
+    }
+}
+
+/// اسم بديل غير حائزي داخل مجلد (نمط PUT clip في السيرفر)
+fn unique_dest(dir: &Path, name: &str) -> PathBuf {
+    let mut target = dir.join(name);
+    let stem = Path::new(name).file_stem().and_then(|s| s.to_str()).unwrap_or("ملف").to_string();
+    let ext = Path::new(name).extension().and_then(|s| s.to_str()).map(|e| format!(".{e}")).unwrap_or_default();
+    for i in 1..50 {
+        if !target.exists() {
+            return target;
+        }
+        target = dir.join(format!("{stem} ({i}){ext}"));
+    }
+    target
+}
+
+/// سحب وإفلات من سطح المكتب إلى النافذة → نسخ إلى pc-fs/Inbox → عرض نقل فوري للهاتف
+pub fn handle_dropped_files(app: &AppHandle, paths: Vec<PathBuf>) {
+    let app2 = app.clone();
+    std::thread::spawn(move || {
+        let inbox = server_root(&app2).join("data").join("nexus-storage").join("pc-fs").join("Inbox");
+        if let Err(e) = std::fs::create_dir_all(&inbox) {
+            println!("[drop] mkdir failed: {e}");
+            return;
+        }
+        let agent = STATE
+            .get()
+            .map(|s| s.agent_id.lock().unwrap().clone())
+            .unwrap_or_else(|| "galaxy-s24".to_string());
+        let mut sent = 0usize;
+        for p in paths {
+            if !p.is_file() {
+                continue;
+            }
+            let Some(name) = p.file_name().and_then(|s| s.to_str()).map(String::from) else {
+                continue;
+            };
+            let dest = unique_dest(&inbox, &name);
+            if let Err(e) = std::fs::copy(&p, &dest) {
+                println!("[drop] copy {p:?} failed: {e}");
+                continue;
+            }
+            let vname = dest.file_name().and_then(|s| s.to_str()).unwrap_or(&name).to_string();
+            let body = json!({
+                "action": "send-file",
+                "deviceId": agent,
+                "deviceName": agent,
+                "direction": "out",
+                "srcDeviceId": "pc-office",
+                "srcPath": format!("/Inbox/{vname}"),
+                "fileName": vname,
+            });
+            match post_json("/api/devices", &body) {
+                Ok(v) if v["ok"] == true => {
+                    sent += 1;
+                    crate::notify::plain(&app2, "بدأ الإرسال إلى الهاتف", &vname);
+                }
+                Ok(v) => println!("[drop] send-file refused: {v}"),
+                Err(e) => println!("[drop] send failed: {e}"),
+            }
+        }
+        if sent == 0 {
+            crate::notify::plain(&app2, "تعذّر إرسال الملفات", "لا يوجد هاتف متصل أو الملف غير مدعوم");
+        }
+    });
+}
+
+fn open_main_full(app: &AppHandle, show: bool) {
     let url: tauri::Url = format!("http://127.0.0.1:{REST_PORT}/?desktop=1").parse().expect("valid url");
     let app2 = app.clone();
     let _ = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
@@ -457,9 +759,18 @@ fn open_main_full(app: &AppHandle) {
         .visible(false)
         .on_page_load(move |_wv, payload| {
             if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
+                // الإظهار التلقائي يُلغى في وضع «بدء مخفي» حتى أول نية مستخدم صريحة
+                let show_now = show
+                    && STATE
+                        .get()
+                        .map(|s| s.auto_show.load(Ordering::Relaxed))
+                        .unwrap_or(true);
                 if let Some(w) = app2.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
+                    if show_now {
+                        let _ = w.show();
+                        let _ = w.set_focus();
+                        set_main_focused(&app2, true);
+                    }
                 }
                 if let Some(s) = app2.get_webview_window("splash") {
                     let _ = s.close();

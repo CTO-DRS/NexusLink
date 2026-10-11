@@ -165,6 +165,65 @@ try {
   })
   check("قناة الأمان 3009 عبر البوابة", true)
   sec.disconnect()
+  // ============ 6) الطبقة الأصلية: اختصارات + حقول desktop في الحالة + مسار الإرسال ============
+  console.log("== [6] native layer: shortcuts + status.desktop + send-file ==")
+  // 6a) مزامنة الاختصارات (نفس مسار جسر الواجهة → المخزن المشترك)
+  const putSc = await fetch("http://127.0.0.1:3000/api/desktop/shortcuts", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ shortcuts: { sendClipboard: "Ctrl+Shift+N", toggleWindow: "Ctrl+Shift+D" } }),
+  }).then((r) => r.json())
+  check("desktop/shortcuts: PUT يقبل الخريطة", putSc?.ok === true)
+  const getSc = await fetch("http://127.0.0.1:3000/api/desktop/shortcuts").then((r) => r.json())
+  check("desktop/shortcuts: GET يعيد نفس المخزن",
+    getSc?.ok === true && getSc?.shortcuts?.sendClipboard === "Ctrl+Shift+N" && getSc?.shortcuts?.toggleWindow === "Ctrl+Shift+D")
+
+  // 6b) الحالة الموحدة تحمل حزمة desktop كاملة
+  const st2 = await waitHttp("desktop/status (native)", "http://127.0.0.1:3000/api/desktop/status", 30000)
+  const dt = st2?.desktop || {}
+  check("status.desktop.shortcuts موجودة", typeof dt.shortcuts?.sendClipboard === "string")
+  check("status.desktop.agentId حقل معلن", "agentId" in dt)
+  check("status.desktop.transfers قائمة", Array.isArray(dt.transfers))
+  check("status.desktop.notifs قائمة", Array.isArray(dt.notifs))
+
+  // 6c) مسار Drag&Drop التعاقدي: ملف على القرص → pc-fs/Inbox → send-file (نفس ما ينفذه Rust)
+  // ملاحظة فيزيائية: standalone server.js يعمل chdir(__dirname) — جذر البيانات = .next/standalone/data
+  // (في الحزمة المثبتة: procman يشغّل resources/server/server.js → الجذر = resources/server/data)
+  const fsMod = await import("node:fs/promises")
+  const pathMod = await import("node:path")
+  const dataRoot = process.env.NEXUS_DATA_ROOT || pathMod.join(ROOT, ".next", "standalone", "data")
+  const inboxDir = pathMod.join(dataRoot, "nexus-storage", "pc-fs", "Inbox")
+  await fsMod.mkdir(inboxDir, { recursive: true })
+  await fsMod.writeFile(pathMod.join(inboxDir, "e2e-drop.txt"), "nexus desktop drop " + Date.now())
+  const sendRes = await fetch("http://127.0.0.1:3000/api/devices", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "send-file", deviceId: "galaxy-s24", deviceName: "Galaxy S24",
+      direction: "out", srcDeviceId: "pc-office", srcPath: "/Inbox/e2e-drop.txt", fileName: "e2e-drop.txt",
+    }),
+  }).then((r) => r.json())
+  check("devices/send-file: قبول ملف سحب-وإفلات", sendRes?.ok === true && !!sendRes?.job?.id, `job=${sendRes?.job?.id ?? sendRes?.error}`)
+  const txList = await fetch("http://127.0.0.1:3000/api/transfer").then((r) => r.json())
+  check("المهمة ظهرت في قائمة النقل", Array.isArray(txList?.jobs) && txList.jobs.some((j) => j.id === sendRes?.job?.id))
+
+  // 6d) الحافظة الموحدة — نفس ما ينفذه Rust عند Ctrl+Shift+N (POST → prodEmit clip:new)
+  const clip = await fetch("http://127.0.0.1:3000/api/prod/clipboard", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ deviceId: "pc-office", deviceName: "NEXUS-PC", kind: "text", content: "nexus-e2e-clipboard", mode: "auto" }),
+  }).then((r) => r.json())
+  check("prod/clipboard: POST حافظة موحدة (مسار Ctrl+Shift+N)", clip?.ok === true && !!clip?.item?.id)
+
+  // 6e) إشعار جديد من الهاتف — مصدر إشعارات النظام الأصلية
+  const notifRes = await fetch("http://127.0.0.1:3000/api/comms/notifications", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ appId: "com.whatsapp", appName: "WhatsApp", title: "E2E رسالة", body: "نص تجريبي", actionable: true }),
+  }).then((r) => r.json())
+  check("comms/notifications: إشعار قابل للتفاعل", notifRes?.ok === true && !!notifRes?.notification?.id)
+  const st3 = await fetch("http://127.0.0.1:3000/api/desktop/status").then((r) => r.json())
+  check("status.desktop.notifs يتضمن الإشعار الجديد", (st3?.desktop?.notifs || []).some((n) => n.id === notifRes?.notification?.id))
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {

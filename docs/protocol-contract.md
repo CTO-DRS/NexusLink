@@ -425,3 +425,23 @@ interface TransferJob {
 ---
 
 *مصادر الاستخراج: mini-services/comms-service/index.ts · mini-services/remote-service/index.ts · src/lib/nexus/{types,devices,transfer-engine,fs-server,e2e-crypto,security-bridge,guard-bridge,media-bridge,productivity-bridge}.ts · src/app/api/**/route.ts · prisma/schema.prisma · Caddyfile · فحص حي بالمنافذ.*
+
+## 10. واجهات سطح المكتب الأصلية (FA-desktop-native — مصدر: desktop-bridge.tsx + procman.rs)
+
+نقاط سيرفرية يستهلكها تطبيق سطح المكتب (Tauri) — كلها إضافية ولا تغيّر أي مسار قائم:
+
+| الواجهة | الطرف | العقد الحرفي |
+|---|---|---|
+| `GET /api/desktop/shortcuts` | Rust يستطلعها (كل ~10ث عبر status) | `{ok, shortcuts: {sendClipboard, toggleWindow}}` — الافتراضي: `Ctrl+Shift+N` / `Ctrl+Shift+D` |
+| `PUT /api/desktop/shortcuts` | جسر الواجهة (desktop-bridge) يدفع المخزن المشترك | body `{shortcuts: Record<action,combo>}` — يُدمج فوق القائم ويُخزن في `data/desktop-ui.json` |
+| `GET /api/desktop/status` | Rust يستطلعها كل ~10ث | حقل `desktop` الإضافي: `{agentId, shortcuts, transfers[≤5 done-in], notifs[≤8 new]}` |
+| `POST /api/prod/clipboard` | Rust (Ctrl+Shift+N + nexus://send) + جسر الواجهة (داخل التركيز) | `{deviceId:"pc-office", deviceName, kind:"text", content, mode:"auto"}` → `prodEmit("clip:new")` للهاتف فورًا |
+| `POST /api/devices` (send-file) | Rust (سحب وإفلات النافذة) | ملف مُنسوخ إلى `pc-fs/Inbox/` ثم `{action:"send-file", deviceId:<agentId>, direction:"out", srcDeviceId:"pc-office", srcPath:"/Inbox/<name>", fileName}` → `tx:offer` للوكيل الحقيقي |
+
+**تعاقد التركيز للاختصارات**: الاختصارات العالمية مسجلة **فقط عندما نافذة الواجهة غير مركّزة** — داخل التركيز تعمل combos الواجهة الحالية من المخزن نفسه (Ctrl+Shift+D = المظهر داخل النافذة، إظهار/إخفاء خارجها). المخزن واحد: `nexus-shortcuts` (localStorage) يُدفع للسيرفر ويستطلعه Rust.
+
+**إشعارات النظام**: مصدرها `desktop.transfers` (اتجاه in منتهية → «وصل ملف» بأزرار حفظ-في/فتح-المجلد) و`desktop.notifs` (جديدة → أزرار رد/فتح). التنقية بـ id (زرع أول جلب بلا إشعارات). لا إشعار نظام بينما النافذة مركّزة (نسخة داخل التطبيق تعرض حينها).
+
+**deep-link**: `nexus://open` (فتح/تركيز) · `nexus://comms|transfers|files|devices|settings` (تنقل) · `nexus://send?text=…` (إرسال نص للحافظة الموحدة). النمط مسجل عبر `plugins.deep-link.schemes` + `register_all()` وقت التشغيل (ويندوز).
+
+**Drag & Drop**: إفلات على النافذة الرئيسية → نسخ إلى `pc-fs/Inbox/` (باسم فريد) → send-file أعلاه. **الإشعارات أصلية**: WinRT Toast بأزرار على ويندوز (AUMID = identifier)؛ ماك/لينكس عبر إضافة الإشعارات الرسمية بلا أزرار (حد منصة موثق).
