@@ -6,7 +6,7 @@ import QRCode from "qrcode"
 import { toast } from "sonner"
 import {
   Gauge, PackageOpen, BellRing, ShieldAlert, RadioTower, SlidersHorizontal,
-  CheckCircle2, Circle, QrCode, PartyPopper, ShieldCheck, LockKeyhole,
+  CheckCircle2, Circle, QrCode, PartyPopper, ShieldCheck, LockKeyhole, Hand,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -18,6 +18,7 @@ import { FindTab } from "./find-tab"
 import { LostTab } from "./lost-tab"
 import { ProximityTab } from "./proximity-tab"
 import { ControlTab } from "./control-tab"
+import { RemoteTouchTab } from "./remote-touch-tab"
 import { PhoneMirror } from "./phone-mirror"
 import { cn } from "@/lib/utils"
 import type { LucideIcon } from "lucide-react"
@@ -29,6 +30,7 @@ const TABS: { id: GuardTab; label: string; icon: LucideIcon; num: string }[] = [
   { id: "lost", label: "وضع الفقدان", icon: ShieldAlert, num: "4" },
   { id: "proximity", label: "القرب التلقائي", icon: RadioTower, num: "5" },
   { id: "control", label: "المنبهات والإعدادات", icon: SlidersHorizontal, num: "6" },
+  { id: "touch", label: "التحكم باللمس", icon: Hand, num: "7" },
 ]
 
 const CHECKS: { key: string; label: string; star?: boolean }[] = [
@@ -155,6 +157,7 @@ export function GuardView() {
           {tab === "lost" && <LostTab />}
           {tab === "proximity" && <ProximityTab />}
           {tab === "control" && <ControlTab />}
+          {tab === "touch" && <RemoteTouchTab />}
         </div>
         <aside className="xl:sticky xl:top-16 space-y-3">
           <PhoneMirror />

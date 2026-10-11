@@ -3,7 +3,26 @@
 // مقاييس حية · تطبيقات · منبهات · إعدادات سريعة · رن · فقدان · مسح · قرب
 import { create } from "zustand"
 
-export type GuardTab = "dashboard" | "apps" | "find" | "lost" | "proximity" | "control"
+export type GuardTab = "dashboard" | "apps" | "find" | "lost" | "proximity" | "control" | "touch"
+
+// ---------- FA-7: جلسة التحكم باللمس ----------
+
+export interface CtlSessionInfo {
+  active: boolean
+  controller: string
+  name: string
+  reason: string
+  at: number
+}
+
+/** أبعاد شاشة الهاتف الحقيقية (dev:screen) — أساس تحويل إحداثيات الويب. */
+export interface PhoneScreenInfo {
+  w: number
+  h: number
+  density: number
+  deviceId: string | null
+  at: number
+}
 
 export interface AppEntry {
   pkg: string
@@ -222,6 +241,15 @@ interface GuardState {
   logs: GuardLog[]
   pushLog: (text: string, kind?: GuardLog["kind"]) => void
 
+  ctl: CtlSessionInfo
+  setCtl: (c: Partial<CtlSessionInfo>) => void
+  phoneScreen: PhoneScreenInfo | null
+  setPhoneScreen: (s: PhoneScreenInfo | null) => void
+  ctlPending: boolean
+  setCtlPending: (b: boolean) => void
+  phoneAccessibility: boolean | null
+  setPhoneAccessibility: (b: boolean | null) => void
+
   checks: Record<string, boolean>
   setCheck: (k: string) => void
   celebrated: boolean
@@ -373,6 +401,15 @@ export const useGuard = create<GuardState>((set, get) => ({
   logs: [],
   pushLog: (text, kind = "info") =>
     set((s) => ({ logs: [{ id: uid(), text, kind, at: Date.now() }, ...s.logs].slice(0, 120) })),
+
+  ctl: { active: false, controller: "", name: "", reason: "", at: 0 },
+  setCtl: (c) => set((s) => ({ ctl: { ...s.ctl, ...c } })),
+  phoneScreen: null,
+  setPhoneScreen: (s) => set({ phoneScreen: s }),
+  ctlPending: false,
+  setCtlPending: (b) => set({ ctlPending: b }),
+  phoneAccessibility: null,
+  setPhoneAccessibility: (b) => set({ phoneAccessibility: b }),
 
   checks: {},
   setCheck: (k) => set((s) => (s.checks[k] ? {} : { checks: { ...s.checks, [k]: true } })),

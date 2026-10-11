@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/protocol.dart';
 import '../domain/models.dart';
+import '../state/control_providers.dart';
 import '../state/providers.dart';
 import '../state/transfer_providers.dart';
+import 'control_screen.dart';
 
 /// الإعدادات: المظهر (داكن/فاتح/نظام)، اللغة (ar/en)، معلومات الهوية، حالة الخدمة.
 class SettingsScreen extends ConsumerWidget {
@@ -129,6 +131,35 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ]),
           ),
+          const SizedBox(height: 14),
+
+          // ==== التحكم عن بعد (FA-7) ====
+          _Header('settings.remote'.tr()),
+          Builder(builder: (context) {
+            final ctl = ref.watch(controlControllerProvider);
+            return Card(
+              child: ListTile(
+                leading: Icon(
+                  Icons.touch_app_rounded,
+                  color: ctl.isActive ? cs.error : cs.primary,
+                ),
+                title: Text(
+                  ctl.isActive
+                      ? 'ctl.activeFrom'.tr(args: [ctl.session.name.isEmpty ? 'PC' : ctl.session.name])
+                      : 'settings.remoteEntry'.tr(),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  ctl.isActive ? 'settings.remoteActiveHint'.tr() : 'settings.remoteHint'.tr(),
+                  style: const TextStyle(fontSize: 12),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ControlScreen()),
+                ),
+              ),
+            );
+          }),
           const SizedBox(height: 14),
 
           // ==== حالة الخدمة الخلفية ====

@@ -14,6 +14,7 @@ import '../data/signaling.dart';
 import '../data/transfer_api.dart';
 import '../data/transfer_engine.dart';
 import '../domain/models.dart';
+import 'control_providers.dart';
 import 'providers.dart' show ConnectPhase, activityLogProvider, agentChannelProvider, connectionProvider, nexusDbProvider;
 
 // ---------------------------------------------------------------------------
@@ -222,6 +223,9 @@ class SignalingController extends Notifier<AgentSignaling?> {
         unawaited(ref.read(photoSyncControllerProvider.notifier).scanNow());
       } else if (kind == 'share') {
         unawaited(ref.read(shareIntakeProvider.notifier).drain());
+      } else if (kind == 'ctl' && detail != null) {
+        // FA-7 — أحداث جلسة التحكم عن بعد (القناة الوحيدة لا تحتمل مستمعين)
+        ref.read(controlControllerProvider.notifier).ingest(detail);
       }
     });
 

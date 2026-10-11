@@ -137,6 +137,62 @@ class NativeBridge {
     await _guard<dynamic>(() => _ch.invokeMethod('setUiAlive', {'alive': alive}), null);
   }
 
+  // ------------------------------------------------------------------
+  // FA-7 — التحكم عن بعد: الإتاحة + الجلسة
+  // ------------------------------------------------------------------
+
+  /// هل خدمة الإتاحة مفعّلة على الهاتف؟ (لشاشة الإرشاد)
+  Future<CtlAccessibility> accessibilityStatus() async {
+    return _guard<CtlAccessibility>(() async {
+      final r = await _ch.invokeMethod<dynamic>('accessibilityStatus');
+      if (r is Map) {
+        return CtlAccessibility(
+          enabled: r['enabled'] == true,
+          ready: r['ready'] == true,
+        );
+      }
+      return const CtlAccessibility();
+    }, const CtlAccessibility());
+  }
+
+  /// افتح إعدادات الإتاحة مباشرة (خطوة الإرشاد).
+  Future<void> openAccessibilitySettings() async {
+    await _guard<dynamic>(
+      () => _ch.invokeMethod('openAccessibilitySettings'),
+      null,
+    );
+  }
+
+  /// لقطة حالة جلسة التحكم من الخدمة (مزامنة عند فتح الواجهة).
+  Future<CtlSession> ctlSnapshot() async {
+    return _guard<CtlSession>(() async {
+      final r = await _ch.invokeMethod<dynamic>('ctlSnapshot');
+      if (r is Map) return CtlSession.fromMap(r.cast<Object?, Object?>());
+      return const CtlSession();
+    }, const CtlSession());
+  }
+
+  /// قرار حوار طلب التحكم (سماح/رفض) — يصل للخدمة الخلفية.
+  Future<void> ctlDecision(bool allow) async {
+    await _guard<dynamic>(
+      () => _ch.invokeMethod('ctlDecision', {'allow': allow}),
+      null,
+    );
+  }
+
+  /// زر القطع الفوري من التطبيق.
+  Future<void> ctlStop() async {
+    await _guard<dynamic>(() => _ch.invokeMethod('ctlStop'), null);
+  }
+
+  /// إعداد طلب تأكيد بدء كل جلسة (يُحفظ داخل الخدمة).
+  Future<void> setCtlConfirm(bool enabled) async {
+    await _guard<dynamic>(
+      () => _ch.invokeMethod('setCtlConfirm', {'enabled': enabled}),
+      null,
+    );
+  }
+
   /// فك JSON من تفاصيل حدث (أداة مساعدة).
   static Map<String, dynamic>? decodeDetail(Object? raw) {
     try {
@@ -145,4 +201,32 @@ class NativeBridge {
     } catch (_) {}
     return null;
   }
+}
+
+/// حالة خدمة الإتاحة على الهاتف (FA-7 — شاشة الإرشاد).
+class CtlAccessibility {
+  final bool enabled; // مفعّلة في إعدادات النظام
+  final bool ready; // النسخة الحية متصلة (instance != null)
+  const CtlAccessibility({this.enabled = false, this.ready = false});
+}
+
+/// جلسة تحكم عن بعد كما تعرفها خدمة الوكيل (مصدر الحقيقة على الهاتف).
+class CtlSession {
+  final bool active;
+  final String controller; // معرّف جهاز الكمبيوتر المُتحكم
+  final String name; // اسمه المعروض
+  final bool requireConfirm; // طلب تأكيد عند بدء كل جلسة
+  const CtlSession({
+    this.active = false,
+    this.controller = '',
+    this.name = '',
+    this.requireConfirm = true,
+  });
+
+  factory CtlSession.fromMap(Map<Object?, Object?> m) => CtlSession(
+        active: m['active'] == true,
+        controller: '${m['controller'] ?? ''}',
+        name: '${m['name'] ?? ''}',
+        requireConfirm: m['requireConfirm'] != false,
+      );
 }
