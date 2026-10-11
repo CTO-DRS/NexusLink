@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_label">NexusLink — التحكم عن بُعد</string>
+    <string name="accessibility_desc">يتيح لجهاز الكمبيوتر المرتبط تنفيذ لمساتك وإدخال النصوص على هذا الهاتف عبر NexusLink. لا تعمل الخدمة إلا أثناء جلسة تحكم صريحة توافق عليها من الهاتف، ويمكنك قطعها فورًا من التطبيق في أي وقت. لا تُستخدم لقراءة أحرف الكتابة أو كلمات المرور.</string>
+</resources>

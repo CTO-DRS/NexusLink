@@ -5,6 +5,7 @@ import { useEffect } from "react"
 import { useGuard, type ProxInfo } from "@/lib/guard-store"
 import { getGuardSocket, guardSettings, proxSim, devState } from "@/lib/guard-socket"
 import { playNotifSound, playConnectSound } from "@/lib/nexus/sounds"
+import { toast } from "sonner"
 
 const LS_PIN = "nexus-guard-pin"
 const LS_PROX = "nexus-guard-prox"
@@ -102,8 +103,52 @@ export function useGuardBridge() {
 
     // ==== حضور الهاتف في طبقة الحماية ====
     socket.on("guard:phone-online", (d: { online: boolean }) => st().setPhoneOnline(d.online))
-    socket.on("guard:hello", (d: { phoneGuardOnline?: boolean }) => {
+    socket.on("guard:hello", (d: { phoneGuardOnline?: boolean; screen?: import("@/lib/guard-store").PhoneScreenInfo | null }) => {
       if (typeof d?.phoneGuardOnline === "boolean") st().setPhoneOnline(d.phoneGuardOnline)
+      if (d?.screen && d.screen.w > 0) st().setPhoneScreen(d.screen)
+    })
+
+    // ==== FA-7: جلسة التحكم + أبعاد الشاشة + إقرارات التنفيذ ====
+    socket.on("guard:screen", (d: import("@/lib/guard-store").PhoneScreenInfo) => {
+      if (d?.w > 0 && d?.h > 0) st().setPhoneScreen(d)
+    })
+    socket.on("dev:ctl-state", (d: { active: boolean; controller?: string; name?: string; reason?: string; at?: number }) => {
+      st().setCtl({
+        active: !!d.active,
+        controller: d.controller ?? "",
+        name: d.name ?? "",
+        reason: d.reason ?? "",
+        at: d.at ?? Date.now(),
+      })
+      st().setCtlPending(false)
+      if (d.active) {
+        st().pushLog(`بدأ التحكم باللمس من ${d.name ?? d.controller ?? "الكمبيوتر"} — الهاتف يقبل الآن أوامر الإدخال`, "warn")
+        st().setCheck("touch")
+        toast.warning(`التحكم باللمس مفعّل من ${d.name ?? d.controller ?? "الكمبيوتر"}`, {
+          description: "يمكن للهاتف القطع فوريًا من التطبيق في أي وقت",
+        })
+      } else {
+        const why = (d.reason ?? "stopped") as string
+        st().pushLog(
+          why === "denied" ? "رُفض طلب التحكم على الهاتف" : why === "phone-stop" ? "قُطعت جلسة التحكم من الهاتف" : `انتهت جلسة التحكم (${why})`,
+          why === "denied" ? "warn" : "ok",
+        )
+      }
+    })
+    socket.on("dev:ctl-rejected", (d: { reason: string; from?: string }) => {
+      st().setCtlPending(false)
+      const msg = d.reason === "untrusted"
+        ? "رُفض الطلب: جهاز التحكم غير موثوق في سجل الأجهزة"
+        : d.reason === "target-untrusted"
+          ? "رُفض الطلب: جهاز الهاتف غير موثوق"
+          : "لا هاتف وكيل متصل الآن لبدء التحكم"
+      st().pushLog(msg, "warn")
+      toast.error(msg)
+    })
+    socket.on("dev:touch-ack", (d: { op: string; ok: boolean; err?: string; seq?: number }) => {
+      if (!d?.ok && d?.err === "accessibility-off") {
+        st().pushLog("تعذّر التنفيذ: خدمة الإتاحة غير مفعّلة على الهاتف", "warn")
+      }
     })
 
     // ==== تقارير الهاتف (مرآة الحالة) ====
@@ -112,7 +157,23 @@ export function useGuardBridge() {
       lost?: { active: boolean; message?: string; callback?: string }
       wipe?: { stage: "idle" | "wiping" | "wiped"; progress?: number }
       qs?: Record<string, boolean | number>
+      accessibility?: boolean
+      ctl?: { active?: boolean; controller?: string; name?: string }
     }) => {
+      if (typeof d?.accessibility === "boolean") st().setPhoneAccessibility(d.accessibility)
+      if (d?.ctl && typeof d.ctl.active === "boolean") {
+        // مزامنة الجلسة من تقرير الهاتف (مثلاً بعد إعادة تحميل الويب وسط جلسة)
+        const cur = st().ctl
+        if (cur.active !== d.ctl.active) {
+          st().setCtl({
+            active: !!d.ctl.active,
+            controller: d.ctl.controller ?? cur.controller,
+            name: d.ctl.name ?? cur.name,
+            reason: "sync",
+            at: Date.now(),
+          })
+        }
+      }
       if (typeof d?.ringing === "boolean") st().setRinging(d.ringing)
       if (typeof d?.strobe === "boolean") st().setStrobe(d.strobe)
       if (d?.lost && d.lost.active !== st().lost.active) {

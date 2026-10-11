@@ -7,7 +7,9 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
+import android.hardware.display.DisplayManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
@@ -35,7 +37,9 @@ class AgentForegroundService : Service() {
     companion object {
         const val CHANNEL_ID = "nexus_agent_channel"
         const val TX_CHANNEL_ID = "nexus_tx_channel"
+        const val CTL_CHANNEL_ID = "nexus_ctl_channel"
         const val NOTIF_ID = 4201
+        const val CTL_NOTIF_ID = 4310
 
         private const val BEACON_MS = 5_000L
         private const val STATE_MS = 30_000L
@@ -72,6 +76,48 @@ class AgentForegroundService : Service() {
                 return out
             }
         }
+
+        // ----------------------------------------------------------
+        // FA-7 — جلسة التحكم باللمس (بوابة الحقن)
+        // ----------------------------------------------------------
+
+        /** النسخة الحية للخدمة — للوصول من MainActivity (قرار الحوار/الإيقاف). */
+        @Volatile
+        var liveInstance: AgentForegroundService? = null
+
+        /** جلسة تحكم نشطة؟ لا جلسة = لا حقن لمس/نص إطلاقًا (بوابة الأمان). */
+        @Volatile
+        var ctlActive: Boolean = false
+
+        @Volatile
+        var ctlController: String? = null
+
+        @Volatile
+        var ctlName: String? = null
+
+        /** طلب تأكيد معلّق (بعد dev:ctl-start وقبل قرار المستخدم). */
+        @Volatile
+        var ctlPendingFrom: String? = null
+
+        @Volatile
+        var ctlPendingName: String? = null
+
+        /** طلب تأكيد عند بدء كل جلسة (افتراضي مفعّل — يكتبه Dart عبر setCtlConfirm). */
+        @Volatile
+        var ctlRequireConfirm: Boolean = true
+
+        /** لقطة حالة الجلسة للواجهة (MethodChannel). */
+        fun ctlSnapshot(): Map<String, Any?> = mapOf(
+            "active" to ctlActive,
+            "controller" to (ctlController ?: ""),
+            "name" to (ctlName ?: ""),
+            "requireConfirm" to ctlRequireConfirm,
+        )
+
+        /** إقرار تنفيذ إيماءة — من NexusAccessibilityService إلى السيرفر. */
+        fun forwardTouchAck(seq: Int, op: String, ok: Boolean, err: String?) {
+            liveInstance?.emitTouchAck(seq, op, ok, err)
+        }
     }
 
     private var socket: Socket? = null
@@ -95,9 +141,20 @@ class AgentForegroundService : Service() {
         super.onCreate()
         createNotificationChannel()
         createTxChannel()
+        createCtlChannel()
+        liveInstance = this
+        loadCtlPrefs()
+        registerDisplayListener()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // أفعال الإشعار (رفض عرض نقل / قرار تحكم) — تُعالج ثم نخرج مبكرًا
+        // (بدونها نُعيد فتح سوكِتات جديدة فوق القائمة — تكرار اتصال)
+        if (intent?.hasExtra("nexus.action") == true) {
+            startForegroundCompat()
+            handleServiceAction(intent)
+            return START_STICKY
+        }
         intent?.let { i ->
             host = i.getStringExtra("host") ?: host
             port = i.getIntExtra("port", port)
@@ -109,9 +166,12 @@ class AgentForegroundService : Service() {
         currentServerKey = "$host:$port"
 
         startForegroundCompat()
-        setState("connecting")
-        connect()
-        connectProd()
+        val fresh = socket?.connected() != true
+        if (fresh) {
+            setState("connecting")
+            connect()
+            connectProd()
+        }
 
         // إعادة البدء إن قتلها النظام
         return START_STICKY
@@ -138,12 +198,42 @@ class AgentForegroundService : Service() {
             socket = s
 
             s.on(Socket.EVENT_CONNECT, onConnect)
-            s.on(Socket.EVENT_DISCONNECT) { setState("offline") }
+            s.on(Socket.EVENT_DISCONNECT) {
+                setState("offline")
+                // انقطاع القناة = نهاية الجلسة دائمًا (من يتحكم لم يعد متصلًا)
+                main.post { endControlSession("disconnected") }
+            }
             s.on(Socket.EVENT_CONNECT_ERROR) { setState("reconnecting") }
 
             // أوامر الكمبيوتر → الهاتف: إقرار الاستلام (التنفيذ الكامل في مرحلة الحماية)
             for (cmd in AgentBridge.PC_COMMANDS) {
                 s.on(cmd) { args -> main.post { ackCommand(cmd, args) } }
+            }
+
+            // ==== FA-7: جلسة التحكم + أوامر اللمس/النص/الأزرار + فتح التطبيقات ====
+            s.on(AgentBridge.EV_CTL_START) { args ->
+                val data = args.firstOrNull() as? JSONObject ?: return@on
+                main.post { handleCtlStart(data) }
+            }
+            s.on(AgentBridge.EV_CTL_STOP) { _ ->
+                main.post { endControlSession("stopped") }
+            }
+            s.on(AgentBridge.EV_TOUCH) { args ->
+                val data = args.firstOrNull() as? JSONObject ?: return@on
+                // اللمس على المعالج الرئيسي — dispatchGesture يتطلبه عمليًا للحساسية القصوى
+                main.post { handleTouch(data) }
+            }
+            s.on(AgentBridge.EV_TEXT) { args ->
+                val data = args.firstOrNull() as? JSONObject ?: return@on
+                main.post { handleText(data) }
+            }
+            s.on(AgentBridge.EV_KEY) { args ->
+                val data = args.firstOrNull() as? JSONObject ?: return@on
+                main.post { handleKey(data) }
+            }
+            s.on(AgentBridge.EV_APP) { args ->
+                val data = args.firstOrNull() as? JSONObject ?: return@on
+                main.post { handleAppOpen(data) }
             }
 
             // عروض نقل الملفات (عقد §8): إشعار نظام + بث إلى الواجهة
@@ -325,14 +415,276 @@ class AgentForegroundService : Service() {
     }
 
     private fun handleServiceAction(intent: Intent?) {
-        if (intent?.getStringExtra("nexus.action") == "reject") {
-            val offerId = intent.getStringExtra("nexus.offerId") ?: return
-            try {
-                socket?.emit(AgentBridge.EV_TX_REJECT, JSONObject().put("id", offerId))
-                (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-                    .cancel(offerId.hashCode() and 0x7fffffff)
-            } catch (_: Exception) {
+        when (intent?.getStringExtra("nexus.action")) {
+            "reject" -> {
+                val offerId = intent.getStringExtra("nexus.offerId") ?: return
+                try {
+                    socket?.emit(AgentBridge.EV_TX_REJECT, JSONObject().put("id", offerId))
+                    (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                        .cancel(offerId.hashCode() and 0x7fffffff)
+                } catch (_: Exception) {
+                }
             }
+            "ctl-allow" -> {
+                val from = ctlPendingFrom
+                val name = ctlPendingName
+                ctlPendingFrom = null
+                ctlPendingName = null
+                cancelCtlNotification()
+                if (from != null) acceptControl(from, name ?: "الكمبيوتر")
+            }
+            "ctl-deny" -> {
+                val from = ctlPendingFrom
+                val name = ctlPendingName
+                ctlPendingFrom = null
+                ctlPendingName = null
+                cancelCtlNotification()
+                if (from != null) {
+                    pushCtlToUi("state", mapOf("active" to false, "controller" to from, "reason" to "denied"))
+                    emitCtlState(false, "denied", from, name)
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // FA-7 — جلسة التحكم باللمس والحقن (عقد §4.8)
+    // ------------------------------------------------------------------
+
+    private fun pushCtlToUi(event: String, data: Map<String, Any?>) {
+        val m = HashMap<String, Any?>(data)
+        m["event"] = event
+        MainActivity.pushDataEvent("ctl", m)
+    }
+
+    private fun emitCtlState(active: Boolean, reason: String, controller: String?, name: String?) {
+        try {
+            val o = JSONObject()
+                .put("active", active)
+                .put("reason", reason)
+                .put("at", System.currentTimeMillis())
+            if (!controller.isNullOrEmpty()) o.put("controller", controller)
+            if (!name.isNullOrEmpty()) o.put("name", name)
+            socket?.emit(AgentBridge.EV_CTL_STATE, o)
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun handleCtlStart(data: JSONObject) {
+        val from = data.optString("from")
+        val name = data.optString("name").ifEmpty { "الكمبيوتر" }
+        if (from.isEmpty()) return
+        if (ctlActive) {
+            // الجلسة الواحدة فقط في الوقت نفسه — بلّغ بأن الخط مشغول
+            emitCtlState(true, "busy", ctlController, ctlName)
+            return
+        }
+        if (ctlRequireConfirm) {
+            ctlPendingFrom = from
+            ctlPendingName = name
+            notifyCtlRequest(name)
+            pushCtlToUi("start-request", mapOf("controller" to from, "name" to name))
+            // لا حالة بعد — القرار قادم من الإشعار أو حوار الواجهة
+        } else {
+            acceptControl(from, name)
+        }
+    }
+
+    private fun acceptControl(from: String, name: String) {
+        ctlActive = true
+        ctlController = from
+        ctlName = name
+        cancelCtlNotification()
+        pushCtlToUi("state", mapOf("active" to true, "controller" to from, "name" to name, "reason" to "confirmed"))
+        emitCtlState(true, "confirmed", from, name)
+        emitDevState()
+        android.util.Log.i(TAG, "control session started by $from ($name)")
+    }
+
+    private fun endControlSession(reason: String) {
+        if (!ctlActive) return
+        val c = ctlController
+        val n = ctlName
+        ctlActive = false
+        ctlController = null
+        ctlName = null
+        cancelCtlNotification()
+        pushCtlToUi("state", mapOf("active" to false, "controller" to (c ?: ""), "reason" to reason))
+        emitCtlState(false, reason, c, n)
+        emitDevState()
+        android.util.Log.i(TAG, "control session ended: $reason")
+    }
+
+    /** قرار حوار الواجهة (MethodChannel — MainActivity). */
+    fun decideControl(allow: Boolean) {
+        val from = ctlPendingFrom
+        val name = ctlPendingName
+        ctlPendingFrom = null
+        ctlPendingName = null
+        cancelCtlNotification()
+        if (allow && from != null) {
+            acceptControl(from, name ?: "الكمبيوتر")
+        } else if (from != null) {
+            pushCtlToUi("state", mapOf("active" to false, "controller" to from, "reason" to "denied"))
+            emitCtlState(false, "denied", from, name)
+        }
+    }
+
+    /** زر القطع الفوري من التطبيق (البند 6). */
+    fun phoneStopControl() {
+        endControlSession("phone-stop")
+    }
+
+    private fun emitTouchAck(seq: Int, op: String, ok: Boolean, err: String?) {
+        try {
+            val o = JSONObject().put("op", op).put("ok", ok)
+            if (seq > 0) o.put("seq", seq)
+            if (err != null) o.put("err", err)
+            socket?.emit(AgentBridge.EV_TOUCH_ACK, o)
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun handleTouch(data: JSONObject) {
+        if (!ctlActive) return // بوابة الجلسة — لا جلسة، لا حقن
+        val svc = NexusAccessibilityService.instance
+        val op = data.optString("op")
+        val seq = data.optInt("seq", 0)
+        if (svc == null) {
+            emitTouchAck(seq, op, false, "accessibility-off")
+            return
+        }
+        val x = data.optDouble("x", 0.0).toFloat()
+        val y = data.optDouble("y", 0.0).toFloat()
+        when (op) {
+            "tap" -> svc.tap(x, y, seq)
+            "long" -> svc.longPress(x, y, data.optLong("durationMs", 700), seq)
+            "swipe" -> svc.swipe(
+                x, y,
+                data.optDouble("x2", x.toDouble()).toFloat(),
+                data.optDouble("y2", y.toDouble()).toFloat(),
+                data.optLong("durationMs", 300), "swipe", seq,
+            )
+            "scroll" -> svc.scroll(
+                x, y,
+                data.optDouble("x2", x.toDouble()).toFloat() - x,
+                data.optDouble("y2", y.toDouble()).toFloat() - y,
+                data.optLong("durationMs", 300), seq,
+            )
+            "down" -> svc.touchDown(x, y)
+            "move" -> svc.touchMove(x, y)
+            "up" -> svc.touchUp(x, y)
+            else -> if (seq > 0) emitTouchAck(seq, op, false, "unknown-op")
+        }
+    }
+
+    private fun handleText(data: JSONObject) {
+        if (!ctlActive) return
+        val svc = NexusAccessibilityService.instance
+        if (svc == null) {
+            emitTouchAck(0, "text", false, "accessibility-off")
+            return
+        }
+        svc.setText(data.optString("text"), 0)
+    }
+
+    private fun handleKey(data: JSONObject) {
+        if (!ctlActive) return
+        val svc = NexusAccessibilityService.instance
+        if (svc == null) {
+            emitTouchAck(0, "key", false, "accessibility-off")
+            return
+        }
+        svc.keyAction(data.optString("action"), 0)
+    }
+
+    /** فتح تطبيق بالحزمة (البند: افتح تطبيقًا من الويب) — لا يحتاج الإتاحة. */
+    private fun handleAppOpen(data: JSONObject) {
+        val action = data.optString("action", "open")
+        val pkg = data.optString("pkg")
+        if (action != "open" || pkg.isEmpty()) {
+            socket?.emit(AgentBridge.EV_DEV_ACKED, JSONObject().put("text", "أمر تطبيق غير مدعوم — تجاهُل"))
+            return
+        }
+        try {
+            val intent = packageManager.getLaunchIntentForPackage(pkg)
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+                socket?.emit(
+                    AgentBridge.EV_DEV_ACKED,
+                    JSONObject().put("text", "فُتح تطبيق ${data.optString("name", pkg)} من الكمبيوتر"),
+                )
+            } else {
+                socket?.emit(
+                    AgentBridge.EV_DEV_ACKED,
+                    JSONObject().put("text", "تعذّر فتح ${data.optString("name", pkg)} — التطبيق غير مثبت على الهاتف"),
+                )
+            }
+        } catch (e: Exception) {
+            socket?.emit(
+                AgentBridge.EV_DEV_ACKED,
+                JSONObject().put("text", "خطأ في فتح $pkg: ${e.message?.take(60) ?: "مجهول"}"),
+            )
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // FA-7 — أبعاد الشاشة الحقيقية (تحويل إحداثيات الويب)
+    // ------------------------------------------------------------------
+
+    private fun emitScreen() {
+        try {
+            val m = NexusAccessibilityService.instance?.screenInfo()
+                ?: NexusAccessibilityService.metricsFromContext(this)
+                ?: return
+            socket?.emit(
+                AgentBridge.EV_DEV_SCREEN,
+                JSONObject()
+                    .put("w", m.first)
+                    .put("h", m.second)
+                    .put("density", m.third),
+            )
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun registerDisplayListener() {
+        try {
+            val dm = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+            dm.registerDisplayListener(
+                object : DisplayManager.DisplayListener {
+                    override fun onDisplayAdded(displayId: Int) {}
+                    override fun onDisplayRemoved(displayId: Int) {}
+                    override fun onDisplayChanged(displayId: Int) {
+                        // تدوير الشاشة أو تغيّر الكثافة → أبلغ الويب بأبعاد جديدة
+                        main.post { emitScreen() }
+                    }
+                },
+                main,
+            )
+        } catch (_: Exception) {
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // FA-7 — إعداد طلب التأكيد (يُحفظ محليًا)
+    // ------------------------------------------------------------------
+
+    private fun loadCtlPrefs() {
+        try {
+            val p = getSharedPreferences("nexus_ctl", Context.MODE_PRIVATE)
+            ctlRequireConfirm = p.getBoolean("require_confirm", true)
+        } catch (_: Exception) {
+        }
+    }
+
+    fun setCtlConfirm(enabled: Boolean) {
+        ctlRequireConfirm = enabled
+        try {
+            getSharedPreferences("nexus_ctl", Context.MODE_PRIVATE)
+                .edit().putBoolean("require_confirm", enabled).apply()
+        } catch (_: Exception) {
         }
     }
 
@@ -346,7 +698,9 @@ class AgentForegroundService : Service() {
                     .put("name", deviceName)
                     .put("deviceId", deviceId),
             )
-            // 2) بدء المنارة + تقرير الحالة
+            // 2) أبعاد الشاشة الحقيقية (أساس تحويل إحداثيات الويب — عقد §4.8)
+            emitScreen()
+            // 3) بدء المنارة + تقرير الحالة
             startBeacons()
         }
     }
@@ -393,23 +747,32 @@ class AgentForegroundService : Service() {
         stateRun = object : Runnable {
             override fun run() {
                 try {
-                    if (socket?.connected() == true) {
-                        socket?.emit(
-                            AgentBridge.EV_DEV_STATE,
-                            JSONObject()
-                                .put("deviceId", deviceId)
-                                .put("name", deviceName)
-                                .put("battery", readBattery())
-                                .put("source", "agent")
-                                .put("at", System.currentTimeMillis()),
-                        )
-                    }
+                    emitDevState()
                 } catch (_: Exception) {
                 }
                 main.postDelayed(this, STATE_MS)
             }
         }
         main.postDelayed(stateRun!!, STATE_MS)
+    }
+
+    /** تقرير الحالة الدوري + بعد جلسة التحكم والإتاحة (البند 6 — مؤشر الحالة). */
+    private fun emitDevState() {
+        try {
+            if (socket?.connected() != true) return
+            socket?.emit(
+                AgentBridge.EV_DEV_STATE,
+                JSONObject()
+                    .put("deviceId", deviceId)
+                    .put("name", deviceName)
+                    .put("battery", readBattery())
+                    .put("source", "agent")
+                    .put("accessibility", NexusAccessibilityService.isReady)
+                    .put("ctl", JSONObject(ctlSnapshot()))
+                    .put("at", System.currentTimeMillis()),
+            )
+        } catch (_: Exception) {
+        }
     }
 
     private fun readBattery(): Int = try {
@@ -477,6 +840,21 @@ class AgentForegroundService : Service() {
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
                 description = "عروض الملفات الواردة واكتمال الاستلام"
+            }
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .createNotificationChannel(ch)
+        }
+    }
+
+    private fun createCtlChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val ch = NotificationChannel(
+                CTL_CHANNEL_ID,
+                "NexusLink — التحكم عن بعد",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "طلبات بدء جلسات التحكم باللمس من الكمبيوتر"
+                setShowBadge(true)
             }
             (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
                 .createNotificationChannel(ch)
@@ -575,12 +953,23 @@ object AgentBridge {
     const val EV_TX_RESUME = "tx:resume"
     const val EV_TX_CANCEL = "tx:cancel"
 
+    // FA-7 — التحكم باللمس والحقن (عقد §4.8)
+    const val EV_CTL_START = "dev:ctl-start"
+    const val EV_CTL_STOP = "dev:ctl-stop"
+    const val EV_CTL_STATE = "dev:ctl-state"
+    const val EV_TOUCH = "dev:touch"
+    const val EV_TEXT = "dev:text"
+    const val EV_KEY = "dev:key"
+    const val EV_TOUCH_ACK = "dev:touch-ack"
+    const val EV_DEV_SCREEN = "dev:screen"
+    const val EV_APP = "dev:app"
+
     // الإنتاجية (عقد §4.5)
     const val EV_CLIP_NEW = "clip:new"
     const val EV_HAND_NEW = "hand:new"
 
     val PC_COMMANDS = listOf(
         "dev:ring", "dev:ring-stop", "dev:light", "dev:lost", "dev:lost-off",
-        "dev:wipe", "dev:alarm", "dev:qs", "dev:app",
+        "dev:wipe", "dev:alarm", "dev:qs",
     )
 }

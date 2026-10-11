@@ -5,6 +5,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../core/protocol.dart';
 import '../domain/models.dart';
+import '../state/control_providers.dart';
 import '../state/providers.dart';
 
 /// شاشة «الاتصال بالسيرفر»: اكتشاف تلقائي mDNS + مسح QR + إدخال يدوي.
@@ -122,6 +123,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
         children: [
           _StatusBanner(model: connModel, agentState: agentState),
+          const _CtlActiveBanner(),
           const SizedBox(height: 16),
 
           Text('connect.subtitle'.tr(), style: TextStyle(color: cs.onSurface.withOpacity(.65))),
@@ -266,6 +268,55 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   }
 
   String _fmt(DateTime d) => '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}';
+}
+
+// ---------------------------------------------------------------------------
+// FA-7 — مؤشر حالة التحكم عن بعد (البند 6): «التحكم مفعّل من: [جهاز]» + قطع فوري
+// يظهر أعلى الشاشة الرئيسية طوال مدة الجلسة النشطة.
+// ---------------------------------------------------------------------------
+
+class _CtlActiveBanner extends ConsumerWidget {
+  const _CtlActiveBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ctl = ref.watch(controlControllerProvider);
+    if (!ctl.isActive) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: cs.errorContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.touch_app_rounded, color: cs.onErrorContainer),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'ctl.activeFrom'.tr(args: [ctl.session.name.isEmpty ? 'PC' : ctl.session.name]),
+                style: TextStyle(color: cs.onErrorContainer, fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonal(
+              style: FilledButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                backgroundColor: cs.error,
+                foregroundColor: cs.onError,
+              ),
+              onPressed: () => ref.read(controlControllerProvider.notifier).stopNow(),
+              child: Text('ctl.cutNow'.tr()),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

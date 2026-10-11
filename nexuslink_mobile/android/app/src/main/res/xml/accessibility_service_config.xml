@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FA-7: إعداد خدمة الإتاحة — محرك حقن اللمس والإدخال (بديل AirMirror).
+     أقل صلاحيات ممكنة: قراءة محتوى النوافذ فقط للعثور على الحقل المركّز
+     (ACTION_SET_TEXT) — بلا مراقبة أحرف، وبلا استرجاع كلمات مرور،
+     وبلا تنفيذ إلا بأمر صريح خلال جلسة تحكم يقبلها المستخدم. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeViewFocused"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews|flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:notificationTimeout="100"
+    android:description="@string/accessibility_desc" />

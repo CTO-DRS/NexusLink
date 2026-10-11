@@ -2,7 +2,9 @@ package com.nexuslink.mobile
 
 import android.Manifest
 import android.app.NotificationManager
+import android.content.ComponentName
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -208,6 +210,63 @@ class MainActivity : FlutterActivity() {
 
                 "setUiAlive" -> {
                     AgentForegroundService.uiAlive = call.argument<Boolean>("alive") ?: false
+                    result.success(true)
+                }
+
+                // ---------- FA-7: التحكم عن بعد (الإتاحة + الجلسة) ----------
+
+                "accessibilityStatus" -> {
+                    val enabled = try {
+                        val setting = Settings.Secure.getString(
+                            contentResolver,
+                            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                        ) ?: ""
+                        val flat = "$packageName/com.nexuslink.mobile.NexusAccessibilityService"
+                        val flatCompat = ComponentName(packageName, NexusAccessibilityService::class.java.name).flattenToString()
+                        setting.split(':').any { it.equals(flat, true) || it.equals(flatCompat, true) } || NexusAccessibilityService.isReady
+                    } catch (_: Exception) {
+                        NexusAccessibilityService.isReady
+                    }
+                    result.success(mapOf("enabled" to enabled, "ready" to NexusAccessibilityService.isReady))
+                }
+
+                "openAccessibilitySettings" -> {
+                    try {
+                        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("open_failed", e.message, null)
+                    }
+                }
+
+                "ctlSnapshot" -> result.success(AgentForegroundService.ctlSnapshot())
+
+                "ctlDecision" -> {
+                    val allow = call.argument<Boolean>("allow") ?: false
+                    AgentForegroundService.liveInstance?.decideControl(allow)
+                        ?: run { // لا خدمة حية — نظّف الحالة المعلقة
+                            AgentForegroundService.ctlPendingFrom = null
+                            AgentForegroundService.ctlPendingName = null
+                        }
+                    result.success(true)
+                }
+
+                "ctlStop" -> {
+                    AgentForegroundService.liveInstance?.phoneStopControl()
+                    result.success(true)
+                }
+
+                "setCtlConfirm" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: true
+                    AgentForegroundService.liveInstance?.setCtlConfirm(enabled)
+                        ?: run {
+                            // الخدمة غير حية — احفظ الإعداد ليقرأه onCreate
+                            try {
+                                getSharedPreferences("nexus_ctl", Context.MODE_PRIVATE)
+                                    .edit().putBoolean("require_confirm", enabled).apply()
+                            } catch (_: Exception) {
+                            }
+                        }
                     result.success(true)
                 }
 

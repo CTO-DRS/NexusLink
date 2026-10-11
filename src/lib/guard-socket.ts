@@ -74,6 +74,43 @@ export function cmdApp(action: "open" | "uninstall" | "install", pkg: string, na
   getGuardSocket().emit("dev:app", { action, pkg, name })
 }
 
+// ---------- FA-7: التحكم باللمس والحقن (عقد §4.8) ----------
+
+/** طلب بدء جلسة تحكم — الجسر يتحقق أن `from` جهاز موثوق قبل التوجيه للوكيل. */
+export function ctlStart(from: string, name?: string) {
+  getGuardSocket().emit("dev:ctl-start", { from, name, at: Date.now() })
+}
+
+/** إنهاء جلسة التحكم من الكمبيوتر. */
+export function ctlStop() {
+  getGuardSocket().emit("dev:ctl-stop", { at: Date.now() })
+}
+
+export interface TouchCmd {
+  op: "tap" | "long" | "swipe" | "scroll" | "down" | "move" | "up"
+  seq?: number
+  x: number
+  y: number
+  x2?: number
+  y2?: number
+  durationMs?: number
+}
+
+/** أمر لمس بإحداثيات مطلقة (بكسل شاشة الهاتف الحقيقية) — توجيه مباشر بلا صدى. */
+export function cmdTouch(t: TouchCmd) {
+  getGuardSocket().emit("dev:touch", t)
+}
+
+/** حقن نص في الحقل المركّز (نص فارغ = مسح الحقل). */
+export function cmdText(text: string) {
+  getGuardSocket().emit("dev:text", { text, at: Date.now() })
+}
+
+/** زر نظام: back | home | recents | notifications | keyboard. */
+export function cmdKey(action: "back" | "home" | "recents" | "notifications" | "keyboard") {
+  getGuardSocket().emit("dev:key", { action, at: Date.now() })
+}
+
 /** قفل الكمبيوتر يدوياً من لوحة الحماية */
 export function proxManualLock() {
   getGuardSocket().emit("prox:manual-lock")

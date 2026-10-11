@@ -44,6 +44,24 @@ class GuardEvents {
   static const String txCancel = 'tx:cancel';
 }
 
+/// أحداث التحكم باللمس والحقن (عقد §4.8 — FA-7 بديل AirMirror) على قناة 3006.
+/// أوامر الويب تصل الهاتف مباشرة عبر الجسر (بلا بث)، وتُنفَّذ فقط خلال جلسة نشطة.
+class CtlEvents {
+  // الجلسة
+  static const String ctlStart = 'dev:ctl-start'; // ويب → هاتف (مباشر)
+  static const String ctlStop = 'dev:ctl-stop'; // ويب → هاتف (مباشر)
+  static const String ctlState = 'dev:ctl-state'; // هاتف → ويب (بث)
+
+  // الإدخال (يُنفَّذ فقط إذا كانت الجلسة نشطة)
+  static const String touch = 'dev:touch';
+  static const String text = 'dev:text';
+  static const String key = 'dev:key';
+
+  // تقارير الهاتف
+  static const String touchAck = 'dev:touch-ack';
+  static const String screen = 'dev:screen'; // أبعاد الشاشة الحقيقية
+}
+
 /// أحداث جسر الإنتاجية 3007 — النصوص/الروابط السريعة والحافظة الموحدة.
 class ProdEvents {
   static const String hello = 'prod:hello';

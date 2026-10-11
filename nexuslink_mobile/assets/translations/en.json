@@ -91,7 +91,11 @@
     "deviceInfo": "Your identity on the network",
     "deviceId": "Stable ID",
     "deviceName": "Device name",
-    "transfers": "File transfers"
+    "transfers": "File transfers",
+    "remote": "Remote control",
+    "remoteEntry": "Touch & input control (AirMirror alternative)",
+    "remoteActiveHint": "A control session is active now — tap to view or cut instantly",
+    "remoteHint": "Accessibility service, confirmation prompt, and session cut"
   },
   "perms": {
     "notificationsTitle": "Notification permission",
@@ -151,5 +155,24 @@
     "photoSyncSubtitle": "When connected, the service watches DCIM via WorkManager and uploads new shots",
     "photoLastScan": "Last photo scan",
     "scanNow": "Scan now"
+  },
+  "ctl": {
+    "title": "Remote Control",
+    "activeFrom": "Control active from: {}",
+    "cutNow": "Cut now",
+    "requestFrom": "Control request from {}",
+    "allow": "Allow",
+    "deny": "Deny",
+    "accEnabled": "Accessibility service enabled — remote control ready",
+    "accDisabled": "Accessibility service not enabled yet",
+    "accSteps": "Setup steps:\n1. Tap the button below to open Accessibility settings directly.\n2. Find NexusLink in the list of downloaded services.\n3. Open it and turn on \"Use service\".\n4. Confirm the warning dialog — the service does nothing outside a control session you explicitly accept.",
+    "openAccSettings": "Open Accessibility settings",
+    "securityTitle": "Control security",
+    "confirmTitle": "Ask for confirmation at session start",
+    "confirmSubtitle": "When enabled, an Allow/Deny notification appears before the computer touches your screen. When disabled, sessions start automatically from trusted devices only.",
+    "trustedTitle": "Trusted devices only",
+    "trustedSubtitle": "Devices not paired and trusted in the server registry cannot request control at all — requests are rejected before reaching your phone.",
+    "howTitle": "How it works",
+    "howBody": "When a session starts from the computer, its touches are injected on your phone through the accessibility service with pixel precision: tap, long-press, drag, scroll, text into the focused field, and system buttons (back/home/recents). You can cut instantly from the home screen or here at any time, and control always ends when the server connection is lost."
   }
 }

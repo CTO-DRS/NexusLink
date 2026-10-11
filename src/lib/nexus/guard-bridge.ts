@@ -6,8 +6,48 @@
 import { createServer } from "http"
 import { Server as SocketServer } from "socket.io"
 import { applyAgentTx } from "./transfer-engine"
+import { store } from "./devices"
 
 const PORT = 3006
+
+// ---------------------------------------------------------------------------
+// FA-7 — التحكم باللمس والحقن (بديل AirMirror)
+// أحداث التحكم تُوجّه مباشرة للوكيل (لا بث) — اللمس عالي التكرار ويجب ألا يُرَدّ
+// إلى مرسل الويب. الجلسة نفسها تُدار على الهاتف (تأكيد/قطع)، والسيرفر يفرض
+// حاجز الثقة: لا تحكم إلا من جهاز مسجل وموثوق في سجل الأجهزة.
+// ---------------------------------------------------------------------------
+
+/** أبعاد شاشة الهاتف كما أبلغها الوكيل (dev:screen) — للويب لحساب مقياس الدقة. */
+interface AgentScreenInfo { w: number; h: number; density: number; deviceId: string | null; at: number }
+function screenReg(): AgentScreenInfo | null {
+  const gg = globalThis as unknown as { __nexusGuardScreen?: AgentScreenInfo }
+  return gg.__nexusGuardScreen ?? null
+}
+
+/** محدد معدل لأوامر اللمس — 120 حدثًا/ثانية لكل عميل (حماية من الفيضان). */
+const touchBudget = new Map<string, { n: number; win: number }>()
+function touchAllowed(key: string): boolean {
+  const now = Date.now()
+  const b = touchBudget.get(key)
+  if (!b || now - b.win >= 1000) {
+    touchBudget.set(key, { n: 1, win: now })
+    if (touchBudget.size > 64) {
+      for (const [k, v] of touchBudget) if (now - v.win >= 5000) touchBudget.delete(k)
+    }
+    return true
+  }
+  b.n++
+  return b.n <= 120
+}
+
+const TOUCH_OPS = new Set(["tap", "long", "swipe", "scroll", "down", "move", "up"])
+const KEY_ACTIONS = new Set(["back", "home", "recents", "notifications", "keyboard"])
+
+function clampCoord(v: unknown): number {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return 0
+  return Math.min(20000, Math.max(0, Math.round(n * 10) / 10))
+}
 
 // ---------- إعدادات محرك القرب (المصدر الرسمي) ----------
 export interface ProxSettings {
@@ -141,6 +181,7 @@ export function ensureGuardBridge() {
       socket.emit("guard:hello", {
         prox: { ...prox, state: proxState, rssi: presence?.rssi ?? null, source: presence?.source ?? null },
         phoneGuardOnline,
+        screen: screenReg(),
         at: Date.now(),
       })
 
@@ -237,6 +278,94 @@ export function ensureGuardBridge() {
           io2.emit(ev, data)
         })
       }
+
+      // ==== FA-7: أبعاد شاشة الهاتف (من الوكيل فقط — تُخزن وتُبث للويب) ====
+      socket.on("dev:screen", (d: { w?: number; h?: number; density?: number }) => {
+        if (agentReg().socketId !== socket.id) return
+        const w = Math.round(Number(d?.w ?? 0))
+        const h = Math.round(Number(d?.h ?? 0))
+        if (w <= 0 || h <= 0) return
+        const info: AgentScreenInfo = {
+          w, h,
+          density: Math.round(Number(d?.density ?? 0)),
+          deviceId: agentReg().deviceId,
+          at: Date.now(),
+        }
+        ;(globalThis as unknown as { __nexusGuardScreen?: AgentScreenInfo }).__nexusGuardScreen = info
+        io2.emit("guard:screen", info)
+        log(io2, `أبعاد شاشة الهاتف: ${w}×${h} (كثافة ${info.density})`, "info")
+      })
+
+      // ==== FA-7: جلسة التحكم — توجيه مباشر للوكيل مع حاجز الثقة ====
+      socket.on("dev:ctl-start", (d: { from?: string; name?: string }) => {
+        const from = String(d?.from ?? "").trim()
+        const dev = store().devices.find((x) => x.id === from)
+        if (!dev || !dev.trusted) {
+          log(io2, `رفض محاولة تحكم من جهاز غير موثوق: ${from || "مجهول"}`, "warn")
+          socket.emit("dev:ctl-rejected", { reason: "untrusted", from, at: Date.now() })
+          return
+        }
+        const reg = agentReg()
+        const target = reg.deviceId ? store().devices.find((x) => x.id === reg.deviceId) : null
+        if (!target || !target.trusted) {
+          socket.emit("dev:ctl-rejected", { reason: "target-untrusted", from, at: Date.now() })
+          return
+        }
+        const okSend = guardEmitToAgent("dev:ctl-start", {
+          from,
+          name: dev.name,
+          at: Date.now(),
+        })
+        if (!okSend) {
+          socket.emit("dev:ctl-rejected", { reason: "offline", from, at: Date.now() })
+          return
+        }
+        log(io2, `طلب تحكم باللمس من ${dev.name} إلى ${target.name}`, "in")
+      })
+
+      socket.on("dev:ctl-stop", () => {
+        guardEmitToAgent("dev:ctl-stop", { at: Date.now() })
+      })
+
+      // ==== FA-7: أوامر اللمس/النص/الأزرار — توجيه مباشر (بلا صدى للمرسل) ====
+      socket.on("dev:touch", (d: Record<string, unknown>) => {
+        if (!touchAllowed(socket.id)) return
+        const op = String(d?.op ?? "")
+        if (!TOUCH_OPS.has(op)) return
+        const payload: Record<string, unknown> = { op }
+        if (d?.seq != null) payload.seq = Number(d.seq) || 0
+        payload.x = clampCoord(d?.x)
+        payload.y = clampCoord(d?.y)
+        if (op === "swipe" || op === "scroll") {
+          payload.x2 = clampCoord(d?.x2)
+          payload.y2 = clampCoord(d?.y2)
+          const dur = Math.min(5000, Math.max(40, Math.round(Number(d?.durationMs ?? 300))))
+          payload.durationMs = dur
+        }
+        guardEmitToAgent("dev:touch", payload)
+      })
+
+      socket.on("dev:text", (d: { text?: string }) => {
+        const text = String(d?.text ?? "")
+        if (text.length > 2000) return
+        guardEmitToAgent("dev:text", { text, at: Date.now() })
+      })
+
+      socket.on("dev:key", (d: { action?: string }) => {
+        const action = String(d?.action ?? "")
+        if (!KEY_ACTIONS.has(action)) return
+        guardEmitToAgent("dev:key", { action, at: Date.now() })
+      })
+
+      // ==== FA-7: تقارير الوكيل — حالة الجلسة وإقرارات التنفيذ (بث للويب) ====
+      socket.on("dev:ctl-state", (data: Record<string, unknown>) => {
+        if (agentReg().socketId !== socket.id) return
+        io2.emit("dev:ctl-state", data)
+      })
+      socket.on("dev:touch-ack", (data: Record<string, unknown>) => {
+        if (agentReg().socketId !== socket.id) return
+        io2.emit("dev:touch-ack", data)
+      })
 
       // ==== تقارير الهاتف → الكمبيوتر ====
       socket.on("dev:state", (data: Record<string, unknown>) => {
