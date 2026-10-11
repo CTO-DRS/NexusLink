@@ -56,6 +56,7 @@ jobs:
         with:
           name: desktop-${{ matrix.os }}
           path: dist/**
+          if-no-files-found: ignore
 
   android:
     needs: test
@@ -70,7 +71,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: { channel: stable, cache: true }
       - name: Restore release signing key (secrets.ANDROID_KEYSTORE_BASE64)
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: env.KEYSTORE_B64 != ''
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
@@ -114,6 +115,7 @@ jobs:
         with:
           name: ios
           path: dist/**
+          if-no-files-found: ignore
 
   release:
     needs: [desktop, android, ios]
