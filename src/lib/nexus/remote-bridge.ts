@@ -59,6 +59,7 @@ export function ensureRemoteBridge() {
 
   try {
     const httpServer = createServer()
+    let bindAttempts = 0
     const io2 = new SocketServer(httpServer, {
       path: "/",
       cors: { origin: "*", methods: ["GET", "POST"] },
@@ -200,8 +201,26 @@ export function ensureRemoteBridge() {
       })
     })
 
-    httpServer.on("error", () => {
-      // المنفذ مشغول (مثلاً الخدمة المستقلة تعمل) — لا شيء يحدث
+    // FA-9 إصلاح انحدار: المنفذ مشغول بخدمة قديمة (mini-service ببروتوكول ميت) لا يعني الاستسلام —
+    // المدمج في next هو المصدر المعتمد، فيعيد المحاولة حتى تتحرر المنفذ (المشرف قد يعيد إطلاق الخدمة القديمة)
+    httpServer.on("error", (err: NodeJS.ErrnoException) => {
+      if (err?.code === "EADDRINUSE" && bindAttempts < 15) {
+        bindAttempts++
+        setTimeout(() => {
+          try {
+            httpServer.close()
+          } catch {}
+          httpServer.listen(PORT)
+        }, 1000)
+        return
+      }
+      io2.emit("rc:log", {
+        id: uid(),
+        text: `تعذّر ربط جسر التحكم بالمنفذ ${PORT} (${err?.code ?? "خطأ"}) — قد تكون خدمة قديمة تحتكره ببروتوكول ناقص`,
+        kind: "err",
+        at: Date.now(),
+      })
+      console.error(`[nexus] Remote bridge bind failed on ${PORT}:`, err?.code)
     })
 
     httpServer.listen(PORT, () => {
