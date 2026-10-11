@@ -58,3 +58,8 @@ server.log
 
 tool-results/
 *.pid
+
+# signing secrets - never commit
+key.properties
+*.jks
+*.keystore
