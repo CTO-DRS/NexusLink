@@ -3,11 +3,16 @@
 // خدمة مستقلة (socket.io, port 3003) تمثل جسر Nexus Protocol بين
 // سطح المكتب والهاتف: انعكاس الإشعارات، الرد السريع، SMS، المكالمات،
 // ومزامنة عدم الإزعاج — مع محاكي هاتف أندرويد مدمج.
+// تشغيل مضمّن (تطبيق سطح المكتب Tauri): NEXUSLINK_NAME/NEXUSLINK_GATEWAY_PORT
+// تعدّل الإعلان mDNS فقط — الافتراضات مطابقة للعقد (NEXUS-PC/81).
 import { createServer } from 'http'
 import { Server } from 'socket.io'
 
 const PORT = 3003
-const NEXT_BASE = 'http://127.0.0.1:3000'
+const NEXT_BASE = process.env.NEXT_BASE || 'http://127.0.0.1:3000'
+const SERVER_NAME = process.env.NEXUSLINK_NAME || 'NEXUS-PC'
+const GATEWAY_PORT = Number(process.env.NEXUSLINK_GATEWAY_PORT || 81)
+const STARTED_AT = Date.now()
 
 // ---------- Nexus Protocol app catalog ----------
 interface AppMeta { id: string; name: string; color: string; actionable: boolean }
@@ -172,6 +177,38 @@ io = new Server(httpServer, {
   pingInterval: 25000,
 })
 
+// فحص جاهزية + حالة (يقرؤه مدير العمليات في تطبيق سطح المكتب و tray)
+// socket.io مُنشأ بـ path:'/' (العقد: يقبل أي مسار) — engine.io يطالب بكل المسارات
+// ويكتب 400 قبل أي مستمع آخر. الحل: نلتقط مستمع engine حرفيًا ونغلّفه:
+// /status تُجاب هنا، وكل ما عداه يُفوَّض لـ engine بلا أي تغيير سلوك.
+const ENGINE_REQUEST = httpServer.listeners('request').pop() as (
+  req: import('http').IncomingMessage,
+  res: import('http').ServerResponse,
+) => void
+httpServer.removeAllListeners('request')
+httpServer.on('request', (req, res) => {
+  try {
+    const path = (req.url ?? '/').split('?')[0]
+    if (path === '/status') {
+      res.writeHead(200, {
+        'content-type': 'application/json',
+        'access-control-allow-origin': '*',
+        'cache-control': 'no-store',
+      })
+      res.end(JSON.stringify({
+        ok: true,
+        proto: 'Nexus/1.2',
+        role: 'comms',
+        port: PORT,
+        sockets: io?.engine?.clientsCount ?? 0,
+        uptimeMs: Date.now() - STARTED_AT,
+      }))
+      return
+    }
+  } catch { /* لا نُسقط السيرفر أبدًا بسبب فحص */ }
+  ENGINE_REQUEST(req, res)
+})
+
 io.on('connection', (socket) => {
   console.log('desktop connected:', socket.id)
   socket.emit('bridge:hello', {
@@ -315,16 +352,16 @@ async function startMdns() {
     const { Bonjour } = await import("bonjour-service")
     const bonjour = new Bonjour()
     const svc = bonjour.publish({
-      name: "NEXUS-PC",
+      name: SERVER_NAME,
       type: "nexuslink", // → _nexuslink._tcp
-      port: 81,          // بوابة Caddy (نفس نمط ?XTransformPort)
+      port: GATEWAY_PORT, // بوابة الإدخال (نفس نمط ?XTransformPort)
       txt: {
-        proto: "Nexus/1.2", name: "NEXUS-PC",
-        gateway: "81", rest: "3000", comms: "3003", remote: "3004",
+        proto: "Nexus/1.2", name: SERVER_NAME,
+        gateway: String(GATEWAY_PORT), rest: "3000", comms: "3003", remote: "3004",
         media: "3005", guard: "3006", prod: "3007", sec: "3009",
       },
     })
-    svc.on("up", () => console.log("[mdns] advertising _nexuslink._tcp (port 81)"))
+    svc.on("up", () => console.log("[mdns] advertising _nexuslink._tcp (port " + GATEWAY_PORT + ")"))
     svc.on("error", (e: Error) => console.warn("[mdns] publish error:", e.message))
   } catch (e) {
     console.warn("[mdns] غير متاح في هذه البيئة:", e instanceof Error ? e.message : e)

@@ -1,0 +1,105 @@
+name: Desktop — Tauri bundles (win/linux/mac)
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            os-name: linux
+            bundles: "appimage deb"
+            node-dist: "linux-x64"
+            node-triple: "x86_64-unknown-linux-gnu"
+          - os: windows-latest
+            os-name: windows
+            bundles: "nsis"
+            node-dist: "win-x64"
+            node-triple: "x86_64-pc-windows-msvc"
+          - os: macos-latest
+            os-name: macos
+            bundles: "dmg"
+            node-dist: "darwin-arm64"
+            node-triple: "aarch64-apple-darwin"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+
+      # bash على المنصات الثلاث (الدرس: لا تعتمد على shell الافتراضي لكل نظام)
+      - name: Build Next standalone
+        shell: bash
+        run: |
+          bunx next build
+          cp -r .next/static .next/standalone/.next/
+          cp -r public .next/standalone/
+
+      - name: Assemble desktop resources (server + comms + gateway)
+        shell: bash
+        run: bash apps/desktop/build-resources.sh
+
+      - name: Download Node sidecar (v20.18.1)
+        shell: bash
+        run: |
+          NODE_VERSION=v20.18.1
+          mkdir -p apps/desktop/src-tauri/binaries
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            curl -fL -o node-pkg.zip "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-${{ matrix.node-dist }}.zip"
+            powershell.exe -NoProfile -Command "Expand-Archive -Force node-pkg.zip ."
+            cp "node-${NODE_VERSION}-${{ matrix.node-dist }}/node.exe" "apps/desktop/src-tauri/binaries/node-${{ matrix.node-triple }}.exe"
+          else
+            curl -fL -o node-pkg.tar.xz "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-${{ matrix.node-dist }}.tar.xz"
+            tar -xJf node-pkg.tar.xz
+            cp "node-${NODE_VERSION}-${{ matrix.node-dist }}/bin/node" "apps/desktop/src-tauri/binaries/node-${{ matrix.node-triple }}"
+          fi
+          ls -la apps/desktop/src-tauri/binaries/
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux deps (webkit2gtk)
+        if: matrix.os-name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Build Tauri bundles (${{ matrix.bundles }})
+        shell: bash
+        working-directory: apps/desktop
+        run: |
+          bunx @tauri-apps/cli@^2 build \
+            --bundles ${{ matrix.bundles }} \
+            --config '{"bundle":{"externalBin":["binaries/node"]}}'
+
+      - name: Upload bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os-name }}
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/**/*.AppImage
+            apps/desktop/src-tauri/target/release/bundle/**/*.deb
+            apps/desktop/src-tauri/target/release/bundle/**/*.exe
+            apps/desktop/src-tauri/target/release/bundle/**/*.dmg
+          if-no-files-found: error
+
+      - name: Attach bundles to release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            apps/desktop/src-tauri/target/release/bundle/**/*.AppImage
+            apps/desktop/src-tauri/target/release/bundle/**/*.deb
+            apps/desktop/src-tauri/target/release/bundle/**/*.exe
+            apps/desktop/src-tauri/target/release/bundle/**/*.dmg
