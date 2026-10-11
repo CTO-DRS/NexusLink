@@ -4,10 +4,24 @@
 # الفحوص: جسر 3009 مباشر + عبر البوابة 81 (XTransformPort) + مصافحة/إطارات/قفل/مسح/صلاحيات/تدقيق.
 cd /home/z/my-project
 
+# فإذا: fuser غير مثبت — قتل حقيقي عبر ss → pid → kill -9 مع حلقة تحقق (درس إعادة الاعتماد FA-9)
+kill_port() {
+  local port="$1" pids
+  for _ in 1 2 3; do
+    pids=$(ss -tlnp 2>/dev/null | grep ":${port} " | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u)
+    [ -z "$pids" ] && return 0
+    kill -9 $pids 2>/dev/null
+    sleep 1
+  done
+  ss -tlnp 2>/dev/null | grep -q ":${port} " && return 1 || return 0
+}
+
 echo "── تنظيف المنافذ والعمليات القديمة ──"
 pkill -f "next dev" 2>/dev/null
 pkill -f "next-server" 2>/dev/null
-fuser -k 81/tcp 3000/tcp 3009/tcp 2>/dev/null
+kill_port 81 || { echo "❌ 81 لم يتحرر"; exit 1; }
+kill_port 3000 2>/dev/null || true
+kill_port 3009 2>/dev/null || true
 sleep 1
 
 echo "── إقلاع caddy 81 (البوابة) ──"
@@ -46,5 +60,7 @@ echo "── تنظيف ──"
 pkill -f "next dev" 2>/dev/null
 pkill -f "next-server" 2>/dev/null
 pkill -f "caddy run" 2>/dev/null
-fuser -k 81/tcp 3000/tcp 3009/tcp 2>/dev/null
+kill_port 81 2>/dev/null || true
+kill_port 3000 2>/dev/null || true
+kill_port 3009 2>/dev/null || true
 exit $RC
