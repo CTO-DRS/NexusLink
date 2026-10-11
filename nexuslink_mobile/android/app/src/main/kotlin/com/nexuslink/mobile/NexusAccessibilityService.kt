@@ -47,6 +47,12 @@ class NexusAccessibilityService : AccessibilityService() {
         @Volatile var screenH: Int = 0
         @Volatile var screenDensity: Int = 0
 
+        // ثوابت الإيماءات (كانت في companion ثانٍ — دُمجت هنا، Kotlin يسمح بواحد فقط)
+        const val POINTER_MS = 40L          // مدة مقطع اللمس المستمر الواحد
+        const val HEARTBEAT_MS = 100L       // نبضة الاستمرار أثناء ثبات الإصبع
+        const val TAP_MS = 60L
+        const val MAX_NODES = 300
+
         /** قراءة الأبعاد دون نسخة حية (بديل عن الخدمة — من أي سياق). */
         fun metricsFromContext(ctx: Context): Triple<Int, Int, Int>? = try {
             val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -79,13 +85,6 @@ class NexusAccessibilityService : AccessibilityService() {
     private var contStart: Long = 0
     private var contPhase: Boolean = false
     private var heartbeatOn: Boolean = false
-
-    private companion object {
-        const val POINTER_MS = 40L          // مدة مقطع اللمس المستمر الواحد
-        const val HEARTBEAT_MS = 100L       // نبضة الاستمرار أثناء ثبات الإصبع
-        const val TAP_MS = 60L
-        const val MAX_NODES = 300
-    }
 
     // ------------------------------------------------------------------
     // دورة الحياة

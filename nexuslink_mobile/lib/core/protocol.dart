@@ -176,3 +176,36 @@ class TxProtocol {
   /// إرسال tx:progress مُخفّف (كل هذا القدر أو كل قطعة، أيهما أبطأ).
   static const Duration progressEvery = Duration(milliseconds: 800);
 }
+
+/// أحداث قناة الأمان المشفرة 3009 (عقد §4.6 + §9 — FA-10).
+/// السوكِت نفسه يعيش في Kotlin (SecChannel) — هذه الثوابت للعرض والتوثيق،
+/// والواجهة تستقبل الحالة عبر EventChannel (kind: "sec"/"wipe"/"lost").
+class SecEvents {
+  static const String hello = 'sec:hello'; // {port, suite, peers, stealth, counters}
+  static const String announce = 'sec:announce'; // {role:"phone", deviceId, name, pub, eph}
+  static const String pendingTrust = 'sec:pending-trust'; // {alertId, probeId}
+  static const String rejected = 'sec:rejected'; // {reason}
+  static const String kexPeer = 'kex:peer'; // {deviceId, name, role, pub, eph, sid, epoch?}
+  static const String kexUpdate = 'kex:update'; // {eph, epoch}
+  static const String peers = 'sec:peers';
+  static const String frame = 'sec:frame'; // {to, from, kind, e, iv, ct, seq}
+  static const String nack = 'sec:nack'; // {seq, reason}
+  static const String lockCmd = 'sec:lock-cmd'; // بث: قفل التطبيق (احتياطي غير مشفر)
+  static const String lostCmd = 'sec:lost-cmd'; // بث: وضع الفقدان {message, locate}
+  static const String wipeCmd = 'sec:wipe-cmd'; // بث: مسح آمن {passes}
+  static const String lockState = 'sec:lock-state'; // من الهاتف: {deviceId, locked, lost, ...}
+  static const String wipeState = 'sec:wipe-state'; // من الهاتف: {ok, count, bytes}
+  static const String audit = 'sec:audit'; // {actor, action, detail, severity}
+  static const String permSet = 'sec:perm-set'; // {feature, deviceId, enabled}
+  static const String permGet = 'sec:perm-get';
+  static const String permRules = 'perm:rules';
+
+  /// أنواع الإطارات المشفرة (بعد الفك في Kotlin/الويب).
+  static const List<String> frameKinds = ['cmd', 'ack', 'perm-denied', 'clip', 'lost-state', 'file-meta', 'file-chunk', 'file-end'];
+
+  /// ميزات الصلاحيات العشر — نفس قائمة العقد §4.6.
+  static const List<String> features = [
+    'file_transfer', 'clipboard', 'notifications', 'remote_input', 'media',
+    'camera', 'microphone', 'system_commands', 'contacts', 'screen_mirror',
+  ];
+}

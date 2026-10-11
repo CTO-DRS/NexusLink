@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { useSec } from "@/lib/sec-store"
-import { sendEncryptedFile, rotateKeys, sendSecureCmd } from "@/hooks/use-sec-bridge"
+import { sendEncryptedFile, rotateKeys, sendSecureCmd, sendWipeCmd } from "@/hooks/use-sec-bridge"
 import { SUITE, toHex, fromB64 } from "@/lib/nexus/e2e-crypto"
 import { fmtSize } from "@/lib/store"
 
@@ -180,10 +180,16 @@ export function CryptoTab({ onOpenPhone }: { onOpenPhone: () => void }) {
             )}
           </div>
         )}
-        <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-          <Lock className="w-3 h-3" /> جرّب أيضاً: أمر رن مشفر فوري
+        <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 flex-wrap">
+          <Lock className="w-3 h-3" /> أوامر الهاتف المشفرة:
           <Button size="sm" variant="outline" className="h-6 rounded-lg text-[10px] gap-1" disabled={!kexDone} onClick={() => { void sendSecureCmd("ring", "remote_input"); toast.info("أُرسل أمر رن مشفراً — راقب الهاتف") }}>
             <Send className="w-3 h-3" /> رن الهاتف
+          </Button>
+          <Button size="sm" variant="outline" className="h-6 rounded-lg text-[10px] gap-1" disabled={!kexDone} onClick={() => { void sendSecureCmd("lock-phone", "remote_input"); toast.info("أُرسل أمر قفل مشفر — سيُقفل الهاتف ويُظهر رسالة الفقدان") }}>
+            <Lock className="w-3 h-3" /> قفل الهاتف
+          </Button>
+          <Button size="sm" variant="outline" className="h-6 rounded-lg text-[10px] gap-1" disabled={!kexDone} onClick={() => { void sendWipeCmd(3); toast.info("أُرسل أمر مسح آمن — الهاتف سيحرق ملفات Download/NexusLink بثلاث تمريرات") }}>
+            <ShieldCheck className="w-3 h-3" /> مسح الملفات المستلمة
           </Button>
         </div>
       </div>

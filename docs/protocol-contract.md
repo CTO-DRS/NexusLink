@@ -214,6 +214,12 @@ interface TransferJob {
 
 **أحداث إضافية:** `sec:capture-get/clear` + `sec:capture {frames[]}` (WireTap) · `sec:stranger-probe {name}` · `sec:trust-decision {alertId, deviceId, name, decision: "block"|"once"|"trust"}` · `sec:perm-set {feature, deviceId, enabled}` / `sec:perm-get` → `perm:rules` (الميزات: file_transfer, clipboard, notifications, remote_input, media, camera, microphone, system_commands, contacts, screen_mirror) · `audit:get/clear` → `audit:list` · `wipe:list` → `wipe:files` · `wipe:run {deviceId, vPath, passes: 3|7, stealth}` → `wipe:progress {…, file}` ثم `wipe:done` · `sec:stealth-set {on}` → `sec:stealth`
 
+**امتدادات FA-10 (طبقة أمان الهاتف — نفس الجسر):**
+- `sec:lost-cmd {message?, locate?}` — من الكمبيوتر (بث للأدوار phone): تفعيل وضع الفقدان على الهاتف = قفل التطبيق + رسالة ملء الشاشة + جمع إحداثيات الموقع. الهاتف يردّ `sec:lock-state {deviceId, lost: true, message, location?: {lat, lng, accuracy, at}}` (غير مشفر — حالة عمومية) وإطاري `lost-state`/`ack` مشفرين عبر `sec:frame`.
+- `sec:wipe-cmd {passes: 3|7}` — من الكمبيوتر: أمر مسح آمن لملفات `Download/NexusLink` المستلمة على الهاتف (كتابة فوق + حذف من MediaStore). الهاتف يردّ `sec:wipe-state {deviceId, ok, count, bytes, error?}` ويُبث للويب مع toast وسطر تدقيق.
+- `sec:lock-state` من الهاتف عند الاتصال وعند كل تغيّر: `{deviceId, locked, lost, message?, hasPin, hasBiometric, autoLockSec}`.
+- `sec:audit` من الهاتف عند kex/قفل/فتح/مسح — يدخل سجل التدقيق الموحد.
+
 ### 4.7 جسر 3006 — أحداث نقل الملفات الحقيقية (أُضيفت في مرحلة Flutter-2)
 
 **على نفس القناة الدائمة للوكيل** (الخدمة الخلفية + واجهة Flutter). تسجيل الوكيل تم عبر `guard:hello-phone {name, deviceId}` — الحقل `deviceId` الجديد يجعل السيرفر يوجّه العروض للجهاز الصحيح.
@@ -386,7 +392,35 @@ interface TransferJob {
 | G-10 | لا قناة نقل حقيقية للوكيل | ✅ مُصلحة | أحداث tx:* على 3006 + `/api/fs/upload` + send-file يوجّه للوكيل الحي |
 | G-11 | إيقاف/إلغاء الويب لا يصل الهاتف | ✅ مُصلحة | `POST /api/transfer` يبث tx:pause/resume/cancel، وPUT الرفع يُرفض 409 paused |
 
-**تحقق E2E (scripts/agent-tx-e2e.mjs): 27/27 ناجح** — رفع 2GB مع قتل عند 40% واستئناف (sha256 مطابق)، إرسال 2GB من الويب → offer → قبول → قتل حقيقي عند 0.7GB → استئناف 206 → sha256 مطابق → مهمة done، إيقاف/إلغاء من الكمبيوتر يصل الهاتف، PUT 409 paused، وclip/hand عبر 3007.
+## 9. طبقة أمان الهاتف — FA-10 (المصدر: e2e-crypto.ts + use-sec-bridge.ts + security-bridge.ts)
+
+### 9.1 مطابقة التشفير حرفيًا (Kotlin/lazysodium ⇄ Web/@noble)
+- **الهوية**: X25519 keypair يُولَّد مرة ويُحفظ b64 في SharedPreferences `nexus_sec` (identity/eph). توليد: 32 بايت عشوائية + `crypto_scalarmult_base`.
+- **الاشتقاق (لكل عصر epoch)**: `shared = X25519(myEph.priv, peerEph.pub)` ثم HKDF-SHA256 — `salt = "nexuslink-v1|" + join("|", sort([myDeviceId, peerDeviceId]))`، `info = "nexuslink-e2e-session"`، L=32. مفتاح AES-256-GCM للعصر.
+- **مصافحة العصور**: على `kex:peer {deviceId, name, pub, eph, epoch?}`: إن كان `pEpoch > myEpoch && pEpoch != awaitingEpoch` → الطرف الآخر بدأ تدويرًا: وُلِّد eph جديد، أُرسل `kex:update {eph, epoch: pEpoch}` واشتُق فورًا. وإلا: `epoch = pEpoch > 0 ? pEpoch : 1` (اتصال أول = عصر 1 دائمًا).
+- **ختم إطار**: `iv` عشوائي 12B، `AAD = "${from}|${to}|${kind}|e${epoch}"`، `seq` تصاعدي لكل عصر، بث `sec:frame {to, from, kind, e, iv, ct, seq}`. الفتح يرفض `seq <= lastSeq[epoch]` (REPLAY_DETECTED). عصر غير معروف → إعادة `sec:announce` (resync، ≤ مرة كل 5 ثوانٍ).
+- **SAS**: `sha256("${x}|${hex(pubX)}|${y}|${hex(pubY)}")` بالمعرّفين مرتّبين (المفاتيح تتبع الترتيب) → 4 إيموجي من قائمة الويب نفسها (b % 32) + 6 hex من البايتات 8..13 (b % 16) مجمّعة 3-3. **البصمة الطويلة**: sha256(pub)[0..7] hex مقصوصtoUpperCase مجمّعة 4-4.
+- **PIN**: PBKDF2-SHA256 بـ 150,000 دورة و256 بت وملح 16B (نفس معاملات الويب) — عبر javax.crypto على الهاتف، مطابقة إخراج الويب {salt, hash, iters}.
+
+### 9.2 عميل 3009 داخل الخدمة (يعمل بلا واجهة)
+- سوكِت رابع socket.io (بوابة 81 عبر `XTransformPort=3009` أو مباشر) — `sec:announce {role:"phone", deviceId, name, pub, eph}` عند كل اتصال، مع `sec:lock-state` فورًا بعده.
+- معالجات مشفرة: `cmd` (op: `ring` → أين هاتفي + ack، `lock-phone` → وضع الفقدان + ack)، `clip` → بث للواجهة + إشعار عند غيابها، `file-*` → سطر تدقيق (نقل الملفات المشفرة مسار ويب/مستقبلات).
+- أوامر بث غير مشفرة: `sec:lost-cmd` و`sec:wipe-cmd` و`sec:lock-cmd` (احتياطي) — تُنفَّذ في الخدمة مباشرة.
+- تدقيق: `sec:audit {actor: <اسم الجهاز>, action, detail, severity}` عند kex/قفل/فتح/مسح.
+- السياسة الصارمة: جهاز غير موثوق → `sec:pending-trust` ولا اشتقاق ولا إطارات؛ محظور → `sec:rejected` + قطع.
+
+### 9.3 وضع الفقدان والمسح الآمن والقفل
+- **وضع الفقدان** (`dev:lost {on, message}` على 3006 أو `sec:lost-cmd`/`cmd lock-phone` على 3009): قفل التطبيق + `LostModeActivity` ملء الشاشة (showWhenLocked + turnScreenOn + keepScreenOn، رسالة حمراء + اسم الجهاز) + موقع من LocationManager (lastKnown مع تحديث وحيد احتياطي 10 ثوانٍ، صلاحيات وقت الاستخدام) → `sec:lock-state` و`lost-state` مشفر. إلغاء عبر `dev:lost-off`/`sec:lock-state {lost:false}`. بدء نشاط من الخدمة على Android 10+ محظور عمومًا — الاعتماد على إذن النظام SYSTEM_ALERT_WINDOW (يُطلب في لوحة الأذونات) وإشعار full-screen-intent احتياطيًا.
+- **المسح الآمن**: ملفات `Download/NexusLink` (MediaStore، ملكية التطبيق) → فتح "rw" وكتابة فوق بـ N تمريرات (عشوائي/أصفار/0xFF) + flush/fsync ثم حذف من MediaStore — من زر داخل التطبيق أو `sec:wipe-cmd`/`dev:wipe` مع تقدم حي للواجهة و`sec:wipe-state` للويب.
+- **قفل التطبيق**: PIN (PBKDF2 أعلاه) + بصمة/وجه (local_auth/BiometricPrompt — يتطلب FlutterFragmentActivity) + قفل تلقائي عند الخلفية بعد `autoLockSec` (0 = فوري) — بوابة LockScreen قبل Shell.
+
+### 9.4 الإقلاع والبطارية
+- `BootReceiver` (BOOT_COMPLETED/QUICKBOOT_POWERON): يقرأ آخر اتصال محفوظ من SharedPreferences `nexus_agent` (تُكتب في كل onStartCommand) ومفتاح autoStart → `startForegroundService`. `KeepAliveWorker` (WorkManager كل 15 دقيقة) يُعيد الخدمة إن قتلها النظام.
+- **الخمول**: عندما الشاشة مطفأة والواجهة ميتة → المنارة 5ث→60ث وتقرير الحالة 30ث→120ث تلقائيًا (isInteractive)؛ بلا WakeLockات في الخمول (سوى مراقبة الأطفال النشطة)؛ socket.io pingInterval 25ث خفيف. بلا استشعارات/بث في الخمول أصلًا.
+
+### 9.5 التوقيع والCI
+- `android/key.properties` (مُتجاهَل git) + `app/nexuslink-release.jks` (مُتجاهَل) — signingConfig release عند وجوده وإلا debug (جري سريع).
+- CI: وظيفة android في release.yml تبني `flutter build apk --release` + appbundle داخل nexuslink_mobile، تفكّ `secrets.ANDROID_KEYSTORE_BASE64` → keystore وتكتب key.properties عند توفرها، وترفع الأثرية.
 
 ---
 

@@ -379,6 +379,26 @@ export function useSecBridge(role: "desktop" | "phone") {
       // مسار احتياطي غير مشفر — الأمر الرسمي يمر عبر sec:frame المشفر
       window.dispatchEvent(new CustomEvent("nl-sec-lock-now"))
     })
+    // FA-10: نتيجة المسح الآمن من الهاتف + تأكيد وضع الفقدان
+    socket.on("sec:wipe-state", (r: { ok?: boolean; count?: number; bytes?: number; deviceId?: string; error?: string }) => {
+      if (!r) return
+      const stx = useSec.getState()
+      if (r.ok) {
+        stx.setCheck("wipe", true)
+        toast.success(`مسح آمن على الهاتف: ${r.count ?? 0} ملف (${((r.bytes ?? 0) / 1024).toFixed(1)}KB) — لم تعد قابلة للاسترجاع`)
+        void clientAudit({ actor: "الهاتف", action: "wipe", detail: `حذف آمن لـ ${r.count ?? 0} ملف مستلم على الهاتف`, severity: "warn" })
+      } else {
+        toast.error(`فشل المسح الآمن على الهاتف: ${r.error ?? "غير معروف"}`)
+      }
+    })
+    socket.on("sec:lock-state", (d: { lost?: boolean; message?: string; location?: { lat: number; lng: number; accuracy?: number } }) => {
+      if (d?.lost) {
+        toast.error(`الهاتف في وضع الفقدان — «${String(d.message ?? "").slice(0, 60)}»`, {
+          description: d.location ? `الموقع: ${d.location.lat.toFixed(5)}, ${d.location.lng.toFixed(5)} (±${Math.round(d.location.accuracy ?? 0)}م)` : "الموقع غير متاح بعد",
+          duration: 12000,
+        })
+      }
+    })
 
     // تدوير تلقائي كل 3 دقائق
     const iv = window.setInterval(() => { void rotateKeys() }, ROTATE_MS)
@@ -435,6 +455,18 @@ export async function sendEncryptedFile(bytes: Uint8Array, name: string, stealth
 /** أمر مشفر للهاتف */
 export async function sendSecureCmd(op: string, feature: string) {
   return sendFrame("cmd", { op, feature, at: Date.now() })
+}
+
+/** FA-10: وضع الفقدان عبر جسر 3009 (قفل + رسالة + موقع) — مسار غير مشفر مباشر */
+export async function sendLostCmd(message: string, locate: boolean) {
+  const { getSecSocket } = await import("@/lib/sec-socket")
+  getSecSocket()?.emit("sec:lost-cmd", { message, locate, at: Date.now() })
+}
+
+/** FA-10: مسح آمن للملفات المستلمة على الهاتف — أمر من الكمبيوتر */
+export async function sendWipeCmd(passes: number) {
+  const { getSecSocket } = await import("@/lib/sec-socket")
+  getSecSocket()?.emit("sec:wipe-cmd", { passes, at: Date.now() })
 }
 
 /** لصق آمن (نص مشفر) */

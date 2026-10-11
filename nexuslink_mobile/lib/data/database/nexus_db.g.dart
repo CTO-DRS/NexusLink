@@ -648,7 +648,7 @@ class $TransferHistoryTable extends TransferHistory
       'transferred_bytes', aliasedName, false,
       type: DriftSqlType.bigInt,
       requiredDuringInsert: false,
-      defaultValue: const Constant(BigInt.zero));
+      defaultValue: Constant(BigInt.zero));
   static const VerificationMeta _stateMeta = const VerificationMeta('state');
   @override
   late final GeneratedColumn<String> state = GeneratedColumn<String>(

@@ -180,8 +180,10 @@ export function ensureSecurityBridge() {
 
         // جهاز موثوق: ترحيل المفاتيح للطرفين (مصافحة X25519)
         // للجديد: مفاتيح الأقران الموجودين — للموجودين: مفاتيح الجديد
+        // FA-10 fix: الترحيل بين الموثوقين فقط — عميل غير موثوق لا يدخل في المصافحة
+        // إطلاقًا (وإلا يستطيع اختطاف إقران الطرفين عبر kex:update وهمي)
         for (const [, c] of clients()) {
-          if (c.sid !== socket.id && (c.pub || c.eph)) {
+          if (c.sid !== socket.id && c.trusted && (c.pub || c.eph)) {
             socket.emit("kex:peer", { deviceId: c.deviceId, name: c.name, role: c.role, pub: c.pub, eph: c.eph, sid: c.sid })
             io2.to(c.sid).emit("kex:peer", peerKeyPayload(socket))
           }
@@ -191,12 +193,14 @@ export function ensureSecurityBridge() {
       })
 
       // تحديث مفاتيح (تدوير الجلسة الرجيع — يُرحَّل العصر معها)
+      // FA-10 fix: بوابة الثقة على المرسِل — غير الموثوق لا يبث kex:update إطلاقًا
+      // (وإلا اختطف إقران الموثوقين وسرق بث الإطارات لجلسة وهمية)
       socket.on("kex:update", (d: { eph?: string; epoch?: number }) => {
         const c = clients().get(socket.id)
-        if (!c) return
+        if (!c || !c.trusted) return
         c.eph = d?.eph ?? c.eph
         for (const [, o] of clients()) {
-          if (o.sid !== socket.id) {
+          if (o.sid !== socket.id && o.trusted) {
             io2.to(o.sid).emit("kex:peer", { ...peerKeyPayload(socket), epoch: d?.epoch ?? 0 })
           }
         }
@@ -214,7 +218,15 @@ export function ensureSecurityBridge() {
         if (!sender || !sender.trusted) return // الأجهزة غير الموثوقة لا تمرر شيئاً
         let target: Socket | null = null
         if (d?.to) {
-          for (const [, c] of clients()) if (c.deviceId === d.to) { target = io2?.sockets?.sockets.get(c.sid) ?? null; break }
+          // FA-10 fix: تجاوز الإدخالات القديمة (sid ميت بعد انهيار عميل بلا disconnect) —
+          // أول إدخال حي فقط للجهاز الهدف، وإلا كان آخر عميل حي يأكل nack بلا سبب.
+          for (const [sid, c] of [...clients()]) {
+            if (c.deviceId === d.to) {
+              const sock = io2?.sockets?.sockets.get(c.sid)
+              if (sock) { target = sock; break }
+              clients().delete(sid) // إدخال ميت — يُنظَّف فورًا
+            }
+          }
         }
         // التقاط ما يعبر السلك فعلاً (نفس بايتات الرسالة)
         let raw: Buffer
@@ -333,6 +345,20 @@ export function ensureSecurityBridge() {
         tapWire({ channel: "e2e", from: "pc-office", to: "galaxy-s24", kind: "lock-cmd", len: JSON.stringify(d).length, hex: Buffer.from(JSON.stringify(d), "utf8").subarray(0, 96).toString("hex"), b64: Buffer.from(JSON.stringify(d), "utf8").toString("base64"), encrypted: false })
         for (const [, c] of clients()) if (c.role === "phone") io2.to(c.sid).emit("sec:lock-cmd", d)
       })
+
+      // ==== FA-10: وضع الفقدان الكامل + المسح الآمن لملفات الهاتف ====
+      // sec:lost-cmd {message?, locate?} — الكمبيوتر يفعّل وضع الفقدان: القفل + رسالة على الشاشة + بيانات الموقع
+      socket.on("sec:lost-cmd", (d: Record<string, unknown>) => {
+        tapWire({ channel: "e2e", from: "pc-office", to: "galaxy-s24", kind: "lost-cmd", len: JSON.stringify(d).length, hex: Buffer.from(JSON.stringify(d), "utf8").subarray(0, 96).toString("hex"), b64: Buffer.from(JSON.stringify(d), "utf8").toString("base64"), encrypted: false })
+        for (const [, c] of clients()) if (c.role === "phone") io2.to(c.sid).emit("sec:lost-cmd", d)
+      })
+      // sec:wipe-cmd {passes?} — الكمبيوتر يأمر الهاتف بمسح الملفات المستلمة حذفًا آمنًا
+      socket.on("sec:wipe-cmd", (d: Record<string, unknown>) => {
+        tapWire({ channel: "e2e", from: "pc-office", to: "galaxy-s24", kind: "wipe-cmd", len: JSON.stringify(d).length, hex: Buffer.from(JSON.stringify(d), "utf8").subarray(0, 96).toString("hex"), b64: Buffer.from(JSON.stringify(d), "utf8").toString("base64"), encrypted: false })
+        for (const [, c] of clients()) if (c.role === "phone") io2.to(c.sid).emit("sec:wipe-cmd", d)
+      })
+      // sec:wipe-state {deviceId, ok, count, bytes, error?} — من الهاتف: نتيجة المسح (يُبث للويب)
+      socket.on("sec:wipe-state", (d: Record<string, unknown>) => io2.emit("sec:wipe-state", d))
 
       socket.on("disconnect", () => {
         const c = clients().get(socket.id)

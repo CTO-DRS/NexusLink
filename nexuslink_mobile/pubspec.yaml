@@ -34,10 +34,13 @@ dependencies:
   # ---- الأذونات (طلب وقت الاستخدام) ----
   permission_handler: ^11.3.1
 
+  # ---- FA-10: قفل التطبيق — بصمة/وجه عبر BiometricPrompt ----
+  local_auth: ^2.2.0
+
   # ---- نقل الملفات: منتقي الملفات/المجلدات ----
   file_picker: ^8.1.2
   flutter_webrtc: ^1.6.2+hotfix.4
-  sensors_plus: ^7.1.1
+  sensors_plus: ^6.1.1
   image: ^4.12.0
 
 dev_dependencies:
