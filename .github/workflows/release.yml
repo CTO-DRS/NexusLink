@@ -76,7 +76,7 @@ jobs:
         run: |
           echo "$KEYSTORE_B64" | base64 -d > android/app/nexuslink-release.jks
           cat > android/key.properties <<EOF
-          storeFile=app/nexuslink-release.jks
+          storeFile=nexuslink-release.jks
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
