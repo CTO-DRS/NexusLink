@@ -274,3 +274,39 @@ Stage Summary:
 - المستودع: https://github.com/CTO-DRS/NexusLink (خاص — يمكن جعله عاماً من Settings)
 - التوكن لم يُخزَّن في .git/config ولا في أي ملف بالمشروع (استُخدم عابراً في أمر الدفع فقط)
 - remote origin مضبوط محلياً على URL نظيف بدون توكن
+
+---
+Task ID: FA-10-build
+Agent: main (Super Z)
+Task: بناء التطبيق الموقّع من الصفر بعد إعادة ضبط البيئة ورفعه إلى GitHub Release
+
+Work Log:
+- البيئة كانت مفرغة: Flutter SDK + Android SDK + JDK17 + keystore كلها مفقودة. أُعيد بناء السلسلة كاملة:
+  Flutter 3.24.5 (693MB عبر fetch-flutter.sh) + Temurin JDK17 (~/.jdk17 بـ jlink) + Android SDK (cmdtools + platform-34 + build-tools 34).
+- keystore سابق فُقد (لم يُرفع git عمداً) → توليد keystore جديد CN=NexusLink + android/key.properties، ورفع 4 أسرار مشفرة
+  (ANDROID_KEYSTORE_BASE64/PASSWORD/ALIAS/KEY_PASSWORD) إلى GitHub Actions عبر scripts/upload-keystore-secrets.py (SealedBox).
+  كلمة السر محفوظة محلياً خارج المستودع وكذلك ضمن GitHub Secrets — لا تُكتب هنا.
+- حماية: .gitignore الآن يمنع key.properties/*.jks.
+- ترقيعا pub-cache أُعيدا اشتقاقهما من المصدر: (1) flutter_webrtc compileSdk 36→34 (2) SurfaceProducer.Callback —
+  فُحص flutter.jar المحرك 3.24.5 بـ javap: الواجهة = onSurfaceCreated()/onSurfaceDestroyed() فقط، فرقّع webrtc عليها.
+- معارك الموارد: حد ذاكرة الحاوية 4GB — قاتل المضيف يقتل java عند ~2.7GB RSS (dmesg) → gradle.properties محلي:
+  -Xmx1536m + metaspace 512m + direct 256m + workers 1 + kotlin 768m + no-daemon + jetifier=false؛
+  قتل next-server (1.6GB) مؤقتاً؛ قرص 9.9GB امتلأ (jars-9 2GB + bun cache 1.3GB + .next 486MB حُذفت — القابلة لإعادة التوليد).
+  ملاحظة: gradle.properties المحلي (قيود ذاكرة + مسار jdk) غير مرفوع عمداً كي لا يكسر CI.
+- البناء نجح: flutter build apk --release --target-platform android-arm64 → 100.6MB موقّع، apksigner verify ✓
+  (شهادة SHA-256 c8cda07d…، APK SHA-256 45950043…) → download/NexusLink-1.0.0-arm64-release.apk.
+- الرفع: commit ff191d4 (APK + gitignore + سكربت الأسرار) → main. Release v1.0.0 عبر API مع ملاحظات عربية كاملة
+  + تحذير تغيّر التوقيع (يجب حذف التثبيت القديم) + رفع الـ APK كأصل إصدار — GitHub أكد digest مطابق للـ SHA-256 المحلي.
+- **أعطال CI كُشف وأصلح (3 طبقات)**: (1) storeFile خاطئ في release.yml (file() يُقاس من android/app/) — أصلح قبل أول رفع
+  (2) step-level if مع secrets → رفض parse صامت صفر jobs → حيلة env الموثقة (3) **السبب الجذري**: اسم step غير مقتبس
+  يحتوي ": " (سطر Tauri bundles) → YAML كامل فاسد — اكتُشف بـ actionlint بعد أن انتظرت GitHub بصمت. أُضيف
+  if-no-files-found: ignore لوابتا desktop/ios الـ placeholder. actionlint: صفر أخطاء، workflow_dispatch: 204،
+  7 jobs مجدولة بشكل صحيح.
+- **حاجز خارجي حقيقي**: الفواتير — "The job was not started because recent account payments have failed or your
+  spending limit needs to be increased" — حساب Free لا يشغّل Actions على مستودع خاص. القرار للمالك: تعديل الفوترة
+  أو جعل المستودع عاماً (Actions مجانية غير محدودة على العام).
+
+Stage Summary:
+- APK موقّع مبني حديثاً ومرفوع في موضعين: repo (download/) + Release v1.0.0 asset مع checksum مؤكد من GitHub.
+- CI جاهز بنيوياً بالكامل (يوقّع من Secrets) — انتظار قرار الفوترة/العلنية فقط.
+- سلسلة إعادة البناء بعد أي reset موثقة في هذا القسم: fetch-flutter → JDK17 → android-sdk → secrets-restore → build.
