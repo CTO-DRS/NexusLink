@@ -331,3 +331,26 @@ Stage Summary:
 - درس دائم: **قبل أي push، fetch+rebase من GitHub أولًا** — البيئة المحلية قد تراجع لقطةً قديمة بين الجلسات وGitHub هو مصدر الحقيقة.
 - درس دائم 2: لا تعتمد على fuser (غير مثبت) — kill_port عبر ss/pkill فقط.
 - المتبقي من FA-9 حصريًا فيزيائي على هاتف حقيقي (جيروسكوب/حافظة نظام/ودجات على لانشر فعلي) — موثق في §9.4 كما في FA-6/7/8.
+
+---
+Task ID: FA-10-public-ci
+Agent: main (Super Z)
+Task: أصلح كل شيء + اجعل المستودع عاماً + أكمل المتبقي + لا تغيّر الإصدار v1.0.0 مهما فعلنا
+
+Work Log:
+- المزامنة أولاً (الدرس الدائم): fetch بالتوكن عابراً — محلي==بعيد (472553c) والوسم v1.0.0 يشير لـ ff191d4.
+- المستودع عام الآن (PATCH private:false) — يحل حاجز فواتير Actions نهائياً (مجاني غير محدود على العام).
+- **فحص حرج قبل التشغيل**: الوسم v1.0.0 يشير لـ release.yml المكسور القديم (اسم step غير مقتبس) — لذا التشغيل عبر workflow_dispatch على main (الـ YAML المُصلح) لا عبر إعادة الوسم؛ مهمة release محمية بشرط refs/tags فلا تُربك الإصدار.
+- **قنبلة مُكتشفة في gradle.properties المُلتزم**: org.gradle.java.home=/home/z/jdk17 — مسار الحاوية فقط، كان سيقتل daemon الـ CI فوراً؛ أُزيلت السطر.
+- تحصين android job: تثبيت flutter-version 3.24.5 (مطابق البناء المحلي الموثق) + خطوة رقعة flutter_webrtc (compileSdkVersion 36→34 + onSurfaceAvailable/onSurfaceCleanup→onSurfaceCreated/onSurfaceDestroyed — مُشتقة من تحميل الحزمة من pub.dev ومطابقة رقعة pub-cache المحلية الموثقة) + اسم artifact يقصّ +1 من 1.0.0+1 → NexusLink-1.0.0-release.apk.
+- **أول تشغيل CI حقيقي (run 38164103472): ubuntu✓ macos✓ windows✗** — فخ pwsh: echo في PowerShell هو cmdlet لا يمسح $LASTEXITCODE (بقي 1 من bun test "No tests found") وpwsh تخرج بآخر $LASTEXITCODE → خطوة «لا يمكن أن تفشل» فشلت. الإصلاح: shell: bash صريح (Git bash متاح على ويندوز).
+- **التشغيل الثاني (run 38164410954): 8/8 jobs خضراء بالكامل** — 3×test + 3×desktop + ios + **android كامل**: keystore من الأسرار ✓ pub get ✓ رقعة webrtc ✓ analyze صفر ✓ APK+AAB موقّعان ✓ rename ✓ رفع artifacts ✓.
+- تحقق مستقل من APK الـ CI (138.7MB عالمي: arm64-v8a/armeabi-v7a/x86/x86_64): apksigner (build-tools r34 منزل مباشرة) → **CN=NexusLink, O=DRS — SHA-256 c8cda07d…f30e مطابق حرفياً لشهادة البناء المحلي الموثق** → CI يوقّع بنفس الهوية من Secrets. APK SHA-256: 1b6a56de…c959.
+- الإرفاق بالإصدار القائم (id 409793052): أصل جديد NexusLink-1.0.0-release.apk (GitHub أكد digest مطابق) + وصف موسّع يوثق النسختين وسلسلة CI الخضراء — **الوسم v1.0.0 لم يُلمس، الاسم والإصدار كما هما**.
+- تدقيق FA-9 النهائي: إعادة الاعتماد 23/23×2 منجزة سابقاً (FA-9-recert)؛ المتبقي فيزيائي حصراً على هاتف حقيقي (جيروسكوب/حافظة نظام/ودجات لانشر) موثق §9.4 — لا بند برمجي متبقٍ.
+
+Stage Summary:
+- CI أخضر كاملاً لأول مرة في تاريخ المستودع، والمستودع عام على https://github.com/CTO-DRS/NexusLink.
+- Release v1.0.0 بأصلين موقّعين بنفس الشهادة: arm64 (100.6MB محلي) + عالمي (138.7MB آلي) — الإصدار v1.0.0 ثابت لم يُغير.
+- درس جديد موثق: pwsh لا يغفر `|| cmdlet` — فرض shell: bash لأي منطق fallback عبر المنصات.
+- درس جديد 2: قبل أول تشغيل CI، دوّن في العقل أن الملفات المُلتزمة تُنفذ على بيئة غريبة — أي مسار مطلق (org.gradle.java.home) قنبلة صامتة.
