@@ -9,7 +9,8 @@
     "log": "Log",
     "settings": "Settings",
     "transfers": "Transfers",
-    "media": "Media"
+    "media": "Media",
+    "control": "Control"
   },
   "status": {
     "online": "Online",
@@ -247,5 +248,99 @@
     "err": {
       "perms": "Grant camera and microphone permissions in Settings to enable streaming"
     }
+  },
+  "rctl": {
+    "desktop": "Desktop",
+    "power": "Power",
+    "offline": "Control bridge offline — connect to the server first",
+    "tab": {
+      "pad": "Touchpad",
+      "kbd": "Keyboard",
+      "air": "Air Mouse",
+      "sys": "System",
+      "clip": "Clipboard",
+      "hand": "Handoff"
+    },
+    "pad": {
+      "title": "Touchpad — move the computer cursor",
+      "tap": "Left click",
+      "dbl": "Double click",
+      "drag": "Drag mode active",
+      "left": "Left click",
+      "right": "Right click",
+      "speed": "Speed",
+      "dragk": "Drag",
+      "hint": "Drag to move · double-tap · long-press to drag · two fingers to scroll/pinch"
+    },
+    "kbd": {
+      "title": "Wireless keyboard (Arabic/English)",
+      "hint": "Type here — keystrokes go straight to the computer",
+      "live": "{n} keystrokes sent",
+      "sp": {
+        "enter": "Enter",
+        "space": "Space",
+        "backspace": "Backspace",
+        "tab": "Tab",
+        "esc": "Esc",
+        "up": "Up",
+        "down": "Down",
+        "left": "Left",
+        "right": "Right"
+      }
+    },
+    "air": {
+      "title": "Air Mouse — phone gyroscope",
+      "on": "Air mouse active — move your phone to steer the cursor",
+      "off": "Air mouse off",
+      "gesture": "Activation gesture: 3 quick taps ({n})",
+      "gyro": "Gyroscope",
+      "moves": "Moves sent: {n}"
+    },
+    "sys": {
+      "media": "Media control on the computer",
+      "vol": "Volume level",
+      "power": "Power commands",
+      "confirm": "Confirm system command",
+      "confirmBody": "This will run «{a}» on the computer — are you sure?",
+      "rejected": "Bridge rejected the last command ({r}) — is the PC off?",
+      "wol": "Wake-on-LAN — registered MAC",
+      "macEmpty": "No MAC yet — arrives automatically when the PC is ready",
+      "wake": "Send the magic packet",
+      "act": {
+        "lock": "Lock",
+        "sleep": "Sleep",
+        "hibernate": "Hibernate",
+        "restart": "Restart",
+        "shutdown": "Shut down"
+      }
+    },
+    "clip": {
+      "title": "Unified clipboard — phone ↔ computer",
+      "count": "Pushes: {n}",
+      "watch": "Watch phone clipboard",
+      "watchSub": "Polls every 1.5s while this screen is open (Android 10+ limit)",
+      "auto": "Auto-send on copy",
+      "autoSub": "Or use the manual send button below",
+      "send": "Send clipboard now",
+      "pull": "Request PC clipboard",
+      "fromPc": "Latest text from the computer",
+      "empty": "Nothing yet — press «Request PC clipboard» or copy there",
+      "copyPhone": "Copy to phone clipboard"
+    },
+    "hand": {
+      "title": "Continue where you left off",
+      "shared": "Received from the share button",
+      "openPc": "Open on the computer",
+      "notUrl": "Shared text is not a URL — handoff accepts http/https only",
+      "urlHint": "https://…",
+      "titleHint": "Optional title (shown on the computer)",
+      "count": "Handoffs: {n}",
+      "send": "Hand off to the computer",
+      "explain": "The link appears in the «Continue where you left off» bar above the server desktop; the «Open here» button opens then removes it."
+    }
+  },
+  "common": {
+    "cancel": "Cancel",
+    "ok": "OK"
   }
 }

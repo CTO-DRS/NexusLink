@@ -356,6 +356,10 @@ class MainActivity : FlutterActivity() {
             intent.hasExtra("nexus.mediaStop") -> {
                 pushDataEvent("mediastop", emptyMap())
             }
+            // FA-9: ودجت الإرسال السريع — إرسال حافظة الهاتف إلى الكمبيوتر
+            intent.getStringExtra(NexusWidgets.OPEN_QUICKSEND) == NexusWidgets.OPEN_QUICKSEND_VAL -> {
+                pushDataEvent("quicksend", mapOf("from" to "widget"))
+            }
         }
     }
 

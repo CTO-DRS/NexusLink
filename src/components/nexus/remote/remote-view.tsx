@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { useDesktop } from "@/lib/remote-store"
 import { VirtualDesktop } from "./desktop/virtual-desktop"
+import { HandoffBar } from "./desktop/handoff-bar"
 import { ControllerShell } from "./controller/controller-shell"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -26,6 +27,7 @@ const CHECKS: { id: string; label: string; icon: LucideIcon }[] = [
   { id: "media", label: "التحكم بالمشغلات: تشغيل/تخطي/صوت", icon: MousePointer2 },
   { id: "power", label: "أوامر النظام: إيقاف/إسبات/إيقاظ Wake-on-LAN", icon: MousePointer2 },
   { id: "clipboard", label: "الحافظة المشتركة بين الهاتف والكمبيوتر", icon: MousePointer2 },
+  { id: "handoff", label: "تسليم رابط من الهاتف وفتحه على الكمبيوتر", icon: MousePointer2 },
 ]
 
 function LogIcon({ kind }: { kind: string }) {
@@ -108,6 +110,8 @@ export function RemoteView() {
         {/* العمود الأيمن: الشاشة + الاختبار + السجل */}
         <div className="space-y-4 min-w-0">
           <VirtualDesktop />
+
+          <HandoffBar />
 
           {/* اختبار النجاح */}
           <div className="rounded-2xl border bg-card p-4" data-testid="success-checklist">

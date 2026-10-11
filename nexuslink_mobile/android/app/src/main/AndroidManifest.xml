@@ -83,6 +83,28 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- FA-9: الودجات المنزلية — حالة الاتصال + الإرسال السريع -->
+        <receiver
+            android:name=".ConnectionWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_connection_info" />
+        </receiver>
+        <receiver
+            android:name=".SendWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_send_info" />
+        </receiver>
+
         <!-- فتح الملفات المستلمة بمشاهداتها الافتراضية -->
         <provider
             android:name="androidx.core.content.FileProvider"

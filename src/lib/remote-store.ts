@@ -139,6 +139,11 @@ export interface DesktopState {
   applyClipboardToPc: (text: string) => void
   setClipboardFromPc: (text: string) => void
 
+  // ==== FA-9: التسليم (أكمل من حيث توقفت) ====
+  handoffInbox: { id: string; url: string; title?: string; at: number }[]
+  pushHandoff: (url: string, title?: string) => void
+  openHandoff: (id: string) => void
+
   // ==== السجل واختبار النجاح ====
   rcLogs: RcLogEntry[]
   pushRcLog: (e: RcLogEntry) => void
@@ -407,6 +412,23 @@ export const useDesktop = create<DesktopState>((set, get) => ({
     get().pushLocalLog("تم نسخ حافظة الكمبيوتر — جاهزة على الهاتف", "ok")
   },
 
+  // ==== FA-9: التسليم ====
+  handoffInbox: [],
+  pushHandoff: (url, title) => {
+    if (!url) return
+    const item = { id: uid(), url, title, at: Date.now() }
+    set({ handoffInbox: [item, ...get().handoffInbox].slice(0, 8) })
+    get().markCheck("handoff")
+    get().pushLocalLog(`تسليم من الهاتف: رابط بانتظار الفتح هنا («${title ?? url.slice(0, 50)}»)`, "in")
+  },
+  openHandoff: (id) => {
+    const item = get().handoffInbox.find((h) => h.id === id)
+    if (!item) return
+    if (typeof window !== "undefined") window.open(item.url, "_blank", "noopener,noreferrer")
+    set({ handoffInbox: get().handoffInbox.filter((h) => h.id !== id) })
+    get().pushLocalLog(`فُتح رابط التسليم على الكمبيوتر: ${item.url.slice(0, 60)}`, "ok")
+  },
+
   // ==== السجل واختبار النجاح ====
   rcLogs: [],
   pushRcLog: (e) => set({ rcLogs: [e, ...get().rcLogs].slice(0, 80) }),
@@ -460,6 +482,9 @@ interface ControllerMirrorState {
   pushClipboardInbox: (text: string) => void
   sentHistory: { id: string; text: string; at: number }[]
   pushSent: (text: string) => void
+  /** FA-9: وضع السحب النشط (من rc:move drag=true) */
+  dragActive: boolean
+  setDragActive: (b: boolean) => void
 }
 
 export const useRcMirror = create<ControllerMirrorState>((set, get) => ({
@@ -482,4 +507,6 @@ export const useRcMirror = create<ControllerMirrorState>((set, get) => ({
   sentHistory: [],
   pushSent: (text) =>
     set({ sentHistory: [{ id: uid(), text, at: Date.now() }, ...get().sentHistory].slice(0, 10) }),
+  dragActive: false,
+  setDragActive: (b) => set({ dragActive: b }),
 }))

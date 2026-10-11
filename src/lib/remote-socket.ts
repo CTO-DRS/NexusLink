@@ -81,6 +81,11 @@ export function rcClipboard(payload: RcClipboardPayload) {
   getRemoteSocket().emit("rc:clipboard", payload)
 }
 
+/** FA-9: تسليم رابط "أكمل من حيث توقفت" إلى الكمبيوتر */
+export function rcHandoff(url: string, title?: string) {
+  getRemoteSocket().emit("rc:handoff", { url, title })
+}
+
 /** قياس زمن الاستجابة */
 export function rcPing(t: number) {
   getRemoteSocket().emit("rc:ping", { t })

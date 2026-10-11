@@ -93,6 +93,35 @@ class MediaEvents {
   static const String pong = 'media:pong';
 }
 
+/// أحداث جسر التحكم 3004 (عقد §4.2 + §4.9 FA-9) — الهاتف طرف متحكم بالكمبيوتر.
+class RcEvents {
+  static const String hello = 'rc:hello'; // {desktop:{name, mac, power}}
+  static const String helloController = 'rc:hello-controller'; // {name}
+  static const String controllerOnline = 'rc:controller-online';
+
+  // إدخال (بوابة الطاقة سارية على الجسر)
+  static const String move = 'rc:move'; // {dx, dy, source?, drag?}
+  static const String click = 'rc:click'; // {button: left|right, type: tap|double}
+  static const String scroll = 'rc:scroll'; // {dy}
+  static const String pinch = 'rc:pinch'; // {scale}
+  static const String key = 'rc:key'; // {ch?} أو {special}
+  static const String media = 'rc:media'; // {action, value?}
+  static const String power = 'rc:power'; // {action}
+  static const String wol = 'rc:wol'; // {mac}
+  static const String clipboard = 'rc:clipboard'; // {direction: toPc|pull, text?}
+  static const String handoff = 'rc:handoff'; // {url, title?} — FA-9
+
+  // استقبال
+  static const String desktopClipboard = 'desktop:clipboard'; // {text, at?}
+  static const String desktopState = 'desktop:state';
+  static const String desktopWake = 'desktop:wake';
+  static const String rejected = 'rc:rejected'; // {reason, ev}
+  static const String log = 'rc:log';
+
+  static const String ping = 'rc:ping';
+  static const String pong = 'rc:pong';
+}
+
 /// أحداث جسر الإنتاجية 3007 — النصوص/الروابط السريعة والحافظة الموحدة.
 class ProdEvents {
   static const String hello = 'prod:hello';

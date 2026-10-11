@@ -15,6 +15,7 @@ import '../data/transfer_api.dart';
 import '../data/transfer_engine.dart';
 import '../domain/models.dart';
 import 'control_providers.dart';
+import 'controller_providers.dart';
 import 'media_providers.dart';
 import 'providers.dart' show ConnectPhase, activityLogProvider, agentChannelProvider, connectionProvider, nexusDbProvider;
 
@@ -230,6 +231,10 @@ class SignalingController extends Notifier<AgentSignaling?> {
       } else if (kind == 'mediastop') {
         // FA-8 — زر «إيقاف البث» من إشعار الوسائط في شريط النظام
         unawaited(ref.read(mediaControllerProvider.notifier).stopEverything());
+      } else if (kind == 'quicksend') {
+        // FA-9 — ودجت الإرسال السريع: حافظة الهاتف → الكمبيوتر فورًا
+        unawaited(ref.read(controllerControllerProvider.notifier).pushClipboard());
+        ref.read(activityLogProvider.notifier).add('إرسال سريع من الودجت: تُرفع حافظة الهاتف إلى الكمبيوتر', kind: 'ok');
       }
     });
 
