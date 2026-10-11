@@ -256,3 +256,21 @@ Stage Summary:
 - اختبار النجاح: التطبيق الموقّع موجود ويعمل بنيويًا من الإقلاع (BootReceiver + اتصال محفوظ) — «24س متصل» و«<3%/يوم خمول» مصمَّمان بميكانيكات ملموسة ويبقى قياسهما ميدانيًا على جهاز حقيقي (حد موثق بصدق كما في FA-6/7/8/9).
 - E2E الأمان 26/26 ×3 أصبح أقوى اختبار في المستودع — وصد عللتي سيرفر حقيقيتين أثناء ذلك.
 - الخطوة التالية المرشحة حسب ترتيب المستخدم: FA-5 (الإشعارات/SMS على 3003) أو FA-6 (بث الشاشة kind:"screen" + MediaProjection).
+
+---
+Task ID: FA-10-push
+Agent: main (Super Z)
+Task: رفع المشروع بالكامل إلى GitHub (CTO-DRS/NexusLink)
+
+Work Log:
+- فحص الأسرار قبل الرفع: لا توكنات/keys في الملفات المتتبعة، لا keystores
+- تنظيف التتبع: إزالة .env (مسار DB محلي) و scripts/driftgen/.dart_tool (234 ملف بناء) و tool-results و dev.pid + تحديث .gitignore
+- commit جديد 4ab03bc: ملفات FA-10 (BootReceiver, KeepAliveWorker, LostMode, SecCrypto, SecureWipe, NexusWidgets, widgets layouts)
+- إنشاء مستودع خاص CTO-DRS/NexusLink عبر API
+- رفع main بالتاريخ الكامل (~220MB) — تحذير وحيد: APK بحجم 95.96MB (تحت حد 100MB، مقبول)
+- تحقق: remote HEAD == local HEAD (4ab03bc) + جميع الملفات الحرجة 200 OK
+
+Stage Summary:
+- المستودع: https://github.com/CTO-DRS/NexusLink (خاص — يمكن جعله عاماً من Settings)
+- التوكن لم يُخزَّن في .git/config ولا في أي ملف بالمشروع (استُخدم عابراً في أمر الدفع فقط)
+- remote origin مضبوط محلياً على URL نظيف بدون توكن
