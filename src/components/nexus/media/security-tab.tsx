@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Slider } from "@/components/ui/slider"
 import { useMedia } from "@/lib/media-store"
 import { MotionDetector } from "@/lib/media-engine"
-import { secMotion } from "@/lib/media-socket"
+import { secMotion, camCmd } from "@/lib/media-socket"
 import { PcWindow, TvFrame, LiveVideo, NoStream, LiveBadge, LevelBar } from "./media-bits"
 import { cn } from "@/lib/utils"
 
@@ -24,6 +24,8 @@ export function SecurityTab() {
   const sec = useMedia((s) => s.sec)
   const secStream = useMedia((s) => s.secStream)
   const allAlerts = useMedia((s) => s.alerts)
+  const phoneOnline = useMedia((s) => s.phoneOnline)
+  const realCam = useMedia((s) => s.realCam)
   const alerts = useMemo(() => allAlerts.filter((a) => a.kind === "motion").slice(0, 6), [allAlerts])
   const startSecurity = useMedia((s) => s.startSecurity)
   const stopSecurity = useMedia((s) => s.stopSecurity)
@@ -163,6 +165,33 @@ export function SecurityTab() {
 
       {/* ===== لوحة الكشف ===== */}
       <div className="space-y-4">
+        {/* FA-8: مراقبة الهاتف الحقيقي */}
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-2.5">
+          <h4 className="text-[13px] font-bold flex items-center gap-2">
+            <span className={cn("h-2 w-2 rounded-full", phoneOnline ? "bg-emerald-500 animate-pulse" : "bg-zinc-400")} />
+            هاتفك الحقيقي — وضع المراقبة
+            {realCam?.watch && <Badge className="rounded-full bg-red-500 text-white text-[9px]">يراقب الآن</Badge>}
+          </h4>
+          {phoneOnline ? (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <Button size="sm" className="h-8 rounded-lg text-[11px]" disabled={realCam?.watch === true} onClick={() => camCmd("watch-start", { sensitivity: 0.5 })}>
+                  <Radar className="w-3.5 h-3.5" /> بدء المراقبة
+                </Button>
+                <Button variant="destructive" size="sm" className="h-8 rounded-lg text-[11px]" disabled={realCam?.watch !== true} onClick={() => camCmd("watch-stop")}>
+                  <Square className="w-3.5 h-3.5" /> إيقاف
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                يبث الهاتف كاميراته باستمرار عبر WebRTC (شاهدها في تبويب «ويب كام»)، وكشف الحركة يجري على الهاتف نفسه بفروق الإطارات —
+                كل حركة تصل هنا كتنبيه فوري في السجل أدناه.
+              </p>
+            </>
+          ) : (
+            <p className="text-[10px] text-muted-foreground">افتح تطبيق NexusLink على الهاتف لتفعيل مراقبة حقيقية بكاميراته.</p>
+          )}
+        </div>
+
         <div className="rounded-xl border bg-card p-4 space-y-3">
           <h4 className="text-[13px] font-bold flex items-center gap-2">
             <Radar className="w-4 h-4 text-primary" /> كاشف الحركة

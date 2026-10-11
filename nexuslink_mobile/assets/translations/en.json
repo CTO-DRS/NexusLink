@@ -8,7 +8,8 @@
     "devices": "Devices",
     "log": "Log",
     "settings": "Settings",
-    "transfers": "Transfers"
+    "transfers": "Transfers",
+    "media": "Media"
   },
   "status": {
     "online": "Online",
@@ -174,5 +175,77 @@
     "trustedSubtitle": "Devices not paired and trusted in the server registry cannot request control at all — requests are rejected before reaching your phone.",
     "howTitle": "How it works",
     "howBody": "When a session starts from the computer, its touches are injected on your phone through the accessibility service with pixel precision: tap, long-press, drag, scroll, text into the focused field, and system buttons (back/home/recents). You can cut instantly from the home screen or here at any time, and control always ends when the server connection is lost."
+  },
+  "media": {
+    "header": {
+      "title": "Media & Camera — your phone is the server's eye and ear",
+      "online": "Media channel ready",
+      "offline": "Channel offline"
+    },
+    "phase": {
+      "idle": "Idle",
+      "connecting": "Linking…",
+      "live": "Streaming",
+      "error": "Error"
+    },
+    "cam": {
+      "title": "Quick cam — broadcast on server request",
+      "connecting": "Creating WebRTC channel…",
+      "idle": "Mini preview appears here when streaming starts",
+      "back": "Back",
+      "front": "Front",
+      "switch": "Switch",
+      "torch": "Flash",
+      "note": "Audio+video stream over WebRTC to the media bridge — the web watches it as a webcam and in video calls. A system notification with a stop button appears while streaming."
+    },
+    "shot": {
+      "title": "Remote shutter — photo as a file",
+      "busy": "Working…",
+      "now": "Now",
+      "sec": "s",
+      "timer": "Timer:",
+      "capture": "Capture now",
+      "flash": "Capture with flash",
+      "sent": "Photo sent as a file: {name} — visible in your device files on the web",
+      "note": "On a computer command (cam:shutter) the same path runs automatically: countdown + torch, then upload through the same transfer protocol."
+    },
+    "watch": {
+      "title": "Surveillance mode — continuous stream + motion",
+      "on": "Watching",
+      "start": "Start surveillance",
+      "stop": "Stop surveillance",
+      "sensitivity": "Sensitivity",
+      "motion": "Motions detected: {count} — last level {level}%",
+      "note": "Continuous camera stream with frame-difference motion detection (simple pixel math — no AI). On motion a sec:motion alert is pushed to the web security panel."
+    },
+    "baby": {
+      "title": "Baby monitor — audio only",
+      "start": "Start audio stream",
+      "stop": "Stop",
+      "level": "Audio level:",
+      "alerts": "Cry alerts sent: {count}",
+      "note": "Continuous microphone stream with the screen off (WakeLock prevents Doze). Loud audio pushes a baby:alert to the web."
+    },
+    "mic": {
+      "title": "Phone as server microphone",
+      "start": "Start microphone",
+      "stop": "Stop",
+      "note": "On-demand audio stream — your computer speakers hear this phone via the mic channel."
+    },
+    "sensors": {
+      "title": "Sensors for the web",
+      "start": "Start streaming (20Hz)",
+      "stop": "Stop",
+      "acc": "Accelerometer m/s²",
+      "gyro": "Gyroscope rad/s",
+      "note": "Gyroscope/accelerometer streamed over WebSocket ({count} msgs) — the web UI can later use it as a gamepad."
+    },
+    "find": {
+      "title": "Find my phone",
+      "note": "From the web guard panel («Find my phone» tab): the ring button plays max volume ignoring silent mode with vibration and screen wake — executed in the background service even with the app closed; «Light» wakes the screen and blinks the torch for 5 seconds."
+    },
+    "err": {
+      "perms": "Grant camera and microphone permissions in Settings to enable streaming"
+    }
   }
 }

@@ -213,6 +213,31 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
 
+                // ---------- FA-8: الوسائط والكاميرا والصوت ----------
+
+                "mediaNotify" -> {
+                    val show = call.argument<Boolean>("show") ?: false
+                    val title = call.argument<String>("title") ?: "بث نشط"
+                    val body = call.argument<String>("body") ?: ""
+                    val svc = AgentForegroundService.liveInstance
+                    if (show) svc?.notifyMedia(title, body, ongoing = true)
+                    else svc?.cancelMediaNotification()
+                    result.success(true)
+                }
+
+                "babyWake" -> {
+                    AgentForegroundService.liveInstance?.setBabyWake(call.argument<Boolean>("on") ?: false)
+                    result.success(true)
+                }
+
+                "setMediaState" -> {
+                    val m = call.argument<Map<String, Any?>>("state") ?: emptyMap()
+                    AgentForegroundService.mediaSnapshot = m
+                    // دفع فوري (ليس انتظار الـ 30s) — الويب يرى تغيّر الجلسات مباشرة
+                    AgentForegroundService.liveInstance?.emitDevStateNow()
+                    result.success(true)
+                }
+
                 // ---------- FA-7: التحكم عن بعد (الإتاحة + الجلسة) ----------
 
                 "accessibilityStatus" -> {
@@ -326,6 +351,10 @@ class MainActivity : FlutterActivity() {
             // قائمة المشاركة: نص أو ملف(ات) من أي تطبيق (البند 4)
             intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE -> {
                 Thread { stashFromShareIntent(intent); pushDataEvent("share", emptyMap()) }.start()
+            }
+            // زر "إيقاف البث" من إشعار الوسائط (FA-8)
+            intent.hasExtra("nexus.mediaStop") -> {
+                pushDataEvent("mediastop", emptyMap())
             }
         }
     }

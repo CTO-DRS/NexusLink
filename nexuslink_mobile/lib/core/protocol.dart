@@ -62,6 +62,37 @@ class CtlEvents {
   static const String screen = 'dev:screen'; // أبعاد الشاشة الحقيقية
 }
 
+/// أحداث جسر الوسائط 3005 (عقد §4.3 + إضافات FA-8) — كاميرا/ميكروفون/مراقبة.
+class MediaEvents {
+  static const String role = 'media:role'; // تسجيل role=phone
+  static const String hello = 'media:hello';
+  static const String roleAck = 'media:role-ack';
+  static const String phoneOnline = 'media:phone-online';
+  static const String log = 'media:log';
+
+  // إشارات WebRTC — الهاتف صاحب الوسائط ينشئ offer، الكمبيوتر يجيب answer
+  static const String rtcOffer = 'rtc:offer';
+  static const String rtcAnswer = 'rtc:answer';
+  static const String rtcIce = 'rtc:ice';
+
+  // حالة الكاميرا + مصراع + أوامر الوسائط
+  static const String camState = 'cam:state';
+  static const String camShutter = 'cam:shutter'; // {timer, flash, camera}
+  static const String camCaptured = 'cam:captured'; // {name, device}
+  static const String camCmd = 'cam:cmd'; // {action, camera?, on?, sensitivity?}
+
+  // تنبيهات المراقبة
+  static const String secMotion = 'sec:motion'; // {source, level}
+  static const String babyAlert = 'baby:alert'; // {from, level}
+
+  // المستشعرات (FA-8) — للويب كجيمباد لاحقًا
+  static const String sensorStream = 'sensor:stream'; // {a?, g?, ts}
+
+  // زمن الاستجابة
+  static const String ping = 'media:ping';
+  static const String pong = 'media:pong';
+}
+
 /// أحداث جسر الإنتاجية 3007 — النصوص/الروابط السريعة والحافظة الموحدة.
 class ProdEvents {
   static const String hello = 'prod:hello';

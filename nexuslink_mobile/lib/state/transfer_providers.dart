@@ -15,6 +15,7 @@ import '../data/transfer_api.dart';
 import '../data/transfer_engine.dart';
 import '../domain/models.dart';
 import 'control_providers.dart';
+import 'media_providers.dart';
 import 'providers.dart' show ConnectPhase, activityLogProvider, agentChannelProvider, connectionProvider, nexusDbProvider;
 
 // ---------------------------------------------------------------------------
@@ -226,6 +227,9 @@ class SignalingController extends Notifier<AgentSignaling?> {
       } else if (kind == 'ctl' && detail != null) {
         // FA-7 — أحداث جلسة التحكم عن بعد (القناة الوحيدة لا تحتمل مستمعين)
         ref.read(controlControllerProvider.notifier).ingest(detail);
+      } else if (kind == 'mediastop') {
+        // FA-8 — زر «إيقاف البث» من إشعار الوسائط في شريط النظام
+        unawaited(ref.read(mediaControllerProvider.notifier).stopEverything());
       }
     });
 

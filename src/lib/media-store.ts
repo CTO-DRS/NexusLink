@@ -73,6 +73,12 @@ interface MediaState {
   cams: Record<CamDeviceId, CamSourceState>
   mics: Record<"galaxy-s24" | "redmi-note13", MicSourceState>
 
+  // FA-8 — الهاتف الحقيقي: بث صوت/طفل وارد + حالة كاميرته + مستشعراته
+  remoteMicStream: MediaStream | null
+  remoteBabyStream: MediaStream | null
+  realCam: { active: boolean; facing: string; torch: boolean; watch: boolean; at: number } | null
+  sensors: { a: number[]; g: number[]; at: number } | null
+
   webcam: LinkState & { auto: boolean }
   call: VideoCallState
   shutter: { counting: number | null; lastCapture: { name: string; at: number } | null }
@@ -104,6 +110,12 @@ interface MediaState {
   stopCam: (id: CamDeviceId) => Promise<void>
   switchFacing: (id: CamDeviceId) => Promise<void>
   toggleTorch: (id: CamDeviceId) => Promise<void>
+
+  // FA-8
+  setRemoteMicStream: (s: MediaStream | null) => void
+  setRemoteBabyStream: (s: MediaStream | null) => void
+  setRealCam: (c: { active: boolean; facing: string; torch: boolean; watch: boolean; at: number } | null) => void
+  setSensors: (s: { a: number[]; g: number[]; at: number } | null) => void
 
   linkWebcam: () => Promise<void>
   unlinkWebcam: () => void
@@ -187,6 +199,12 @@ export const useMedia = create<MediaState>((set, get) => ({
     "redmi-note13": { active: false, real: false, label: "" },
   },
 
+  // FA-8
+  remoteMicStream: null,
+  remoteBabyStream: null,
+  realCam: null,
+  sensors: null,
+
   webcam: { status: "idle", mode: null, startedAt: idb(null), quality: "1080p", fps: 0, auto: true },
   call: { inCall: false, contact: "ليان — Nexus Video", startedAt: null, micMuted: false, camSource: null },
   shutter: { counting: null, lastCapture: null },
@@ -212,6 +230,12 @@ export const useMedia = create<MediaState>((set, get) => ({
   setBridge: (b) => set({ bridgeOnline: b }),
   setPhoneOnline: (n) => set({ phoneOnline: n }),
   setLatency: (ms) => set({ latency: ms }),
+
+  // FA-8
+  setRemoteMicStream: (s) => set({ remoteMicStream: s }),
+  setRemoteBabyStream: (s) => set({ remoteBabyStream: s }),
+  setRealCam: (c) => set({ realCam: c }),
+  setSensors: (s) => set({ sensors: s }),
 
   log: (text, kind = "info") =>
     set((s) => ({ logs: [{ id: mediaUid(), at: Date.now(), text, kind }, ...s.logs].slice(0, 80) })),

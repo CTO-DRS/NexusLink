@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { useMedia } from "@/lib/media-store"
 import { getCamSource } from "@/lib/media-engine"
-import { shutterRequest } from "@/lib/media-socket"
+import { shutterRequest, camCmd } from "@/lib/media-socket"
 import { PhoneFrame, PcWindow, LiveVideo, NoStream, LiveBadge, StreamChip } from "./media-bits"
 import { cn } from "@/lib/utils"
 
@@ -29,6 +29,8 @@ export function WebcamTab() {
   const webcamStream = useMedia((s) => s.webcamStream)
   const call = useMedia((s) => s.call)
   const shutter = useMedia((s) => s.shutter)
+  const phoneOnline = useMedia((s) => s.phoneOnline)
+  const realCam = useMedia((s) => s.realCam)
   const startCam = useMedia((s) => s.startCam)
   const stopCam = useMedia((s) => s.stopCam)
   const switchFacing = useMedia((s) => s.switchFacing)
@@ -40,6 +42,7 @@ export function WebcamTab() {
   const endCall = useMedia((s) => s.endCall)
   const toggleCallMute = useMedia((s) => s.toggleCallMute)
   const triggerShutter = useMedia((s) => s.triggerShutter)
+  const [realFlash, setRealFlash] = useState(false)
 
   // مصدر الكاميرا الحي (من الهاب) — مزامنة غير متزامنة لتفادي cascading renders
   const [srcStream, setSrcStream] = useState<MediaStream | null>(null)
@@ -160,7 +163,7 @@ export function WebcamTab() {
                 disabled={!cam.active}
                 onClick={() => {
                   void triggerShutter(t)
-                  shutterRequest(t) // يصل لهاتف حقيقي إن كان متصلاً
+                  shutterRequest(t, false, "back") // يصل لهاتف حقيقي إن كان متصلاً
                 }}
               >
                 {t === 0 ? "الآن" : `${t}ث`}
@@ -170,6 +173,59 @@ export function WebcamTab() {
           {shutter.lastCapture && (
             <p className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" /> آخر التقاط: {shutter.lastCapture.name} — حُفظ في DCIM/Camera
+            </p>
+          )}
+        </div>
+
+        {/* ===== FA-8: التحكم بالهاتف الحقيقي (WebRTC عبر جسر الوسائط) ===== */}
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-2.5">
+          <div className="flex items-center gap-2">
+            <span className={cn("h-2 w-2 rounded-full", phoneOnline ? "bg-emerald-500 animate-pulse" : "bg-zinc-400")} />
+            <p className="text-[11px] font-bold">هاتفك الحقيقي — بث WebRTC</p>
+            {realCam?.active && (
+              <Badge variant="default" className="rounded-full text-[9px] ms-auto">
+                يبث {realCam.facing === "front" ? "أمامية" : "خلفية"}{realCam.watch ? " · مراقبة" : ""}
+              </Badge>
+            )}
+          </div>
+          {phoneOnline ? (
+            <div className="grid grid-cols-2 gap-2">
+              <Button size="sm" className="h-8 rounded-lg text-[11px]" onClick={() => camCmd("cam-start", { camera: "back" })}>
+                <Play className="w-3.5 h-3.5" /> بث خلفية
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 rounded-lg text-[11px]" onClick={() => camCmd("cam-start", { camera: "front" })}>
+                <Play className="w-3.5 h-3.5" /> بث أمامية
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 rounded-lg text-[11px]" disabled={!realCam?.active} onClick={() => camCmd("switch")}>
+                <RefreshCcw className="w-3.5 h-3.5" /> تبديل
+              </Button>
+              <Button
+                variant={realCam?.torch ? "default" : "outline"}
+                size="sm"
+                className="h-8 rounded-lg text-[11px]"
+                disabled={!realCam?.active}
+                onClick={() => camCmd("torch", { on: !realCam?.torch })}
+              >
+                <Flashlight className="w-3.5 h-3.5" /> فلاش
+              </Button>
+              <Button variant="destructive" size="sm" className="h-8 rounded-lg text-[11px]" disabled={!realCam?.active} onClick={() => camCmd("cam-stop")}>
+                <Square className="w-3.5 h-3.5" /> إيقاف البث
+              </Button>
+              <div className="flex items-center justify-center gap-1.5 rounded-lg border px-2">
+                <Switch id="real-flash" checked={realFlash} onCheckedChange={setRealFlash} className="scale-90" />
+                <Label htmlFor="real-flash" className="text-[10px] cursor-pointer">مصراع بفلاش</Label>
+              </div>
+              <Button
+                size="sm"
+                className="h-8 rounded-lg text-[11px] col-span-2"
+                onClick={() => shutterRequest(0, realFlash, (realCam?.facing === "front" ? "front" : "back"))}
+              >
+                <Camera className="w-3.5 h-3.5" /> التقاط صورة من الهاتف {realFlash ? "(فلاش + كشاف)" : ""} — تصل كملف
+              </Button>
+            </div>
+          ) : (
+            <p className="text-[10px] text-muted-foreground">
+              افتح تطبيق NexusLink على هاتفك واتصل بالخادم — ستظهر هنا أزرار البث المباشر، والبث نفسه يظهر في نافذة الكويب كام أعلاه.
             </p>
           )}
         </div>

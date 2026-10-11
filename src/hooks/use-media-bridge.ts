@@ -74,7 +74,9 @@ export function useMediaBridge() {
       if (!d?.sdp) return
       const onStream = (stream: MediaStream) => {
         if (d.kind === "cam") st().setRemoteWebcam(stream)
-        // ميك وبaby: يربطان بواجهتيهما عبر مستمعي عناصر المستقبل
+        // FA-8: ميك/الطفل الحقيقيان يتوفران في المتجر لعنصري الصوت
+        if (d.kind === "mic") st().setRemoteMicStream(stream)
+        if (d.kind === "baby") st().setRemoteBabyStream(stream)
         window.dispatchEvent(new CustomEvent("nexus-remote-media", { detail: { kind: d.kind, stream } }))
       }
       void recv.handleOffer(d.kind, d.sdp, onStream)
@@ -100,6 +102,26 @@ export function useMediaBridge() {
     socket.on("baby:alert", (d: { from?: string; level?: number }) => {
       st().pushAlert("cry", `تنبيه بكاء من ${d?.from ?? "غرفة الطفل"}: ${Math.round(d?.level ?? 0)}%`, { level: d?.level })
       st().pass("baby")
+    })
+
+    // ==== FA-8: حالة كاميرا الهاتف الحقيقي + مستشعراته ====
+    socket.on("cam:state", (d: { deviceId?: string; active?: boolean; facing?: string; torch?: boolean; watch?: boolean }) => {
+      st().setRealCam({
+        active: d?.active === true,
+        facing: d?.facing ?? "back",
+        torch: d?.torch === true,
+        watch: d?.watch === true,
+        at: Date.now(),
+      })
+      st().log(
+        d?.active
+          ? `بث كاميرا الهاتف الحقيقي يعمل (${d?.facing === "front" ? "أمامية" : "خلفية"}${d?.torch ? " + فلاش" : ""}${d?.watch ? " — مراقبة" : ""})`
+          : "بث كاميرا الهاتف الحقيقي توقف",
+        d?.active ? "ok" : "info",
+      )
+    })
+    socket.on("sensor:stream", (d: { a?: number[]; g?: number[]; from?: string }) => {
+      st().setSensors({ a: d?.a ?? [], g: d?.g ?? [], at: Date.now() })
     })
 
     // ==== تحكم هاتف حقيقي بالبث والشرائح ====

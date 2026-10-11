@@ -36,6 +36,9 @@ dependencies:
 
   # ---- نقل الملفات: منتقي الملفات/المجلدات ----
   file_picker: ^8.1.2
+  flutter_webrtc: ^1.6.2+hotfix.4
+  sensors_plus: ^7.1.1
+  image: ^4.12.0
 
 dev_dependencies:
   flutter_test:
