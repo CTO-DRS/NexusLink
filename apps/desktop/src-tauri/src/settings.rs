@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Settings {
     pub close_to_tray: bool,
     #[serde(default)]
@@ -47,7 +47,7 @@ pub fn init(app: &tauri::AppHandle) {
 }
 
 pub fn get() -> Settings {
-    *cell().lock().unwrap()
+    cell().lock().unwrap().clone()
 }
 
 fn persist(s: &Settings) {
