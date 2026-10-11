@@ -191,3 +191,21 @@ Stage Summary:
 - اختبار النجاح مسنود بروتوكوليًا بالكامل (21/21): بث الكاميرا يصل كمكالمة ويب كام عبر المسار نفسه الذي يعرضه NexusMeet — التنفيذ الفيزيائي على هاتف حقيقي يتطلب جهازًا (WebRTC/الكاميرا/الرن لا تُحاكى) كما في FA-6/FA-7.
 - قيود صادقة موثقة في العقد: البث/المستشعرات/المصراع تعمل أثناء حياة محرك Flutter؛ الواجهة ميتة → الخدمة تستقبل الطلبات وتنبه، وأين هاتفي يعمل كاملًا بلا واجهة.
 - الخطوة التالية المرشحة: FA-6 بث الشاشة (flutter_webrtc + MediaProjection — الإشارات على نفس قناة rtc:* بإضافة kind:"screen") أو FA-5 الإشعارات/SMS على 3003 حسب ترتيب المستخدم.
+
+---
+Task ID: FA-8-R
+Agent: Super Z (main)
+Task: إعادة تحقق مستقلة من FA-8 بعد انقطاع الجلسة (المشتبه: أن التنفيذ السابق اكتمل قبل الانقطاع لكن بقي غير مُعتمَد) — التحقق من القرص، مطابقة العقد، أدوات الجودة، وE2E حي من جديد
+
+Work Log:
+- قراءة worklog.md كاملًا: عُثر على قسم FA-8 منجز من استدعاء سابق لنفس الجلسة (انقطاع سياق لاحق أفقده الملخص) — القرار: تدقيق واعتماد (نمط FA-2-R) لا إعادة بناء.
+- القرص: pubspec.yaml (flutter_webrtc ^1.6.2+hotfix.4، sensors_plus ^7.1.1، image ^4.12.0، بلا camera) + قفل pubspec.lock مطابق. 10 ملفات = 3577 سطرًا كلها موجودة: media_service.dart (874) · media_screen.dart (523) · media_providers.dart (181) · FindMyPhone.kt (210) · media-bridge.ts (219) · media-socket.ts (78) · media-store.ts (763) · use-media-bridge.ts (161) · webcam-tab.tsx (403) · agent-media-e2e.mjs (165).
+- مطابقة العقد: §4.3 (cam:cmd قائمة بيضاء عشرية، cam:shutter {timer,flash,camera}، sensor:stream بمحدد 40/ث، تسلسل WebRTC بنقل الهاتف offer/أول answer من pc، watch=فروق إطارات، baby=getStats audioLevel، قيود صادقة) و§4.4 (dev:ring/dev:light في Kotlin) — كل ثوابت MediaEvents في protocol.dart (66..89) حاضرة ومطابقة حرفيًا.
+- بنود السبعة — دليل من الكود: (1) startKind('cam') + getUserMedia 720p + RTCVideoView ×2 معاينة مصغرة + Helper.switchCamera + track.setTorch + mediaNotify إشعار بث مع زر إيقاف (2) capturePhoto: عد تنازلي + setTorch أثناءه + uploadInit/Chunk/Complete → ملف /Pictures + cam:captured (3) watch: بث مستمر + captureFrame كل ~900ms → تصغير → فرق لوميناني → عتبة sensitivity → تأكيد عينتين → sec:motion تهدئة 10ث (4) baby: صوت فقط + setBabyWake PARTIAL_WAKE_LOCK + audioLevel كل 2ث → baby:alert تهدئة 20ث (5) startKind('mic') عند الطلب (6) مستشعرات 50ms=20Hz مدمجة → sensor:stream + محدد سيرفري (7) FindMyPhone.kt: RINGER_MODE_NORMAL + أقصى MUSIC/ALARM + USAGE_ALARM حلقي + اهتزاز متموج + SCREEN_BRIGHT_WAKE_LOCK ACQUIRE_CAUSES_WAKEUP + كشاف 5ث + استعادة كاملة + shutdown عند انقطاع القناة — موصول dev:ring/dev:ring-stop/dev:light في AgentForegroundService مع dev:state.find.ringing.
+- أدوات الجودة: flutter analyze **No issues found!** (1.5s) · eslint exit 0 على 10 ملفات ويب · ترجمات media ar/en = 10/10 مفاتيح بلا فرق · AndroidManifest: CAMERA + RECORD_AUDIO + WAKE_LOCK + FOREGROUND_SERVICE حاضرة.
+- **E2E حي معاد (run-media-e2e.sh → agent-media-e2e.mjs عبر بوابة 81): 21/21 ناجح** — boot، hello/role/phone-online، offer بلا ارتداد، answer/ICE باتجاهين مع حقن from=pc/phone، قائمة بيضاء وإسقاط hack-the-phone، تنقية evil، shutter كامل، state/captured، motion/alert، sensor بحقن from + إسقاط دور pc، محدد المعدل 39/100، ping/pong، dev:ring على 3006.
+
+Stage Summary:
+- **FA-8 معتمدة رسميًا (FA-8-R)**: طبقة الكاميرا والصوت سليمة على القرص وتعمل ضد الجسور الفعلية بنفس نتائج الاستدعاء السابق دون أي انحراف.
+- اختبار النجاح (مكالمة فيديو على الكمبيوتر تستخدم كاميرا الهاتف) مسنود بروتوكوليًا كاملًا؛ تنفيذه الفيزيائي يتطلب هاتفًا حقيقيًا (WebRTC/الكاميرا/الرن لا تُحاكى) — قيد موثق كما في FA-6/FA-7.
+- الطريق مفتوح للمرحلة التالية حسب ترتيب المستخدم: FA-6 بث الشاشة (نفس قناة rtc:* + kind:"screen") أو FA-5 الإشعارات/SMS على 3003.
