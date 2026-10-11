@@ -44,7 +44,9 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills"]
+  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills",
+    // سكربتات CJS متعمدة تعمل بـ node الخام داخل حزمة سطح المكتب (بلا تبعيات ولا تحويل)
+    "apps/desktop/**", "mini-services/gateway/**"]
 }];
 
 export default eslintConfig;

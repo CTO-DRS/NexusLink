@@ -1,0 +1,128 @@
+#!/usr/bin/env node
+"use strict";
+// NexusLink — بوابة الإدخال الموحدة (بديل Caddy داخل حزمة سطح المكتب)
+// ============================================================
+// نفس العقد الحرفي للبوابة (docs/protocol-contract.md §1 + Caddyfile):
+//  - أي طلب يحمل ?XTransformPort=<port> يُحوَّل إلى 127.0.0.1:<port> (HTTP + WS upgrade)
+//  - غير ذلك → REST_TARGET (الواجهة + /api/* على 3000)
+//  - GET /__gw/health → فحص جاهزية البوابة نفسها (بلا تبعية للأعلى)
+// صفر تبعيات — node:http + node:net فقط. نفس سلوك header_up Host {host}:
+// نمرّر الترويسات كما هي (Host الأصلي مع المنفذ 81 يصل للأعلى).
+const http = require("http")
+const net = require("net")
+
+const GATEWAY_PORT = Number(process.env.GATEWAY_PORT || 81)
+const FALLBACK_PORT = Number(process.env.GATEWAY_FALLBACK_PORT || 8180)
+const REST_HOST = process.env.REST_HOST || "127.0.0.1"
+const REST_PORT = Number(process.env.REST_PORT || 3000)
+const STARTED_AT = Date.now()
+let BOUND_PORT = GATEWAY_PORT
+
+function targetPort(reqUrl) {
+  try {
+    const q = new URL(reqUrl, "http://gw").searchParams.get("XTransformPort")
+    if (!q || !/^\d{2,5}$/.test(q)) return null
+    const p = Number(q)
+    if (p < 1024 || p > 65535) return null
+    return p
+  } catch {
+    return null
+  }
+}
+
+function hopByHop(headers) {
+  const h = { ...headers }
+  delete h["connection"]
+  delete h["keep-alive"]
+  delete h["proxy-connection"]
+  delete h["transfer-encoding"]
+  delete h["upgrade"]
+  delete h["proxy-authenticate"]
+  delete h["proxy-authorization"]
+  delete h["te"]
+  delete h["trailer"]
+  return h
+}
+
+function proxyHttp(req, res) {
+  const port = targetPort(req.url) ?? REST_PORT
+  const up = http.request(
+    { host: "127.0.0.1", port, method: req.method, path: req.url, headers: hopByHop(req.headers) },
+    (ures) => {
+      res.writeHead(ures.statusCode || 502, ures.headers)
+      ures.pipe(res)
+    },
+  )
+  up.setTimeout(0)
+  up.on("error", (e) => {
+    if (!res.headersSent) {
+      res.writeHead(502, { "content-type": "application/json; charset=utf-8" })
+      res.end(JSON.stringify({ ok: false, gateway: true, error: "upstream-unreachable", port, detail: e.code || e.message }))
+    } else {
+      res.destroy()
+    }
+  })
+  req.pipe(up)
+}
+
+// WS upgrade: نفق TCP خام — نعيد كتابة رأس الطلب حرفيًا ثم أنبوب ثنائي بالاتجاهين
+function proxyUpgrade(req, socket, head) {
+  const port = targetPort(req.url) ?? REST_PORT
+  const up = net.connect(port, "127.0.0.1", () => {
+    let raw = `${req.method} ${req.url} HTTP/1.1\r\n`
+    for (let i = 0; i < req.rawHeaders.length; i += 2) raw += `${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}\r\n`
+    raw += "\r\n"
+    up.write(raw)
+    if (head && head.length) up.write(head)
+    socket.pipe(up)
+    up.pipe(socket)
+  })
+  const cleanup = () => { try { socket.destroy() } catch {} try { up.destroy() } catch {} }
+  up.on("error", cleanup)
+  socket.on("error", cleanup)
+  socket.on("close", cleanup)
+  up.on("close", () => { try { socket.destroy() } catch {} })
+}
+
+const server = http.createServer((req, res) => {
+  try {
+    const path = (req.url || "/").split("?")[0]
+    if (path === "/__gw/health") {
+      res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store", "access-control-allow-origin": "*" })
+      res.end(JSON.stringify({ ok: true, proto: "Nexus/1.2", role: "gateway", port: GATEWAY_PORT, rest: REST_PORT, uptimeMs: Date.now() - STARTED_AT }))
+      return
+    }
+    proxyHttp(req, res)
+  } catch (e) {
+    if (!res.headersSent) {
+      res.writeHead(500, { "content-type": "application/json" })
+      res.end(JSON.stringify({ ok: false, gateway: true, error: e instanceof Error ? e.message : "gw" }))
+    }
+  }
+})
+
+// مأخذ socket.io طويل الاستطلاع عبر البوابة: بلا مهلات قاتلة
+server.requestTimeout = 0
+server.headersTimeout = 60000
+server.keepAliveTimeout = 120000
+server.on("upgrade", proxyUpgrade)
+server.on("clientError", (_err, socket) => { try { socket.end("HTTP/1.1 400 Bad Request\r\n\r\n") } catch {} })
+
+server.listen(GATEWAY_PORT, () => {
+  console.log(`[gateway] NexusLink gateway on :${BOUND_PORT} → rest:${REST_PORT} (+ ?XTransformPort=<port>)`)
+  // سطر آلي يقرؤه مدير العمليات (Rust) ليحدد NEXUSLINK_GATEWAY_PORT لجسر comms/mDNS
+  console.log(`[gateway] PORT=${BOUND_PORT}`)
+})
+server.on("error", (e) => {
+  // تراجع محدد: المنافذ <1024 تحتاج صلاحيات (Linux/macOS) — نجرب المنفذ البديل مرة واحدة
+  if ((e.code === "EACCES" || e.code === "EADDRINUSE") && BOUND_PORT === GATEWAY_PORT && FALLBACK_PORT !== GATEWAY_PORT) {
+    console.error(`[gateway] :${GATEWAY_PORT} blocked (${e.code}) → falling back to :${FALLBACK_PORT}`)
+    BOUND_PORT = FALLBACK_PORT
+    server.listen(BOUND_PORT)
+    return
+  }
+  console.error("[gateway] listen failed:", e.message)
+  process.exit(1)
+})
+process.on("SIGTERM", () => { server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 2000) })
+process.on("SIGINT", () => { server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 2000) })
