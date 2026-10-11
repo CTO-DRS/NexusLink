@@ -36,6 +36,10 @@ jobs:
       - run: bun install --frozen-lockfile
 
       # bash على المنصات الثلاث (الدرس: لا تعتمد على shell الافتراضي لكل نظام)
+      - name: Generate Prisma client
+        shell: bash
+        run: bunx prisma generate
+
       - name: Build Next standalone
         shell: bash
         run: |
