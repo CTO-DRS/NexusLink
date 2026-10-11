@@ -21,6 +21,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run lint
       - name: Unit tests (core engines)
+        shell: bash
         run: bun test || echo "no tests yet"
 
   desktop:
