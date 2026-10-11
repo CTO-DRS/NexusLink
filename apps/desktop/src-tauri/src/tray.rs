@@ -1,7 +1,8 @@
 // NexusLink Desktop — أيقونة النظام (System Tray)
 // ============================================================
 // أيقونة تعكس حالة الاتصال: متصل (أخضر) / منتظر (أزرق) / موقوف (كهرماني) / خطأ (أحمر)
-// قائمة سريعة: فتح، إيقاف مؤقت/استئناف، الإغلاق إلى الـ Tray (خيار)، إنهاء.
+// قائمة سريعة: فتح، إيقاف مؤقت/استئناف، الإغلاق إلى الـ Tray (خيار)،
+// التشغيل التلقائي مع النظام (خيار)، مجلد التنزيلات…، إنهاء.
 use std::sync::Mutex;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
@@ -11,6 +12,7 @@ pub struct TrayUi {
     pub tray: Mutex<TrayIcon>,
     pub pause_item: Mutex<MenuItem<tauri::Wry>>,
     pub closetray_item: Mutex<CheckMenuItem<tauri::Wry>>,
+    pub autostart_item: Mutex<CheckMenuItem<tauri::Wry>>,
 }
 
 fn icon(name: &str) -> tauri::Result<tauri::image::Image<'static>> {
@@ -34,9 +36,24 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         crate::settings::get().close_to_tray,
         None::<&str>,
     )?;
+    // حالة التشغيل التلقائي الحقيقية من مدير الإقلاع (لا من الإعداد فقط)
+    use tauri_plugin_autostart::ManagerExt;
+    let enabled = app.autolaunch().is_enabled().unwrap_or(crate::settings::get().autostart);
+    let autostart = CheckMenuItem::with_id(
+        app,
+        "autostart",
+        "التشغيل التلقائي مع النظام",
+        true,
+        enabled,
+        None::<&str>,
+    )?;
+    let downloads = MenuItem::with_id(app, "downloads", "مجلد التنزيلات…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "إنهاء NexusLink", true, None::<&str>)?;
     let sep = |app: &AppHandle| PredefinedMenuItem::separator(app);
-    let menu = Menu::with_items(app, &[&open, &sep(app)?, &pause, &closetray, &sep(app)?, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[&open, &sep(app)?, &pause, &closetray, &autostart, &downloads, &sep(app)?, &quit],
+    )?;
 
     let tray = TrayIconBuilder::with_id("nexuslink-tray")
         .icon(icon("waiting")?)
@@ -50,6 +67,17 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
                 // الحارس مؤقت ينتهي عند هذه الجملة — بلا امتداد داخل if-let
                 let checked = ui.closetray_item.lock().unwrap().is_checked().unwrap_or(false);
                 crate::settings::set_close_to_tray(checked);
+            }
+            "autostart" => {
+                let ui = app.state::<TrayUi>();
+                let checked = ui.autostart_item.lock().unwrap().is_checked().unwrap_or(false);
+                crate::settings::set_autostart(checked);
+                use tauri_plugin_autostart::ManagerExt;
+                let r = if checked { app.autolaunch().enable() } else { app.autolaunch().disable() };
+                println!("[tray] autostart={} → {:?}", checked, r.is_ok());
+            }
+            "downloads" => {
+                pick_downloads_dir(app);
             }
             "quit" => {
                 crate::procman::kill_all();
@@ -68,8 +96,24 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         tray: Mutex::new(tray),
         pause_item: Mutex::new(pause),
         closetray_item: Mutex::new(closetray),
+        autostart_item: Mutex::new(autostart),
     });
     Ok(())
+}
+
+/// اختيار مجلد التنزيلات الافتراضي (حوار مجلد أصلي) — يُخزن في config.json
+fn pick_downloads_dir(app: &AppHandle) {
+    use tauri_plugin_dialog::DialogExt;
+    let app2 = app.clone();
+    app.dialog().file().pick_folder(move |chosen| {
+        if let Some(fp) = chosen {
+            if let Ok(path) = fp.into_path() {
+                crate::settings::set_downloads_dir(Some(path.display().to_string()));
+                let dir = path.display().to_string();
+                crate::notify::plain(&app2, "مجلد التنزيلات الافتراضي", &dir);
+            }
+        }
+    });
 }
 
 const TIPS: [(&str, &str); 5] = [

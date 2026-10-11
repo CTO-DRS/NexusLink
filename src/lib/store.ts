@@ -23,6 +23,8 @@ export type ShortcutAction =
   | "contrast"
   | "speedtest"
   | "dnd"
+  | "sendClipboard"
+  | "toggleWindow"
 
 export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
   palette: "Ctrl+K",
@@ -41,6 +43,8 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
   contrast: "Ctrl+Shift+H",
   speedtest: "Ctrl+Shift+S",
   dnd: "Ctrl+Shift+M",
+  sendClipboard: "Ctrl+Shift+N",
+  toggleWindow: "Ctrl+Shift+D",
 }
 
 export const SHORTCUT_META: Record<ShortcutAction, string> = {
@@ -60,6 +64,8 @@ export const SHORTCUT_META: Record<ShortcutAction, string> = {
   contrast: "تبديل التباين العالي",
   speedtest: "بدء اختبار السرعة",
   dnd: "تبديل عدم الإزعاج",
+  sendClipboard: "إرسال الحافظة للهاتف (سطح المكتب)",
+  toggleWindow: "إظهار/إخفاء النافذة (سطح المكتب)",
 }
 
 interface NexusState {
