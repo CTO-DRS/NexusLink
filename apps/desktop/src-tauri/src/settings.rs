@@ -43,7 +43,7 @@ pub fn get() -> Settings {
 }
 
 pub fn set_close_to_tray(v: bool) {
-    *cell().lock().unwrap().close_to_tray = v;
+    cell().lock().unwrap().close_to_tray = v;
     if let Some(path) = CONFIG_PATH.get() {
         if let Ok(json) = serde_json::to_string_pretty(&get()) {
             let _ = std::fs::write(path, json);

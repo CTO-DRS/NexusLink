@@ -193,7 +193,7 @@ fn proc_by_name(state: &DesktopState, name: &str) -> Option<std::sync::Arc<ProcH
     state.procs.lock().unwrap().iter().find(|p| p.spec.name == name).cloned()
 }
 
-fn wait_for<F: Fn() -> bool>(timeout: Duration, tick: Duration, mut ok: F) -> bool {
+fn wait_for<F: Fn() -> bool>(timeout: Duration, tick: Duration, ok: F) -> bool {
     let t0 = Instant::now();
     while t0.elapsed() < timeout {
         if ok() {
@@ -297,7 +297,7 @@ fn monitor_tick(app: &AppHandle, state: &DesktopState) {
         if ran_stable {
             arc.attempts.store(0, Ordering::Relaxed);
         }
-        let wait = restart_policy(arc);
+        let wait = restart_policy(&arc);
         println!("[procman] {} dead → restart in {:?}", arc.spec.name, wait);
         std::thread::sleep(wait);
         let _ = spawn_proc(state, &arc.spec, &arc);

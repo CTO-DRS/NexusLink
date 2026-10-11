@@ -47,8 +47,9 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
             "pause" => crate::procman::toggle_pause(app),
             "closetray" => {
                 let ui = app.state::<TrayUi>();
-                let checked = ui.closetray_item.lock().unwrap().is_checked();
-                crate::settings::set_close_to_tray(checked);
+                if let Ok(checked) = ui.closetray_item.lock().unwrap().is_checked() {
+                    crate::settings::set_close_to_tray(checked);
+                }
             }
             "quit" => {
                 crate::procman::kill_all();
