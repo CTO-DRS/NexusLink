@@ -354,3 +354,26 @@ Stage Summary:
 - Release v1.0.0 بأصلين موقّعين بنفس الشهادة: arm64 (100.6MB محلي) + عالمي (138.7MB آلي) — الإصدار v1.0.0 ثابت لم يُغير.
 - درس جديد موثق: pwsh لا يغفر `|| cmdlet` — فرض shell: bash لأي منطق fallback عبر المنصات.
 - درس جديد 2: قبل أول تشغيل CI، دوّن في العقل أن الملفات المُلتزمة تُنفذ على بيئة غريبة — أي مسار مطلق (org.gradle.java.home) قنبلة صامتة.
+
+---
+Task ID: FA-desktop
+Agent: main (Super Z)
+Task: أنشئ apps/desktop (Tauri 2) داخل المونو-ريبو — نافذة تحمّل واجهة React كما هي + سيرفر Node مضمّن يُدار (إقلاع/إيقاف/صحة/إعادة تشغيل) + Tray بحالة الاتصال + close-to-tray + single-instance + انتظار جاهزية بشاشة تحميل + اكتشاف الهاتف عبر mDNS بلا متصفح
+
+Work Log:
+- القاعدة الذهبية أولًا: العقد §1/§7 + discovery_service.dart + models.dart حسمت مسار الاتصال — الهاتف المكتشف يمر عبر بوابة :81 بنمط ?XTransformPort حرفيًا (AccessMode.gateway) والجسور الداخلية تنطلق عبر boot routes idempotent داخل عملية Next.
+- **4 فجوات سيرفرية مُصلحة أولًا**: (1) /api/health (2) /api/desktop/status — إقلاع الجسور الخمسة + phone.online من phoneGuardOnline (نفس مصدر حقيقة الحماية، لا مصدر ثانٍ) (3) comms-service /status — خلف مطالبة engine.io بكل المسارات (path:'/') عبر التقاط مستمع engine حرفيًا وتغليفه: /status تُجاب هنا وكل ما عداه يُفوَّض بلا تغيير سلوك (4) mini-services/gateway — بديل Cjs صفر التبعيات: XTransformPort + نفق WS خام + /__gw/health + **تراجع 81→8180** عند المنافذ المميزة (EACCES) مع سطر آلي PORT= يقرؤه procman ويُمرَّر لcomms فيعلن mDNS المنفذ الفعلي (حقل المنفذ بيانات ديناميكية — الهاتف يقرأ svc.port).
+- **E2E 18/18 (scripts/desktop-e2e.mjs)**: يشغّل نفس ما سيديره procman حرفيًا — next standalone + بوابة (تراجع 8180 مؤكد في الحاوية) + comms (mDNS أُعلنت فعلاً داخل الحاوية) + هاتف محاكى عبر البوابة: socket.io 3006 polling→WS عبر نفق البوابة، guard:hello-phone + منارة → phone.online=true (Tray يقلب) + 3004/3009 عبر البوابة.
+- عللان أثناء E2E: مسار RES بلا شرطة مائلة (resourcescomms) + محاكاة الهاتف افتقرت guard:hello-phone (phoneGuardOnline لا يتحقق بالمنارة وحدها — تسليم الوكيل الحقيقي).
+- **Tauri 2 (apps/desktop)**: procman.rs — إقلاع متسلسل (next→انتظار /api/health 90ث→gateway→قراءة PORT=→comms بمنفذ البوابة) + مراقبة 2ث + إعادة تشغيل بتراجع أسّي (1s→15s، تصفير بعد استقرار 60ث) + إيقاف مؤقت/استئناف + قتل نظيف عند كل مسارات الخروج + إقلاع idempotent (spawn يقتل القديم أولًا بلا تسريب منافذ) + تجفيف أنابيب إلزامي + CREATE_NO_WINDOW على ويندوز. tray.rs — 4 حالات أيقونة من منارة الحماية + قائمة عربية + CheckMenuItem للإغلاق-إلى-Tray. settings.rs — config.json (close_to_tray افتراضي true). main.rs — single-instance أولًا (توثيق tauri) + منع الإغلاق للنافذة الرئيسية حسب الإعداد + splash حتى Finished لصفحة الواجهة ثم فتح main وغلق splash.
+- مراجعة Rust يدوية مزدوجة (لا مترجم محليًا): أُصلح (1) إعادة تشغيل فردية كانت تقلب ready=false → إقلاع كامل يسرّب الأطفال القديمة (سرقة منافذ!) (2) إمساك قفل procs أثناء sleeps الإعادة → قفل قاتل لkill_all (3) is_checked() يرجع bool لا Result (4) static mut → AtomicU32 (5) state() ميتة.
+- أيقونات مولّدة برمجيًا (scripts/gen-desktop-icons.py): 5 حالات tray + ico/icns مصنوع يدويًا (ic07-ic10) — icns مُتحقق من صحته بـ PIL.
+- splash داكنة RTL بثنائية اللغة + حلقة conic-gradient متحركة تستمع desktop://status.
+- **CI desktop.yml**: 3 منصات × (next build → build-resources.sh → sidecar Node v20.18.1 بترقية كل هدف → rust-cache → tauri build بمصفوفة حزم: nsis / appimage+deb / dmg + رفع artifacts + إرفاق بالrelease عند الوسوم فقط). فخان ويندوز مُعالَجان مسبقًا: shell: bash صريح (bun shell لا يعرف cp) + Expand-Archive بدل unzip.
+- الموارد الثقيلة (server 546MB / sidecar node) gitignored وتُبنى في خط الإنتاج — repo نظيف (37 ملفًا فقط، +1616 سطرًا).
+- الإصدار 1.0.0 في tauri.conf.json — متزامن مع v1.0.0 دون تغيير.
+
+Stage Summary:
+- apps/desktop مكتمل: نافذة تحمّل الواجهة كما هي (نفس الثيم/Dock عبر :3000)، سيرفر مضمّن مُدار بالكامل، Tray بحالة حية، close-to-tray، single-instance، شاشة انتظار جاهزية، اكتشاف mDNS تلقائي للهاتف بلا متصفح.
+- اختبار النجاح التعاقدي: E2E يثبت السلسلة كاملة عدا التثبيت الفيزيائي (يغطيها CI الآن) — «تثبيت → يفتح → سيرفر داخله → هاتف يكتشف ويتصل → إغلاق يبقي كل شيء حيًا» = close-to-tray يخفي دون قتل + مراقبة حية.
+- بند فيزيائي وحيد: تجربة mDNS فعليًا على شبكة LAN حقيقية مع هاتف (multicast مؤكد داخل الحاوية لكن شعاع الشبكة الحقيقي يتطلب جهازًا) — موثق بصدق كالسابق.
