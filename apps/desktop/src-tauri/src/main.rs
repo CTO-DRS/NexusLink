@@ -19,7 +19,7 @@ fn main() {
         }))
         .setup(|app| {
             let handle = app.handle().clone();
-            settings::init(&handle)?;
+            settings::init(&handle);
             tray::init(&handle)?;
             procman::start(handle.clone());
             Ok(())
