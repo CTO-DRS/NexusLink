@@ -414,3 +414,23 @@ Stage Summary:
 - FA-desktop مُسلّم ومُتحقَّق منه بالكامل: كود + CI أخضر + E2E 18/18 حي عند HEAD + 5 أصول دائمة على v1.0.0.
 - اختبار النجاح التعاقدي بنيويًا كامل: تثبيت (حزم دائمة متاحة) → فتح → سيرفر داخلي (E2E) → هاتف يكتشف عبر mDNS (إعلان مُثبت) → إغلاق النافذة يبقي كل شيء حيًا (close-to-tray + monitor).
 - المتبقي الميداني الوحيد (بِحَق): التثبيت الفيزيائي على أجهزة حقيقية + راديو mDNS على شبكة LAN فعلية — خارج قدرة الحاوية، موثق بصدق.
+
+---
+Task ID: FA-desktop-native
+Agent: main (Super Z)
+Task: الطبقة الأصلية لسطح المكتب — autostart/بدء مخفي + اختصارات عالمية (نفس المخزن) + إشعارات نظام بأزرار + حوارات حفظ أصلية + سحب-وإفلات فوري + deep-link nexus://
+
+Work Log:
+- القاعدة الذهبية أولًا: استكشاف كامل — مخزن الاختصارات الحقيقي (zustand/localStorage: nexus-shortcuts)، الحافظة الموحدة (/api/prod/clipboard → prodEmit clip:new فوري للهاتف)، عقد الإرسال (POST /api/devices send-file → tx:offer للوكيل الحقيقي بشرط agentId)، مصدر الإشعارات (nexusNotification)، التواقيع الفعلية لـ 6 crates فُحصت من مصادرها المنزلة (لا تخمين): tauri-winrt-notification يدعم add_button+on_activated فعلاً، global-hotkey parse يقبل Ctrl+Shift+N، DragDropEvent::Drop{paths: Vec<PathBuf>} في tauri-runtime 2.12.1، FilePath::into_path، ShortcutEvent.state.
+- **فجات سيرفرية أولًا (إضافية بلا مساس بمسار قائم)**: (1) GET/PUT /api/desktop/shortcuts — مخزن الملف data/desktop-ui.json (تصدير خارج route.ts ممنوع في Next — lib مشترك desktop-shortcuts.ts) (2) status.desktop = {agentId, shortcuts, transfers≤5 done-in, notifs≤8 new} — كل استدعاء محمي لا يُسقط الحالة الأساسية (3) desktop-bridge.tsx في page.tsx: كتم window.Notification + دفع المخزن عند تغيّر + ?view= + sendClipboard داخل التركيز.
+- **إجراءان جديدان في المخزن المشترك**: sendClipboard/toggleWindow في ShortcutAction + DEFAULTS + META، يظهران في إعدادات الاختصارات داخل نافذة سطح المكتب فقط (فلتر DESKTOP_ONLY_ACTIONS).
+- **تعاقد التركيز** (حسم التعارض): Ctrl+Shift+D خارج التركيز = إظهار/إخفاء النافذة عالميًا؛ داخله يبقى للمظهر (سلوك الواجهة الحالي بلا انحدار) — shortcuts.rs يسجل عالميًا عند عدم التركيز فقط ويلغي عند التركيز.
+- مراجعة Rust ذاتية أولى أصابت خطأين قاتلين قبل CI: استيراد GlobalShortcutExt في النطاق الخطأ + حالة ميتة (REGISTERED=any مع قائمة فارغة يمنع تسجيل «البدء المخفي» للأبد — الحسم بالتركيز لا بحالة التسجيل) + تسجيل أولي apply_focus(false) في setup.
+- جولة CI 1: 5 أخطاء ميكانيكية (E0204 Copy مع Option<String>، E0599 Manager import ×3، E0061 center()) — جولة CI 2: **3/3 منصات خضراء** (dmg 279MB + nsis 195MB + deb 271MB) في 9 دقائق فقط (rust-cache).
+- E2E موسّع 29/29 محليًا (18 أصلية + 11 أصلية جديدة): مزامنة shortcuts ذهابًا-وإيابًا، حقول status.desktop، مسار سحب-وإفلات كامل (ملف → pc-fs/Inbox → send-file → مهمة في القائمة — درس: standalone server.js يعمل chdir(__dirname) فجذر البيانات .next/standalone/data)، الحافظة الموحدة، إشعار قابل للتفاعل يظهر في status.
+- **استبدال أصول سطح المكتب في v1.0.0** (حزم الجولة الخضراء 18d839d بنفس الأسماء 1.0.0 — حذف 3 + رفع 3 بـ HTTP 201): APKs والوسم لم يُمَسا.
+- توثيق: §10 في docs/protocol-contract.md (عقد الواجهات الأصلية حرفيًا) + README الجدول الكامل.
+
+Stage Summary:
+- المتطلبات الستة مُنفذة ومُبنية على 3 منصات: autostart+بدء مخفي (خيار Tray)، اختصارات عالمية من المخزن نفسه، إشعارات WinRT بأزرار تفاعلية (حفظ-في/فتح-المجلد/رد/فتح + سياسة لا إشعار أثناء التركيز)، حوار حفظ أصلي بمجلد افتراضي قابل للتغيير، سحب-وإفلات إرسال فوري، nexus:// مع 5 وجوه (open/comms/transfers|files|devices|settings/send).
+- اختبار النجاح التعاقدي «Ctrl+Shift+N في أي مكان → الحافظة تصل الهاتف»: مسار Rust كامل (arboard → POST prod/clipboard → prodEmit clip:new) — حلقة السيرفر مثبتة بـ E2E؛ الضغط الفيزيائي ميداني (لا لوحة مفاتيح في الحاوية).
