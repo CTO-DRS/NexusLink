@@ -7,13 +7,14 @@ import 'controller_screen.dart';
 import 'devices_screen.dart';
 import 'log_screen.dart';
 import 'media_screen.dart';
+import 'security_screen.dart';
 import 'settings_screen.dart';
 import 'transfers_screen.dart';
 import '../state/transfer_providers.dart';
 import '../data/transfer_engine.dart';
 
 /// الهيكل الرئيسي: BottomNavigationBar بديل الـ Dock في نسخة الويب.
-/// سبعة تبويبات: الاتصال، الأجهزة، الوسائط، التحكم، النقل، السجل، الإعدادات.
+/// ثمانية تبويبات: الاتصال، الأجهزة، الوسائط، التحكم، النقل، الأمان، السجل، الإعدادات.
 /// تُفعِّل هذه الشاشة مزودات النقل (المحرك + الإشارة) بمراقبتها هنا.
 class NexusShell extends ConsumerStatefulWidget {
   const NexusShell({super.key});
@@ -26,7 +27,7 @@ class _NexusShellState extends ConsumerState<NexusShell> {
   int _tab = 0;
 
   static const List<String> _keys = [
-    'nav.connect', 'nav.devices', 'nav.media', 'nav.control', 'nav.transfers', 'nav.log', 'nav.settings',
+    'nav.connect', 'nav.devices', 'nav.media', 'nav.control', 'nav.transfers', 'nav.security', 'nav.log', 'nav.settings',
   ];
 
   @override
@@ -45,6 +46,7 @@ class _NexusShellState extends ConsumerState<NexusShell> {
       MediaScreen(),
       RcScreen(),
       TransfersScreen(),
+      SecurityScreen(),
       LogScreen(),
       SettingsScreen(),
     ];
@@ -77,6 +79,7 @@ class _NexusShellState extends ConsumerState<NexusShell> {
         'nav.media' => selected ? Icons.surround_sound_rounded : Icons.surround_sound_outlined,
         'nav.control' => selected ? Icons.mouse_rounded : Icons.mouse_outlined,
         'nav.transfers' => selected ? Icons.swap_vert_circle_rounded : Icons.swap_vert_circle_outlined,
+        'nav.security' => selected ? Icons.verified_user_rounded : Icons.verified_user_outlined,
         'nav.log' => selected ? Icons.receipt_long_rounded : Icons.receipt_long_outlined,
         _ => selected ? Icons.settings_rounded : Icons.settings_outlined,
       };

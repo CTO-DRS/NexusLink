@@ -17,7 +17,7 @@ import android.provider.MediaStore
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
@@ -31,11 +31,14 @@ import java.io.File
  *     المشاركة: drainShare (قائمة المشاركة "إرسال عبر NexusLink")
  *     الصور:   queryNewPhotos (مسح DCIM/Pictures الجديدة)
  *     فتح:     openPath / openUrl · إشعارات: cancelNotif · حالة الواجهة: setUiAlive
- *  2) EventChannel "nexuslink/agent/events": حالة القناة + أحداث النقل/النصوص/الصور/المشاركة.
+ *     FA-10:   pbkdf2Hash/Verify · secSnapshot · secWipe · secListFiles ·
+ *              secLockNow/secUnlock · setLockConfig · setLocked · setAutoStart · setSecFeature · lostStop
+ *  2) EventChannel "nexuslink/agent/events": حالة القناة + أحداث النقل/النصوص/الصور/المشاركة/الأمان.
  *
- * يستقبل أيضًا intents المشاركة (ACTION_SEND / SEND_MULTIPLE) وعروض النقل من الإشعارات.
+ * ملاحظة FA-10: يرث FlutterFragmentActivity (لا FlutterActivity) — يتطلبه
+ * local_auth لبيومترك BiometricPrompt (بصمة/وجه).
  */
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
 
     companion object {
         const val METHOD_CH = "nexuslink/agent"
@@ -93,6 +96,8 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         // جدولة مراقب الصور الدوري (WorkManager — البند 6)
         PhotoSyncWorker.schedule(this)
+        // FA-10: الحزام الدوري للخدمة (يُجدول أيضًا في onCreate الخدمة — KEEP idempotent)
+        KeepAliveWorker.schedule(this)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CH).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -213,6 +218,129 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
 
+                // ---------- FA-10: الأمان (قفل/بصمة/تشفير/فقدان/مسح) ----------
+
+                "pbkdf2Hash" -> {
+                    // مطابق pbkdf2Hash في الويب: PBKDF2-SHA256 150k / 256 بت / ملح 16B
+                    try {
+                        val secret = call.argument<String>("secret") ?: ""
+                        val saltB64 = call.argument<String>("saltB64")
+                        val r = SecCrypto.pbkdf2Hash(secret, saltB64)
+                        result.success(mapOf("salt" to r.salt, "hash" to r.hash, "iters" to r.iters))
+                    } catch (e: Exception) {
+                        result.error("pbkdf2_failed", e.message, null)
+                    }
+                }
+
+                "pbkdf2Verify" -> {
+                    try {
+                        val secret = call.argument<String>("secret") ?: ""
+                        val salt = call.argument<String>("salt") ?: ""
+                        val hash = call.argument<String>("hash") ?: ""
+                        result.success(SecCrypto.pbkdf2Verify(secret, salt, hash))
+                    } catch (e: Exception) {
+                        result.error("pbkdf2_failed", e.message, null)
+                    }
+                }
+
+                "secSnapshot" -> {
+                    val snap = AgentForegroundService.liveInstance?.let { svc -> svc.secSnapshot() }
+                    result.success(snap ?: emptyMap<String, Any?>())
+                }
+
+                "secListFiles" -> {
+                    Thread {
+                        val files = SecureWipe.listReceived(this).map {
+                            mapOf("name" to it.name, "size" to it.size)
+                        }
+                        runOnUiThread { result.success(mapOf("files" to files)) }
+                    }.start()
+                }
+
+                "secWipe" -> {
+                    val passes = call.argument<Int>("passes") ?: 3
+                    val svc = AgentForegroundService.liveInstance
+                    if (svc != null) {
+                        svc.secWipe(passes)
+                        result.success(true)
+                    } else {
+                        // لا خدمة حية — نفّذ محليًا (المسح لا يحتاج الشبكة)
+                        SecureWipe.wipe(this, "local", passes) { done, total, file ->
+                            MainActivity.pushDataEvent("wipe", mapOf("event" to "progress", "done" to done, "total" to total, "file" to file, "passes" to passes))
+                        }
+                        MainActivity.pushDataEvent("wipe", mapOf("event" to "done", "ok" to true, "passes" to passes))
+                        result.success(true)
+                    }
+                }
+
+                "secLockNow" -> {
+                    // قفل فوري للتطبيق من زر الواجهة (أو محاكاة أمر الكمبيوتر)
+                    val svc = AgentForegroundService.liveInstance
+                    if (svc != null) svc.secLockOnly("قفل يدوي من الواجهة")
+                    else {
+                        getSharedPreferences(LostMode.PREFS, Context.MODE_PRIVATE)
+                            .edit().putBoolean("locked", true).apply()
+                        MainActivity.pushDataEvent("sec", mapOf("event" to "locked", "reason" to "قفل يدوي"))
+                    }
+                    result.success(true)
+                }
+
+                "secUnlock" -> {
+                    AgentForegroundService.liveInstance?.secUnlockApp()
+                    result.success(true)
+                }
+
+                "setLockConfig" -> {
+                    // تكتبه الواجهة بعد حفظ PIN/البصمة — تقرأها الخدمة في sec:lock-state
+                    try {
+                        getSharedPreferences(SecPrefs.PREFS, Context.MODE_PRIVATE).edit()
+                            .putBoolean(SecPrefs.KEY_HAS_PIN, call.argument<Boolean>("hasPin") ?: false)
+                            .putBoolean(SecPrefs.KEY_HAS_BIO, call.argument<Boolean>("hasBiometric") ?: false)
+                            .putInt(SecPrefs.KEY_AUTO_LOCK, call.argument<Int>("autoLockSec") ?: 60)
+                            .apply()
+                    } catch (_: Exception) {
+                    }
+                    result.success(true)
+                }
+
+                "setLocked" -> {
+                    // حالة قفل الواجهة من Dart (بوابة LockScreen)
+                    try {
+                        getSharedPreferences(LostMode.PREFS, Context.MODE_PRIVATE)
+                            .edit().putBoolean("locked", call.argument<Boolean>("locked") ?: false).apply()
+                    } catch (_: Exception) {
+                    }
+                    result.success(true)
+                }
+
+                "setAutoStart" -> {
+                    try {
+                        getSharedPreferences(AgentServicePrefs.PREFS, Context.MODE_PRIVATE)
+                            .edit().putBoolean(AgentServicePrefs.KEY_AUTOSTART, call.argument<Boolean>("on") ?: true).apply()
+                    } catch (_: Exception) {
+                    }
+                    result.success(true)
+                }
+
+                "setSecFeature" -> {
+                    val feature = call.argument<String>("feature") ?: ""
+                    val enabled = call.argument<Boolean>("enabled") ?: true
+                    val svc = AgentForegroundService.liveInstance
+                    if (svc != null && feature.isNotEmpty()) svc.secSetFeature(feature, enabled)
+                    else if (feature.isNotEmpty()) {
+                        // لا خدمة — اكتب التفضيل محليًا لتقرأه الخدمة لاحقًا
+                        getSharedPreferences(SecPrefs.PREFS, Context.MODE_PRIVATE)
+                            .edit().putBoolean("feat_$feature", enabled).apply()
+                    }
+                    result.success(true)
+                }
+
+                "lostStop" -> {
+                    LostMode.stop(this)
+                    AgentForegroundService.liveInstance?.let { svc -> svc.secEmitLockState() }
+                    result.success(true)
+                }
+
                 // ---------- FA-8: الوسائط والكاميرا والصوت ----------
 
                 "mediaNotify" -> {
@@ -305,11 +433,13 @@ class MainActivity : FlutterActivity() {
                     eventSink = events
                     // مزامنة فورية: الحالة الحالية + عروض النقل المخزنة أثناء غياب الواجهة
                     MainActivity.pushEvent(AgentForegroundService.currentState, AgentForegroundService.currentServerKey, null)
+                    // FA-10: مزامنة وضع الفقدان وقفل التطبيق فور فتح الواجهة
+                    pushDataEvent("lost", mapOf("active" to LostMode.isActive(this@MainActivity), "message" to LostMode.storedMessage(this@MainActivity)))
                     Thread {
                         for (offer in AgentForegroundService.drainOffers()) {
                             try {
                                 val map = HashMap<String, Any?>()
-                                for (k in offer.keys()) map[k] = if (offer.isNull(k)) null else offer.opt(k)
+                                for (k in offer.keys()) map[k as String] = if (offer.isNull(k)) null else offer.opt(k)
                                 pushDataEvent("tx", map)
                             } catch (_: Exception) {
                             }
@@ -378,8 +508,7 @@ class MainActivity : FlutterActivity() {
                 if (uri != null) copyUriToCache(uri)?.let { files.add(it) }
             }
             Intent.ACTION_SEND_MULTIPLE -> {
-                @Suppress("DEPRECATION")
-                @Suppress("UNCHECKED_CAST")
+                @Suppress("DEPRECATION", "UNCHECKED_CAST")
                 val uris = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
                 } else {

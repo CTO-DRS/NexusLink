@@ -4,12 +4,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'state/security_providers.dart' show onboardingDoneProvider;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // easy_localization: العربية افتراضيًا مع RTL كامل من اليوم الأول
   await EasyLocalization.ensureInitialized();
+
+  // FA-10: علم Onboarding قبل أول إطار (تفادي الوميض)
+  final onboardingDone = await readOnboardingDone();
 
   // شريط الحالة بنمط الحواف الكاملة
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -21,7 +25,12 @@ Future<void> main() async {
       fallbackLocale: const Locale('ar'),
       startLocale: const Locale('ar'),
       saveLocale: true,
-      child: const ProviderScope(child: NexusApp()),
+      child: ProviderScope(
+        overrides: [
+          onboardingDoneProvider.overrideWith((ref) => onboardingDone),
+        ],
+        child: const NexusApp(),
+      ),
     ),
   );
 }

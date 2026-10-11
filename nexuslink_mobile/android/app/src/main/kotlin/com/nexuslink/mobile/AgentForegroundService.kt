@@ -48,6 +48,10 @@ class AgentForegroundService : Service() {
         private const val STATE_MS = 30_000L
         private const val WATCHDOG_MS = 15_000L
 
+        /** FA-10: إيقاع الخمول — شاشة مطفأة وواجهة ميتة → نبض خفيف (بطارية < 3%/يوم). */
+        private const val BEACON_IDLE_MS = 60_000L
+        private const val STATE_IDLE_MS = 120_000L
+
         /** حالة القناة الحالية: stopped|connecting|online|offline|reconnecting */
         @Volatile
         var currentState: String = "stopped"
@@ -154,6 +158,9 @@ class AgentForegroundService : Service() {
     private var prodSocket: Socket? = null
     private var mediaSocket: Socket? = null
 
+    /** FA-10: عميل قناة الأمان المشفرة 3009 — يعمل بلا واجهة إطلاقًا. */
+    private var sec: SecChannel? = null
+
     private var host = ""
     private var port = 81
     private var mode = "gateway"
@@ -177,6 +184,8 @@ class AgentForegroundService : Service() {
         liveInstance = this
         loadCtlPrefs()
         registerDisplayListener()
+        // FA-10: الحزام الدوري — يعيد الخدمة إن قتلها النظام رغم START_STICKY
+        KeepAliveWorker.schedule(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -198,16 +207,105 @@ class AgentForegroundService : Service() {
         currentServerKey = "$host:$port"
 
         startForegroundCompat()
+        // FA-10: احفظ الاتصال الأخير للإقلاع التلقائي (BootReceiver يقرأه)
+        try {
+            getSharedPreferences(AgentServicePrefs.PREFS, Context.MODE_PRIVATE).edit()
+                .putString(AgentServicePrefs.KEY_HOST, host)
+                .putInt(AgentServicePrefs.KEY_PORT, port)
+                .putString(AgentServicePrefs.KEY_MODE, mode)
+                .putInt(AgentServicePrefs.KEY_BRIDGE, bridgePort)
+                .putString(AgentServicePrefs.KEY_DEVICE_ID, deviceId)
+                .putString(AgentServicePrefs.KEY_DEVICE_NAME, deviceName)
+                .putString(AgentServicePrefs.KEY_SERVER_KEY, currentServerKey ?: "")
+                .apply()
+        } catch (_: Exception) {
+        }
         val fresh = socket?.connected() != true
         if (fresh) {
             setState("connecting")
             connect()
             connectProd()
             connectMedia()
+            connectSec()
         }
 
         // إعادة البدء إن قتلها النظام
         return START_STICKY
+    }
+
+    // ------------------------------------------------------------------
+    // FA-10 — قناة الأمان المشفرة 3009 (عقد §4.6 + §9)
+    // ------------------------------------------------------------------
+
+    private fun connectSec() {
+        if (deviceId.isEmpty()) return // بلا معرّف موثوق لا قناة أمان
+        if (sec == null) sec = SecChannel(this, deviceId, deviceName)
+        sec?.connect(host, port, mode, AgentBridge.SEC_PORT)
+    }
+
+    /** إشعار نص مشفر وصل والواجهة ميتة (قناة 3009). */
+    fun notifySecClip(text: String) {
+        try {
+            notifyTx(
+                id = 7800 + (text.hashCode() and 0x7fffffff) % 200,
+                title = "نص مشفر من الكمبيوتر",
+                body = text.take(160),
+                offerId = null,
+            )
+        } catch (_: Exception) {
+        }
+    }
+
+    /** الوكيل العام — من LostMode (خيط الموقع). */
+    fun emitLostState(location: JSONObject?) {
+        sec?.emitLostState(location)
+    }
+
+    // ---------- FA-10: وكلاء الواجهة إلى قناة الأمان (MethodChannel) ----------
+
+    fun secSnapshot(): Map<String, Any?> = sec?.snapshot() ?: mapOf(
+        "online" to false, "kexDone" to false, "sasEmoji" to "", "sasHex" to "",
+        "fingerprint" to SecCrypto.fingerprintOf(SecCrypto.loadOrGenerateIdentity(this).pub),
+        "peerId" to "", "peerName" to "", "epoch" to 0,
+        "lost" to LostMode.isActive(this), "lostMessage" to LostMode.storedMessage(this),
+        "suite" to SecCrypto.SUITE,
+    )
+
+    fun secWipe(passes: Int) {
+        sec?.wipe(passes) ?: run {
+            // لا قناة حية — نفّذ محليًا فقط (المسح لا يحتاج الشبكة)
+            Thread {
+                SecureWipe.wipe(this, deviceId.ifEmpty { "local" }, passes) { done, total, file ->
+                    MainActivity.pushDataEvent("wipe", mapOf("event" to "progress", "done" to done, "total" to total, "file" to file, "passes" to passes))
+                }
+                MainActivity.pushDataEvent("wipe", mapOf("event" to "done", "ok" to true, "passes" to passes))
+            }.start()
+        }
+    }
+
+    fun secLockOnly(reason: String) {
+        sec?.lockAppOnly(reason) ?: run {
+            try {
+                getSharedPreferences(LostMode.PREFS, Context.MODE_PRIVATE)
+                    .edit().putBoolean("locked", true).apply()
+            } catch (_: Exception) {
+            }
+            MainActivity.pushDataEvent("sec", mapOf("event" to "locked", "reason" to reason))
+        }
+    }
+
+    fun secUnlockApp() {
+        sec?.unlockApp()
+        LostMode.stop(this)
+    }
+
+    fun secSetFeature(feature: String, enabled: Boolean) {
+        sec?.setFeatureEnabled(feature, enabled)
+        MainActivity.pushDataEvent("sec", mapOf("event" to "feature", "feature" to feature, "enabled" to enabled))
+    }
+
+    fun secEmitLockState() {
+        sec?.emitLockState(null)
     }
 
     // ------------------------------------------------------------------
@@ -640,6 +738,58 @@ class AgentForegroundService : Service() {
         }
     }
 
+    /** إشعار طلب تحكم IMPORTANCE_HIGH بأزرار سماح/رفض — القرار عبر PendingIntent.getService. */
+    private fun notifyCtlRequest(name: String) {
+        try {
+            val allowIntent = PendingIntent.getService(
+                this, CTL_NOTIF_ID,
+                Intent(this, AgentForegroundService::class.java).apply {
+                    putExtra("nexus.action", "ctl-allow")
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            val denyIntent = PendingIntent.getService(
+                this, CTL_NOTIF_ID + 1,
+                Intent(this, AgentForegroundService::class.java).apply {
+                    putExtra("nexus.action", "ctl-deny")
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            val openIntent = PendingIntent.getActivity(
+                this, CTL_NOTIF_ID + 2,
+                Intent(this, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Notification.Builder(this, CTL_CHANNEL_ID)
+            } else {
+                @Suppress("DEPRECATION")
+                Notification.Builder(this)
+            }
+            builder.setContentTitle("طلب تحكم باللمس من «$name»")
+                .setContentText("سيتمكن من اللمس وكتابة النص على هاتفك — اسمح أو ارفض")
+                .setSmallIcon(android.R.drawable.ic_menu_manage)
+                .setContentIntent(openIntent)
+                .setPriority(Notification.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .addAction(0, "سماح", allowIntent)
+                .addAction(0, "رفض", denyIntent)
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .notify(CTL_NOTIF_ID, builder.build())
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun cancelCtlNotification() {
+        try {
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .cancel(CTL_NOTIF_ID)
+        } catch (_: Exception) {
+        }
+    }
+
     private fun acceptControl(from: String, name: String) {
         ctlActive = true
         ctlController = from
@@ -878,6 +1028,42 @@ class AgentForegroundService : Service() {
                 android.util.Log.i(TAG, "dev:light executed (on=$on)")
                 return
             }
+            // ---- FA-10: وضع الفقدان الكامل + المسح الآمن — تنفيذ حقيقي ----
+            AgentBridge.EV_LOST -> {
+                val on = data?.optBoolean("on", false) ?: false
+                if (on) {
+                    val msg = data?.optString("message", "") ?: ""
+                    LostMode.start(this, msg, locate = true)
+                    sec?.emitLockState(null)
+                    socket?.emit(
+                        AgentBridge.EV_DEV_ACKED,
+                        JSONObject().put("text", "وضع الفقدان مفعّل: قفل + رسالة على الشاشة + جمع الموقع — «${msg.take(40)}»"),
+                    )
+                    sec?.audit("lock", "وضع الفقدان مفعّل عبر dev:lost من جسر الحماية", "warn")
+                } else {
+                    LostMode.stop(this)
+                    sec?.emitLockState(null)
+                    socket?.emit(AgentBridge.EV_DEV_ACKED, JSONObject().put("text", "أُلغي وضع الفقدان — الهاتف فُتح"))
+                    sec?.audit("unlock", "أُلغي وضع الفقدان عبر dev:lost-off", "info")
+                }
+                android.util.Log.i(TAG, "dev:lost executed (on=$on)")
+                return
+            }
+            AgentBridge.EV_LOST_OFF -> {
+                LostMode.stop(this)
+                sec?.emitLockState(null)
+                socket?.emit(AgentBridge.EV_DEV_ACKED, JSONObject().put("text", "أُلغي وضع الفقدان — الهاتف فُتح"))
+                sec?.audit("unlock", "أُلغي وضع الفقدان عبر dev:lost-off", "info")
+                android.util.Log.i(TAG, "dev:lost-off executed")
+                return
+            }
+            AgentBridge.EV_WIPE -> {
+                val passes = data?.optInt("passes", 3) ?: 3
+                socket?.emit(AgentBridge.EV_DEV_ACKED, JSONObject().put("text", "بدأ المسح الآمن للملفات المستلمة بـ $passes تمريرات"))
+                sec?.wipe(passes)
+                android.util.Log.i(TAG, "dev:wipe executed (passes=$passes)")
+                return
+            }
         }
         val detail = when {
             data == null -> ""
@@ -911,7 +1097,9 @@ class AgentForegroundService : Service() {
                     }
                 } catch (_: Exception) {
                 }
-                main.postDelayed(this, BEACON_MS)
+                // FA-10: سياسة الخمول — بلا شاشة وبلا واجهة → منارة كل 60ث بدل 5ث
+                val idle = isIdle()
+                main.postDelayed(this, if (idle) BEACON_IDLE_MS else BEACON_MS)
             }
         }
         main.postDelayed(beaconRun!!, BEACON_MS)
@@ -922,10 +1110,24 @@ class AgentForegroundService : Service() {
                     emitDevState()
                 } catch (_: Exception) {
                 }
-                main.postDelayed(this, STATE_MS)
+                // FA-10: تقرير الحالة في الخمول كل 120ث بدل 30ث
+                val idle = isIdle()
+                main.postDelayed(this, if (idle) STATE_IDLE_MS else STATE_MS)
             }
         }
         main.postDelayed(stateRun!!, STATE_MS)
+    }
+
+    /** خمول = الشاشة مطفأة والواجهة ميتة (لا رنين، لا جلسة تحكم، لا بث). */
+    private fun isIdle(): Boolean {
+        if (FindMyPhone.isRinging() || ctlActive) return false
+        return try {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val quiet = !pm.isInteractive
+            quiet && !uiAlive
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /** تقرير الحالة الدوري + بعد جلسة التحكم والإتاحة (البند 6 — مؤشر الحالة). */
@@ -980,6 +1182,8 @@ class AgentForegroundService : Service() {
                     if (p != null && !p.connected()) p.connect()
                     val m = mediaSocket
                     if (m != null && !m.connected()) m.connect()
+                    // FA-10: قناة الأمان تدخل نفس الحارس
+                    sec?.ensureAlive()
                 } catch (_: Exception) {
                 }
                 main.postDelayed(this, WATCHDOG_MS)
@@ -1123,11 +1327,13 @@ class AgentForegroundService : Service() {
             prodSocket?.disconnect()
             mediaSocket?.off()
             mediaSocket?.disconnect()
+            sec?.shutdown() // FA-10
         } catch (_: Exception) {
         }
         socket = null
         prodSocket = null
         mediaSocket = null
+        sec = null
         setState("stopped")
         super.onDestroy()
     }
@@ -1139,12 +1345,15 @@ class AgentForegroundService : Service() {
 object AgentBridge {
     const val GUARD_PORT = 3006
     const val PROD_PORT = 3007
+    const val SEC_PORT = 3009
 
     const val EV_HELLO_PHONE = "guard:hello-phone"
     const val EV_BEACON = "prox:beacon"
     const val EV_DEV_STATE = "dev:state"
     const val EV_DEV_ACKED = "dev:acked"
     const val EV_LOST = "dev:lost"
+    const val EV_LOST_OFF = "dev:lost-off"
+    const val EV_WIPE = "dev:wipe"
     const val EV_RING = "dev:ring"
     const val EV_RING_STOP = "dev:ring-stop"
     const val EV_LIGHT = "dev:light"

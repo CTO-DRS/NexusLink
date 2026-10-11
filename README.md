@@ -1,0 +1,159 @@
+# NexusLink — منصة ربط الأجهزة عبر الشبكة المحلية
+
+منصة واحدة تربط هاتفك بجهاز الكمبيوتر — كل شيء محلي على شبكتك، بلا سحابة وبلا حسابات.
+هذا الملف يشرح التشغيل الكامل: **السيرفر ← الهاتف ← الاختبار المشترك**، مع خريطة المنافذ
+ونقاط التحقق السريعة لكل طبقة (FA-2 … FA-10).
+
+---
+
+## 1) المتطلبات
+
+| الأداة | الإصدار | الغرض |
+|--------|---------|-------|
+| Bun | 1.1+ | تشغيل السيرفر والويب |
+| Flutter SDK | 3.24.x (Dart 3.5) | تطبيق الهاتف |
+| Java JDK | 17 | بناء APK (يحتاج `jlink` — JDK كامل وليس JRE) |
+| Android SDK | platform 34 + build-tools 34 | بناء APK |
+| Caddy | أي حديث | بوابة 81 الموحّدة (اختياري للتطوير، ضروري للنمط الواقعي) |
+
+---
+
+## 2) السيرفر (الكمبيوتر)
+
+```bash
+bun install                 # تبعيات الوِب والسيرفر
+bun run db:generate         # عميل Prisma (بعد أي bun install جديد)
+bun run db:push             # إنشاء/تحديث قاعدة البيانات
+bun run dev                 # next dev على 3000 + كل الجسور داخل نفس العملية
+```
+
+- الواجهة: `http://localhost:3000`
+- الجسور تُقلَع تلقائيًا داخل عملية Next: `ensureSecurityBridge()` وأخواتها.
+- تفعيل قناة الأمان صراحة (idempotent): `curl -X POST http://localhost:3000/api/security/boot`
+- **البوابة 81 (نمط الإنتاج)**: `caddy run --config Caddyfile` — كل قنوات socket.io
+  تعبر `:81` عبر `?XTransformPort=<port>` كما يفعل تطبيق الهاتف.
+
+### خريطة المنافذ
+
+| المنفذ | القناة | الغرض |
+|--------|--------|-------|
+| 81 | caddy | بوابة موحّدة (XTransformPort) |
+| 3000 | Next | REST `/api/*` + الواجهة |
+| 3003 | comms | الإشعارات/SMS/المكالمات (مرآة الهاتف) |
+| 3004 | remote | التحكم بالكمبيوتر (لمس/كيبورد/وسائط/طاقة/WOL) |
+| 3005 | media | الكاميرا/الميكروفون/المراقبة (WebRTC) |
+| 3006 | guard | حضور الوكيل + أوامر الجهاز + عرض النقل (tx:*) |
+| 3007 | prod | الحافظة الموحدة + تسليم الروابط |
+| 3009 | security | **القناة المشفرة E2E** — ترحيل أعمى لإطارات AES-GCM |
+
+> المرجع الكامل للبروتوكول: `docs/protocol-contract.md` — المصدر الوحيد للحقيقة.
+
+---
+
+## 3) الهاتف (Flutter)
+
+```bash
+cd nexuslink_mobile
+flutter pub get
+flutter run                 # تشغيل تطويري
+```
+
+### بناء APK موقّع (إصدار)
+
+```bash
+# مرة واحدة: أنشئ مفتاحك (أو استخدم nexuslink-release.jks الموجود محليًا)
+keytool -genkeypair -v -keystore android/app/nexuslink-release.jks \
+  -alias nexuslink -keyalg RSA -keysize 2048 -validity 10000
+
+# android/key.properties (مُتجاهَل git):
+# storeFile=nexuslink-release.jks
+# storePassword=...
+# keyAlias=nexuslink
+# keyPassword=...
+
+flutter build apk --release            # APK موقّع
+flutter build appbundle --release      # حزمة Play
+```
+
+الناتج: `build/app/outputs/flutter-apk/app-release.apk` — تحقّق التوقيع:
+
+```bash
+$ANDROID_HOME/build-tools/34.0.0/apksigner verify --print-certs app-release.apk
+```
+
+CI يبني تلقائيًا في `.github/workflows/release.yml` (وظيفة android) — التوقيع من
+`secrets.ANDROID_KEYSTORE_BASE64` + `ANDROID_KEYSTORE_PASSWORD` + `ANDROID_KEY_ALIAS` + `ANDROID_KEY_PASSWORD`.
+
+### متطلبات أندرويد الحساسة
+
+- **الإقلاع التلقائي**: مفعّل افتراضيًا (BootReceiver + KeepAliveWorker) — يُقرأ آخر اتصال محفوظ.
+- **البطارية**: من تبويب «الأمان» اطلب «تجاهل تحسين البطارية» ليبقى الوكيل حيًا 24 ساعة.
+- **وضع الفقدان**: صلاحية الموقع + «الرسم فوق التطبيقات» ترفعان موثوقية الشاشة فوق القفل.
+
+---
+
+## 4) الاقتران (الاختبار المشترك الأول)
+
+1. شغّل السيرفر + البوابة: `bun run dev` ثم `caddy run --config Caddyfile`.
+2. افتح `http://<IP-الكمبيوتر>:3000` على المتصفح — تبويب **الاتصال** يعرض QR.
+3. على الهاتف: تبويب **الاتصال** ← امسح QR (أو إدخال يدوي: host + منفذ 81).
+4. انتظر راية «متصل» — الخدمة الخلفية تبقى حية حتى مع إغلاق التطبيق.
+
+**اختبار النجاح الشامل (FA-9/FA-10):**
+`تحرّك مؤشر الكمبيوتر بهاتفك + تنسخ نصًا من الهاتف → Ctrl+V على الكمبيوتر`
+ثم من نسخة الويب: تبويب **الأمان ← التشفير** ← «قفل الهاتف» و«مسح الملفات المستلمة»
+— يجب أن يُقفل الهاتف برسالة ملء الشاشة ويردّ بالموقع، ويحرق ملفات `Download/NexusLink`.
+
+---
+
+## 5) اختبارات E2E الآلية (كلها ضد السيرفر الحي)
+
+```bash
+bash scripts/run-media-e2e.sh   # FA-8: كاميرا/صوت/مستشعرات/أين هاتفي — 21/21
+bash scripts/run-ctl-e2e.sh     # FA-7: حقن اللمس — 20/20
+node  scripts/agent-rc-e2e.mjs  # FA-9: تحكم الهاتف بالكمبيوتر — 23/23
+node  scripts/agent-tx-e2e.mjs  # FA-3: نقل الملفات + استئناف — 27/27
+node  scripts/agent-sec-e2e.mjs # FA-10: الأمان E2E — 26/26 (مصافحة/SAS/إطارات/قفل/مسح/حظر/تسريب)
+```
+
+> عدّاءات `run-*.sh` تُقلع السيرفر وتفحص وتنظف داخل استدعاء واحد (البيئة تجني الخلفيات).
+> عدّاءات `agent-*.mjs` تتطلب سيرفرًا حيًا + `/api/security/boot`.
+
+---
+
+## 6) طبقة الأمان (FA-10) — ما الذي يحميك فعلًا؟
+
+- **E2E حقيقي**: X25519 + HKDF-SHA256 + AES-256-GCM — السيرفر مرحّل أعمى لا يفك أي إطار
+  (يُثبت بفحص التسريب في WireTap داخل E2E).
+- **بوابة الثقة**: جهاز غير موثوق → `sec:pending-trust` بلا مفاتيح إطلاقًا؛ المحظور → رفض + قطع.
+  الموثوقون فقط يدخلون المصافحة (حتى `kex:update` من غير الموثوق مرفوض — حصانة اختطاف الإقران).
+- **SAS**: بصمة إيموجي+hex متطابقة على الطرفين للتحقق البصري من غياب رجل في المنتصف.
+- **تدوير العصور**: مفاتيح رجيعية جديدة كل 3 دقائق (ويب) مع حماية إعادة per-epoch.
+- **قفل التطبيق**: PIN بـ PBKDF2-SHA256 (150k) + بصمة/وجه + قفل تلقائي عند الخلفية.
+- **وضع الفقدان**: أمر من الويب → قفل + رسالة ملء الشاشة فوق القفل + إحداثيات عبر القناة المشفرة.
+- **الحذف الآمن**: كتابة فوق ملفات `Download/NexusLink` (3/7 تمريرات) ثم حذف من MediaStore.
+
+### حدود صادقة (مثبتة بروتوكوليًا vs فيزيائيًا)
+
+- الـ E2E يثبت مسار البروتوكول والتشفير كاملًا ضد الجسور الحية؛ **التنفيذ الفيزيائي**
+  (بصمة حقيقية، GPS، كاميرا، رن) يتطلب هاتفًا فعليًا — قيد موثق في العقد §9.
+- «24 ساعة اتصال + بطارية < 3%/يوم في الخمول»: مصمَّمة بسياسة الخمول (منارة 60ث/حالة 120ث
+  بلا WakeLock) + KeepAliveWorker — القياس الميداني يحتاج جهازًا فعليًا ليلًا كاملة.
+
+---
+
+## 7) بنية المستودع
+
+```
+├── src/                    # سيرفر Next + واجهة الويب (الجسور في src/lib/nexus/)
+├── nexuslink_mobile/       # تطبيق Flutter (lib/) + Kotlin (android/.../mobile/)
+│   └── android/app/src/main/kotlin/com/nexuslink/mobile/
+│       ├── AgentForegroundService.kt   # 4 سوكِتات دائمة (3006/3007/3005/3009) + إعادة اتصال
+│       ├── SecChannel.kt / SecCrypto.kt# عميل 3009 + محرك libsodium (X25519/AES-GCM/SAS)
+│       ├── LostMode.kt / SecureWipe.kt # وضع الفقدان + الحذف الآمن
+│       ├── BootReceiver.kt / KeepAliveWorker.kt
+│       └── NexusWidgets.kt / NexusAccessibilityService.kt / FindMyPhone.kt
+├── docs/protocol-contract.md  # عقد البروتوكول — المصدر الوحيد للحقيقة
+├── scripts/                   # عدّاءات E2E + أدوات
+└── .github/workflows/release.yml  # CI: لينت + سطح مكتب + أندرويد + iOS
+```

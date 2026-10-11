@@ -12,6 +12,13 @@ if (localPropertiesFile.exists()) {
     }
 }
 
+// ---------- FA-10: توقيع الإصدار (key.properties + keystore محلي/CI) ----------
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
 def flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "1"
 def flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0.0"
 
@@ -36,10 +43,21 @@ android {
         versionName = flutterVersionName
     }
 
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias keystoreProperties["keyAlias"]
+                keyPassword keystoreProperties["keyPassword"]
+                storeFile file(keystoreProperties["storeFile"])
+                storePassword keystoreProperties["storePassword"]
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // توقيع التطوير حتى تجاه الجري السريع — استبدل بمفاتيحك للنشر
-            signingConfig = signingConfigs.debug
+            // FA-10: توقيع الإصدار الحقيقي عند وجود key.properties — وإلا توقيع التطوير للجري السريع
+            signingConfig = keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
             minifyEnabled = false
             shrinkResources = false
         }
@@ -58,4 +76,7 @@ dependencies {
     implementation "androidx.work:work-runtime-ktx:2.9.1"
     // FileProvider + أدوات core (لفتح الملفات المستلمة)
     implementation "androidx.core:core-ktx:1.13.1"
+    // FA-10: libsodium عبر lazysodium — X25519 + AES-256-GCM للقناة المشفرة 3009
+    implementation "com.goterl:lazysodium-android:5.1.0@aar"
+    implementation "net.java.dev.jna:jna:5.2.0@aar"
 }

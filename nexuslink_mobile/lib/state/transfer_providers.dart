@@ -18,6 +18,7 @@ import 'control_providers.dart';
 import 'controller_providers.dart';
 import 'media_providers.dart';
 import 'providers.dart' show ConnectPhase, activityLogProvider, agentChannelProvider, connectionProvider, nexusDbProvider;
+import 'security_providers.dart' show lostProvider, secStateProvider, wipeProvider;
 
 // ---------------------------------------------------------------------------
 // إعدادات النقل (تُحفظ محليًا)
@@ -235,6 +236,21 @@ class SignalingController extends Notifier<AgentSignaling?> {
         // FA-9 — ودجت الإرسال السريع: حافظة الهاتف → الكمبيوتر فورًا
         unawaited(ref.read(controllerControllerProvider.notifier).pushClipboard());
         ref.read(activityLogProvider.notifier).add('إرسال سريع من الودجت: تُرفع حافظة الهاتف إلى الكمبيوتر', kind: 'ok');
+      } else if (kind == 'sec' && detail != null) {
+        // FA-10 — حالة قناة الأمان 3009 (online/kex/sas/قفل)
+        ref.read(secStateProvider.notifier).ingest(detail);
+      } else if (kind == 'lost' && detail != null) {
+        // FA-10 — وضع الفقدان الحي من LostMode
+        ref.read(lostProvider.notifier).ingest(detail);
+      } else if (kind == 'wipe' && detail != null) {
+        // FA-10 — تقدم/نتيجة المسح الآمن
+        ref.read(wipeProvider.notifier).ingest(detail);
+      } else if (kind == 'secclip') {
+        // FA-10 — نص مشفر وصل عبر 3009 (لا يتم حفظه في الحافظة إلا بقرار المستخدم)
+        final text = '${detail?['text'] ?? ''}';
+        if (text.isNotEmpty) {
+          ref.read(activityLogProvider.notifier).add('وصل نص مشفر عبر القناة الآمنة (${text.length} حرفًا)', kind: 'ok');
+        }
       }
     });
 
