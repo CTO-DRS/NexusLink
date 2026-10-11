@@ -377,3 +377,22 @@ Stage Summary:
 - apps/desktop مكتمل: نافذة تحمّل الواجهة كما هي (نفس الثيم/Dock عبر :3000)، سيرفر مضمّن مُدار بالكامل، Tray بحالة حية، close-to-tray، single-instance، شاشة انتظار جاهزية، اكتشاف mDNS تلقائي للهاتف بلا متصفح.
 - اختبار النجاح التعاقدي: E2E يثبت السلسلة كاملة عدا التثبيت الفيزيائي (يغطيها CI الآن) — «تثبيت → يفتح → سيرفر داخله → هاتف يكتشف ويتصل → إغلاق يبقي كل شيء حيًا» = close-to-tray يخفي دون قتل + مراقبة حية.
 - بند فيزيائي وحيد: تجربة mDNS فعليًا على شبكة LAN حقيقية مع هاتف (multicast مؤكد داخل الحاوية لكن شعاع الشبكة الحقيقي يتطلب جهازًا) — موثق بصدق كالسابق.
+
+---
+Task ID: FA-desktop-ci
+Agent: main (Super Z)
+Task: إيصال بناء CI لحزم سطح المكتب الحقيقية (win/linux/mac) حتى الأخضر الكامل
+
+Work Log:
+- 7 جولات CI حقيقية، كل جولة كشفت طبقة أدق:
+  (1) Prisma client غير مولّد على CI — bun يحجب postinstall افتراضيًا (أول بناء Next حقيقي على CI في تاريخ المستودع) → bunx prisma generate قبل next build.
+  (2) tauri resources glob «resources/*» لا يطابق المجلدات (تحقق build.rs) → سرد المجلدات الثلاثة صراحة (نسخ تعاودي).
+  (3) أخطاء Rust أربعة ميكانيكية: Arc deref، أسبقية إسناد حقل عبر MutexGuard، is_checked() يرجع Result في نسخة tauri الحالية، ? على () — كلها أُصلحت.
+  (4) E0597 «ui does not live long enough» — الحارس المؤقت داخل if-let يمتد عبر الجسم (سلوك edition 2021) → جملة مفردة: guard يموت عند الفاصلة المنقوطة.
+  (5) linuxdeploy AppImage يفشل بصمت على المُشغّل حتى مع APPIMAGE_EXTRACT_AND_RUN=1 → قرار: Linux يسلّم .deb (تغليف نقي بلا أدوات AppImage) — AppImage موثق كمتلبات لاحقة بجلسة تشخيص --verbose.
+- **النتيجة النهائية: 3/3 منصات خضراء** — dmg (ماك، 277MB أصل) + nsis exe (ويندوز 194MB) + deb (لينكس 269MB) — كل حزمة تتضمن: ثنائي Tauri + sidecar Node v20.18.1 + Next standalone كامل + comms.cjs + gateway.cjs.
+- الدروس الموثقة: (أ) bun blocks dependency postinstall — أي مشروع Next+Prisma على bun CI يحتاج generate صريحًا (ب) tauri resources: مسارات مجلدات صريحة لا globs (ج) في tauri 2 الحالي: CheckMenuItem::is_checked → Result، والحارس المؤقت في if-let يطيل عمر الاستعارة (د) linuxdeploy على runners: لا تعبث — سلّم deb.
+
+Stage Summary:
+- سلسلة البناء كاملة: git push → next build → prisma generate → resources → node sidecar → rust (مخبأ) → حزم 3 منصات → artifacts.
+- اختبار النجاح التعاقدي مكمل بنيويًا حتى مرحلة التثبيت الفيزيائي: التثبيت ← فتح ← سيرفر داخلي ← هاتف يكتشف عبر mDNS ← إغلاق النافذة يبقي كل شيء حيًا (close-to-tray) — الأخيران مغطيان بـ E2E 18/18 + منطق procman، والتثبيت الفعلي على أجهزة حقيقية هو المتبقي الميداني.
