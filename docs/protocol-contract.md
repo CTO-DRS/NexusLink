@@ -278,6 +278,29 @@ interface TransferJob {
 
 ---
 
+## 4.9 جسر 3004 — الهاتف طرف متحكم حقيقي (FA-9 — وكيل Flutter يتحكم بالكمبيوتر، 2026-10-11)
+
+**الأساس**: قسم 4.2 قائم بالكامل على الجسر (rc:* مع بوابة الطاقة gateInput، rc:wol بحزمة سحرية، desktop:clipboard). FA-9 يربط **وكيل Flutter الحقيقي** بدور المتحكم ويضيف امتدادين توافقيين خلفيًا فقط:
+
+**امتدادات FA-9 (الجسر يمررها كما هي — لا كسر للعملاء الحاليين):**
+- `rc:move {dx, dy, source?, drag?: boolean}` — حقل `drag:true` اختياري يعلن وضع السحب (نقر مطول على لوحة اللمس الهاتفية)؛ العرض الويبي يظهر أثر سحب عليه دون تغيير سلوك المؤشر. الحقل غير الموجود = السلوك القائم تمامًا.
+- `rc:handoff {url, title?}` — «أكمل من حيث توقفت»: من الهاتف إلى الكمبيوتر. تحقق الجسر: URL صالح بنظام http/https فقط وطول ≤ 2048، وإلا `rc:rejected {reason: "url"|"scheme"|"toolong", ev:"rc:handoff"}`. عند القبول: بث `rc:handoff {url, title? (≤120 حرفًا), at}` + سجل. الكمبيوتر يعرضه في شريط التسليم (HandoffBar) وزر «افتح هنا» يفتحه ثم يزيله.
+
+**سلوك وكيل Flutter (المتحكم):**
+- يسجل `rc:hello-controller {name}` عند اتصال سوكِت 3004 ويستقبل `rc:hello {desktop:{name,mac,power}}` لعرض اسم الكمبيوتر وMAC لـ WOL.
+- لوحة اللمس: `onScaleUpdate` إصبع واحد → `rc:move {dx,dy}` (نسبية/430×سرعة) · إصبعان عمودي أو سحب من الحواف (±15%) → `rc:scroll {dy}` · تفرق الإصبعين → `rc:pinch {scale}` · tap → `rc:click {button:"left"}` · doubleTap → `{type:"double"}` · زر أيمن → `{button:"right"}` · نقر مطول → وضع سحب ثم `rc:move {..., drag:true}`.
+- كيبورد: كل حرف من TextField (عربي/إنجليزي حسب لوحة النظام) → `rc:key {ch}` · صف خاص → `{special: "enter"|"backspace"|"up"|"down"|"left"|"right"|"esc"|"tab"|"space"}`.
+- ماوس هوائي: زر تفعيل (مفتاح + عتبة حركة) ثم تكامل الجيروسكوب (gyroEventStream 50ms، تنعيم أُسّي، قتلة ما تحت العتبة) → `rc:move {dx,dy,source:"airmouse"}`.
+- وسائط/طاقة: `rc:media {action,...}` مباشرة · أوامر الطاقة بحوار تأكيد → `rc:power {action}` · WOL → `rc:wol {mac}` (الافتراضي MAC من rc:hello).
+- الحافظة الموحدة: استقصاء `Clipboard.getData` كل 1.5 ثانية أثناء فتح الشاشة (بدون خدمات خلفية — قيد Android 10+) → تغيّر + وضع تلقائي مفعّل → `rc:clipboard {direction:"toPc", text}`؛ زر يدوي دائمًا متاح · استقبال `desktop:clipboard {text}` → عرض + زر نسخ محلي · طلب حافظة الكمبيوتر → `{direction:"pull"}` فيرد الكمبيوتر بـ `desktop:clipboard`.
+- تسليم: زر مشاركة نظام (ACTION_SEND نص/رابط) يصل عبر `drainShare` القائم + إدخال يدوي داخل الشاشة → `rc:handoff {url, title}`.
+- الودجات: ودجت اتصال (تقرأ حالة من SharedPrefs تكتبها خدمة الوكيل الدائمة عند تغيّرها) + ودجت إرسال سريع (يفتح التطبيق على شاشة الحافظة/التسليم) — AppWidgetProvider بلا سوكت مستقل.
+- بوابة الطاقة تبقى سارية: الكمبيوتر off/hibernating يرفض كل الإدخال (`rc:rejected`).
+
+**تحقق E2E (scripts/agent-rc-e2e.mjs):** سيناريو اختبار النجاح (rc:move يصل عميل الويب ثم rc:clipboard toPc) + قائمة فحص الطاقة/WOL/handoff + عربي UTF-8 — النتيجة أسفل worklog.
+
+---
+
 ## 5. عقد التشفير E2E (من `src/lib/nexus/e2e-crypto.ts` — مطابق للـ Dart)
 
 | العنصر | القيمة الدقيقة |

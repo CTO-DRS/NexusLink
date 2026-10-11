@@ -174,6 +174,30 @@ export function ensureRemoteBridge() {
         io2.emit("rc:log", { id: uid(), text: `حزمة Wake-on-LAN السحرية أُرسلت إلى ${norm} — 6×FF + MAC×16 = ${hex.length / 2} بايت`, kind: "in", at: Date.now() })
         io2.emit("desktop:wake", { source: "wol", mac: norm, packet: hex })
       })
+
+      // ==== FA-9: "أكمل من حيث توقفت" — رابط من الهاتف يُفتح على الكمبيوتر ====
+      socket.on("rc:handoff", (data: { url?: string; title?: string }) => {
+        const raw = String(data?.url ?? "").trim()
+        let parsed: URL
+        try {
+          parsed = new URL(raw)
+        } catch {
+          socket.emit("rc:rejected", { reason: "url", ev: "rc:handoff" })
+          return
+        }
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+          socket.emit("rc:rejected", { reason: "scheme", ev: "rc:handoff" })
+          io2.emit("rc:log", { id: uid(), text: `تسليم رابط مرفوض: البروتوكول ${parsed.protocol} غير مسموح (http/https فقط)`, kind: "info", at: Date.now() })
+          return
+        }
+        if (raw.length > 2048) {
+          socket.emit("rc:rejected", { reason: "toolong", ev: "rc:handoff" })
+          return
+        }
+        const out = { url: raw, title: String(data?.title ?? "").slice(0, 120) || undefined, at: Date.now() }
+        io2.emit("rc:handoff", out)
+        io2.emit("rc:log", { id: uid(), text: `تسليم من الهاتف: «${out.title ?? raw.slice(0, 60)}» بانتظار الفتح على الكمبيوتر`, kind: "in", at: Date.now() })
+      })
     })
 
     httpServer.on("error", () => {

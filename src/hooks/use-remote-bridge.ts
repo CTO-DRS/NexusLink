@@ -26,8 +26,10 @@ export function useRemoteBridge() {
     })
 
     // ==== أحداث الإدخال من الهاتف ====
-    socket.on("rc:move", (d: { dx: number; dy: number; source?: string }) => {
+    socket.on("rc:move", (d: { dx: number; dy: number; source?: string; drag?: boolean }) => {
       st().applyMove(d.dx ?? 0, d.dy ?? 0, (d.source as "touchpad") ?? "touchpad")
+      if (d.drag) useRcMirror.getState().setDragActive(true)
+      else if (useRcMirror.getState().dragActive) useRcMirror.getState().setDragActive(false)
     })
     socket.on("rc:click", (d: { button: "left" | "right"; type?: "tap" | "double" }) => {
       st().applyClick(d.button ?? "left", d.type ?? "tap")
@@ -50,6 +52,11 @@ export function useRemoteBridge() {
       else pushDesktopClipboard(useDesktop.getState().clipboard?.text ?? "")
     })
     socket.on("desktop:wake", (d: { source: string }) => st().applyWake(d.source))
+
+    // ==== FA-9: تسليم رابط "أكمل من حيث توقفت" ====
+    socket.on("rc:handoff", (d: { url?: string; title?: string }) => {
+      st().pushHandoff(d.url ?? "", d.title)
+    })
 
     // ==== سجل + هاتف متصل ====
     socket.on("rc:log", (e: { id: string; text: string; kind: "in" | "ok" | "info"; at: number }) => {

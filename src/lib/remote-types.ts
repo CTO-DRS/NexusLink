@@ -3,6 +3,14 @@ export type RcSource =
   | "touchpad" | "airmouse" | "keyboard" | "gamepad"
   | "presenter" | "media" | "system" | "clipboard"
 
+/** FA-9: حركة المؤشر مع وضع السحب (نقر مطول) */
+export interface RcMovePayload {
+  dx: number
+  dy: number
+  source?: RcSource
+  drag?: boolean
+}
+
 export type PowerState =
   | "on" | "shutting-down" | "off" | "booting"
   | "sleeping" | "hibernating" | "locked"
@@ -54,6 +62,12 @@ export interface RcPowerPayload {
 export interface RcClipboardPayload {
   direction: "toPc" | "pull"
   text?: string
+}
+
+/** FA-9: "أكمل من حيث توقفت" — رابط مشترك من الهاتف يُفتح على الكمبيوتر */
+export interface RcHandoffPayload {
+  url: string
+  title?: string
 }
 
 /** تقرير حالة الكمبيوتر يُبَث للهواتف */

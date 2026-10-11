@@ -996,6 +996,8 @@ class AgentForegroundService : Service() {
         currentState = s
         MainActivity.pushEvent(s, currentServerKey, null)
         updateNotification(s)
+        // FA-9: تحديث ودجت حالة الاتصال على الشاشة الرئيسية
+        try { NexusWidgets.updateConnectionWidget(this, s) } catch (_: Exception) {}
     }
 
     private fun createNotificationChannel() {
