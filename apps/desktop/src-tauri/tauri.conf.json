@@ -32,7 +32,11 @@
     "category": "Utility",
     "shortDescription": "NexusLink — device bridge",
     "longDescription": "NexusLink: جسر الأجهزة — الهاتف وسطح المكتب في منصة واحدة. يضم سيرفر Nexus كاملاً داخل التطبيق (واجهة + جسور + بوابة + mDNS).",
-    "targets": ["appimage", "deb", "nsis", "dmg"],
+    "targets": [
+      "deb",
+      "nsis",
+      "dmg"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
