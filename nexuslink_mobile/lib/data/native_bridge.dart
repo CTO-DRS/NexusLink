@@ -193,6 +193,28 @@ class NativeBridge {
     );
   }
 
+  // ------------------------------------------------------------------
+  // FA-8 — الوسائط: إشعار البث + WakeLock مراقبة الأطفال + لقطة الحالة
+  // ------------------------------------------------------------------
+
+  /// إشعار «بث نشط» أثناء أي جلسة كاميرا/ميكروفون (البند 1) — يديره Dart.
+  Future<void> mediaNotify({required bool show, String title = '', String body = ''}) async {
+    await _guard<dynamic>(
+      () => _ch.invokeMethod('mediaNotify', {'show': show, 'title': title, 'body': body}),
+      null,
+    );
+  }
+
+  /// WakeLock جزئي طوال مراقبة الأطفال — يبقي البث حيًا والشاشة مطفأة (البند 4).
+  Future<void> babyWake(bool on) async {
+    await _guard<dynamic>(() => _ch.invokeMethod('babyWake', {'on': on}), null);
+  }
+
+  /// لقطة جلسات الوسائط — تُبث فورًا في dev:state.media للويب.
+  Future<void> setMediaState(Map<String, Object?> state) async {
+    await _guard<dynamic>(() => _ch.invokeMethod('setMediaState', {'state': state}), null);
+  }
+
   /// فك JSON من تفاصيل حدث (أداة مساعدة).
   static Map<String, dynamic>? decodeDetail(Object? raw) {
     try {

@@ -50,6 +50,7 @@ function AlertIcon({ kind }: { kind: string }) {
 
 export function MediaView() {
   const { tab, setTab, bridgeOnline, phoneOnline, latency, checks, alerts, logs } = useMedia()
+  const sensors = useMedia((s) => s.sensors)
   const [qrOpen, setQrOpen] = useState(false)
   const [qrUrl, setQrUrl] = useState("")
   const [qrData, setQrData] = useState("")
@@ -167,6 +168,40 @@ export function MediaView() {
             {allDone && (
               <p className="mt-3 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold px-3 py-2 text-center">
                 المرحلة السابعة مكتملة — كاميرا هاتفك الآن كويب كام للكمبيوتر ✓
+              </p>
+            )}
+          </div>
+
+          {/* FA-8: قراءة المستشعرات الحية من الهاتف */}
+          <div className="rounded-xl border bg-card p-4">
+            <h3 className="text-[13px] font-bold flex items-center gap-1.5 mb-2">
+              <Footprints className="w-4 h-4 text-primary" /> أجهزة الاستشعار للويب
+              {sensors && (
+                <Badge className="rounded-full bg-emerald-500 hover:bg-emerald-500 text-white text-[9px] ms-auto animate-pulse">بث 20Hz</Badge>
+              )}
+            </h3>
+            {sensors ? (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg border bg-muted/40 p-2">
+                  <p className="text-[9px] text-muted-foreground mb-1">التسارع m/s²</p>
+                  {sensors.a.length === 3 ? (
+                    sensors.a.map((v, i) => (
+                      <p key={i} className="text-[10px] tabular-nums leading-snug">{["x", "y", "z"][i]}: {v.toFixed(2)}</p>
+                    ))
+                  ) : <p className="text-[10px] text-muted-foreground">—</p>}
+                </div>
+                <div className="rounded-lg border bg-muted/40 p-2">
+                  <p className="text-[9px] text-muted-foreground mb-1">الجيروسكوب rad/s</p>
+                  {sensors.g.length === 3 ? (
+                    sensors.g.map((v, i) => (
+                      <p key={i} className="text-[10px] tabular-nums leading-snug">{["x", "y", "z"][i]}: {v.toFixed(2)}</p>
+                    ))
+                  ) : <p className="text-[10px] text-muted-foreground">—</p>}
+                </div>
+              </div>
+            ) : (
+              <p className="text-[10.5px] text-muted-foreground">
+                فعّل «المستشعرات» في تطبيق الهاتف (تبويب الوسائط) — يبث الجيروسكوب/التسارع عبر WebSocket لاستخدامه كجيمباد لاحقاً.
               </p>
             )}
           </div>

@@ -14,6 +14,7 @@ import { useMedia } from "@/lib/media-store"
 import { AudioMeter, getMicSource, getSynthLevel } from "@/lib/media-engine"
 import { babyAlert } from "@/lib/media-socket"
 import { PhoneFrame, PcWindow, LiveBadge, LevelBar, NoStream } from "./media-bits"
+import { RealPhoneAudio } from "./real-phone-audio"
 import { cn } from "@/lib/utils"
 
 export function BabyTab() {
@@ -105,6 +106,9 @@ export function BabyTab() {
           </Badge>
         )}
       </div>
+
+      {/* FA-8: بث حقيقي من الهاتف (غرفة الطفل) */}
+      <RealPhoneAudio kind="baby" />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_auto_1fr] items-start">
         {/* هاتف غرفة الطفل (المرسل) */}

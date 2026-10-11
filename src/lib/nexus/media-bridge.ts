@@ -11,6 +11,43 @@ const PORT = 3005
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
 
+// ---------------------------------------------------------------------------
+// FA-8 — طبقة الكاميرا والصوت (وكيل الجهاز الحقيقي)
+//  · cam:cmd: طلب من الكمبيوتر للهاتف (بدء/إيقاف بث، تبديل، فلاش، مراقبة)
+//  · sensor:stream: بث الجيروسكوب/التسارع من الهاتف (للويب كجيمباد لاحقًا)
+//  · cam:shutter: تمرير حقلي flash/camera الإضافيين (مؤقت + فلاش + الكاميرا)
+// ---------------------------------------------------------------------------
+
+/** أوامر الوسائط المسموح توجيهها للهاتف (قائمة بيضاء). */
+const CAM_CMDS = new Set([
+  "cam-start", "cam-stop", "switch", "torch", "mic-start", "mic-stop",
+  "baby-start", "baby-stop", "watch-start", "watch-stop",
+])
+
+/** محدد معدل بث المستشعرات — 40 رسالة/ثانية لكل مقبس (20Hz × هامش أمان). */
+const sensorBudget = new Map<string, { n: number; win: number }>()
+function sensorAllowed(key: string): boolean {
+  const now = Date.now()
+  const b = sensorBudget.get(key)
+  if (!b || now - b.win >= 1000) {
+    sensorBudget.set(key, { n: 1, win: now })
+    if (sensorBudget.size > 64) {
+      for (const [k, v] of sensorBudget) if (now - v.win >= 5000) sensorBudget.delete(k)
+    }
+    return true
+  }
+  b.n++
+  return b.n <= 40
+}
+
+/** تنقية قيم المستشعر إلى مصفوفة [x,y,z] أرقام محدودة. */
+function sensorVec(v: unknown): number[] | null {
+  if (!Array.isArray(v) || v.length !== 3) return null
+  const out = v.map((x) => Number(x))
+  if (out.some((n) => !Number.isFinite(n) || Math.abs(n) > 1e4)) return null
+  return out.map((n) => Math.round(n * 1000) / 1000)
+}
+
 // guard ضد الإقلاع المزدوج عند hot-reload
 const g = globalThis as unknown as { __nexusMediaBooted?: boolean }
 const BOOT_KEY = "__nexusMediaBooted"
@@ -50,6 +87,7 @@ export function ensureMediaBridge() {
         const role = String(data?.role ?? "pc")
         socket.data.role = role
         if (role === "phone") {
+          socket.data.name = String(data?.name ?? "هاتف")
           io2.emit("media:log", {
             id: uid(),
             text: `هاتف وسائط متصل: ${data?.name || "هاتف"} — الكاميرا والميكروفون جاهزان للبث`,
@@ -76,15 +114,51 @@ export function ensureMediaBridge() {
       })
 
       // ==== مصراع عن بُعد: الكمبيوتر يطلب التقاط صورة ====
-      socket.on("cam:shutter", (data: { timer: number }) => {
+      // FA-8: يُمرَّر flash (فلاش/كشاف أثناء العد) و camera (أمامية/خلفية) للهاتف الحقيقي
+      socket.on("cam:shutter", (data: { timer: number; flash?: boolean; camera?: string }) => {
         const t = Math.max(0, Math.min(30, Number(data?.timer ?? 0)))
-        io2.emit("cam:shutter", { timer: t, at: Date.now() })
+        const flash = data?.flash === true
+        const camera = data?.camera === "front" ? "front" : "back"
+        io2.emit("cam:shutter", { timer: t, flash, camera, at: Date.now() })
         io2.emit("media:log", {
           id: uid(),
-          text: t > 0 ? `مصراع عن بُعد: التقط بعد ${t} ثانية` : "مصراع عن بُعد: التقط الآن",
+          text: t > 0
+            ? `مصراع عن بُعد: التقط بعد ${t} ثانية${flash ? " (بفلاش)" : ""} — كاميرا ${camera === "front" ? "أمامية" : "خلفية"}`
+            : `مصراع عن بُعد: التقط الآن${flash ? " (بفلاش)" : ""} — كاميرا ${camera === "front" ? "أمامية" : "خلفية"}`,
           kind: "in",
           at: Date.now(),
         })
+      })
+
+      // ==== FA-8: أوامر وسائط للهاتف الحقيقي — تمرير شفاف مع قائمة بيضاء ====
+      socket.on("cam:cmd", (data: Record<string, unknown>) => {
+        const action = String(data?.action ?? "")
+        if (!CAM_CMDS.has(action)) return
+        const out: Record<string, unknown> = { action, at: Date.now() }
+        // حقول اختيارية محدودة تمر كما هي (front/back، تشغيل الفلاش، حساسية الحركة)
+        if (typeof data?.camera === "string" && ["front", "back"].includes(data.camera)) out.camera = data.camera
+        if (typeof data?.on === "boolean") out.on = data.on
+        if (typeof data?.sensitivity === "number") out.sensitivity = Math.min(1, Math.max(0.01, data.sensitivity))
+        io2.emit("cam:cmd", out)
+        io2.emit("media:log", {
+          id: uid(),
+          text: `أمر وسائط للهاتف: ${action}${out.camera ? ` (${out.camera})` : ""}${out.on === false ? " — إيقاف" : ""}`,
+          kind: "in",
+          at: Date.now(),
+        })
+      })
+
+      // ==== FA-8: بث المستشعرات من الهاتف (جيروسكوب/تسارع) — للويب كجيمباد لاحقًا ====
+      socket.on("sensor:stream", (data: Record<string, unknown>) => {
+        if (socket.data.role !== "phone") return
+        if (!sensorAllowed(socket.id)) return
+        const a = sensorVec(data?.a)
+        const gy = sensorVec(data?.g)
+        if (!a && !gy) return
+        const out: Record<string, unknown> = { from: socket.data.name ?? "phone", ts: Number(data?.ts) || Date.now() }
+        if (a) out.a = a
+        if (gy) out.g = gy
+        socket.broadcast.emit("sensor:stream", out)
       })
 
       socket.on("cam:captured", (data: { name?: string; device?: string }) => {

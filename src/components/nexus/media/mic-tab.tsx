@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { useMedia } from "@/lib/media-store"
 import { AudioMeter, getMicSource, getSynthLevel } from "@/lib/media-engine"
 import { PhoneFrame, PcWindow, LiveBadge, LevelBar, NoStream } from "./media-bits"
+import { RealPhoneAudio } from "./real-phone-audio"
 import { cn } from "@/lib/utils"
 
 export function MicTab() {
@@ -92,6 +93,9 @@ export function MicTab() {
           : <Button size="sm" className="h-8 rounded-lg text-[11px]" onClick={() => void startMic()}><Play className="w-3.5 h-3.5" /> بدء البث</Button>}
         {micState.active && <LiveBadge mode="MIC" />}
       </div>
+
+      {/* FA-8: بث حقيقي من ميكروفون هاتفك */}
+      <RealPhoneAudio kind="mic" />
 
       <div className="grid gap-6 lg:grid-cols-[auto_1fr] items-start">
         {/* الهاتف المرسل */}

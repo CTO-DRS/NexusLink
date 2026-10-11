@@ -15,6 +15,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import io.socket.client.IO
 import io.socket.client.Socket
 import io.socket.emitter.Emitter
@@ -38,8 +39,10 @@ class AgentForegroundService : Service() {
         const val CHANNEL_ID = "nexus_agent_channel"
         const val TX_CHANNEL_ID = "nexus_tx_channel"
         const val CTL_CHANNEL_ID = "nexus_ctl_channel"
+        const val MEDIA_CHANNEL_ID = "nexus_media_channel"
         const val NOTIF_ID = 4201
         const val CTL_NOTIF_ID = 4310
+        const val MEDIA_NOTIF_ID = 4401
 
         private const val BEACON_MS = 5_000L
         private const val STATE_MS = 30_000L
@@ -118,10 +121,38 @@ class AgentForegroundService : Service() {
         fun forwardTouchAck(seq: Int, op: String, ok: Boolean, err: String?) {
             liveInstance?.emitTouchAck(seq, op, ok, err)
         }
+
+        // ----------------------------------------------------------
+        // FA-8 — حالة الوسائط + إشعار البث + WakeLock مراقبة الأطفال
+        // ----------------------------------------------------------
+
+        /** لقطة جلسات الوسائط الحية في Dart (cam/mic/baby/watch/sensors) — تُبث في dev:state. */
+        @Volatile
+        var mediaSnapshot: Map<String, Any?> = emptyMap()
+
+        fun mediaJson(): JSONObject {
+            val o = JSONObject()
+            for ((k, v) in mediaSnapshot) {
+                try {
+                    when (v) {
+                        null -> {}
+                        is Int -> o.put(k, v)
+                        is Long -> o.put(k, v)
+                        is Boolean -> o.put(k, v)
+                        is String -> o.put(k, v)
+                        is Double -> o.put(k, v)
+                        is Float -> o.put(k, v.toDouble())
+                    }
+                } catch (_: Exception) {
+                }
+            }
+            return o
+        }
     }
 
     private var socket: Socket? = null
     private var prodSocket: Socket? = null
+    private var mediaSocket: Socket? = null
 
     private var host = ""
     private var port = 81
@@ -142,6 +173,7 @@ class AgentForegroundService : Service() {
         createNotificationChannel()
         createTxChannel()
         createCtlChannel()
+        createMediaChannel()
         liveInstance = this
         loadCtlPrefs()
         registerDisplayListener()
@@ -171,6 +203,7 @@ class AgentForegroundService : Service() {
             setState("connecting")
             connect()
             connectProd()
+            connectMedia()
         }
 
         // إعادة البدء إن قتلها النظام
@@ -201,7 +234,11 @@ class AgentForegroundService : Service() {
             s.on(Socket.EVENT_DISCONNECT) {
                 setState("offline")
                 // انقطاع القناة = نهاية الجلسة دائمًا (من يتحكم لم يعد متصلًا)
-                main.post { endControlSession("disconnected") }
+                main.post {
+                    endControlSession("disconnected")
+                    // لا رنين يتيم بعد فقدان القناة
+                    FindMyPhone.shutdown(this@AgentForegroundService)
+                }
             }
             s.on(Socket.EVENT_CONNECT_ERROR) { setState("reconnecting") }
 
@@ -338,8 +375,121 @@ class AgentForegroundService : Service() {
     }
 
     // ------------------------------------------------------------------
-    // عروض النقل tx:offer
+    // جسر الوسائط 3005 — مصراع التطبيق المغلق (عقد §4.3)
     // ------------------------------------------------------------------
+
+    /**
+     * سوكِت الوسائط للخدمة: بلا تسجيل role (الواجهة الحية تسجّل نفسها من Dart).
+     * وظيفته الوحيدة: التقاط cam:shutter عندما تكون الواجهة ميتة → إشعار
+     * "افتح التطبيق" (الكاميرا من الخلفية محظورة على Android 11+ بلا نوع camera).
+     */
+    private fun connectMedia() {
+        val mediaPort = 3005
+        val url = if (mode == "gateway") "http://$host:$port" else "http://$host:$mediaPort"
+        try {
+            val opts = IO.Options()
+            opts.reconnection = true
+            opts.reconnectionDelay = 2_000
+            opts.reconnectionDelayMax = 15_000
+            opts.timeout = 10_000
+            if (mode == "gateway") {
+                opts.query = "XTransformPort=$mediaPort"
+            }
+            val s = IO.socket(url, opts)
+            mediaSocket = s
+            s.on("cam:shutter") { args ->
+                val data = args.firstOrNull() as? JSONObject
+                if (uiAlive) return@on // الواجهة حية — Dart يتولى الالتقاط بنفسه
+                main.post {
+                    val timer = try { data?.optInt("timer", 0) ?: 0 } catch (_: Exception) { 0 }
+                    notifyMedia(
+                        title = "طلب التقاط صورة من الكمبيوتر",
+                        body = if (timer > 0) "التقاط بعد $timer ثانية — افتح تطبيق NexusLink أولاً" else "افتح تطبيق NexusLink للالتقاط",
+                        ongoing = false,
+                        id = 4402,
+                    )
+                    try {
+                        socket?.emit(
+                            AgentBridge.EV_DEV_ACKED,
+                            JSONObject().put("text", "طلب مصراع وصل والواجهة مغلقة — صُدر إشعار لفتح التطبيق"),
+                        )
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+            s.connect()
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "media connect failed", e)
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // FA-8 — واجهة Dart (الإشعار + WakeLock + لقطة الحالة)
+    // ------------------------------------------------------------------
+
+    /** إشعار بث الوسائط (كاميرا/ميكروفون نشط) — يديره Dart عند بدء/إيقاف الجلسات. */
+    fun notifyMedia(title: String, body: String, ongoing: Boolean, id: Int = MEDIA_NOTIF_ID) {
+        try {
+            val contentIntent = PendingIntent.getActivity(
+                this, id,
+                Intent(this, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Notification.Builder(this, MEDIA_CHANNEL_ID)
+            } else {
+                @Suppress("DEPRECATION")
+                Notification.Builder(this)
+            }
+            builder.setContentTitle(title)
+                .setContentText(body)
+                .setSmallIcon(android.R.drawable.ic_menu_camera)
+                .setContentIntent(contentIntent)
+                .setOngoing(ongoing)
+                .setOnlyAlertOnce(ongoing)
+            if (ongoing) builder.addAction(
+                0, "إيقاف البث",
+                PendingIntent.getActivity(
+                    this, id + 1,
+                    Intent(this, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        putExtra("nexus.mediaStop", true)
+                    },
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .notify(id, builder.build())
+        } catch (_: Exception) {
+        }
+    }
+
+    fun cancelMediaNotification(id: Int = MEDIA_NOTIF_ID) {
+        try {
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(id)
+        } catch (_: Exception) {
+        }
+    }
+
+    /** WakeLock جزئي طوال مراقبة الأطفال — يمنع Doze من تعطيل بث الصوت والشاشة مطفأة. */
+    private var babyWake: PowerManager.WakeLock? = null
+
+    fun setBabyWake(on: Boolean) {
+        try {
+            if (on) {
+                if (babyWake?.isHeld == true) return
+                val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                babyWake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "NexusLink:baby-monitor")
+                    .apply { acquire(12 * 60 * 60 * 1000L) } // حتى 12 ساعة
+            } else {
+                babyWake?.let { if (it.isHeld) try { it.release() } catch (_: Exception) {} }
+                babyWake = null
+            }
+        } catch (_: Exception) {
+        }
+    }
 
     private fun handleTxOffer(data: JSONObject) {
         stashOffer(data)
@@ -707,6 +857,28 @@ class AgentForegroundService : Service() {
 
     private fun ackCommand(cmd: String, args: Array<Any?>) {
         val data = args.firstOrNull() as? JSONObject
+        // ---- FA-8: تنفيذ حقيقي لأوامر «أين هاتفي» (تعمل حتى مع انطفاء التطبيق) ----
+        when (cmd) {
+            AgentBridge.EV_RING -> {
+                val text = FindMyPhone.startRing(this)
+                socket?.emit(AgentBridge.EV_DEV_ACKED, JSONObject().put("text", "«أين هاتفي»: $text"))
+                android.util.Log.i(TAG, "dev:ring executed")
+                return
+            }
+            AgentBridge.EV_RING_STOP -> {
+                val text = FindMyPhone.stopRing(this)
+                socket?.emit(AgentBridge.EV_DEV_ACKED, JSONObject().put("text", "«أين هاتفي»: $text"))
+                android.util.Log.i(TAG, "dev:ring-stop executed")
+                return
+            }
+            AgentBridge.EV_LIGHT -> {
+                val on = data?.optBoolean("on", true) ?: true
+                val text = FindMyPhone.lightScreen(this, on)
+                socket?.emit(AgentBridge.EV_DEV_ACKED, JSONObject().put("text", "«الإضاءة»: $text"))
+                android.util.Log.i(TAG, "dev:light executed (on=$on)")
+                return
+            }
+        }
         val detail = when {
             data == null -> ""
             cmd == AgentBridge.EV_LOST && data.optBoolean("on") -> " — «${data.optString("message")}»"
@@ -769,10 +941,17 @@ class AgentForegroundService : Service() {
                     .put("source", "agent")
                     .put("accessibility", NexusAccessibilityService.isReady)
                     .put("ctl", JSONObject(ctlSnapshot()))
+                    .put("media", mediaJson())
+                    .put("find", JSONObject().put("ringing", FindMyPhone.isRinging()))
                     .put("at", System.currentTimeMillis()),
             )
         } catch (_: Exception) {
         }
+    }
+
+    /** دفع فوري لتقرير الحالة (تغيّر جلسات الوسائط من Dart — FA-8). */
+    fun emitDevStateNow() {
+        main.post { emitDevState() }
     }
 
     private fun readBattery(): Int = try {
@@ -799,6 +978,8 @@ class AgentForegroundService : Service() {
                     }
                     val p = prodSocket
                     if (p != null && !p.connected()) p.connect()
+                    val m = mediaSocket
+                    if (m != null && !m.connected()) m.connect()
                 } catch (_: Exception) {
                 }
                 main.postDelayed(this, WATCHDOG_MS)
@@ -861,6 +1042,21 @@ class AgentForegroundService : Service() {
         }
     }
 
+    private fun createMediaChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val ch = NotificationChannel(
+                MEDIA_CHANNEL_ID,
+                "NexusLink — البث والوسائط",
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = "إشعار استمرار بث الكاميرا/الميكروفون وطلبات التصوير عن بعد"
+                setShowBadge(false)
+            }
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .createNotificationChannel(ch)
+        }
+    }
+
     private fun startForegroundCompat() {
         val n = buildNotification("connecting")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -917,14 +1113,19 @@ class AgentForegroundService : Service() {
         watchdogRun?.let { main.removeCallbacks(it) }
         watchdogRun = null
         try {
+            FindMyPhone.shutdown(this)
+            setBabyWake(false)
             socket?.off()
             socket?.disconnect()
             prodSocket?.off()
             prodSocket?.disconnect()
+            mediaSocket?.off()
+            mediaSocket?.disconnect()
         } catch (_: Exception) {
         }
         socket = null
         prodSocket = null
+        mediaSocket = null
         setState("stopped")
         super.onDestroy()
     }
@@ -942,6 +1143,9 @@ object AgentBridge {
     const val EV_DEV_STATE = "dev:state"
     const val EV_DEV_ACKED = "dev:acked"
     const val EV_LOST = "dev:lost"
+    const val EV_RING = "dev:ring"
+    const val EV_RING_STOP = "dev:ring-stop"
+    const val EV_LIGHT = "dev:light"
 
     // نقل الملفات (عقد §8)
     const val EV_TX_OFFER = "tx:offer"

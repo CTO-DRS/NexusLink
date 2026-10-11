@@ -34,8 +34,27 @@ export function camState(state: { deviceId: string; active: boolean; facing: str
   getMediaSocket().emit("cam:state", state)
 }
 
-export function shutterRequest(timer: number) {
-  getMediaSocket().emit("cam:shutter", { timer })
+/**
+ * مصراع عن بُعد — FA-8: يمرر فلاش وكاميرا الهاتف الحقيقي (عقد §4.3)
+ * [flash] يشعل الكشاف أثناء العد التنازلي ثم يلتقط، [camera] أمامية/خلفية.
+ */
+export function shutterRequest(timer: number, flash = false, camera: "front" | "back" = "back") {
+  getMediaSocket().emit("cam:shutter", { timer, flash, camera })
+}
+
+/**
+ * FA-8: أوامر وسائط للهاتف الحقيقي — قائمة بيضاء على الجسر:
+ * cam-start/cam-stop/switch/torch/mic-start/mic-stop/baby-start/baby-stop/watch-start/watch-stop
+ */
+export function camCmd(
+  action:
+    | "cam-start" | "cam-stop" | "switch" | "torch"
+    | "mic-start" | "mic-stop"
+    | "baby-start" | "baby-stop"
+    | "watch-start" | "watch-stop",
+  extra?: { camera?: "front" | "back"; on?: boolean; sensitivity?: number },
+) {
+  getMediaSocket().emit("cam:cmd", { action, ...extra })
 }
 
 export function secMotion(source: string, level: number) {
