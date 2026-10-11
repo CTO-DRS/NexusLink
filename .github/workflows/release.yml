@@ -69,7 +69,10 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "17" }
       - uses: subosito/flutter-action@v2
-        with: { channel: stable, cache: true }
+        with:
+          channel: stable
+          flutter-version: 3.24.5
+          cache: true
       - name: Restore release signing key (secrets.ANDROID_KEYSTORE_BASE64)
         if: env.KEYSTORE_B64 != ''
         env:
@@ -83,6 +86,12 @@ jobs:
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           EOF
       - run: flutter pub get
+      - name: Patch flutter_webrtc for engine 3.24 (same patch verified locally)
+        run: |
+          PKG=$(ls -d "$HOME/.pub-cache/hosted/pub.dev/flutter_webrtc-"*)
+          sed -i 's/compileSdkVersion 36/compileSdkVersion 34/' "$PKG/android/build.gradle"
+          sed -i -e 's/public void onSurfaceAvailable()/public void onSurfaceCreated()/' -e 's/public void onSurfaceCleanup()/public void onSurfaceDestroyed()/' "$PKG/android/src/main/java/com/cloudwebrtc/webrtc/SurfaceTextureRenderer.java"
+          echo "patched: $(grep -c 'compileSdkVersion 34' "$PKG/android/build.gradle") compileSdk, $(grep -c 'onSurfaceCreated' "$PKG/android/src/main/java/com/cloudwebrtc/webrtc/SurfaceTextureRenderer.java") callback"
       - name: Analyze (zero-issue gate)
         run: flutter analyze
       - name: Build signed APK
@@ -91,7 +100,7 @@ jobs:
         run: flutter build appbundle --release
       - name: Rename artifacts with tag
         run: |
-          VERSION=$(grep -o '^version: .*' pubspec.yaml | cut -d' ' -f2)
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d' ' -f2 | cut -d'+' -f1)
           cp build/app/outputs/flutter-apk/app-release.apk "NexusLink-${VERSION}-release.apk"
       - uses: actions/upload-artifact@v4
         with:
