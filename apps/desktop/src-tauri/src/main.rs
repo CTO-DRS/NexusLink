@@ -12,7 +12,7 @@ mod settings;
 mod shortcuts;
 mod tray;
 
-use tauri::{RunEvent, WindowEvent};
+use tauri::{Manager, RunEvent, WindowEvent};
 
 fn main() {
     tauri::Builder::default()
@@ -112,7 +112,7 @@ fn create_splash(app: &tauri::AppHandle, visible: bool) -> tauri::Result<()> {
         .maximizable(false)
         .minimizable(false)
         .decorations(false)
-        .center(true)
+        .center()
         .visible(visible)
         .build()?;
     Ok(())
