@@ -86,6 +86,9 @@ jobs:
         env:
           # linuxdeploy AppImage لا يعمل بلا FUSE على المُشغّل — استخراج ذاتي بدل التحميل
           APPIMAGE_EXTRACT_AND_RUN: "1"
+          # CMake 4 الجديد أزال توافق <3.5 — libopus المضمن في audiopus_sys قديم
+          # (العمل الموثق: -DCMAKE_POLICY_VERSION_MINIMUM=3.5 — نفس فعل cmake crate)
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
         run: |
           bunx @tauri-apps/cli@^2 build \
             --bundles ${{ matrix.bundles }} \

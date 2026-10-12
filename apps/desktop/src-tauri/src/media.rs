@@ -91,13 +91,6 @@ fn emit(event: &str, payload: Value) {
     }
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
-}
-
 /// إطار مُشفّر من خيط الالتقاط إلى مهمة الإرسال
 struct EncodedFrame {
     data: Vec<u8>,
@@ -106,7 +99,7 @@ struct EncodedFrame {
 
 struct ScreenSess {
     gate: core::KindGate,
-    pc: Arc<PeerConnection>,
+    pc: Arc<dyn PeerConnection>,
     stop: Arc<AtomicBool>,
     /// تغيير الجودة أثناء البث — خيط الالتقاط يعيد بناء مشفره
     rebuild: Arc<AtomicBool>,
@@ -120,22 +113,25 @@ struct ScreenSess {
 }
 
 struct KindSess {
-    pc: Arc<PeerConnection>,
+    pc: Arc<dyn PeerConnection>,
     stop: Arc<AtomicBool>,
 }
 
 static SCREEN: Mutex<Option<ScreenSess>> = Mutex::new(None);
-static KINDS: Mutex<HashMap<String, KindSess>> = Mutex::new(HashMap::new());
+static KINDS: std::sync::LazyLock<Mutex<HashMap<String, KindSess>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 /// الويب كام المطلوبة (video/audio) — يقرؤها الويبفيو عبر media_status
 static VCAM_WANTED: Mutex<(bool, bool)> = Mutex::new((false, false));
 /// حالة الدرايفور الأخيرة (JSON من vcam_driver_status) — للواجهة
 static VCAM_STATUS: Mutex<Value> = Mutex::new(Value::Null);
-/// قناة إطارات YUYV جاهزة للحقن (من مفكك الكاميرا إلى الخيط الحاقن)
-static VCAM_TX: OnceLock<(webrtc::runtime::Sender<Vec<u8>>, webrtc::runtime::Receiver<Vec<u8>>)> =
-    OnceLock::new();
+/// قناة إطارات YUYV جاهزة للحقن (من مفكك الكاميرا إلى الخيط الحاقن).
+/// std mpsc — try_recv(&self) يعمل من مرجع ثابت (قنوات webrtc primitives
+/// تتطلب &mut self وتستحيل على OnceLock) — المستهلك يأخذ Receiver مرة واحدة.
+static VCAM_TX: OnceLock<std::sync::mpsc::SyncSender<Vec<u8>>> = OnceLock::new();
+static VCAM_RX: Mutex<Option<std::sync::mpsc::Receiver<Vec<u8>>>> = Mutex::new(None);
 /// قناة PCM (i16) من مفكك الصوت إلى الجهاز الافتراضي
-static VMIC_TX: OnceLock<(webrtc::runtime::Sender<Vec<i16>>, webrtc::runtime::Receiver<Vec<i16>>)> =
-    OnceLock::new();
+static VMIC_TX: OnceLock<std::sync::mpsc::SyncSender<Vec<i16>>> = OnceLock::new();
+static VMIC_RX: Mutex<Option<std::sync::mpsc::Receiver<Vec<i16>>>> = Mutex::new(None);
 /// أبعاد الويب كام الحالية (يحددها أول إطار وارده)
 static VCAM_DIMS: Mutex<(u32, u32, u32)> = Mutex::new((0, 0, 0)); // w,h,fps
 /// إحصاءات بسيطة
@@ -146,12 +142,31 @@ fn rt() -> Arc<dyn Runtime> {
     Arc::clone(RT.get_or_init(|| default_runtime().expect("webrtc runtime-tokio")))
 }
 
-fn vcam_tx() -> &'static (webrtc::runtime::Sender<Vec<u8>>, webrtc::runtime::Receiver<Vec<u8>>) {
-    VCAM_TX.get_or_init(|| webrtc::runtime::channel(64))
+fn vcam_tx() -> &'static std::sync::mpsc::SyncSender<Vec<u8>> {
+    VCAM_TX.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::sync_channel(64);
+        *VCAM_RX.lock().unwrap() = Some(rx);
+        tx
+    })
 }
 
-fn vmic_tx() -> &'static (webrtc::runtime::Sender<Vec<i16>>, webrtc::runtime::Receiver<Vec<i16>>) {
-    VMIC_TX.get_or_init(|| webrtc::runtime::channel(256))
+/// المستهلك يأخذ Receiver مرة واحدة (تُهيأ القناة كسولًا أولًا)
+fn vcam_take_rx() -> Option<std::sync::mpsc::Receiver<Vec<u8>>> {
+    let _ = vcam_tx();
+    VCAM_RX.lock().unwrap().take()
+}
+
+fn vmic_tx() -> &'static std::sync::mpsc::SyncSender<Vec<i16>> {
+    VMIC_TX.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::sync_channel(256);
+        *VMIC_RX.lock().unwrap() = Some(rx);
+        tx
+    })
+}
+
+fn vmic_take_rx() -> Option<std::sync::mpsc::Receiver<Vec<i16>>> {
+    let _ = vmic_tx();
+    VMIC_RX.lock().unwrap().take()
 }
 
 fn push_tray_media() {
@@ -233,7 +248,7 @@ fn base_config() -> RTCConfigurationBuilder {
     RTCConfigurationBuilder::new().with_ice_servers(vec![RTCIceServer::default()])
 }
 
-async fn local_desc_json(pc: &Arc<PeerConnection>) -> Result<Value, String> {
+async fn local_desc_json(pc: &Arc<dyn PeerConnection>) -> Result<Value, String> {
     let desc = pc.local_description().await.ok_or("لا وصف محلي بعد الترشيح")?;
     serde_json::to_value(&desc).map_err(|e| e.to_string())
 }
@@ -323,11 +338,15 @@ pub struct TargetInfo {
 
 #[cfg(target_os = "linux")]
 fn list_targets() -> Result<Vec<TargetInfo>, String> {
+    use x11rb::connection::Connection;
+    use x11rb::protocol::randr;
+    use x11rb::protocol::xproto::ConnectionExt;
     // X11: RandR للشاشات (أصول دقيقة) + نوافذ الجذر بأسمائها (اقتصاص تقريبي موثق §15)
     let (conn, screen_num) = x11rb::connect(None).map_err(|e| format!("X11: {e}"))?;
     let root = conn.setup().roots[screen_num].root;
     let mut out = Vec::new();
-    let monitors = conn.randr().get_monitors(root, true);
+    // ملاحظة x11rb 0.13: دوال الامتداد حرة (randr::get_monitors) — conn.randr() لا وجود لها
+    let monitors = randr::get_monitors(&conn, root, true);
     if let Ok(reply) = monitors.and_then(|r| r.reply()) {
         for (i, m) in reply.monitors.iter().enumerate() {
             out.push(TargetInfo {
@@ -380,8 +399,9 @@ fn list_targets() -> Result<Vec<TargetInfo>, String> {
                 if geo.width < 8 || geo.height < 8 {
                     continue;
                 }
+                // Window = u32 في x11rb (لا resource_id)
                 out.push(TargetInfo {
-                    id: format!("window:{}", win.resource_id()),
+                    id: format!("window:{win}"),
                     kind: "window",
                     title: name.chars().take(60).collect(),
                     origin: (tr.dst_x as i32, tr.dst_y as i32),
@@ -469,7 +489,9 @@ fn window_origin(w: &scap::targets::Window) -> (i32, i32) {
     extern "C" {
         fn CGWindowGetBounds(cid: u32) -> CGRect;
     }
-    let r = unsafe { CGWindowGetBounds(w.raw_handle.0) };
+    // CGWindowID في fork سيرفو = type alias لu32 (لا newtype — لا .0)
+    let cid: u32 = w.raw_handle;
+    let r = unsafe { CGWindowGetBounds(cid) };
     (r.origin.x as i32, r.origin.y as i32)
 }
 
@@ -496,6 +518,8 @@ fn full_dims(target: &str, tinfo: &Option<TargetInfo>) -> Result<(u32, u32, (i32
 
 #[cfg(target_os = "linux")]
 fn full_desktop_dims() -> Result<(u32, u32, (i32, i32)), String> {
+    use x11rb::connection::Connection;
+    use x11rb::protocol::xproto::ConnectionExt;
     let (conn, n) = x11rb::connect(None).map_err(|e| format!("X11: {e}"))?;
     let root = conn.setup().roots[n].root;
     let geo = conn.get_geometry(root).and_then(|r| r.reply()).map_err(|e| e.to_string())?;
@@ -654,7 +678,9 @@ fn capture_loop(
     quality: String,
     tx: webrtc::runtime::Sender<EncodedFrame>,
 ) {
-    use x11rb::protocol::xproto::ImageFormat;
+    use x11rb::connection::Connection;
+    use x11rb::protocol::randr;
+    use x11rb::protocol::xproto::{ConnectionExt, ImageFormat};
     loop {
         if stop.load(Ordering::Relaxed) {
             return;
@@ -679,9 +705,7 @@ fn capture_loop(
         };
         let mut region = (0i16, 0i16, root_geo.width, root_geo.height);
         if target.starts_with("screen:") && target != "screen:all" {
-            if let Some(m) = conn
-                .randr()
-                .get_monitors(root, true)
+            if let Some(m) = randr::get_monitors(&conn, root, true)
                 .and_then(|r| r.reply())
                 .ok()
                 .and_then(|r| {
@@ -767,7 +791,7 @@ fn encode_and_send(
     }
     let enc = &mut encoder.as_mut().unwrap().0;
     // الأبعاد مضمونة زوجية من scaled_dims — new يتحقق دفاعيًا (panic إذا فاسد)
-    let yuv = openh264::formats::yuv::YUVBuffer::from_bgra8_source(
+    let yuv = openh264::formats::YUVBuffer::from_bgra8_source(
         openh264::formats::BgraSliceU8::new(bgra, (w as usize, h as usize)),
     );
     let stream = enc.encode(&yuv).map_err(|e| format!("openh264 encode: {e}"))?;
@@ -835,7 +859,7 @@ async fn video_decode_loop(track: Arc<dyn TrackRemote>, stop: Arc<AtomicBool>) {
                             if w >= 2 && h >= 2 {
                                 let yuyv =
                                     core::yuv420_to_yuyv(yuv.y(), yuv.u(), yuv.v(), w, h, s.0, s.1);
-                                let _ = vcam_tx().0.try_send(yuyv);
+                                let _ = vcam_tx().try_send(yuyv);
                                 STATS.fetch_add(1, Ordering::Relaxed);
                                 let mut d = VCAM_DIMS.lock().unwrap();
                                 if d.0 != w || d.1 != h {
@@ -889,11 +913,18 @@ async fn audio_decode_loop(track: Arc<dyn TrackRemote>, stop: Arc<AtomicBool>) {
             Ok(p) => p,
             Err(_) => continue,
         };
-        match decoder.decode(Some(packet), audiopus::MutSignals(&mut out), false) {
+        let muts = match audiopus::MutSignals::try_from(&mut out) {
+            Ok(m) => m,
+            Err(e) => {
+                println!("[media] MutSignals: {e}");
+                continue;
+            }
+        };
+        match decoder.decode(Some(packet), muts, false) {
             Ok(frames) => {
                 let n = frames * 2; // ستيريو
                 if n > 0 {
-                    let _ = vmic_tx().0.try_send(out[..n].to_vec());
+                    let _ = vmic_tx().try_send(out[..n].to_vec());
                 }
             }
             Err(e) => println!("[media] opus decode: {e}"),
@@ -930,12 +961,12 @@ pub async fn media_screen_start(
     let (me, reg) = engine_screen()?;
     let (gather_tx, mut gather_rx) = webrtc::runtime::channel::<()>(1);
     let handler = MediaHandler { gather_tx, kind: "screen".into(), role: "offer" };
-    let pc: Arc<PeerConnection> = Arc::new(
+    let pc: Arc<dyn PeerConnection> = Arc::new(
         PeerConnectionBuilder::new()
             .with_configuration(base_config().build())
             .with_media_engine(me)
             .with_interceptor_registry(reg)
-            .with_handler(handler)
+            .with_handler(Arc::new(handler))
             .with_runtime(rt())
             .with_udp_addrs(vec!["0.0.0.0:0".to_string()])
             .build()
@@ -1271,12 +1302,12 @@ pub async fn media_answer(kind: String, sdp: Value) -> Result<Value, String> {
     };
     let (gather_tx, mut gather_rx) = webrtc::runtime::channel::<()>(1);
     let handler = MediaHandler { gather_tx, kind: kind.clone(), role: "answer" };
-    let pc: Arc<PeerConnection> = Arc::new(
+    let pc: Arc<dyn PeerConnection> = Arc::new(
         PeerConnectionBuilder::new()
             .with_configuration(base_config().build())
             .with_media_engine(me)
             .with_interceptor_registry(reg)
-            .with_handler(handler)
+            .with_handler(Arc::new(handler))
             .with_runtime(rt())
             .with_udp_addrs(vec!["0.0.0.0:0".to_string()])
             .build()
@@ -1480,8 +1511,11 @@ fn spawn_v4l2_sink(_status: &Value) -> Result<(), String> {
 #[cfg(target_os = "linux")]
 fn v4l2_writer(dev_path: String) {
     use std::io::Write;
-    use std::os::unix::io::AsRawFd;
-    let rx = &vcam_tx().1;
+    use std::os::unix::io::{AsRawFd, FromRawFd};
+    let mut rx = match vcam_take_rx() {
+        Some(r) => r,
+        None => return,
+    };
     let mut cur_dims: (u32, u32) = (0, 0);
     let mut file: Option<std::fs::File> = None;
     loop {
@@ -1559,7 +1593,10 @@ fn spawn_akvcam_sink(_status: &Value) -> Result<(), String> {
 fn akvcam_writer(manager: &'static str, device: String) {
     use std::io::Write;
     use std::process::{Child, Command, Stdio};
-    let rx = &vcam_tx().1;
+    let mut rx = match vcam_take_rx() {
+        Some(r) => r,
+        None => return,
+    };
     let mut cur_dims: (u32, u32) = (0, 0);
     let mut child: Option<Child> = None;
     let mut stdin: Option<std::process::ChildStdin> = None;
@@ -1647,7 +1684,10 @@ fn spawn_pulse_sink(_status: &Value) -> Result<(), String> {
 fn pulse_writer() {
     use std::io::Write;
     use std::os::unix::io::FromRawFd;
-    let rx = &vmic_tx().1;
+    let mut rx = match vmic_take_rx() {
+        Some(r) => r,
+        None => return,
+    };
     // O_RDWR يمنع الانسداد حتى قبل اتصال القارئ
     let path = std::ffi::CString::new(MIC_PCM_PATH).unwrap();
     let fd = unsafe { libc_open(path.as_ptr(), 2) };
@@ -1701,10 +1741,13 @@ fn spawn_cpal_sink(_status: &Value) -> Result<(), String> {
     let err_fn = |e| println!("[media] cpal stream error: {e}");
     // مهمة التغذية: قناة PCM (48k) → buffer مع إعادة تشكيل خطية إن لزم
     let buf2 = Arc::clone(&buffer);
+    let mut vmic_rx = match vmic_take_rx() {
+        Some(r) => r,
+        None => return,
+    };
     rt().spawn(Box::pin(async move {
-        let rx = &vmic_tx().1;
         loop {
-            match rx.try_recv() {
+            match vmic_rx.try_recv() {
                 Ok(mut pcm) => {
                     // إعادة تشكيل خطية 48000 → rate إن لزم (ستيريو)
                     let src_frames = pcm.len() / 2;

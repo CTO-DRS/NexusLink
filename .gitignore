@@ -75,3 +75,4 @@ scripts/enigo-verify/target/
 # FA-files — artifacts build/التحقق وبيانات التشغيل
 scripts/files-verify/target/
 /data/nexus-storage/
+scripts/media-verify/target/
