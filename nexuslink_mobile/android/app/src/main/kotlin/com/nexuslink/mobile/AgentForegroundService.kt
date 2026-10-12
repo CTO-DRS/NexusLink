@@ -44,10 +44,7 @@ class AgentForegroundService : Service() {
         const val CTL_NOTIF_ID = 4310
         const val MEDIA_NOTIF_ID = 4401
 
-        /** FA-clipboard-sync — النسخة الحية للخدمة (تستخدمها مراقبة الإتاحة للدفع عبر prod socket) */
-        @Volatile
-        var liveInstance: AgentForegroundService? = null
-            private set
+        /** FA-clipboard-sync — النسخة الحية: معلنة أصلًا في قسم FA-7 أدناه (liveInstance). */
 
         /** FA-clipboard-sync (عقد §11.ج): آخر نص كُتب في حافظة الهاتف قادمًا من الكمبيوتر
          *  — كي لا تعيده مراقبة الإتاحة إلى الكمبيوتر (حرس حلقة). */
