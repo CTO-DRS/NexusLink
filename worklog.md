@@ -536,3 +536,22 @@ Stage Summary:
 - الحلقة التعاقدية كاملة: زر أيمن على ملف → Registry → --send → المثيل الحي → Inbox → send-file → tx:offer → الهاتف يستلم (اختبار النجاح 1 مثبت بالعقد + E2E). ملف في مجلد متزامن → notify فوري → Outbox → offer → هبوط في Sync/<زوج> على الهاتف خلال ثوانٍ — والعكس: Directory.watch → رفع §8.2 → جذر الوكيل → notify → المجلد المحلي (اختبار النجاح 2 مثبت تنفيذيًا بالاتجاهين في المحرك + تعاقديًا في E2E).
 - بث الفيديو: تخزين الهاتف → خدمة وسائط (Range كامل) → تنزيل تقدّمي مؤقت في Rust → المشغّل الافتراضي يفتح عند 2MB/1.5ث ويستكمل — والقنوات موثقة في status.desktop.agentMedia.
 - القيود الموثقة بصدق (§14): %1 أول عنصر فقط في قائمة السياق — Share Extension .appex يتطلب هدف Xcode (Services تغطي Finder) — البث أثناء حياة التطبيق — الحذف لا ينتشر — الضغط الفيزيائي على Windows/macOS يثبت بـ CI 3/3 (الحاوية بلا GUI لتلك المنصات).
+
+---
+Task ID: FA-files-CI
+Agent: main (Super Z)
+Task: جولات CI لمهمة FA-files — 3/3 منصات خضراء + بوابة analyze الصفرية الخضراء
+
+Work Log:
+- خمس جولات موثقة (النمط المعتاد: النوى النقية تُختبر محليًا 56/56 والطبقة الأصلية تُبوّب بـ CI — كل درس أدناه لم يكن ممكنًا محليًا):
+  (1) ee71a01: E0308 ×6 — دلالات المرجع في طبقة Tauri: notify::plain/open_main يأخذان &AppHandle (مرّرتها مملوكة في خيوط flush/broadcast)، stage_and_offer تستعير، process_outbound(&app_handle()).
+  (2) f03ade8: E0599 flush غير موجود على File بلا trait Write (استُبدلت الاستيراد بـ file.sync_all() المتأصلة — أنظف) + E0382 temp انتقل إلى closure البث واستُعمل بعده في json! الاستجابة (clone temp_resp) — والبوابة الصفرية التقطت info-lint واحد (prefer_function_declarations_over_variables: الإغلاق log → دالة محلية؛ **البوابة الصفرية تشمل info**).
+  (3) 027d8f5: analyze الصفرية التقطت FileStat.size وليس .length (7× في sync_service.dart — خلط مع File.length()).
+  (4) afe5bc2: E0599 winreg 0.56 أعاد تسمية delete_tree → **delete_subkey_all** (تحقق من مصدر crate قبل الإصلاح) + Kotlin isNotEmpty() أقواس استدعاء (MainActivity:581).
+  (5) النتيجة: desktop 3/3 (deb + nsis + dmg) و release كامل (analyze صفرية + APK/AAB/iOS + 3 اختبارات OS).
+- درس عمل إضافي: git add -A التقط مخلفات (files-verify/target 461 ثنائيًا + 2GB e2e test file في data/) — رفض pre-receive (GH001 >100MB) — أُعيد البناء الانتقائي + gitignore (scripts/files-verify/target/ و /data/nexus-storage/) — نفس درس db/custom.db الموثق سابقًا.
+- v1.0.0 لم تُمَس في كل الجولات (لا وسوم ولا أصول)؛ الوسم والأصول الخمسة الثابتة كما هي.
+
+Stage Summary:
+- الحلقة كاملة خضراء أعلى مستوى ممكن: تنفيذيًا 56/56 محليًا (نوى البث/المزامنة/Registry ضد خوادم وملفات حقيقية) + تعاقديًا 76/76 E2E (incl. G-19 رفع 2GB sha-مطابق) + بناء فعلي 3/3 منصات للطبقة الأصلية (winreg/notify/zip/tauri-plugin-drag/Info.plist merge/installer-hooks).
+- الرأس النهائي: afe5bc2.
