@@ -54,7 +54,8 @@ fn remove_menu_windows() -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     for key in [&spec.key_file, &spec.key_dir] {
         // الغياب ليس خطأ — المفتاح قد يكون أُزيل سابقًا
-        if let Err(e) = hkcu.delete_tree(key) {
+        // (winreg 0.56: الحذف الشجري اسمه delete_subkey_all — ليس delete_tree)
+        if let Err(e) = hkcu.delete_subkey_all(key) {
             if e.kind() != std::io::ErrorKind::NotFound {
                 return Err(format!("{key}: {e}"));
             }
