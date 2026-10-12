@@ -118,6 +118,10 @@ class ControllerController extends Notifier<RcUiState> {
 
   Future<void> pushClipboard([String? text]) => _svc?.pushClipboard(text) ?? Future.value();
 
+  /// FA-clipboard-sync — تحديث حرس الحلقة: نص خارجي وُضع في حافظة الهاتف
+  /// (من الكمبيوتر) كي لا تعيده مراقبة الشاشة المفتوحة (عقد §11.ج).
+  void markExternal(String text) => _svc?.markExternal(text);
+
   void pullPcClipboard() => _svc?.pullPcClipboard();
 
   void handoff(String url, {String? title}) => _svc?.handoff(url, title: title);
