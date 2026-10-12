@@ -462,7 +462,7 @@ interface TransferJob {
 - الصور/الملفات تصل عبر مسار النقل الحقيقي (tx:offer قائم) — لا تُكتب في الحافظة.
 
 ### 11.ج الهاتف → الكمبيوتر (حرس الحلقة في الطرفين)
-- **مراقب الإتاحة** (`NexusAccessibilityService` — الاستثناء المشروع الوحيد لقراءة حافظة Android 10+ بلا تركيز، ومفعّل مسبقًا بموافقة المستخدم لجلسات التحكم FA-7): `OnPrimaryClipChangedListener` → نص غيّر → `clip:push {deviceId, kind:"text", mode:"auto"}` عبر socket 3007 لخدمة الوكيل.
+- **مراقب الإتاحة** (`NexusAccessibilityService` — التطبيق كله يحصل على إذن القراءة بلا تركيز طالما خدمة إتاحة فعّالة مفعّلة — مفعّل مسبقًا بموافقة المستخدم لجلسات التحكم FA-7): استقصاء 1.5s (نفس نمط مراقبة شاشة التحكم) → نص غيّر → `clip:push {deviceId, kind:"text", mode:"auto"}` عبر socket 3007 لخدمة الوكيل.
 - بدون خدمة الإتاحة: مراقبة مركّزة قائمة في شاشة التحكم (استقصاء 1.5s عبر Flutter) — قيد موثق منذ FA-9.
 - **حرس الحلقة (تعاقدي)**: كل `clip:new` يحمل `deviceId` حرفيًا؛ الهاتف يتجاهل صداه (`deviceId == هويتي`)؛ الحرس الثلاثي: `clipLastFromPc` / `clipLastSentToPc` (Kotlin) + `markExternal` (Flutter) + بصمات `APPLIED_*` (Rust) — النص الذي وضعه الكمبيوتر لا يعود، والعكس.
 - استقبال الكمبيوتر: الويبفيو (حتى والنافذة مخفية في الـ Tray) يستقبل `clip:new` غريبًا + وضع auto → `clip_apply` (أمر Tauri) → `arboard set_text/set_image` — تعمل Ctrl+V في أي تطبيق.

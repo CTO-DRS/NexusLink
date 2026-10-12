@@ -113,43 +113,41 @@ class NexusAccessibilityService : AccessibilityService() {
     // ------------------------------------------------------------------
     // FA-clipboard-sync — مراقب حافظة الخلفية (عقد §11.أ)
     // ------------------------------------------------------------------
-    // خدمات الإتاحة هي الاستثناء المشروع الوحيد على قيد Android 10+ (قراءة
-    // الحافظة بلا تركيز) — نفس النهج المعتمد في تطبيقات المزامنة الكبرى.
-    // الخدمة مفعّلة مسبقًا بموافقة المستخدم لجلسات التحكم (FA-7)؛ المستمع
-    // للقراءة فقط، ويدفع عبر خدمة الوكيل مع حرس الحلقة (clipLastFromPc/
-    // clipLastSentToPc) — بلا تخزين، وبلا إرسال في حال التطابق.
-    private var clipWatch: android.content.ClipboardManager.OnPrimaryClipChangedListener? = null
+    // الخدمة مفعّلة مسبقًا بموافقة المستخدم لجلسات التحكم (FA-7) — وقراءة
+    // الحافظة على Android 10+ تُسمح للتطبيق كله (package-level) طالما خدمة
+    // إتاحة فعّالة مفعلة — نفس الباب الذي تستعمله تطبيقات المزامنة الكبرى.
+    // التنفيذ: استقصاء 1.5s (نفس نمط مراقبة شاشة التحكم في Flutter) —
+    // نص فقط + حرس الحلقة (clipLastFromPc/clipLastSentToPc) — بلا تخزين.
+    private val clipPoll = Handler(Looper.getMainLooper())
+    private var clipWatchOn = false
+    private var clipLastSeen: String? = null
 
     private fun registerClipboardWatch() {
-        if (clipWatch != null) return
+        if (clipWatchOn) return
+        clipWatchOn = true
+        clipPollTick()
+    }
+
+    private fun clipPollTick() {
+        if (!clipWatchOn) return
         try {
             val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            val l = object : android.content.ClipboardManager.OnPrimaryClipChangedListener {
-                override fun onPrimaryClipChanged() {
-                    try {
-                        val clip = cm.primaryClip ?: return
-                        if (clip.itemCount > 0) {
-                            val text = clip.getItemAt(0).coerceToText(this@NexusAccessibilityService)?.toString().orEmpty()
-                            AgentForegroundService.pushClipTextFromAccessibility(text)
-                        }
-                    } catch (_: Exception) {
-                    }
+            val clip = cm.primaryClip
+            if (clip != null && clip.itemCount > 0) {
+                val text = clip.getItemAt(0).coerceToText(this)?.toString().orEmpty()
+                if (text.isNotEmpty() && text != clipLastSeen) {
+                    clipLastSeen = text
+                    AgentForegroundService.pushClipTextFromAccessibility(text)
                 }
             }
-            cm.addOnPrimaryClipChangedListener(l)
-            clipWatch = l
         } catch (_: Exception) {
         }
+        clipPoll.postDelayed({ clipPollTick() }, 1500)
     }
 
     private fun unregisterClipboardWatch() {
-        val l = clipWatch ?: return
-        clipWatch = null
-        try {
-            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            cm.removeOnPrimaryClipChangedListener(l)
-        } catch (_: Exception) {
-        }
+        clipWatchOn = false
+        clipPoll.removeCallbacksAndMessages(null)
     }
 
     override fun onInterrupt() {}
