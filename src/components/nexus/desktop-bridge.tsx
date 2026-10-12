@@ -18,6 +18,14 @@
 //      __src=controller (هاتف موثوق) خلال جلسة نشطة فقط، unknown يُرفض.
 //    · دورة حياة جلسة التحكم (rc:session) → input_session + لافتة دائمة
 //      + إنهاء فوري من اللافتة أو الشريط + تدفق إرشاد العربية على ماك.
+// 8) FA-media (عقد §15) — «طبقة الوسائط الأصلية»:
+//    · سوكِت 3005 دائم (media:role pc) يرحّل إشارات WebRTC بين الجسر ومحرك
+//      Rust: screen:req من الهاتف → media_screen_start → rtc:offer kind=screen
+//      → إجابة الهاتف/مرشحاته → media_screen_answer / media_screen_ice.
+//    · الويب كام: rtc:offer kind=cam/mic من الهاتف (بعد cam:cmd) → media_answer
+//      → إجابتنا → الأجهزة الافتراضية تُغذّى أصليًا (v4l2loopback/AkVCam/...).
+//    · rc:pointer من الهاتف (مؤشر مطلق على الشاشة المعروضة) — خلال جلسة.
+//    · دفع حالة الوسائط إلى المخزن المشترك (status.desktop.media للشريط).
 // كل ذلك معطّل خارج وضع سطح المكتب (?desktop=1 — تضبطه procman عند فتح النافذة).
 import { useEffect, useState } from "react"
 import { io, type Socket } from "socket.io-client"
@@ -34,7 +42,7 @@ const DESKTOP_DEFAULTS: Partial<Record<ShortcutAction, string>> = {
 // أحداث الإدخال التي تُنفَّذ أصليًا (نفس قائمة RC_INPUT في الجسر — عقد §4.2)
 const RC_INPUT_EVENTS = [
   "rc:move", "rc:click", "rc:scroll", "rc:pinch", "rc:key",
-  "rc:presenter", "rc:media",
+  "rc:presenter", "rc:media", "rc:pointer", // rc:pointer — عقد §15 (FA-media)
 ] as const
 
 interface SessionBanner {
@@ -307,6 +315,142 @@ export function DesktopBridge() {
     }
     guardSock.on("pc:lock", onPcLock)
 
+    // ------------------------------------------------------------------
+    // FA-media (عقد §15) — سوكِت 3005: رحّالة إشارات WebRTC بين الجسر
+    // ومحرك Rust الأصلي (بث الشاشة kind=screen + الويب كام kind=cam/mic)
+    // ------------------------------------------------------------------
+    const mediaSock: Socket = io("/?XTransformPort=3005", {
+      transports: ["websocket", "polling"],
+      forceNew: true,
+      reconnection: true,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 15000,
+      timeout: 10000,
+    })
+    mediaSock.on("connect", () => {
+      mediaSock.emit("media:role", { role: "pc", name: "NEXUS-PC" })
+    })
+
+    // حالة الوسائط المخزنة — يقرؤها الهاتف/الشريط (status.desktop.media)
+    const putMedia = (patch: Record<string, unknown>) => {
+      void fetch("/api/desktop/shortcuts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ media: patch }),
+      }).catch(() => null)
+    }
+    const onMediaState = (d: { screenOn?: boolean; vcamVideo?: boolean; vcamAudio?: boolean }) => {
+      putMedia({
+        screen: { on: d?.screenOn === true },
+        vcam: { video: d?.vcamVideo === true, audio: d?.vcamAudio === true },
+      })
+    }
+    type Unlisten2 = () => void
+    let mediaUnlisteners: Unlisten2[] = []
+    void (async () => {
+      try {
+        const ev = (window as unknown as {
+          __TAURI__?: { event?: { listen?: <T>(n: string, f: (e: { payload: T }) => void) => Promise<() => void> } }
+        }).__TAURI__?.event
+        if (!ev?.listen) return
+        // حالة من محرك Rust (بدء/إيقاف/فشل) — تُدفع للمخزن وللجسر
+        const un = await ev.listen<{ screenOn?: boolean; vcamVideo?: boolean; vcamAudio?: boolean }>(
+          "media://state",
+          (e) => {
+            onMediaState(e.payload)
+            // حالة بث الشاشة للهاتف (screen:state بث عام)
+            mediaSock.emit("screen:state", {
+              action: "state",
+              on: e.payload?.screenOn === true,
+              name: "NEXUS-PC",
+            })
+          },
+        )
+        mediaUnlisteners = [un]
+      } catch {
+        /* خارج Tauri */
+      }
+    })()
+
+    // ---- عرض الشاشة: الهاتف يطلب → نبدأ أصليًا → نعرض/نجيب ----
+    const onScreenReq = (d: { fps?: number; quality?: string; target?: string }) => {
+      void tauriInvoke<{ offer: { type: string; sdp: string }; w: number; h: number; fps: number; quality: string }>(
+        "media_screen_start",
+        { fps: d?.fps ?? null, quality: d?.quality ?? null, target: d?.target ?? null },
+      )
+        .then((r) => {
+          mediaSock.emit("rtc:offer", { kind: "screen", sdp: r.offer })
+          mediaSock.emit("screen:state", { action: "state", on: true, w: r.w, h: r.h, fps: r.fps, quality: r.quality, name: "NEXUS-PC" })
+        })
+        .catch((e) => {
+          console.warn("[desktop-bridge] screen_start:", e)
+          mediaSock.emit("screen:state", { action: "state", on: false, error: String(e).slice(0, 160) })
+        })
+    }
+    mediaSock.on("screen:req", onScreenReq)
+    mediaSock.on("screen:stop", () => {
+      void tauriInvoke("media_screen_stop").catch(() => null)
+    })
+    mediaSock.on("screen:set", (d: { fps?: number; quality?: string }) => {
+      void tauriInvoke("media_screen_set", { fps: d?.fps ?? null, quality: d?.quality ?? null }).catch(() => null)
+    })
+
+    // ---- إجابات/مرشحات الشاشة من الهاتف ----
+    const onRtc = (d: Record<string, unknown>, ev: string) => {
+      const kind = String(d?.kind ?? "")
+      if (kind === "screen") {
+        if (ev === "rtc:answer") {
+          void tauriInvoke("media_screen_answer", { sdp: d?.sdp }).catch((e) => console.warn("[desktop-bridge] screen answer:", e))
+        } else if (ev === "rtc:ice" && d?.candidate) {
+          void tauriInvoke("media_screen_ice", { candidate: d?.candidate }).catch(() => null)
+        }
+        return
+      }
+      // الويب كام: عرض الهاتف لـ cam/mic — نجيب فقط إن كنا طالبين
+      if ((kind === "cam" || kind === "mic") && ev === "rtc:offer") {
+        void tauriInvoke<{ answer: { type: string; sdp: string } }>("media_answer", { kind, sdp: d?.sdp })
+          .then((r) => {
+            mediaSock.emit("rtc:answer", { kind, sdp: r.answer })
+          })
+          .catch((e) => console.warn(`[desktop-bridge] answer ${kind}:`, e))
+      } else if ((kind === "cam" || kind === "mic") && ev === "rtc:ice" && d?.candidate) {
+        void tauriInvoke("media_ice", { kind, candidate: d?.candidate }).catch(() => null)
+      }
+    }
+    const offRtcAnswer = (d: Record<string, unknown>) => onRtc(d, "rtc:answer")
+    const offRtcIce = (d: Record<string, unknown>) => onRtc(d, "rtc:ice")
+    const offRtcOffer = (d: Record<string, unknown>) => onRtc(d, "rtc:offer")
+    mediaSock.on("rtc:answer", offRtcAnswer)
+    mediaSock.on("rtc:ice", offRtcIce)
+    mediaSock.on("rtc:offer", offRtcOffer)
+
+    // حالة كاميرا الهاتف — توقف الهاتف ينهي جلساتنا الأصلية
+    const onCamState = (d: { active?: boolean; deviceId?: string }) => {
+      if (d?.active === false) {
+        void tauriInvoke("media_kind_stop", { kind: "cam" }).catch(() => null)
+      }
+    }
+    mediaSock.on("cam:state", onCamState)
+
+    // بدء الويب كام من محرك Rust (بطاقة الإعدادات) → طلب بث من الهاتف
+    let unVcam: Unlisten2 | null = null
+    void (async () => {
+      try {
+        const ev = (window as unknown as {
+          __TAURI__?: { event?: { listen?: <T>(n: string, f: (e: { payload: T }) => void) => Promise<() => void> } }
+        }).__TAURI__?.event
+        if (!ev?.listen) return
+        unVcam = await ev.listen<{ video: boolean; audio: boolean }>("media://vcam-start", (e) => {
+          // تنقية محرك Rust نجحت → نطلب من الهاتف بدء البث (عقد §4.3)
+          if (e.payload?.video) mediaSock.emit("cam:cmd", { action: "cam-start" })
+          if (e.payload?.audio) mediaSock.emit("cam:cmd", { action: "mic-start" })
+        })
+        mediaUnlisteners.push(unVcam)
+      } catch {
+        /* خارج Tauri */
+      }
+    })()
+
     return () => {
       unsub()
       window.removeEventListener("keydown", onKey)
@@ -320,6 +464,13 @@ export function DesktopBridge() {
       for (const un of unlisteners) un()
       guardSock.off("pc:lock", onPcLock)
       guardSock.disconnect()
+      mediaSock.off("screen:req", onScreenReq)
+      mediaSock.off("rtc:answer", offRtcAnswer)
+      mediaSock.off("rtc:ice", offRtcIce)
+      mediaSock.off("rtc:offer", offRtcOffer)
+      mediaSock.off("cam:state", onCamState)
+      mediaSock.disconnect()
+      for (const un of mediaUnlisteners) un()
     }
   }, [])
 

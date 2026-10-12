@@ -88,6 +88,14 @@ class MediaEvents {
   // المستشعرات (FA-8) — للويب كجيمباد لاحقًا
   static const String sensorStream = 'sensor:stream'; // {a?, g?, ts}
 
+  // FA-media (عقد §15) — عرض شاشة الكمبيوتر على الهاتف:
+  // screen:req/stop/set من الهاتف (تنقية الجسر: fps 15..60 + quality low..ultra)
+  // screen:state من الكمبيوتر (on/w/h/fps + error عند الفشل)
+  static const String screenReq = 'screen:req';
+  static const String screenStop = 'screen:stop';
+  static const String screenSet = 'screen:set';
+  static const String screenState = 'screen:state';
+
   // زمن الاستجابة
   static const String ping = 'media:ping';
   static const String pong = 'media:pong';
@@ -111,6 +119,10 @@ class RcEvents {
   static const String wol = 'rc:wol'; // {mac}
   static const String clipboard = 'rc:clipboard'; // {direction: toPc|pull, text?}
   static const String handoff = 'rc:handoff'; // {url, title?} — FA-9
+  /// FA-media (عقد §15) — مؤشر مطلق على الشاشة المعروضة في الهاتف:
+  /// {nx, ny (0..1 على إطار البث), action: move|down|up|click|dblclick|rclick}
+  /// — يُنفّذ مطلقًا في فضاء سطح المكتب المركّب خلال جلسة تحكم موثوقة (§13).
+  static const String pointer = 'rc:pointer';
 
   // FA-input (عقد §13) — دورة حياة جلسة التحكم الموثوقة:
   // إرسال: {action: "start"|"stop", deviceId, name?} · {action: "hb"} نبض 2ث

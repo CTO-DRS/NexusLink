@@ -132,6 +132,17 @@ class MediaController extends Notifier<MediaUiState> {
     await _svc?.stopKind('mic');
   }
 
+  // FA-media (عقد §15) — عرض شاشة الكمبيوتر: طلب/إيقاف/جودة
+  void requestScreen({int? fps, String? quality}) =>
+      _svc?.requestScreen(fps: fps, quality: quality);
+
+  void setScreenQuality({int? fps, String? quality}) =>
+      _svc?.setScreenQuality(fps: fps, quality: quality);
+
+  Future<void> stopScreen() async {
+    await _svc?.stopScreen();
+  }
+
   Future<void> startBaby() async {
     await _svc?.startKind('baby');
   }

@@ -51,6 +51,13 @@ class MediaUiState {
 
   final MediaStream? previewStream; // المعاينة المصغرة للكاميرا
 
+  // FA-media (عقد §15) — عرض شاشة الكمبيوتر (الاتجاه المعاكس: الكمبيوتر صاحب الوسائط)
+  final MediaKindState screen;
+  final MediaStream? screenStream; // تدفق الفيديو الوارد من الكمبيوتر
+  final int screenW; // أبعاد سطح المكتب الملتقط (أساس خريطة اللمس)
+  final int screenH;
+  final int screenFps;
+
   const MediaUiState({
     this.bridgeOnline = false,
     this.cam = const MediaKindState(),
@@ -74,6 +81,11 @@ class MediaUiState {
     this.gyro = const [0, 0, 0],
     this.sensorMsgs = 0,
     this.previewStream,
+    this.screen = const MediaKindState(),
+    this.screenStream,
+    this.screenW = 0,
+    this.screenH = 0,
+    this.screenFps = 30,
   });
 
   bool get anyStreamOn =>
@@ -109,6 +121,12 @@ class MediaUiState {
     int? sensorMsgs,
     MediaStream? previewStream,
     bool clearPreview = false,
+    MediaKindState? screen,
+    MediaStream? screenStream,
+    bool clearScreenStream = false,
+    int? screenW,
+    int? screenH,
+    int? screenFps,
   }) =>
       MediaUiState(
         bridgeOnline: bridgeOnline ?? this.bridgeOnline,
@@ -133,6 +151,11 @@ class MediaUiState {
         gyro: gyro ?? this.gyro,
         sensorMsgs: sensorMsgs ?? this.sensorMsgs,
         previewStream: clearPreview ? null : (previewStream ?? this.previewStream),
+        screen: screen ?? this.screen,
+        screenStream: clearScreenStream ? null : (screenStream ?? this.screenStream),
+        screenW: screenW ?? this.screenW,
+        screenH: screenH ?? this.screenH,
+        screenFps: screenFps ?? this.screenFps,
       );
 }
 
@@ -157,6 +180,8 @@ class MediaService {
   });
 
   sio.Socket? _socket;
+  /// FA-media (§15) — اتصال عرض شاشة الكمبيوتر (الكمبيوتر صاحب الوسائط)
+  RTCPeerConnection? _screenPc;
 
   // جلسات WebRTC حية (نوعها: cam | mic | baby)
   final Map<String, RTCPeerConnection> _pcs = {};
@@ -251,6 +276,8 @@ class MediaService {
 
       bind(MediaEvents.rtcAnswer, _onAnswer);
       bind(MediaEvents.rtcIce, _onRemoteIce);
+      bind(MediaEvents.rtcOffer, _onScreenOffer); // FA-media: عرض شاشة الكمبيوتر (§15)
+      bind(MediaEvents.screenState, _onScreenState);
       bind(MediaEvents.camCmd, _onCamCmd);
       bind(MediaEvents.camShutter, (d) {
         final m = _map(d);
@@ -276,7 +303,8 @@ class MediaService {
     } catch (_) {}
     _socket = null;
     stopAll(reason: 'disconnected');
-    _patch((s) => s.copyWith(bridgeOnline: false, clearPreview: true));
+    unawaited(_teardownScreen()); // FA-media: تفكيك جلسة عرض الشاشة أيضًا
+    _patch((s) => s.copyWith(bridgeOnline: false, clearPreview: true, screen: const MediaKindState()));
   }
 
   static Map<Object?, Object?>? _map(dynamic data) {
@@ -470,6 +498,130 @@ class MediaService {
     } catch (e) {
       _setPhase(kind, MediaPhase.error, 'answer: $e');
     }
+  }
+
+  // ------------------------------------------------------------------
+  // FA-media (عقد §15) — عرض شاشة الكمبيوتر: الكمبيوتر صاحب الوسائط —
+  // نستقبل rtc:offer kind=screen ونجيب، وبث مرشحاتنا trickle.
+  // ------------------------------------------------------------------
+  Future<void> _onScreenOffer(dynamic raw) async {
+    final m = _map(raw);
+    if (m == null) return;
+    if ('${m['from'] ?? ''}' != 'pc') return; // من الكمبيوتر فقط
+    if ('${m['kind'] ?? ''}' != 'screen') return; // أنواع الكاميرا مسارها مستقل
+    if (_screenPc != null) return; // جلسة قائمة — أول عرض فقط (§4.3)
+    final sdp = m['sdp'];
+    if (sdp is! Map) return;
+    _patch((s) => s.copyWith(
+          screen: const MediaKindState(phase: MediaPhase.connecting),
+          lastError: null,
+          clearError: true,
+        ));
+    try {
+      final pc = await createPeerConnection({'iceServers': const []});
+      pc.onIceCandidate = (c) {
+        if (c.candidate == null) return;
+        _emit(MediaEvents.rtcIce, {
+          'kind': 'screen',
+          'candidate': {
+            'candidate': c.candidate,
+            'sdpMid': c.sdpMid,
+            'sdpMLineIndex': c.sdpMLineIndex,
+          },
+        });
+      };
+      pc.onTrack = (event) {
+        // تدفق الشاشة الوارد — أول stream في الحدث
+        final streams = event.streams;
+        if (streams.isNotEmpty) {
+          _patch((s) => s.copyWith(screenStream: streams.first, clearScreenStream: false));
+        }
+      };
+      pc.onConnectionState = (st) {
+        if (st == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+          _patch((s) => s.copyWith(screen: const MediaKindState(phase: MediaPhase.live)));
+        } else if (st == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
+            st == RTCPeerConnectionState.RTCPeerConnectionStateClosed ||
+            st == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+          unawaited(stopScreen(reason: 'rtc-$st'));
+        }
+      };
+      _screenPc = pc;
+      await pc.setRemoteDescription(RTCSessionDescription('${sdp['sdp']}', '${sdp['type']}'));
+      final answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      final desc = await pc.getLocalDescription();
+      if (desc != null) {
+        _emit(MediaEvents.rtcAnswer, {
+          'kind': 'screen',
+          'sdp': {'type': desc.type, 'sdp': desc.sdp},
+        });
+      }
+    } catch (e) {
+      _patch((s) => s.copyWith(
+            screen: MediaKindState(phase: MediaPhase.error, error: '$e'),
+            lastError: 'فشل عرض الشاشة: $e',
+          ));
+      await _teardownScreen();
+    }
+  }
+
+  void _onScreenState(dynamic raw) {
+    final m = _map(raw);
+    if (m == null) return;
+    if ('${m['from'] ?? ''}' == 'phone') return; // صدى
+    if (m['on'] == false) {
+      // الكمبيوتر أوقف البث (أو فشل بدؤه)
+      unawaited(_teardownScreen());
+      _patch((s) => s.copyWith(screen: const MediaKindState()));
+      final err = '${m['error'] ?? ''}';
+      if (err.isNotEmpty) {
+        _patch((s) => s.copyWith(lastError: 'بث الشاشة: $err'));
+      }
+      return;
+    }
+    // أبعاد سطح المكتب — أساس خريطة اللمس (تحويل الشاشة المعروضة → مطلق)
+    final w = (m['w'] as num?)?.toInt() ?? 0;
+    final h = (m['h'] as num?)?.toInt() ?? 0;
+    final fps = (m['fps'] as num?)?.toInt() ?? 30;
+    _patch((s) => s.copyWith(screenW: w, screenH: h, screenFps: fps));
+  }
+
+  /// طلب بدء عرض شاشة الكمبيوتر (عقد §15 — screen:req على 3005)
+  void requestScreen({int? fps, String? quality}) {
+    final data = <String, dynamic>{'action': 'start'};
+    if (fps != null) data['fps'] = fps;
+    if (quality != null) data['quality'] = quality;
+    _emit(MediaEvents.screenReq, data);
+  }
+
+  /// طلب تغيير الجودة أثناء البث
+  void setScreenQuality({int? fps, String? quality}) {
+    final data = <String, dynamic>{'action': 'set'};
+    if (fps != null) data['fps'] = fps;
+    if (quality != null) data['quality'] = quality;
+    _emit(MediaEvents.screenSet, data);
+  }
+
+  /// إيقاف العرض (طلب + تفكيك محلي)
+  Future<void> stopScreen({String reason = 'manual'}) async {
+    _emit(MediaEvents.screenStop, {'action': 'stop'});
+    await _teardownScreen();
+    _patch((s) => s.copyWith(
+          screen: const MediaKindState(),
+          screenW: 0,
+          screenH: 0,
+          clearScreenStream: true,
+        ));
+  }
+
+  Future<void> _teardownScreen() async {
+    final pc = _screenPc;
+    _screenPc = null;
+    try {
+      await pc?.close();
+    } catch (_) {}
+    _patch((s) => s.copyWith(clearScreenStream: true));
   }
 
   Future<void> _onRemoteIce(dynamic raw) async {

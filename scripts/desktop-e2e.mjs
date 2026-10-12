@@ -663,6 +663,133 @@ try {
       contract.includes("## 14.") && contract.includes("--send") && contract.includes("NSServices") && contract.includes("/Outbox/") && contract.includes("/api/fs/upload") && contract.includes("installer-hooks"))
   }
 
+  // ==========================================================================
+  // FA-media (عقد §15) — طبقة الوسائط الأصلية: إشارات عرض الشاشة + الويب كام
+  // ==========================================================================
+  {
+    console.log("\n== FA-media: عرض الشاشة (screen:req/offer/answer/ICE) والويب كام ==")
+    const mPc = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3005" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+    const mPhone = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3005" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+    await Promise.all([
+      new Promise((res, rej) => { mPc.on("connect", res); mPc.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("media pc timeout")), 10000) }),
+      new Promise((res, rej) => { mPhone.on("connect", res); mPhone.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("media phone timeout")), 10000) }),
+    ])
+    mPc.emit("media:role", { role: "pc", name: "E2E-PC" })
+    mPhone.emit("media:role", { role: "phone", name: "E2E-Media-Phone" })
+    await sleep(400)
+
+    // (أ) screen:req من الهاتف يصل الكمبيوتر (تنقية الجسر تمرر الصالح)
+    const screenReq = await new Promise((res) => {
+      mPc.on("screen:req", (d) => res(d))
+      mPhone.emit("screen:req", { action: "start", fps: 60 })
+      setTimeout(() => res(null), 6000)
+    })
+    check("FA-media: screen:req من الهاتف يصل الكمبيوتر مع fps=60",
+      screenReq?.fps === 60 && screenReq?.from === "phone", JSON.stringify(screenReq ?? {}).slice(0, 120))
+
+    // (ب) screen:req بفيس فاسد يُرفض صامتًا (قائمة بيضاء الجسر)
+    let badReqSeen = false
+    mPc.on("screen:req", () => { badReqSeen = true })
+    mPhone.emit("screen:req", { action: "start", fps: 90 })
+    await sleep(1200)
+    check("FA-media: screen:req بـ fps=90 يُرفض صامتًا", badReqSeen === false)
+
+    // (ج) عرض الشاشة: الكمبيوتر يبث rtc:offer kind=screen → الهاتف يستقبل
+    const screenOffer = await new Promise((res) => {
+      mPhone.on("rtc:offer", (d) => res(d))
+      mPc.emit("rtc:offer", { kind: "screen", sdp: { type: "offer", sdp: "v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\n" } })
+      setTimeout(() => res(null), 6000)
+    })
+    check("FA-media: rtc:offer kind=screen يرحّل للهاتف مع from=pc",
+      screenOffer?.kind === "screen" && screenOffer?.from === "pc" && screenOffer?.sdp?.type === "offer",
+      JSON.stringify(screenOffer ?? {}).slice(0, 140))
+
+    // (د) إجابة الهاتف → الكمبيوتر يستقبل
+    const screenAnswer = await new Promise((res) => {
+      mPc.on("rtc:answer", (d) => res(d))
+      mPhone.emit("rtc:answer", { kind: "screen", sdp: { type: "answer", sdp: "v=0\r\no=- 2 2 IN IP4 127.0.0.1\r\n" } })
+      setTimeout(() => res(null), 6000)
+    })
+    check("FA-media: rtc:answer kind=screen يرحّل للكمبيوتر",
+      screenAnswer?.kind === "screen" && screenAnswer?.from === "phone", JSON.stringify(screenAnswer ?? {}).slice(0, 140))
+
+    // (هـ) ICE ثنائي الاتجاه (trickle)
+    const iceAtPc = await new Promise((res) => {
+      mPc.on("rtc:ice", (d) => res(d))
+      mPhone.emit("rtc:ice", { kind: "screen", candidate: { candidate: "candidate:1 1 UDP 2122252543 192.168.1.9 50000 typ host", sdpMid: "0", sdpMLineIndex: 0 } })
+      setTimeout(() => res(null), 6000)
+    })
+    check("FA-media: rtc:ice (trickle) يرحّل", iceAtPc?.candidate?.candidate?.startsWith("candidate:1"), JSON.stringify(iceAtPc ?? {}).slice(0, 120))
+
+    // (و) الويب كام: cam:cmd cam-start من الكمبيوتر يصل الهاتف
+    const camStart = await new Promise((res) => {
+      mPhone.on("cam:cmd", (d) => res(d))
+      mPc.emit("cam:cmd", { action: "cam-start" })
+      setTimeout(() => res(null), 6000)
+    })
+    check("FA-media: cam:cmd cam-start يصل الهاتف (البند 4)", camStart?.action === "cam-start", JSON.stringify(camStart ?? {}).slice(0, 100))
+
+    // (ز) عرض الكاميرا من الهاتف kind=cam → الكمبيوتر (أول إجابة تفوز — §4.3)
+    const camOffer = await new Promise((res) => {
+      mPc.on("rtc:offer", (d) => res(d))
+      mPhone.emit("rtc:offer", { kind: "cam", sdp: { type: "offer", sdp: "v=0\r\no=- 3 2 IN IP4 127.0.0.1\r\n" } })
+      setTimeout(() => res(null), 6000)
+    })
+    check("FA-media: rtc:offer kind=cam (فيديو+صوت الهاتف) يرحّل للكمبيوتر",
+      camOffer?.kind === "cam" && camOffer?.from === "phone", JSON.stringify(camOffer ?? {}).slice(0, 120))
+
+    // (ح) screen:state من الكمبيوتر للهاتف (on/w/h)
+    const screenState = await new Promise((res) => {
+      mPhone.on("screen:state", (d) => res(d))
+      mPc.emit("screen:state", { action: "state", on: true, w: 1920, h: 1080, fps: 60, quality: "high", name: "E2E-PC" })
+      setTimeout(() => res(null), 6000)
+    })
+    check("FA-media: screen:state on/w/h يبث للهاتف",
+      screenState?.on === true && screenState?.w === 1920 && screenState?.h === 1080,
+      JSON.stringify(screenState ?? {}).slice(0, 120))
+
+    // (ط) مخزن حالة الوسائط: PUT media → status.desktop.media (الشريط)
+    const putM = await fetch(`http://127.0.0.1:3000/api/desktop/shortcuts`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ media: { screen: { on: true, fps: 60, quality: "ultra" }, vcam: { video: true, audio: true, driver: "akvirtualcamera" } } }),
+    }).then((r) => r.json())
+    check("FA-media: PUT media يقبل الحالة الصالحة",
+      putM?.ok === true && putM?.media?.screen?.on === true && putM?.media?.screen?.fps === 60,
+      JSON.stringify(putM?.media).slice(0, 130))
+    const badM = await fetch(`http://127.0.0.1:3000/api/desktop/shortcuts`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ media: { screen: { on: true, fps: 91 } } }),
+    }).then((r) => r.json())
+    check("FA-media: PUT media fps=91 يُرفض ويُبقي آخر قيمة صالحة (60)", badM?.ok === true && badM?.media?.screen?.fps === 60,
+      JSON.stringify(badM?.media).slice(0, 110))
+    const stM = await fetch(`http://127.0.0.1:3000/api/desktop/status`).then((r) => r.json())
+    check("FA-media: status.desktop.media يعرض الحالة للشريط/الهاتف",
+      stM?.desktop?.media?.screen?.on === true && stM?.desktop?.media?.vcam?.video === true,
+      JSON.stringify(stM?.desktop?.media).slice(0, 130))
+
+    // (ي) rc:pointer: التنقية (فاسد مرفوض صامتًا) + الصالح يمرر مع __src
+    const ptrInj = await new Promise((res) => {
+      rcDesk.on("rc:pointer", (d) => res(d))
+      rcCtl.emit("rc:pointer", { nx: 0.5, ny: 0.25, action: "move" })
+      setTimeout(() => res(null), 6000)
+    })
+    check("FA-media: rc:pointer صالح يمرر مع __src=controller + مطبّع",
+      ptrInj?.__src === "controller" && ptrInj?.nx === 0.5 && ptrInj?.ny === 0.25 && ptrInj?.action === "move",
+      JSON.stringify(ptrInj ?? {}).slice(0, 120))
+    let badPtr = null
+    const badPtrP = new Promise((res) => { rcDesk.on("rc:pointer", (d) => res(d)); setTimeout(() => res("__none__"), 2500) })
+    rcCtl.emit("rc:pointer", { nx: 5, ny: 0.5, action: "explode" })
+    badPtr = await badPtrP
+    check("FA-media: rc:pointer فاسد (nx>1 + إجراء غريب) يُرفض صامتًا", badPtr === "__none__", `got=${JSON.stringify(badPtr)}`)
+
+    // (ك) العقد §15 موثق حرفيًا
+    check("العقد: §15 موثق (kind=screen + scap/x11rb + v4l2loopback/akvirtualcamera + VB-CABLE/BlackHole + rc:pointer)",
+      contract.includes("## 15.") && contract.includes('kind="screen"') && contract.includes("v4l2loopback") && contract.includes("akvirtualcamera") && contract.includes("BlackHole") && contract.includes("rc:pointer"))
+
+    mPc.disconnect()
+    mPhone.disconnect()
+  }
+
   rcCtl.disconnect()
   webSock.disconnect()
   rcDesk.disconnect()

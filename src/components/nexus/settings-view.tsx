@@ -17,10 +17,11 @@ import {
   Moon, Sun, Languages, ShieldCheck, Wifi, Cpu, Info, Radio, Contrast,
   Accessibility, Keyboard, Gauge, HardDriveDownload, Sparkles, RotateCcw,
   Ear, Volume2, CheckCircle2, AlertTriangle, Rocket, Package, Globe,
-  FolderSync, Plus, Trash2, FolderOpen,
+  FolderSync, Plus, Trash2, FolderOpen, MonitorPlay, Camera, Mic,
 } from "lucide-react"
 import { toast } from "sonner"
 import { pickFolder } from "@/lib/desktop-files"
+import { tauriInvoke } from "@/lib/tauri"
 
 const SHORTCUT_ORDER: ShortcutAction[] = [
   "palette", "help", "sendFile", "lock", "theme", "lang", "contrast", "speedtest", "dnd",
@@ -154,6 +155,49 @@ export function SettingsView() {
       .then((r) => r.json())
       .then((j) => { if (!j?.ok) throw new Error(j?.error) })
       .catch(() => toast.error(t("تعذر حفظ أزواج المزامنة")))
+  }
+  // FA-media (عقد §15) — حالة الوسائط من محرك Rust الأصلي (بطاقة إعدادات سطح المكتب)
+  interface VcamGuide { title?: string; steps?: string[] }
+  interface VcamStatus {
+    video: { driver: string; ok: boolean; guide: VcamGuide | null }
+    audio: { driver: string; ok: boolean; guide: VcamGuide | null }
+  }
+  interface MediaStatus { screen: { on: boolean; fps?: number; quality?: string }; vcam: { video: boolean; audio: boolean } }
+  const [mediaStatus, setMediaStatus] = useState<MediaStatus | null>(null)
+  const [vcamStatus, setVcamStatus] = useState<VcamStatus | null>(null)
+  const refreshMedia = useCallback(() => {
+    if (!IS_DESKTOP_WINDOW) return
+    void tauriInvoke<MediaStatus>("media_status")
+      .then((r) => setMediaStatus(r))
+      .catch(() => null)
+    void tauriInvoke<VcamStatus>("media_vcam_status")
+      .then((r) => setVcamStatus(r))
+      .catch(() => null)
+  }, [])
+  useEffect(() => {
+    if (!IS_DESKTOP_WINDOW) return
+    refreshMedia()
+    const iv = setInterval(refreshMedia, 5000)
+    return () => clearInterval(iv)
+  }, [refreshMedia])
+  const toggleVcam = async (on: boolean) => {
+    try {
+      if (on) {
+        const r = await tauriInvoke<{ ok: boolean; status: VcamStatus }>("media_vcam_start", { video: true, audio: true })
+        setVcamStatus(r.status)
+        const okV = r.status?.video?.ok
+        const okA = r.status?.audio?.ok
+        if (okV && okA) toast.success(t("الويب كام والميكروفون الافتراضي جاهزان — الهاتف سيبدأ البث"))
+        else if (okV || okA) toast.info(t("جزء من الأجهزة جاهز — راجع الإرشاد في البطاقة"))
+        else toast.error(t("لا درايفر كاميرا/صوت افتراضي — اتبع الإرشاد"))
+      } else {
+        await tauriInvoke("media_vcam_stop")
+        toast.success(t("أُوقفت الأجهزة الافتراضية"))
+      }
+    } catch (e) {
+      toast.error(String(e).slice(0, 160))
+    }
+    setTimeout(refreshMedia, 400)
   }
   const addSyncPair = async () => {
     const dir = await pickFolder()
@@ -413,6 +457,74 @@ export function SettingsView() {
             </div>
             <p className="text-[11px] text-muted-foreground leading-relaxed">
               {t("ملاحظة: الأحدث يفوز عند التعارض، والحذف لا ينتشر (حد موثق) — الملفات المؤقتة والمخفية مستثناة")}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* طبقة الوسائط الأصلية (FA-media — عقد §15 — نافذة سطح المكتب فقط) */}
+      {IS_DESKTOP_WINDOW && (
+        <Card>
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <SectionTitle
+                icon={MonitorPlay}
+                title={t("طبقة الوسائط الأصلية")}
+                desc={t("بث شاشة الكمبيوتر إلى الهاتف (WebRTC) + كاميرا الهاتف وميكروفونها كأجهزة افتراضية حقيقية يعملان في Zoom/Meet")}
+              />
+              <Button
+                size="sm"
+                variant={mediaStatus?.vcam?.video || mediaStatus?.vcam?.audio ? "destructive" : "outline"}
+                className="gap-1.5 shrink-0"
+                onClick={() => void toggleVcam(!(mediaStatus?.vcam?.video || mediaStatus?.vcam?.audio))}
+              >
+                <Camera className="w-3.5 h-3.5" />
+                {mediaStatus?.vcam?.video || mediaStatus?.vcam?.audio ? t("إيقاف الويب كام") : t("تشغيل الويب كام")}
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-xl border px-3 py-2 flex items-center gap-2">
+                <MonitorPlay className="w-4 h-4 opacity-70 shrink-0" />
+                <div className="min-w-0">
+                  <div className="font-medium">{t("بث الشاشة")}</div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {mediaStatus?.screen?.on
+                      ? `${t("نشط")} · ${mediaStatus.screen.fps ?? 30}fps · ${mediaStatus.screen.quality ?? "high"}`
+                      : t("خامل — ابدأه من شاشة «كمبيوترك» على الهاتف")}
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-xl border px-3 py-2 flex items-center gap-2">
+                <Mic className="w-4 h-4 opacity-70 shrink-0" />
+                <div className="min-w-0">
+                  <div className="font-medium">{t("الأجهزة الافتراضية")}</div>
+                  <div className="text-[10px] text-muted-foreground" dir="ltr">
+                    {vcamStatus?.video?.driver !== "none" ? `NexusLink Virtual Camera · ` : ""}
+                    {vcamStatus?.audio?.driver !== "none" ? vcamStatus?.audio?.driver : ""}
+                    {vcamStatus?.video?.driver === "none" && vcamStatus?.audio?.driver === "none" ? "—" : ""}
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* إرشادات الدوايفور المفقودة — نص صادق لكل منصة */}
+            {vcamStatus && !vcamStatus.video.ok && vcamStatus.video.guide && (
+              <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 px-3 py-3 text-xs space-y-1.5">
+                <div className="font-semibold flex items-center gap-1.5"><Camera className="w-3.5 h-3.5" /> {t(String(vcamStatus.video.guide.title ?? ""))}</div>
+                {(vcamStatus.video.guide.steps ?? []).map((s, i) => (
+                  <div key={i} className="text-muted-foreground" dir="auto">{s.startsWith("http") || s.includes("sudo") || s.includes("AkVCam") || s.includes("modprobe") ? <code className="text-[10px]" dir="ltr">{s}</code> : t(s)}</div>
+                ))}
+              </div>
+            )}
+            {vcamStatus && !vcamStatus.audio.ok && vcamStatus.audio.guide && (
+              <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 px-3 py-3 text-xs space-y-1.5">
+                <div className="font-semibold flex items-center gap-1.5"><Mic className="w-3.5 h-3.5" /> {t(String(vcamStatus.audio.guide.title ?? ""))}</div>
+                {(vcamStatus.audio.guide.steps ?? []).map((s, i) => (
+                  <div key={i} className="text-muted-foreground" dir="auto">{s.startsWith("http") ? <code className="text-[10px]" dir="ltr">{s}</code> : t(s)}</div>
+                ))}
+              </div>
+            )}
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              {t("الحدود الموثقة: ويندوز/ماك يحتاجان تثبيت akvirtualcamera وVB-CABLE/BlackHole (إرشاد أعلاه)؛ لينكس يحتاج v4l2loopback ويستخدم PulseAudio مباشرة — والبث يعمل أثناء حياة التطبيق")}
             </p>
           </CardContent>
         </Card>

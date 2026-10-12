@@ -24,6 +24,50 @@ const CAM_CMDS = new Set([
   "baby-start", "baby-stop", "watch-start", "watch-stop",
 ])
 
+// ---------------------------------------------------------------------------
+// FA-media (عقد §15) — عرض شاشة الكمبيوتر على الهاتف عبر WebRTC.
+// الاتجاه معكوس عن الكاميرا: الكمبيوتر (صاحب الشاشة) ينشئ rtc:offer kind=screen
+// استجابةً لطلب الهاتف، والهاتف يجيب. أحداث screen:* تُنقّى وتُبث للجميع.
+// ---------------------------------------------------------------------------
+
+/** مستويات الجودة المسموحة للبث (الافتراضي high = 30fps). */
+const SCREEN_QUALITIES = new Set(["low", "medium", "high", "ultra"])
+/** معدلات الإطارات المسموحة (المطلوب التعاقدي: 30–60). */
+const SCREEN_FPS = new Set([15, 24, 30, 45, 60])
+
+/** تنقية حدث عرض الشاشة الوارد — يعيد الحمولة الآمنة أو null للرفض. */
+function sanitizeScreenEvent(data: Record<string, unknown> | undefined) {
+  if (!data || typeof data !== "object") return null
+  const out: Record<string, unknown> = { at: Date.now() }
+  const action = data.action === undefined ? undefined : String(data.action)
+  if (action !== undefined) {
+    if (!"start|stop|set|state".split("|").includes(action)) return null
+    out.action = action
+  }
+  if (data.fps !== undefined) {
+    const fps = Math.round(Number(data.fps))
+    if (!SCREEN_FPS.has(fps)) return null
+    out.fps = fps
+  }
+  if (data.quality !== undefined) {
+    if (typeof data.quality !== "string" || !SCREEN_QUALITIES.has(data.quality)) return null
+    out.quality = data.quality
+  }
+  // حقول الحالة الصادرة من الكمبيوتر (screen:state) تمر كما هي بعد التحقق النوعي
+  if (data.on !== undefined) out.on = data.on === true
+  if (data.w !== undefined) {
+    const w = Math.round(Number(data.w))
+    if (Number.isFinite(w) && w > 0 && w <= 8192) out.w = w
+  }
+  if (data.h !== undefined) {
+    const h = Math.round(Number(data.h))
+    if (Number.isFinite(h) && h > 0 && h <= 8192) out.h = h
+  }
+  if (typeof data.name === "string" && data.name.length <= 80) out.name = data.name
+  if (typeof data.error === "string" && data.error.length <= 200) out.error = data.error
+  return out
+}
+
 /** محدد معدل بث المستشعرات — 40 رسالة/ثانية لكل مقبس (20Hz × هامش أمان). */
 const sensorBudget = new Map<string, { n: number; win: number }>()
 function sensorAllowed(key: string): boolean {
@@ -185,6 +229,17 @@ export function ensureMediaBridge() {
           at: Date.now(),
         })
       })
+
+      // ==== FA-media: عرض شاشة الكمبيوتر (عقد §15) — تنقية + بث شفاف ====
+      // screen:req/stop/set من الهاتف؛ screen:state من الكمبيوتر (الطبقة الأصلية
+      // عبر الويبفيو). rtc:offer kind=screen يمر عبر مسار rtc:* الشفاف أعلاه.
+      for (const ev of ["screen:req", "screen:stop", "screen:set", "screen:state"]) {
+        socket.on(ev, (data: Record<string, unknown>) => {
+          const out = sanitizeScreenEvent(data)
+          if (!out) return
+          io2.emit(ev, { ...out, from: socket.data.role ?? "unknown" })
+        })
+      }
 
       // ==== بث الوسائط: أوامر من مرسل (هاتف) إلى مستقبل (TV/كمبيوتر) ====
       socket.on("cast:cmd", (data: Record<string, unknown>) => {

@@ -10,6 +10,7 @@ mod clipboard;
 mod files_menu;
 mod files_menu_core;
 mod input;
+mod media;
 mod notify;
 mod power;
 mod procman;
@@ -86,12 +87,15 @@ fn main() {
             // FA-files (عقد §14) — قائمة الزر الأيمن + مقبض المزامنة الأصلي
             files_menu::apply_startup();
             sync::set_app(handle.clone());
+            // FA-media (عقد §15) — الطبقة الأصلية للوسائط (بث الشاشة + الويب كام)
+            media::set_app(handle.clone());
             Ok(())
         })
         // FA-clipboard-sync — أوامر الطبقة الأصلية للحافظة الموحدة (عقد §11)
         // FA-power — أوامر النظام/الطاقة الحقيقية + MAC + إلغاء الإيقاف (عقد §12)
         // FA-input — جلسة التحكم وتنفيذ أحداث اللمس/الكيبورد عبر enigo (عقد §13)
         // FA-files — إظهار في المستكشف/بث الفيديو/قائمة السياق (عقد §14)
+        // FA-media — بث الشاشة + الويب كام الافتراضية (عقد §15)
         .invoke_handler(tauri::generate_handler![
             clipboard::clip_apply,
             clipboard::clip_send_now,
@@ -105,7 +109,20 @@ fn main() {
             files_menu::files_reveal,
             files_menu::files_stream_open,
             files_menu::files_stream_cancel,
-            files_menu::files_context_menu
+            files_menu::files_context_menu,
+            media::media_screen_start,
+            media::media_screen_answer,
+            media::media_screen_ice,
+            media::media_screen_stop,
+            media::media_screen_set,
+            media::media_targets,
+            media::media_vcam_start,
+            media::media_vcam_stop,
+            media::media_vcam_status,
+            media::media_answer,
+            media::media_ice,
+            media::media_kind_stop,
+            media::media_status
         ])
         .on_window_event(|window, event| match event {
             // إغلاق → إخفاء إلى الـ Tray (قابل للتعطيل من قائمة الـ Tray)
@@ -141,11 +158,13 @@ fn main() {
                     procman::kill_all();
                     files_menu::cleanup_all();
                     sync::stop_all();
+                    media::stop_all();
                 }
                 RunEvent::Exit => {
                     procman::kill_all();
                     files_menu::cleanup_all();
                     sync::stop_all();
+                    media::stop_all();
                 }
                 _ => {}
             }

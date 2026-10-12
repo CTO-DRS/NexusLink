@@ -41,6 +41,54 @@ const SCROLL_PX_PER_NOTCH: f64 = 40.0;
 /// أقصى نقرات عجلة في حدث واحد
 const MAX_SCROLL_NOTCHES: i32 = 10;
 
+// ---------------------------------------------------------------------------
+// FA-media (عقد §15) — المؤشر المطلق على الشاشة المعروضة في الهاتف:
+// فضاء الإحداثيات = سطح المكتب المركّب (أصل كل الشاشات) — يضبطه media.rs عند
+// بدء/إيقاف البث (أبعاد الهدف + أصله) ويفض افتراضيًا على البعد الشائع.
+// ---------------------------------------------------------------------------
+static POINTER_SPACE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// ضبط فضاء المؤشر المطلق — (w, h, origin_x, origin_y) مرمزة في u64 واحد
+/// (w 12bit · h 12bit · x 20bit إزاحة ±512K · y 20bit) — بلا قفل للمسار الحرج
+pub fn set_pointer_space(w: u32, h: u32, ox: i32, oy: i32) {
+    let pack = ((w.min(0xFFF) as u64) << 52)
+        | ((h.min(0xFFF) as u64) << 40)
+        | (((ox + 512_000).clamp(0, 0xFFFFF) as u64) << 20)
+        | ((oy + 512_000).clamp(0, 0xFFFFF) as u64);
+    POINTER_SPACE.store(pack, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn pointer_space() -> (u32, u32, i32, i32) {
+    let p = POINTER_SPACE.load(std::sync::atomic::Ordering::Relaxed);
+    if p == 0 {
+        return (1920, 1080, 0, 0); // افتراضي حتى يضبطه media.rs
+    }
+    (
+        ((p >> 52) & 0xFFF) as u32,
+        ((p >> 40) & 0xFFF) as u32,
+        ((p >> 20) & 0xFFFFF) as i32 - 512_000,
+        (p & 0xFFFFF) as i32 - 512_000,
+    )
+}
+
+/// إجراءات المؤشر المطلق (rc:pointer — تنقية الجسر تغطيها أيضًا)
+pub const POINTER_ACTIONS: [&str; 6] = ["move", "down", "up", "click", "dblclick", "rclick"];
+
+pub fn pointer_action_ok(a: &str) -> bool {
+    POINTER_ACTIONS.contains(&a)
+}
+
+/// تحويل إحداثيات مُطبّعة (0..1 من الشاشة المعروضة في الهاتف) إلى بكسل
+/// مطلق في فضاء سطح المكتب المركّب (أصل كل الشاشات المركبة).
+pub fn pointer_map(nx: f64, ny: f64, w: u32, h: u32, ox: i32, oy: i32) -> (i32, i32) {
+    let nx = if nx.is_finite() { nx.clamp(0.0, 1.0) } else { 0.0 };
+    let ny = if ny.is_finite() { ny.clamp(0.0, 1.0) } else { 0.0 };
+    let x = ox + (nx * w as f64).round() as i32;
+    let y = oy + (ny * h as f64).round() as i32;
+    // حاجز دفاعي: داخل فضاء سطح المكتب المركب بعيدًا عن الأطراف القاتلة
+    (x.clamp(-32_000, 32_000), y.clamp(-32_000, 32_000))
+}
+
 fn clamp_i(v: f64, hi: f64) -> i32 {
     if !v.is_finite() {
         return 0;
@@ -65,7 +113,50 @@ pub fn apply_event(enigo: &mut Enigo, ev: &serde_json::Value) -> Result<String, 
         "key" => apply_key(enigo, ev),
         "presenter" => apply_presenter(enigo, ev),
         "media" => apply_media(enigo, ev),
+        "pointer" => apply_pointer(enigo, ev), // FA-media (عقد §15)
         other => Err(format!("نوع حدث إدخال غير معروف: {other}")),
+    }
+}
+
+/// FA-media (عقد §15) — لمس على الشاشة المعروضة في الهاتف: مؤشر مطلق + إجراء.
+/// nx/ny 0..1 على إطار البث → بكسل مطلق في فضاء سطح المكتب المركّب.
+fn apply_pointer(enigo: &mut Enigo, ev: &serde_json::Value) -> Result<String, String> {
+    let nx = ev.get("nx").and_then(|x| x.as_f64()).unwrap_or(0.0);
+    let ny = ev.get("ny").and_then(|x| x.as_f64()).unwrap_or(0.0);
+    let action = ev.get("action").and_then(|x| x.as_str()).unwrap_or("move");
+    if !pointer_action_ok(action) {
+        return Err(format!("إجراء مؤشر غير معروف: {action}"));
+    }
+    let (w, h, ox, oy) = pointer_space();
+    let (x, y) = pointer_map(nx, ny, w, h, ox, oy);
+    enigo
+        .move_mouse(x, y, Coordinate::Abs)
+        .map_err(|e| format!("تحريك المؤشر المطلق فشل: {e}"))?;
+    match action {
+        "move" => Ok("مؤشر مطلق".into()),
+        "down" => enigo
+            .button(Button::Left, Direction::Press)
+            .map(|_| "ضغط".to_string())
+            .map_err(|e| format!("ضغط فشل: {e}")),
+        "up" => enigo
+            .button(Button::Left, Direction::Release)
+            .map(|_| "رفع".to_string())
+            .map_err(|e| format!("رفع فشل: {e}")),
+        "click" => {
+            enigo.button(Button::Left, Direction::Click).map_err(|e| format!("نقر فشل: {e}"))?;
+            Ok("نقر على الموضع".into())
+        }
+        "dblclick" => {
+            enigo.button(Button::Left, Direction::Click).map_err(|e| format!("نقر فشل: {e}"))?;
+            std::thread::sleep(std::time::Duration::from_millis(40));
+            enigo.button(Button::Left, Direction::Click).map_err(|e| format!("نقر مزدوج فشل: {e}"))?;
+            Ok("نقر مزدوج على الموضع".into())
+        }
+        "rclick" => {
+            enigo.button(Button::Right, Direction::Click).map_err(|e| format!("نقر أيمن فشل: {e}"))?;
+            Ok("نقر أيمن على الموضع".into())
+        }
+        _ => Ok("مؤشر مطلق".into()),
     }
 }
 

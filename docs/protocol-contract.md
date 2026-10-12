@@ -626,3 +626,57 @@ interface TransferJob {
 **تحقق E2E**: قسم ] في scripts/desktop-e2e.mjs — realpath موجود فعليًا + 404 لجهاز فاسد — تسجيل نقطة الوسائط عبر hello-phone media + تحديث guard:media + محوها عند الانقطاع — دورة عرض مزامنة كاملة (send-file /Outbox → tx:offer بـ srcVPath → accept/progress/state → مهمة done) — Range 206 على /api/preview — PUT/GET أزواج المزامنة مع تنقية الفاسد — توثيق §14. محرك تنفيذي إضافي: **scripts/files-verify (56/56)** — مواصفات Registry (اقتباس/عربية) — pump_stream ضد خادم Range محلي (403 لرمز فاسد، 206، اكتمال 2.5MB، فتح مرة واحدة عند العتبة، إلغاء فوري) — مزامنة حقيقية بمجلدات مؤقتة (صادر/وارد/LWW/صدى/استثناءات) — مراقب notify حقيقي.
 
 **قيود موثقة بصدق**: تعدد تحديد قائمة السياق يمرر أول عنصر (%1) — Share Extension .appex يتطلب هدف Xcode (Services تغطي Finder) — البث أثناء حياة التطبيق — الحذف لا ينتشر — الضغط الفيزيائي لقائمة السياق/Services/Drag يثبت بـ CI 3/3 (بناء فعلي بالطبقات) بينما النواة مثبتة تنفيذيًا 56/56 محليًا.
+
+---
+
+## 15. طبقة الوسائط الأصلية (FA-media — مصدر: media.rs + media_core.rs + media-bridge.ts + remote-bridge.ts + media_service.dart + pc_screen_screen.dart + desktop-bridge.tsx)
+
+«شاشة الكمبيوتر على الهاتف عبر WebRTC بجودة قابلة للضبط + لمس الشاشة المعروضة يتحكم بالكمبيوتر + كاميرا الهاتف وميكروفونها أجهزة افتراضية حقيقية على الكمبيوتر (Zoom/Meet/Camera)» — كل الاتجاهات أعلى القنوات القائمة (جسر 3005 §4.3 + جلسة التحكم §13) بلا مساس.
+
+**تحقق تنفيذي 38/38 (scripts/media-verify — يضمّن media_core.rs/input_exec.rs حرفيًا)**: النوى (جودة/YUYV/تصغير/بوابة/دوايفور/SDP/ICE) + خريطة اللمس + **H264 ترميز→فك دورة كاملة (OpenH264)** + **Opus ترميز→فك (audiopus، نسبة RMS 0.99)** + **WebRTC loopback حقيقي (webrtc-rs 0.21): عرض/إجابة بمرشحات host مضمّنة، 20 إطار H264 و40 حزمة Opus استُقبلت عبر RTP فعلي**. والطبقة الأصلية (media.rs) تُبوّب بـ CI على المنصات الثلاث (الحاوية بلا GUI — نفس نمط §13/§14).
+
+### 15.أ شاشة الكمبيوتر → الهاتف (بند 1 و2 و3 — kind="screen" — الكمبيوتر صاحب الوسائط)
+- **الالتقاط**: `scap 0.0.8` على ويندوز/ماك (Windows.Graphics.Capture / ScreenCaptureKit — اختيار شاشة/نافذة عبر `get_all_targets()`، FrameType BGRAFrame) — وعلى لينكس `x11rb` مباشرة (GetImage على الجذر + RandR للشاشات بأصولها الدقيقة + اقتصاص النوافذ). **حد موثق**: scap على لينكس يعتمد PipeWire/portal وغير صالح للالتقاط المباشر؛ الأصول على ويندوز/ماك للشاشة الأساسية (0,0) وتعدد الشاشات الدقيق بFFI على ماك (CGDisplayBounds) وويندوز (GetSystemMetrics سطح المكتب المركب).
+- **الترميز**: OpenH264 (مضمن C++ عبر `openh264 0.9`) — BGRA→YUV→H264 Annex-B، packetization-mode=1 + `profile-level-id=42e01f` (baseline) يطابق fmtp المعلن.
+- **الجودة (بند 1)**: مستويات `low/medium/high/ultra` (مقياس 0.4/0.6/0.8/1.0 + bitrate 0.8/1.5/3/6 Mbps) وfps من قائمة بيضاء **15/24/30/45/60** (sanitize_fps — افتراضي 30). التغيير أثناء البث: `media_screen_set` يضبط الإعدادات وتُطبق عند إعادة البث (حد موثق — الخيط يعيد بناء المشفر عند إشارة rebuild).
+- **الإشارات (على جسر 3005 — ترحيل شفاف قائم §4.3 لا يُمس)**:
+  1. الهاتف يفتح شاشة «كمبيوترك» → `screen:req {action:"start", fps?, quality?}` (حدث جديد — الجسر ينقّي: fps ∈ القائمة، quality ∈ المستويات، وإلا رفض صامت).
+  2. الويبفيو الدائم يستقبل → أمر Tauri `media_screen_start` → **webrtc-rs يبني PeerConnection (MediaEngine بH264 فقط)** + تراك إرسال → `create_offer` → `set_local_description` → **انتظار اكتمال الترشيح (غير ترشيحي: كل مرشحات host داخل SDP نفسها — بلا STUN/TURN، اتصال LAN مباشر)** → يعيد `{offer:{type,sdp}, w, h, fps, quality}`.
+  3. الويبفيو يبث `rtc:offer {kind:"screen", sdp}` + `screen:state {on:true, w, h, fps, quality}` — **kind=screen يمر عبر مسار rtc:* الشفاف كما هو (بلا قائمة بيضاء على kind)**.
+  4. الهاتف (flutter_webrtc): `setRemoteDescription(offer)` → `createAnswer` → `rtc:answer {kind:"screen", sdp}` + مرشحاته `rtc:ice {kind:"screen"}` (trickle).
+  5. الويبفيو يرحّل الإجابة/المرشحات → `media_screen_answer` / `media_screen_ice` → **«أول إجابة فقط» بوابة KindGate (media_core — الحارس الثاني بعد الجسر §4.3)**.
+- **الإيقاف**: `screen:stop` من الهاتف أو `media_screen_stop` أو فشل PeerConnection (Failed/Closed → تنظيف ذاتي + `screen:state {on:false}`) — كل المسارات توقف خيط الالتقاط وتغلق الاتصال.
+
+### 15.ب اللمس على الشاشة المعروضة = تحكم حقيقي (البند 3 — فوق جلسة §13)
+- **حدث جديد `rc:pointer {nx, ny, action}`** على 3004 (مضاف لا يكسر): nx/ny مُطبّعة 0..1 على إطار البث المعروض؛ action ∈ `move|down|up|click|dblclick|rclick` (قائمة بيضاء — الجسران يرفضان الفاسد صامتًا ويحقنان `__src` كأي حدث إدخال — بوابة الطاقة سارية §4.2).
+- **التنفيذ الأصلي** (input_exec.rs — kind:"pointer"): `pointer_map(nx,ny,w,h,ox,oy)` → بكسل مطلق في **فضاء سطح المكتب المركّب** (الأصل + الأبعاد يضبطهما media.rs عند بدء البث عبر `set_pointer_space` — ترميز بيتي بلا قفل) → `enigo.move_mouse(x, y, Coordinate::Abs)` + ضغط/رفع/نقر حسب الإجراء. **خلال جلسة تحكم نشطة فقط** (بوابة §13 نفسها: __src=controller + جلسة موثوقة + القطع الفوري من الطرفين).
+- **إيماءات الهاتف** (pc_screen_screen.dart): نقرة = click · نقر مزدوج = dblclick · ضغط مطول + تحريك = down→move→up (سحب) · إصبعان عمودي = rc:scroll · تفريق = rc:pinch · نقر بإصبعين/زر ثانوي = rclick · حقل نصي = rc:key حرفًا حرفًا (عربي كامل — مسار §13.ب يونيكوديًا).
+- **الجلسة**: فتح الشاشة يبدأ rc:session (نبض 2ث) ويقفلها إغلاقه — نفس الدورة الموثوقة من §13 (إشعار دائم في الشريط + لافتة بنفسجية + قطع فوري من الطرفين).
+
+### 15.ج كاميرا الهاتف → ويب كام حقيقية (البند 4 — kind="cam" كما هو §4.3)
+- **المسار**: بطاقة «طبقة الوسائط» (إعدادات نافذة سطح المكتب) → `media_vcam_start {video, audio}` → كشف الدوايفور + إطلاق الحاقنات → الويبفيو يبث `cam:cmd {action:"cam-start"}` (+`mic-start` للصوت) → **الهاتف (خدمة الوسائط القائمة) يبث `rtc:offer {kind:"cam", sdp}` بفيديو+صوت معًا (getUserMedia audio:true — عقد §4.3 حرفيًا)** → الويبفيو يستقبل العرض → `media_answer {kind, sdp}` → webrtc-rs (MediaEngine: H264+Opus للكام، Opus فقط للميك) يجيب `rtc:answer {kind:"cam"}` — **«أول إجابة من دور pc تُقبل لكل kind وتُتجاهل ما بعدها» (§4.3 حرفيًا + KindGate محليًا)** — والصوت يعالج عبر onTrack.
+- **الفك**: مسار الفيديو — `TrackRemote.poll()` → `H264Packet::depacketize` (Annex-B) → `openh264::Decoder` → YUV420 → **`yuv420_to_yuyv`** → قناة الحاقن. مسار الصوت — `OpusPacket::depacketize` → `audiopus::Decoder` (48k ستيريو i16) → قناة الصوت. PLI كل 2ث (طلب إطارات مفتاحية للمنضمّ الجديد).
+- **الحقن الفعلي (لكل منصة طريقها — البند 4 حرفيًا)**:
+  | المنصة | الكاميرا الافتراضية | الميكروفون الافتراضي |
+  |---|---|---|
+  | **Linux** | **v4l2loopback**: كشف من /sys/class/video4linux (اسم الدرايفور "v4l2 loopback") → فتح الجهاز → `VIDIOC_S_FMT` YUYV W×H (ioctl FFI مباشر — تحقق من موافقة السائق) → كتابة الإطارات خامًا. غيابها = إرشاد (apt v4l2loopback-dkms + modprobe card_label="NexusLink") | **pactl module-pipe-source** (source_name=NexusLinkMic، FIFO s16le 48k ستيريو على /tmp/nexuslink-mic.pcm — كتابة O_RDWR بلا انسداد) — يعمل مع PulseAudio/PipeWire-pulse |
+  | **Windows** | **akvirtualcamera** (DirectShow/Media Foundation): كشف AkVCamManager في المسارات المعروفة → `devices` → `stream -f FPS DEVICE YUY2 W H` (البروتوكول متحقق من مصدره: يقرأ إطارات خام من stdin بحجم VideoFrame) — غيابه = إرشاد تنزيل + ذكر بديل OBS (Media Source ثم Start Virtual Camera) | **VB-CABLE** عبر cpal: كشف "CABLE Input" في أجهزة الإخراج → stream F32/I16 من مخزن حلقي — غيابه = إرشاد vb-audio.com/Cable |
+  | **macOS** | **akvirtualcamera** (CMIO) — نفس المسار — **حد صادق موثق**: macOS الحديث يقيد إضافات الكاميرا غير الموقعة (Gatekeeper)؛ إن ظهرت الكاميرا بلا صورة فهذا قيد النظام، والحل العملي OBS | **BlackHole** عبر cpal (نفس نمط VB-CABLE) — غيابه = إرشاد existential.audio |
+- **الأبعاد الديناميكية**: أول إطار مفكوك يحدد W×H (VCAM_DIMS) — الحاقن يعيد فتح الجهاز/تشغيل stream بالأبعاد الجديدة (إطارات الويب كام 1280×720 نمطيًا كما تطلب خدمة الهاتف).
+- **الإيقاف**: `media_vcam_stop` يبث `cam:cmd cam-stop/mic-stop` ويجمع جلسات cam/mic.
+
+### 15.د حالة الوسائط (الشريط والهاتف)
+- `status.desktop.media {screen:{on,fps,quality}, vcam:{video,audio,driver}}` — من نفس المخزن desktop-ui.json عبر `PUT /api/desktop/shortcuts {media:{...}}` (نمط clip/security/sync حرفيًا — readDesktopMedia/writeDesktopMedia + تنقية fps/quality).
+- Tray: عنصر «الوسائط: خاملة/بث الشاشة نشط/كاميرا الهاتف تعمل/شاشة + كاميرا» — يحدثه media.rs عند كل تغيّر (push_tray_media) + حدث Tauri داخلي `media://state`.
+- الهاتف: بطاقة «شاشة الكمبيوتر» في شاشة الوسائط (حالة الطور) + شاشة العرض الكاملة بجودة قابلة للتبديل (إعادة بث فوري بـ stop→req).
+
+### 15.هـ فجوات سيرفرية أُصلحت في هذه المرحلة
+| # | الفجوة | ما نُفّذ |
+|---|--------|----------|
+| G-23 | جسر 3005 بلا أحداث عرض الشاشة | `screen:req/screen:stop/screen:set/screen:state` — تنقية صارمة (fps قائمة بيضاء 15..60، quality، w/h ≤ 8192، name ≤ 80، error ≤ 200) + حقن from — مضافة لا تكسر العملاء القائمين |
+| G-24 | لا مؤشر مطلق في أحداث الإدخال | `rc:pointer` في RC_INPUT بالجسرين (مدمج + mini-service متطابقان) + `sanitizePointer` (0..1 مقرب 4 خانات + قائمة إجراءات) — الرفض الصامت للفاسد |
+| G-25 | status.desktop بلا حالة الوسائط | readDesktopMedia/writeDesktopMedia + `status.desktop.media` + PUT media |
+
+**تحقق E2E**: قسم جديد في scripts/desktop-e2e.mjs — screen:req صالح/فاسد (fps=60 يمر، 90 يُرفض) — rtc:offer kind=screen/answer/ICE ثنائي — cam:cmd cam-start — rtc:offer kind=cam — screen:state on/w/h — PUT media صالح/فاسد + status.desktop.media — rc:pointer صالح (__src=controller + مطبّع) وفاسد (رفض صامت) — توثيق §15.
+
+**قيود موثقة بصدق**: البث أثناء حياة التطبيق (الهاتف) وحياة الطبقة الأصلية (الكمبيوتر) — تغيير الجودة أثناء البث يُطبق عند إعادة البث — توقيع akvirtualcamera على macOS الحديث قد يمنع ظهور الصورة (حد النظام — OBS بديل عملي) — تعدد تحديد شاشة ماك/ويندوز بأصل الشاشة الأساسية للنقر المطلق (الأصول الدقيقة لكل شاشة: لينكس RandR كامل، ماك CGDisplayBounds للرئيسية، ويندوز سطح المكتب المركب) — البناء الفيزيائي للطبقة يثبت بـ CI 3/3 بينما النواة مثبتة تنفيذيًا 38/38 (incl. loopback WebRTC حقيقي).

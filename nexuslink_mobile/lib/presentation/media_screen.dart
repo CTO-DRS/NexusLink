@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../data/media_service.dart';
 import '../state/media_providers.dart';
+import 'pc_screen_screen.dart';
 
 /// شاشة الوسائط والكاميرا (FA-8) — بند البث من التطبيق:
 /// كويب كام بمعاينة مصغرة + إشعار أثناء البث، مصراع بمؤقت وفلاش،
@@ -62,6 +63,28 @@ class _MediaScreenState extends ConsumerState<MediaScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         _StatusHeader(bridgeOnline: st.bridgeOnline),
+        const SizedBox(height: 12),
+
+        // ================= شاشة الكمبيوتر (FA-media — عقد §15) =================
+        _Card(
+          title: 'pcscreen.card'.tr(),
+          icon: Icons.monitor,
+          trailing: _PhaseChip(phase: st.screen.phase),
+          children: [
+            Text(
+              'pcscreen.card_desc'.tr(),
+              style: const TextStyle(fontSize: 12, height: 1.6),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PcScreenView()),
+              ),
+              icon: const Icon(Icons.cast),
+              label: Text('pcscreen.open'.tr()),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
 
         // ================= كويب كام =================
