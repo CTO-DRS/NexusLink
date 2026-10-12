@@ -11,7 +11,10 @@
 // 4) تفسير معاملات ?view= القادمة من deep-link/الإشعارات الأصلية.
 // كل ذلك معطّل خارج وضع سطح المكتب (?desktop=1 — تضبطه procman عند فتح النافذة).
 import { useEffect } from "react"
+import { getProdSocket } from "@/lib/prod-socket"
+import { useProd } from "@/lib/prod-store"
 import { useNexus, type ShortcutAction, type ViewId } from "@/lib/store"
+import { tauriInvoke } from "@/lib/tauri"
 
 const DESKTOP_DEFAULTS: Partial<Record<ShortcutAction, string>> = {
   sendClipboard: "Ctrl+Shift+N",
@@ -23,6 +26,9 @@ export function DesktopBridge() {
     if (typeof window === "undefined") return
     const sp = new URLSearchParams(window.location.search)
     if (!sp.has("desktop")) return // متصفح/هاتف — لا شيء يخص سطح المكتب هنا
+
+    // 0) علم وضع سطح المكتب — تقرأه بقية الطبقات (use-prod-bridge: Rust يملك الحافظة)
+    ;(window as unknown as { __NEXUS_DESKTOP__?: boolean }).__NEXUS_DESKTOP__ = true
 
     // 1) كتم إشعارات المتصفح داخل الويبفيو (المصدر الأصلي يتولاه Rust)
     try {
@@ -98,9 +104,27 @@ export function DesktopBridge() {
       if (views.includes(v as ViewId)) useNexus.getState().setView(v as ViewId)
     }
 
+    // 4) FA-clipboard-sync — استقبال حافظة الهاتف → حافظة النظام (عقد §11.ب):
+    //    clip:new من جهاز غريب + وضع تلقائي → clip_apply (arboard) — يعمل والنافذة
+    //    مخفية في الـ Tray. حرس الصدى: deviceId === pc-office يُتجاهل (إرسالنا نحن).
+    //    إعادة الاشتراك عند تغيّر وضع الحافظة (التبديل في واجهة الإنتاجية).
+    const applyIncoming = (item: { deviceId?: string; kind?: string; content?: string }) => {
+      if (!item || item.deviceId === "pc-office") return
+      const clipAllowed = useProd.getState().state.clipMode === "auto"
+      if (!clipAllowed) return
+      if (item.kind === "text" && item.content) {
+        void tauriInvoke("clip_apply", { kind: "text", content: item.content }).catch(() => null)
+      } else if (item.kind === "image" && item.content?.startsWith("data:image/png;base64,")) {
+        void tauriInvoke("clip_apply", { kind: "image", content: item.content }).catch(() => null)
+      }
+    }
+    const sock = getProdSocket()
+    sock.on("clip:new", applyIncoming)
+
     return () => {
       unsub()
       window.removeEventListener("keydown", onKey)
+      sock.off("clip:new", applyIncoming)
     }
   }, [])
 

@@ -20,7 +20,7 @@ import { ensureSecurityBridge } from "@/lib/nexus/security-bridge"
 import { jobs } from "@/lib/nexus/transfer-engine"
 import { db } from "@/lib/db"
 import { serNotification } from "@/lib/nexus/comms-server"
-import { readShortcuts } from "@/lib/nexus/desktop-shortcuts"
+import { readShortcuts, readDesktopClip } from "@/lib/nexus/desktop-shortcuts"
 
 export const dynamic = "force-dynamic"
 
@@ -56,6 +56,15 @@ export async function GET() {
       /* قاعدة البيانات غير جاهزة بعد — لا إشعارات الآن */
     }
 
+    // FA-clipboard-sync — إعدادات مراقب الحافظة الحية: الوضع من db.prodState
+    // (زر التبديل في واجهة الإنتاجية) + حد الحجم من desktop-ui.json. فشلها لا يُسقط الحالة.
+    let clipMode: "auto" | "manual" = "auto"
+    try {
+      const ps = await db.prodState.findUnique({ where: { id: "main" } })
+      if (ps?.clipMode === "manual") clipMode = "manual"
+    } catch { /* قاعدة البيانات غير جاهزة — الافتراضي تلقائي */ }
+    const clip = { ...(await readDesktopClip()), mode: clipMode }
+
     return Response.json({
       ok: true,
       proto: "Nexus/1.2",
@@ -69,6 +78,7 @@ export async function GET() {
       desktop: {
         agentId: getAgentDeviceId(),
         shortcuts: await readShortcuts(),
+        clip,
         transfers,
         notifs,
       },

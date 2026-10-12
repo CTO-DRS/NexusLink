@@ -44,6 +44,28 @@ class AgentForegroundService : Service() {
         const val CTL_NOTIF_ID = 4310
         const val MEDIA_NOTIF_ID = 4401
 
+        /** FA-clipboard-sync — النسخة الحية للخدمة (تستخدمها مراقبة الإتاحة للدفع عبر prod socket) */
+        @Volatile
+        var liveInstance: AgentForegroundService? = null
+            private set
+
+        /** FA-clipboard-sync (عقد §11.ج): آخر نص كُتب في حافظة الهاتف قادمًا من الكمبيوتر
+         *  — كي لا تعيده مراقبة الإتاحة إلى الكمبيوتر (حرس حلقة). */
+        @Volatile
+        var clipLastFromPc: String? = null
+
+        /** FA-clipboard-sync: آخر نص أرسلته مراقبة الإتاحة إلى الكمبيوتر — كي لا يعيد إرسال نفسه. */
+        @Volatile
+        var clipLastSentToPc: String? = null
+
+        /** FA-clipboard-sync (§11.أ): مراقبة الإتاحة تدفع نص حافظة الهاتف إلى الحافظة الموحدة.
+         *  تعمل فقط إذا كانت خدمة الوكيل حية ومتصلة بجسر الإنتاجية، مع حرس الحلقة أعلاه. */
+        fun pushClipTextFromAccessibility(text: String) {
+            if (text.isEmpty() || text == clipLastFromPc || text == clipLastSentToPc) return
+            val svc = liveInstance ?: return
+            svc.pushClipText(text)
+        }
+
         private const val BEACON_MS = 5_000L
         private const val STATE_MS = 30_000L
         private const val WATCHDOG_MS = 15_000L
@@ -421,6 +443,8 @@ class AgentForegroundService : Service() {
             }
             s.on(AgentBridge.EV_CLIP_NEW) { args ->
                 val data = args.firstOrNull() as? JSONObject ?: return@on
+                // FA-clipboard-sync (§11.ج): تجاهل صدى الحافظة الخاص بالهاتف نفسه
+                if (data.optString("deviceId") == deviceId) return@on
                 main.post {
                     MainActivity.pushDataEvent("clip", mapOf(
                         "id" to data.optString("id"),
@@ -433,11 +457,33 @@ class AgentForegroundService : Service() {
                         "mode" to data.optString("mode"),
                         "createdAt" to data.optLong("createdAt"),
                     ))
-                    if (!uiAlive && data.optString("kind") == "text") {
+                    if (data.optString("kind") == "text") {
+                        val content = data.optString("content")
+                        if (content.isNotEmpty()) {
+                            // FA-clipboard-sync (§11.ب): الهاتف يضعها في حافظته فورًا —
+                            // الكتابة في الحافظة مسموحة دائمًا من الخدمة (قيود Android 10+ على القراءة فقط).
+                            // يعمل حتى لو كانت واجهة Flutter ميتة — اختبار النجاح: لصق فوري.
+                            try {
+                                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                cm.setPrimaryClip(android.content.ClipData.newPlainText("NexusLink", content))
+                                clipLastFromPc = content
+                            } catch (_: Exception) {
+                            }
+                            if (!uiAlive) {
+                                notifyTx(
+                                    id = 7300 + (data.optString("id").hashCode() and 0x7fffffff) % 300,
+                                    title = "نص من ${data.optString("deviceName", "الكمبيوتر")} — جاهز للّصق",
+                                    body = content.take(160),
+                                    offerId = null,
+                                )
+                            }
+                        }
+                    } else if (!uiAlive) {
+                        val label = if (data.optString("kind") == "image") "صورة" else "ملف"
                         notifyTx(
                             id = 7300 + (data.optString("id").hashCode() and 0x7fffffff) % 300,
-                            title = "نص من ${data.optString("deviceName", "الكمبيوتر")}",
-                            body = data.optString("content").take(160),
+                            title = "$label من ${data.optString("deviceName", "الكمبيوتر")}",
+                            body = data.optString("fileName").ifEmpty { "وصل إلى الحافظة الموحدة" }.take(160),
                             offerId = null,
                         )
                     }
@@ -1334,8 +1380,30 @@ class AgentForegroundService : Service() {
         prodSocket = null
         mediaSocket = null
         sec = null
+        liveInstance = null // FA-clipboard-sync — بلا نسخة بائدة
         setState("stopped")
         super.onDestroy()
+    }
+
+    /** FA-clipboard-sync (§11.أ): دفع نص حافظة الهاتف إلى الحافظة الموحدة عبر جسر الإنتاجية
+     *  3007 (clip:push) — يصل الكمبيوتر عبر الويبفيو ووضع في حافظة النظام (clip_apply).
+     *  الحرس النهائي هنا يمنع السباق مع التغييرات المتتالية. */
+    fun pushClipText(text: String) {
+        if (text.isEmpty() || text == clipLastFromPc || text == clipLastSentToPc) return
+        val s = prodSocket ?: return
+        clipLastSentToPc = text
+        try {
+            s.emit("clip:push", JSONObject().apply {
+                put("deviceId", deviceId)
+                put("deviceName", deviceName)
+                put("kind", "text")
+                put("content", text)
+                put("size", text.length)
+                put("mode", "auto")
+            })
+            android.util.Log.i(TAG, "clip pushed to unified clipboard (${text.length} chars)")
+        } catch (_: Exception) {
+        }
     }
 
     private val TAG = "NexusAgent"

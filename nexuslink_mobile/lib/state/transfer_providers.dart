@@ -236,6 +236,14 @@ class SignalingController extends Notifier<AgentSignaling?> {
         // FA-9 — ودجت الإرسال السريع: حافظة الهاتف → الكمبيوتر فورًا
         unawaited(ref.read(controllerControllerProvider.notifier).pushClipboard());
         ref.read(activityLogProvider.notifier).add('إرسال سريع من الودجت: تُرفع حافظة الهاتف إلى الكمبيوتر', kind: 'ok');
+      } else if (kind == 'clip' && detail != null) {
+        // FA-clipboard-sync — الخدمة الأصلية كتبت نصًا من الكمبيوتر في حافظة
+        // الهاتف (تعمل حتى مع واجهة ميتة): تحديث حرس الحلقة (عقد §11.ج)
+        final text = '${detail['content'] ?? ''}';
+        if (text.isNotEmpty) {
+          ref.read(controllerControllerProvider.notifier).markExternal(text);
+          ref.read(activityLogProvider.notifier).add('نص من الكمبيوتر جاهز في حافظة الهاتف (${text.length} حرفًا)', kind: 'ok');
+        }
       } else if (kind == 'sec' && detail != null) {
         // FA-10 — حالة قناة الأمان 3009 (online/kex/sas/قفل)
         ref.read(secStateProvider.notifier).ingest(detail);
@@ -274,6 +282,9 @@ class SignalingController extends Notifier<AgentSignaling?> {
       final autoCopy = ref.read(txSettingsProvider).autoCopyText;
       if (autoCopy && clip.kind == 'text' && clip.content.isNotEmpty) {
         Clipboard.setData(ClipboardData(text: clip.content));
+        // FA-clipboard-sync — حرس الحلقة: ما وضعناه في الحافظة ليس نسخة هاتفية
+        // للإرسال، بل نص وارد من الكمبيوتر — كي لا تعيده مراقبة الشاشة المفتوحة (عقد §11.ج)
+        ref.read(controllerControllerProvider.notifier).markExternal(clip.content);
         ref.read(activityLogProvider.notifier).add(
               'نُسخ نص وارد من ${clip.deviceName} إلى الحافظة (${clip.content.length} حرفًا)',
               kind: 'ok',

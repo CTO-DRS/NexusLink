@@ -349,6 +349,14 @@ class ControllerService {
     sk.emit(RcEvents.clipboard, {'direction': 'pull'});
   }
 
+  /// FA-clipboard-sync — نص خارجي وضعه غيرنا في حافظة الهاتف (من الكمبيوتر عبر
+  /// الخدمة الأصلية، أو من النسخ التلقائي للنصوص الواردة): تحديث الحرس كي
+  /// لا تعيده مراقبة الشاشة المفتوحة إلى الكمبيوتر (حرس الحلقة، عقد §11.ج).
+  void markExternal(String text) {
+    if (text.isEmpty) return;
+    _lastPhoneClip = text;
+  }
+
   /// تسليم رابط «أكمل من حيث توقفت» إلى الكمبيوتر.
   void handoff(String url, {String? title}) {
     final sk = _socket;

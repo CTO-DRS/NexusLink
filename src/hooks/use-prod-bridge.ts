@@ -60,11 +60,24 @@ export function useProdBridge() {
       const mine = item.deviceId === "pc-office"
       if (mine) return
 
+      // FA-clipboard-sync — في وضع سطح المكتب الطبقة الأصلية (Rust/arboard) هي
+      // مالكة حافظة النظام: desktop-bridge يستدعي clip_apply بنفسه (يعمل حتى
+      // والنافذة مخفية) — هنا فقط التوست بدون كتابة متصفح مكرّرة.
+      const isDesktop = !!(window as unknown as { __NEXUS_DESKTOP__?: boolean }).__NEXUS_DESKTOP__
+
       if (item.kind === "text") {
         st().setCheck("copy")
         const auto = st().state.clipMode === "auto"
-        const clipAllowed = st().profile ? st().profile.clipboard : true
+        const profile = st().profile
+        const clipAllowed = profile ? profile.clipboard : true
         if (auto && clipAllowed) {
+          if (isDesktop) {
+            st().setSysClipboardArmed(true)
+            toast("نسخة من هاتفك جاهزة — اضغط Ctrl+V الآن", {
+              description: `من ${item.deviceName} · وُضع النص في حافظة النظام تلقائياً (الطبقة الأصلية)`,
+            })
+            return
+          }
           // النص يدخل حافظة النظام فعلياً — Ctrl+V يعمل في أي مكان
           navigator.clipboard.writeText(item.content).then(
             () => {
@@ -186,7 +199,8 @@ export function useProdBridge() {
   }, [])
 }
 
-/** حفظ وضع الحافظة وتطبيقه */
+/** حفظ وضع الحافظة وتطبيقه — يُزامن المخزنَين: prodState (عقد الواجهة) وdesktop-ui.json
+ *  (مصدر مراقب الحافظة الأصلي في Rust — عقد §11) */
 export async function setClipMode(mode: "auto" | "manual") {
   useProd.getState().setState({ clipMode: mode })
   try { localStorage.setItem(LS_CLIP_MODE, mode) } catch { /* ignore */ }
@@ -195,4 +209,22 @@ export async function setClipMode(mode: "auto" | "manual") {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ clipMode: mode }),
   }).catch(() => {})
+  await putDesktopClip({ mode })
+}
+
+/** FA-clipboard-sync — حد حجم الإرسال التلقائي (1KB..20MB) — يُخزن في desktop-ui.json */
+export async function setClipMax(maxAutoBytes: number) {
+  const safe = Math.max(1024, Math.min(20_971_520, Math.floor(maxAutoBytes)))
+  await putDesktopClip({ maxAutoBytes: safe })
+}
+
+/** دفع جزئي لإعدادات مراقب الحافظة إلى مخزن سطح المكتب (فشل صامت خارج سطح المكتب) */
+async function putDesktopClip(clip: Record<string, unknown>) {
+  try {
+    await fetch("/api/desktop/shortcuts", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clip }),
+    })
+  } catch { /* ignore */ }
 }

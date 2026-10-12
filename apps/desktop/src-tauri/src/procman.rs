@@ -79,7 +79,7 @@ fn http_get_json(port: u16, path: &str) -> Option<serde_json::Value> {
     serde_json::from_str(&body[start..=end]).ok()
 }
 
-fn machine_name() -> String {
+pub fn machine_name() -> String {
     if let Ok(n) = std::env::var("NEXUSLINK_NAME") {
         if !n.trim().is_empty() {
             return n.trim().to_string();
@@ -156,16 +156,21 @@ pub fn read_clipboard_text() -> Result<String, String> {
 /// إرسال نص إلى الحافظة الموحدة — يصل للهاتف فورًا عبر prodEmit(clip:new)
 /// (هذا هو مسار Ctrl+Shift+N التعاقدي + nexus://send?text=…)
 pub fn push_clipboard_text(text: &str) -> Result<(), String> {
+    push_clipboard_text_mode(text, "auto")
+}
+
+/// نفس المسار مع تحديد الوضع صراحة: "auto" (المراقب) أو "manual" (زر صريح)
+pub fn push_clipboard_text_mode(text: &str, mode: &str) -> Result<(), String> {
     let body = json!({
         "deviceId": "pc-office",
         "deviceName": machine_name(),
         "kind": "text",
         "content": text,
-        "mode": "auto",
+        "mode": mode,
     });
     let v = post_json("/api/prod/clipboard", &body)?;
     if v["ok"] == true {
-        println!("[clip] sent {} chars to unified clipboard", text.len());
+        println!("[clip] sent {} chars to unified clipboard (mode={mode})", text.len());
         Ok(())
     } else {
         Err(format!("server: {v}"))
@@ -411,6 +416,13 @@ fn poll_native_events(app: &AppHandle, state: &DesktopState, j: &serde_json::Val
         }
     }
 
+    // (ه) FA-clipboard-sync — إعدادات مراقب الحافظة الحي (mode/maxAutoBytes)
+    if let Some(clip) = dt.get("clip") {
+        if clip.is_object() {
+            crate::clipboard::update_cfg(clip);
+        }
+    }
+
     // (ج) ملفات وصلت من الهاتف → إشعار أصلي بأزرار (حفظ في… / فتح المجلد)
     if let Some(arr) = dt.get("transfers").and_then(|v| v.as_array()) {
         let ids: Vec<String> = arr
@@ -614,6 +626,14 @@ pub fn is_main_focused() -> bool {
     STATE.get().map(|s| s.focused.load(Ordering::Relaxed)).unwrap_or(false)
 }
 
+/// هوية الوكيل الحقيقي المتصل — هدف إرسال ملفات الحافظة (نفس مصدر السحب والإفلات)
+pub fn current_agent_id() -> String {
+    STATE
+        .get()
+        .map(|s| s.agent_id.lock().unwrap().clone())
+        .unwrap_or_else(|| "galaxy-s24".to_string())
+}
+
 /// إظهار/إخفاء النافذة (Ctrl+Shift+D عالميًا + من الإشعارات)
 pub fn toggle_main_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
@@ -685,7 +705,7 @@ pub fn handle_deep_link(app: &AppHandle, urls: Vec<tauri::Url>) {
 }
 
 /// اسم بديل غير حائزي داخل مجلد (نمط PUT clip في السيرفر)
-fn unique_dest(dir: &Path, name: &str) -> PathBuf {
+pub fn unique_dest(dir: &Path, name: &str) -> PathBuf {
     let mut target = dir.join(name);
     let stem = Path::new(name).file_stem().and_then(|s| s.to_str()).unwrap_or("ملف").to_string();
     let ext = Path::new(name).extension().and_then(|s| s.to_str()).map(|e| format!(".{e}")).unwrap_or_default();

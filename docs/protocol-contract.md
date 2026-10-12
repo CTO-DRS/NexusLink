@@ -445,3 +445,30 @@ interface TransferJob {
 **deep-link**: `nexus://open` (فتح/تركيز) · `nexus://comms|transfers|files|devices|settings` (تنقل) · `nexus://send?text=…` (إرسال نص للحافظة الموحدة). النمط مسجل عبر `plugins.deep-link.schemes` + `register_all()` وقت التشغيل (ويندوز).
 
 **Drag & Drop**: إفلات على النافذة الرئيسية → نسخ إلى `pc-fs/Inbox/` (باسم فريد) → send-file أعلاه. **الإشعارات أصلية**: WinRT Toast بأزرار على ويندوز (AUMID = identifier)؛ ماك/لينكس عبر إضافة الإشعارات الرسمية بلا أزرار (حد منصة موثق).
+
+## 11. الحافظة الموحدة الحية على مستوى النظام (FA-clipboard-sync — مصدر: clipboard.rs + AgentForegroundService.kt + NexusAccessibilityService.kt + desktop-bridge.tsx)
+
+«انسخ في أي طرف → الصق في الآخر فورًا» — حافظة نظام حقيقية في الاتجاهين، بلا حلقات.
+
+### 11.أ الكمبيوتر → الهاتف (مراقب Rust خلفي — `clipboard.rs`)
+- استقصاء كل 1 ثانية عبر arboard بالأولوية: **ملفات** (`get().file_list()`: CF_HDROP/NSPasteboard/text-uri-list) ← **نص** (`get().text()`) ← **صورة** (`get().image()` RGBA).
+- **نص**: في الوضع `auto` وحده وبشرط `len ≤ maxAutoBytes` → `POST /api/prod/clipboard {deviceId:"pc-office", kind:"text", content, mode:"auto"}` → `prodEmit("clip:new")` → الهاتف يكتب حافظته (§11.ب).
+- **صورة**: ترميز PNG (image 0.25) → ملف في `pc-fs/Inbox/clipboard-<ts>.png` → `POST /api/devices send-file` (عقد §10 — tx:offer للوكيل الحقيقي) + عنصر سجل `kind:"image"` بـ dataURL إن سَع (≤300KB).
+- **ملفات (Ctrl+C على ملف)**: حتى 10 ملفات/حدث → نسخ إلى `pc-fs/Inbox/` → send-file (اقتراح نقل) + عنصر سجل `kind:"file"`.
+- **الوضع اليدوي**: كل التدفقات التلقائية متوقفة — الإرسال صراحة فقط (Ctrl+Shift+N / زر «إرسال الحافظة الحالية» عبر أمر `clip_send_now`، بلا حد الحجم).
+
+### 11.ب استقبال الهاتف (Kotlin `AgentForegroundService` — يعمل والواجهة ميتة)
+- على `clip:new` بـ `deviceId ≠ هويتي` و`kind="text"`: `ClipboardManager.setPrimaryClip()` **فورًا من الخدمة** (الكتابة مسموحة دائمًا على Android 10+ — القيد على القراءة فقط) + `pushDataEvent("clip")` للواجهة + إشعار «جاهز للّصق» إن كانت الواجهة ميتة.
+- الصور/الملفات تصل عبر مسار النقل الحقيقي (tx:offer قائم) — لا تُكتب في الحافظة.
+
+### 11.ج الهاتف → الكمبيوتر (حرس الحلقة في الطرفين)
+- **مراقب الإتاحة** (`NexusAccessibilityService` — الاستثناء المشروع الوحيد لقراءة حافظة Android 10+ بلا تركيز، ومفعّل مسبقًا بموافقة المستخدم لجلسات التحكم FA-7): `OnPrimaryClipChangedListener` → نص غيّر → `clip:push {deviceId, kind:"text", mode:"auto"}` عبر socket 3007 لخدمة الوكيل.
+- بدون خدمة الإتاحة: مراقبة مركّزة قائمة في شاشة التحكم (استقصاء 1.5s عبر Flutter) — قيد موثق منذ FA-9.
+- **حرس الحلقة (تعاقدي)**: كل `clip:new` يحمل `deviceId` حرفيًا؛ الهاتف يتجاهل صداه (`deviceId == هويتي`)؛ الحرس الثلاثي: `clipLastFromPc` / `clipLastSentToPc` (Kotlin) + `markExternal` (Flutter) + بصمات `APPLIED_*` (Rust) — النص الذي وضعه الكمبيوتر لا يعود، والعكس.
+- استقبال الكمبيوتر: الويبفيو (حتى والنافذة مخفية في الـ Tray) يستقبل `clip:new` غريبًا + وضع auto → `clip_apply` (أمر Tauri) → `arboard set_text/set_image` — تعمل Ctrl+V في أي تطبيق.
+
+### 11.د الإعدادات والسجل (مخازن قائمة — بلا مخزن جديد)
+- **الوضع** (تلقائي/يدوي): `db.prodState.clipMode` — زر التبديل القائم في واجهة الإنتاجية (PATCH /api/prod/state) هو المصدر.
+- **حد الإرسال التلقائي**: `data/desktop-ui.json → clip.maxAutoBytes` (1KB..20MB، افتراضي 1MB) عبر `PUT /api/desktop/shortcuts {clip:{...}}`.
+- يقرأهما Rust من `status.desktop.clip = {mode (من prodState), maxAutoBytes (من المخزن)}` — فشلها لا يُسقط الحالة.
+- **السجل**: `GET /api/prod/clipboard` = آخر **50** عنصرًا (`kind: text|image|file` + `mode` + `deviceId`) — عرضه في واجهة الإنتاجية «سجل الحافظة — آخر 50».

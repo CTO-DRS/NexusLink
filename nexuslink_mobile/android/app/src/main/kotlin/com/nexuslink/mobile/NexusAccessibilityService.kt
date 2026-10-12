@@ -2,6 +2,7 @@ package com.nexuslink.mobile
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Path
@@ -94,17 +95,60 @@ class NexusAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         captureMetrics()
+        registerClipboardWatch()
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
         if (instance === this) instance = null
+        unregisterClipboardWatch()
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
         if (instance === this) instance = null
         ackSink = null
+        unregisterClipboardWatch()
         super.onDestroy()
+    }
+
+    // ------------------------------------------------------------------
+    // FA-clipboard-sync — مراقب حافظة الخلفية (عقد §11.أ)
+    // ------------------------------------------------------------------
+    // خدمات الإتاحة هي الاستثناء المشروع الوحيد على قيد Android 10+ (قراءة
+    // الحافظة بلا تركيز) — نفس النهج المعتمد في تطبيقات المزامنة الكبرى.
+    // الخدمة مفعّلة مسبقًا بموافقة المستخدم لجلسات التحكم (FA-7)؛ المستمع
+    // للقراءة فقط، ويدفع عبر خدمة الوكيل مع حرس الحلقة (clipLastFromPc/
+    // clipLastSentToPc) — بلا تخزين، وبلا إرسال في حال التطابق.
+    private var clipWatch: ClipboardManager.OnPrimaryClipChangedListener? = null
+
+    private fun registerClipboardWatch() {
+        if (clipWatch != null) return
+        try {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val l = ClipboardManager.OnPrimaryClipChangedListener {
+                try {
+                    val clip = cm.primaryClip ?: return@OnPrimaryClipChangedListener
+                    if (clip.itemCount > 0) {
+                        val text = clip.getItemAt(0).coerceToText(this)?.toString().orEmpty()
+                        AgentForegroundService.pushClipTextFromAccessibility(text)
+                    }
+                } catch (_: Exception) {
+                }
+            }
+            cm.addOnPrimaryClipChangedListener(l)
+            clipWatch = l
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun unregisterClipboardWatch() {
+        val l = clipWatch ?: return
+        clipWatch = null
+        try {
+            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                .removeOnPrimaryClipChangedListener(l)
+        } catch (_: Exception) {
+        }
     }
 
     override fun onInterrupt() {}

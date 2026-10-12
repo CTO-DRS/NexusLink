@@ -1,10 +1,11 @@
 "use client"
 // الحافظة الموحدة — نسخ في أي جهاز ← لصق في الآخر (تلقائي/يدوي)
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
   ClipboardCheck, Monitor, Smartphone, Tablet, Tv, Copy, Trash2, FileDown,
   Pilcrow, Image as ImageIcon, FileText, Keyboard, Wand2, CircleCheck,
+  ArrowLeftRight, Send,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -12,7 +13,8 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useProd, type ProdClipItem } from "@/lib/prod-store"
-import { setClipMode, lastPhoneText } from "@/hooks/use-prod-bridge"
+import { setClipMode, setClipMax, lastPhoneText } from "@/hooks/use-prod-bridge"
+import { tauriInvoke } from "@/lib/tauri"
 import { fmtSize } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
@@ -25,10 +27,37 @@ function DeviceIcon({ id, className }: { id: string; className?: string }) {
 
 const KIND_LABEL: Record<string, string> = { text: "نص", image: "صورة", file: "ملف" }
 
+/** FA-clipboard-sync — وضع سطح المكتب: الطبقة الأصلية تملك حافظة النظام */
+const isDesktop = () =>
+  typeof window !== "undefined" &&
+  !!(window as unknown as { __NEXUS_DESKTOP__?: boolean }).__NEXUS_DESKTOP__
+
+/** خيارات حد الإرسال التلقائي (عقد §11) */
+const MAX_OPTIONS = [
+  { label: "128KB", value: 131_072 },
+  { label: "512KB", value: 524_288 },
+  { label: "1MB", value: 1_048_576 },
+  { label: "4MB", value: 4_194_304 },
+]
+
+/** قراءة الحد المحفوظ من مخزن سطح المكتب عند التركيب */
+async function loadClipMax(): Promise<number | null> {
+  try {
+    const r = await fetch("/api/desktop/shortcuts")
+    const j = await r.json()
+    return typeof j?.clip?.maxAutoBytes === "number" ? j.clip.maxAutoBytes as number : null
+  } catch { return null }
+}
+
 export function ClipboardTab() {
   const { clips, state, sysClipboardArmed, pasteZoneText, setPasteZoneText, checks, setCheck } = useProd()
   const [compose, setCompose] = useState("")
+  const [clipMax, setClipMaxLocal] = useState(1_048_576)
   const pasteRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    void loadClipMax().then((v) => { if (v) setClipMaxLocal(v) })
+  }, [])
 
   const phoneText = lastPhoneText()
 
@@ -86,6 +115,37 @@ export function ClipboardTab() {
     await fetch("/api/prod/clipboard", { method: "DELETE" })
   }
 
+  /** FA-clipboard-sync — زر «إرسال الحافظة الحالية»: يقرأ حافظة النظام الآن ويرسل
+   *  (سطح المكتب: عبر الطبقة الأصلية بلا حد الحجم · المتصفح: عبر clipboard API) */
+  async function sendCurrent() {
+    if (isDesktop()) {
+      try {
+        const r = await tauriInvoke<string>("clip_send_now")
+        if (r.startsWith("text:")) {
+          toast.success("أُرسلت حافظة النظام إلى الهاتف", { description: `${r.slice(5)} حرفًا — افتح الهاتف والصق` })
+        }
+      } catch (e) {
+        toast.error("لم أقرأ نصًا من حافظة النظام", { description: "الصورة تُرسل خلفيًا كملف إن وُجدت · " + String(e).slice(0, 60) })
+      }
+      return
+    }
+    try {
+      const text = await navigator.clipboard.readText()
+      if (!text?.trim()) {
+        toast.error("الحافظة فارغة")
+        return
+      }
+      await fetch("/api/prod/clipboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceId: "pc-office", deviceName: "هذا الكمبيوتر", kind: "text", content: text, mode: state.clipMode }),
+      })
+      toast.success("أُرسلت حافظة النظام إلى الهاتف", { description: `${text.length} حرفًا` })
+    } catch {
+      toast.error("المتصفح رفض قراءة الحافظة", { description: "استعمل صندوق النسخ بجانبك داخل نافذة سطح المكتب" })
+    }
+  }
+
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_340px] items-start">
       {/* العمود الأيمن: منطقة اللصق + العناصر */}
@@ -110,6 +170,42 @@ export function ClipboardTab() {
               onCheckedChange={(v) => void setClipMode(v ? "auto" : "manual")}
               aria-label="تبديل الوضع التلقائي للحافظة"
             />
+          </div>
+        </div>
+
+        {/* FA-clipboard-sync — حد الإرسال التلقائي + إرسال الحافظة الحالية */}
+        <div className="rounded-2xl border bg-card p-4 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl grid place-items-center bg-muted text-muted-foreground">
+              <ArrowLeftRight className="w-4.5 h-4.5" />
+            </div>
+            <div className="leading-tight">
+              <div className="text-[13px] font-bold">مراقب حافظة النظام</div>
+              <div className="text-[10.5px] text-muted-foreground">
+                يراقب النسخ في أي مكان على الكمبيوتر — نص/صور/ملفات — ويرسل للهاتف فورًا في الوضع التلقائي
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10.5px] text-muted-foreground">حد الإرسال التلقائي</span>
+            <div className="flex rounded-xl border overflow-hidden">
+              {MAX_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  onClick={() => { setClipMaxLocal(o.value); void setClipMax(o.value) }}
+                  className={cn(
+                    "px-2.5 h-7 text-[10.5px] transition-colors",
+                    clipMax === o.value ? "bg-violet-500 text-white" : "bg-background hover:bg-muted text-muted-foreground"
+                  )}
+                  aria-pressed={clipMax === o.value}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <Button size="sm" variant="outline" className="rounded-xl h-8 gap-1.5 text-[11px]" onClick={() => void sendCurrent()}>
+              <Send className="w-3.5 h-3.5" /> إرسال الحافظة الحالية
+            </Button>
           </div>
         </div>
 
@@ -150,7 +246,7 @@ export function ClipboardTab() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Pilcrow className="w-4 h-4 text-muted-foreground" />
-              <span className="text-[13px] font-bold">تدفق الحافظة</span>
+              <span className="text-[13px] font-bold">سجل الحافظة — آخر 50</span>
               <Badge variant="secondary" className="rounded-full text-[9.5px]">{clips.length}</Badge>
             </div>
             {clips.length > 0 && (
@@ -200,7 +296,16 @@ export function ClipboardTab() {
                         <Button
                           variant="ghost" size="icon" className="w-7 h-7 rounded-lg"
                           aria-label="نسخ إلى حافظة النظام"
-                          onClick={() => { void navigator.clipboard.writeText(c.content).then(() => toast("نُسخ إلى حافظة النظام")) }}
+                          onClick={() => {
+                            if (isDesktop()) {
+                              // عبر الطبقة الأصلية — يعمل مع حرس الحلقة (لا يعيد المراقب إرساله)
+                              void tauriInvoke("clip_apply", { kind: "text", content: c.content })
+                                .then(() => toast("نُسخ إلى حافظة النظام (أصلي)"))
+                                .catch(() => toast.error("تعذّر الكتابة للحافظة"))
+                            } else {
+                              void navigator.clipboard.writeText(c.content).then(() => toast("نُسخ إلى حافظة النظام"))
+                            }
+                          }}
                         >
                           <Copy className="w-3.5 h-3.5" />
                         </Button>

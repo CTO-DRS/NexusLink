@@ -178,7 +178,8 @@ export const useProd = create<ProdStore>((set, get) => ({
   setClips: (c) => set({ clips: c }),
   addClip: (c) => {
     const isPc = c.deviceId === "pc-office"
-    set({ clips: [c, ...get().clips].slice(0, 60), unseenClips: isPc ? get().unseenClips : get().unseenClips + 1 })
+    // FA-clipboard-sync — السجل التعاقدي: آخر 50 عنصرًا (عقد §11)
+    set({ clips: [c, ...get().clips].slice(0, 50), unseenClips: isPc ? get().unseenClips : get().unseenClips + 1 })
   },
   unseenClips: 0,
   clearUnseen: () => set({ unseenClips: 0 }),
