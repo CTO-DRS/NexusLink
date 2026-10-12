@@ -578,7 +578,7 @@ class MainActivity : FlutterFragmentActivity() {
         val sub = subPath?.trim()
             ?.replace("\\", "/")
             ?.split('/')
-            ?.filter { it.isNotEmpty && it != "." && it != ".." && !it.startsWith(".") }
+            ?.filter { it.isNotEmpty() && it != "." && it != ".." && !it.startsWith(".") }
             ?.take(4)
             ?.joinToString("/")
             ?.ifEmpty { null }
