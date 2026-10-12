@@ -271,7 +271,7 @@ pub fn update_session(app: &AppHandle, name: Option<&str>) {
     if let Ok(tray) = ui.tray.lock() {
         let _ = match name {
             Some(n) => tray.set_tooltip(Some(format!("NexusLink — جلسة تحكم نشطة: {n}"))),
-            None => tray.set_tooltip(Some("NexusLink".into())),
+            None => tray.set_tooltip(Some("NexusLink".to_string())),
         };
     };
     match name {
