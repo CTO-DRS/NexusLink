@@ -21,7 +21,7 @@ import { jobs } from "@/lib/nexus/transfer-engine"
 import { store as deviceStore } from "@/lib/nexus/devices"
 import { db } from "@/lib/db"
 import { serNotification } from "@/lib/nexus/comms-server"
-import { readShortcuts, readDesktopClip, readDesktopSecurity, readDesktopSync } from "@/lib/nexus/desktop-shortcuts"
+import { readShortcuts, readDesktopClip, readDesktopSecurity, readDesktopSync, readDesktopMedia } from "@/lib/nexus/desktop-shortcuts"
 import { agentMedia } from "@/lib/nexus/guard-bridge"
 
 export const dynamic = "force-dynamic"
@@ -76,6 +76,7 @@ export async function GET() {
     } catch { /* السجل غير جاهز — صفر */ }
     const secCfg = await readDesktopSecurity()
     const syncCfg = await readDesktopSync()
+    const mediaCfg = await readDesktopMedia()
 
     return Response.json({
       ok: true,
@@ -103,6 +104,8 @@ export async function GET() {
         // FA-files (عقد §14) — نقطة وسائط الهاتف (بث فيديو مباشر) + أزواج مزامنة المجلدات
         agentMedia: agentMedia(),
         sync: syncCfg,
+        // FA-media (عقد §15) — حالة طبقة الوسائط الأصلية (بث الشاشة + الويب كام الافتراضي)
+        media: mediaCfg,
         transfers,
         notifs,
       },

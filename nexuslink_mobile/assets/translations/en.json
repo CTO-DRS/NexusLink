@@ -531,5 +531,24 @@
     "awake": "Computer is awake — reconnecting…",
     "mac": "Computer MAC",
     "noMac": "The computer has not announced its MAC yet — open the app near the PC once"
+  },
+  "pcscreen": {
+    "card": "Your computer screen on your phone",
+    "card_desc": "Watch your PC screen live over WebRTC and control it by touch: tap = click, long-press drag = drag, two fingers = scroll/pinch, full Arabic text input — within a trusted control session.",
+    "open": "Open view & control",
+    "title": "Computer screen",
+    "quality": "Stream quality",
+    "session_on": "Control session active — touching the screen moves the PC pointer",
+    "session_off": "No control session — starts automatically when the view opens (trusted devices only)",
+    "session_ended": "Session ended",
+    "cut": "Cut now",
+    "connecting": "Connecting to stream…",
+    "failed": "Stream failed",
+    "retry": "Retry",
+    "waiting": "Waiting for the computer to start streaming",
+    "live_touch": "Touch control live",
+    "type_hint": "Type here (Arabic/English) — injected on the PC",
+    "enter": "Enter",
+    "backspace": "Backspace"
   }
 }

@@ -377,6 +377,19 @@ class ControllerService {
     sk.emit(RcEvents.pinch, {'scale': _clamp(scale, hi: 8)});
   }
 
+  /// FA-media (عقد §15) — لمس على الشاشة المعروضة: مؤشر مطلق بإحداثيات
+  /// مُطبّعة (0..1) + إجراء (move|down|up|click|dblclick|rclick).
+  /// الجسر ينقّيها ويحقن __src، والكمبيوتر يحوّلها إلى بكسل مطلق خلال جلسة.
+  void sendPointer(double nx, double ny, {String action = 'move'}) {
+    final sk = _socket;
+    if (sk == null || !sk.connected) return;
+    sk.emit(RcEvents.pointer, {
+      'nx': nx.clamp(0.0, 1.0),
+      'ny': ny.clamp(0.0, 1.0),
+      'action': action,
+    });
+  }
+
   void key(String ch) {
     final sk = _socket;
     if (sk == null || !sk.connected) return;

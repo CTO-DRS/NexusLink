@@ -18,10 +18,21 @@ pub struct Settings {
     pub downloads_dir: Option<String>,
     #[serde(default = "dft_context_menu")]
     pub context_menu: bool,
+    // FA-media (عقد §15) — افتراضيات بث الشاشة (يتجاوزها الهاتف لكل طلب)
+    #[serde(default = "dft_media_fps")]
+    pub media_fps: u32,
+    #[serde(default = "dft_media_quality")]
+    pub media_quality: String,
 }
 
 fn dft_context_menu() -> bool {
     true
+}
+fn dft_media_fps() -> u32 {
+    30
+}
+fn dft_media_quality() -> String {
+    "high".into()
 }
 
 impl Default for Settings {
@@ -32,6 +43,8 @@ impl Default for Settings {
             start_hidden: false,
             downloads_dir: None,
             context_menu: true,
+            media_fps: 30,
+            media_quality: "high".into(),
         }
     }
 }
@@ -115,4 +128,18 @@ pub fn effective_start_hidden() -> bool {
         return true;
     }
     get().start_hidden
+}
+
+/// FA-media (عقد §15) — ضبط افتراضيات البث من بطاقة الوسائط
+pub fn set_media_defaults(fps: Option<u32>, quality: Option<String>) {
+    let mut s = cell().lock().unwrap();
+    if let Some(f) = fps {
+        s.media_fps = f;
+    }
+    if let Some(q) = quality {
+        if ["low", "medium", "high", "ultra"].contains(&q.as_str()) {
+            s.media_quality = q;
+        }
+    }
+    persist(&s);
 }

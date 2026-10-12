@@ -123,6 +123,11 @@ class ControllerController extends Notifier<RcUiState> {
 
   void pinch(double scale) => _svc?.pinch(scale);
 
+  /// FA-media (عقد §15) — لمس على الشاشة المعروضة: مؤشر مطلق (nx,ny ∈ 0..1)
+  void sendPointer(double nx, double ny, {String action = 'move'}) {
+    _svc?.sendPointer(nx, ny, action: action);
+  }
+
   void key(String ch) => _svc?.key(ch);
 
   void keySpecial(String special) => _svc?.keySpecial(special);

@@ -73,7 +73,27 @@ const POWER_AR: Record<string, string> = {
 const RC_INPUT = new Set([
   'rc:move', 'rc:click', 'rc:scroll', 'rc:pinch', 'rc:key',
   'rc:gamepad', 'rc:presenter', 'rc:media', 'rc:clipboard',
+  'rc:pointer', // FA-media (عقد §15) — مؤشر مطلق على الشاشة المعروضة في الهاتف
 ])
+
+/**
+ * FA-media (عقد §15) — تنقية rc:pointer (مطابقة للجسر المدمج):
+ * إحداثيات مطبّعة 0..1 + إجراء من قائمة بيضاء — null = رفض صامت.
+ */
+const POINTER_ACTIONS = new Set(['move', 'down', 'up', 'click', 'dblclick', 'rclick'])
+function sanitizePointer(data: Record<string, unknown> | undefined): Record<string, unknown> | null {
+  const nx = Number(data?.nx)
+  const ny = Number(data?.ny)
+  if (!Number.isFinite(nx) || !Number.isFinite(ny)) return null
+  if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return null
+  const action = String(data?.action ?? 'move')
+  if (!POINTER_ACTIONS.has(action)) return null
+  return {
+    nx: Math.round(nx * 10000) / 10000,
+    ny: Math.round(ny * 10000) / 10000,
+    action,
+  }
+}
 
 // أسماء أوامر النظام للسجل
 const POWER_AR_ACTION: Record<string, string> = {
@@ -241,6 +261,12 @@ io.on('connection', (socket) => {
   for (const ev of RC_INPUT) {
     socket.on(ev, (data: Record<string, unknown>) => {
       if (!gateInput(socket, data, ev)) return
+      // FA-media (عقد §15) — rc:pointer يُنقّى حرفيًا قبل البث (كالجسر المدمج)
+      if (ev === 'rc:pointer') {
+        const ptr = sanitizePointer(data)
+        if (!ptr) return
+        data = ptr
+      }
       // FA-input — حقن مصدر الحدث (نفس الجسر المدمج — عقد §13)
       const src = desktopSocks.has(socket.id)
         ? 'desktop'

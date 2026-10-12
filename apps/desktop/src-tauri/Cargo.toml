@@ -36,11 +36,45 @@ notify = "8"
 # zip: ضغط المجلدات من قائمة الزر الأيمن قبل الإرسال
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
+# ---------------------------------------------------------------------------
+# FA-media (عقد §15) — طبقة الوسائط الأصلية:
+#  · webrtc 0.21 (webrtc-rs Sans-I/O): بث شاشة الكمبيوتر إلى الهاتف (kind=screen)
+#    واستقبال كاميرا/ميكروفون الهاتف (kind=cam/mic) — الإشارات عبر جسر 3005
+#    والوسائط RTP مباشرة عبر الشبكة المحلية (مرشحات host مضمّنة في SDP).
+#  · openh264 (مضمن C++): ترميز إطارات الشاشة H264 وفك بث الكاميرا H264
+#    (packetization-mode=1 — يطابق fmtp المعلن في العقد).
+#  · audiopus (libopus مضمن عبر cmake): فك صوت الهاتف Opus → PCM للأجهزة الافتراضية.
+#  · الالتقاط: scap على ويندوز/ماك (Windows.Graphics.Capture/ScreenCaptureKit) —
+#    وعلى لينكس X11 مباشرة عبر x11rb (scap هناك يعتمد PipeWire/portal — موثق بصدق).
+# ---------------------------------------------------------------------------
+webrtc = "0.21"
+openh264 = { version = "0.9", features = ["source"] }
+audiopus = "=0.3.0-rc.0"
+# سمات معالج الأحداث (async_trait) + عازل بايتات العينات (Sample.data)
+async-trait = "0.1"
+bytes = "1"
+
+# الالتقاط على لينكس — x11rb (نفس خلفية enigo): GetImage + RandR للشاشات + نوافذ
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = { version = "0.13", features = ["randr"] }
+
+# الالتقاط على ويندوز/ماك — scap (بناء لينكس لا يحتاجها إطلاقًا)
+# ملاحظة موثقة: سطر الكود الذي يدعم Targets (شاشات+نوافذ) نُشر على crates.io
+# تحت الرقم 0.0.8 (فرع release-plz في المستودع يحمل 0.16 غير المنشورة —
+# تحقق حرفي من مصدر v0.0.8: نفس Options/Target/FrameType المستخدمة أدناه)
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+scap = "0.0.8"
+
+# إخراج صوت الهاتف إلى درايفر الصوت الافتراضي (VB-CABLE على ويندوز / BlackHole على ماك)
+# — على لينكس لا حاجة: module-pipe-source عبر pactl (FIFO خام) بلا أي crate.
 # إشعارات ويندوز الأصلية بأزرار تفاعلية (WinRT Toast)
-[target.'cfg(windows)'.dependencies]
-tauri-winrt-notification = "0.8"
 # FA-files — قائمة الزر الأيمن Windows (HKCU — بلا صلاحيات مدير)
+[target.'cfg(windows)'.dependencies]
+cpal = "0.18"
+tauri-winrt-notification = "0.8"
 winreg = "0.56"
+[target.'cfg(target_os = "macos")'.dependencies]
+cpal = "0.18"
 
 [profile.release]
 opt-level = "s"

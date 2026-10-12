@@ -1,0 +1,21 @@
+[package]
+name = "media-verify"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# نفس تبعيات الطبقة الأصلية (FA-media §15) — نواة نقية + WebRTC حقيقي
+webrtc = "0.21"
+rtc = "0.21.1"
+tokio = { version = "1", features = ["rt-multi-thread", "time", "macros"] }
+openh264 = { version = "0.9", features = ["source"] }
+audiopus = "=0.3.0-rc.0"
+async-trait = "0.1"
+bytes = "1"
+serde_json = "1"
+# input_exec.rs (المؤشر المطلق) يُضمَّن حرفيًا — يحتاج enigo كما في enigo-verify
+enigo = { version = "0.2.1", default-features = false, features = ["x11rb"] }
+
+[[bin]]
+name = "media-verify"
+path = "src/main.rs"

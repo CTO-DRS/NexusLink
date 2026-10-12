@@ -23,6 +23,8 @@ pub struct TrayUi {
     // FA-input (عقد §13) — مؤشر جلسة التحكم + زر القطع الفوري
     pub session_item: Mutex<MenuItem<tauri::Wry>>,
     pub stop_session_item: Mutex<MenuItem<tauri::Wry>>,
+    // FA-media (عقد §15) — مؤشر حالة الوسائط
+    pub media_item: Mutex<MenuItem<tauri::Wry>>,
 }
 
 /// آخر مرحلة اتصال (لأيقونة Tray عند انتهاء جلسة التحكم — نرجع لما قبلها)
@@ -48,6 +50,8 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     // FA-input — مؤشر جلسة التحكم (عرض) + زر القطع الفوري (مفعّل أثناء الجلسة فقط)
     let session_item = MenuItem::with_id(app, "session", "لا جلسة تحكم", false, None::<&str>)?;
     let stop_session_item = MenuItem::with_id(app, "stop_session", "إنهاء جلسة التحكم", false, None::<&str>)?;
+    // FA-media — مؤشر حالة الوسائط (عرض)
+    let media_item = MenuItem::with_id(app, "media", "الوسائط: خاملة", false, None::<&str>)?;
     let pause = MenuItem::with_id(app, "pause", "إيقاف مؤقت للسيرفر", true, None::<&str>)?;
     let closetray = CheckMenuItem::with_id(
         app,
@@ -73,7 +77,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     let sep = |app: &AppHandle| PredefinedMenuItem::separator(app);
     let menu = Menu::with_items(
         app,
-        &[&open, &sep(app)?, &power_item, &connections_item, &cancel_item, &session_item, &stop_session_item, &sep(app)?, &pause, &closetray, &autostart, &downloads, &sep(app)?, &quit],
+        &[&open, &sep(app)?, &power_item, &connections_item, &cancel_item, &session_item, &stop_session_item, &media_item, &sep(app)?, &pause, &closetray, &autostart, &downloads, &sep(app)?, &quit],
     )?;
 
     let tray = TrayIconBuilder::with_id("nexuslink-tray")
@@ -130,6 +134,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         cancel_item: Mutex::new(cancel_item),
         session_item: Mutex::new(session_item),
         stop_session_item: Mutex::new(stop_session_item),
+        media_item: Mutex::new(media_item),
     });
     Ok(())
 }
@@ -281,4 +286,16 @@ pub fn update_session(app: &AppHandle, name: Option<&str>) {
             set_state(app, stage);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// FA-media (عقد §15) — مؤشر حالة الوسائط الدائم (عرض فقط)
+// ---------------------------------------------------------------------------
+
+/// تحديث نص عنصر الوسائط في قائمة Tray (يستدعيه media.rs عند كل تغيّر)
+pub fn update_media(app: &AppHandle, text: &str) {
+    let ui = app.state::<TrayUi>();
+    if let Ok(it) = ui.media_item.lock() {
+        let _ = it.set_text(text.to_string());
+    };
 }
