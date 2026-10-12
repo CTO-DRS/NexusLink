@@ -1,11 +1,9 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
-import '../data/controller_service.dart';
-import '../data/media_service.dart';
+import '../data/media_service.dart'; // MediaPhase/MediaKindState
 import '../state/controller_providers.dart';
 import '../state/media_providers.dart';
 
@@ -187,7 +185,7 @@ class _PcScreenViewState extends ConsumerState<PcScreenView> {
                             final n = _normalized(d.localPosition, box, dims.$1, dims.$2);
                             if (n != null) _ctl!.sendPointer(n.$1, n.$2, action: 'click');
                           },
-                          onDoubleTapUp: (d) {
+                          onDoubleTapDown: (d) {
                             final n = _normalized(d.localPosition, box, dims.$1, dims.$2);
                             if (n != null) _ctl!.sendPointer(n.$1, n.$2, action: 'dblclick');
                           },

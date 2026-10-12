@@ -47,6 +47,9 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 #  · الالتقاط: scap على ويندوز/ماك (Windows.Graphics.Capture/ScreenCaptureKit) —
 #    وعلى لينكس X11 مباشرة عبر x11rb (scap هناك يعتمد PipeWire/portal — موثق بصدق).
 # ---------------------------------------------------------------------------
+# rtc 0.21 = نواة webrtc المنشورة منفصلة — أنواعها (Sample/TrackLocalStaticSample/
+# MediaStreamTrack/H264Packet/...) تُستورد مباشرة منها كما في أمثلة webrtc-rs الرسمية
+rtc = "0.21.1"
 webrtc = "0.21"
 openh264 = { version = "0.9", features = ["source"] }
 audiopus = "=0.3.0-rc.0"
