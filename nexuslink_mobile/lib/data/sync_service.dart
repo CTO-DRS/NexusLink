@@ -82,7 +82,7 @@ class PhoneSyncService {
     try {
       if (!await f.exists()) return; // حُذف قبل المعالجة — الحذف لا ينتشر (حد موثق)
       final st = await f.stat();
-      if (st.length > 200 * 1024 * 1024) {
+      if (st.size > 200 * 1024 * 1024) {
         _onLog?.call('تجاوز حد المزامنة (200MB): ${p.split('/').last}', kind: 'warn');
         return;
       }
@@ -99,18 +99,18 @@ class PhoneSyncService {
         final init = await _api.uploadInit(
           deviceId: _deviceId,
           name: name,
-          size: st.length,
+          size: st.size,
           mime: 'application/octet-stream',
           localPath: p,
           dir: dirV.isEmpty ? '/Sync' : dirV,
           taskId: taskId,
         );
         var received = init.received;
-        if (received < st.length) {
+        if (received < st.size) {
           final raf = await f.open();
           try {
-            while (received < st.length) {
-              final len = st.length - received > 4 * 1024 * 1024 ? 4 * 1024 * 1024 : st.length - received;
+            while (received < st.size) {
+              final len = st.size - received > 4 * 1024 * 1024 ? 4 * 1024 * 1024 : st.size - received;
               await raf.setPosition(received);
               final bytes = await raf.read(len);
               if (bytes.isEmpty) break;
@@ -120,7 +120,7 @@ class PhoneSyncService {
             await raf.close();
           }
         }
-        if (received >= st.length) {
+        if (received >= st.size) {
           await _api.uploadComplete(init.uploadId);
           _onLog?.call('مزامنة: رُفع $name إلى الكمبيوتر', kind: 'ok');
         }
