@@ -312,7 +312,8 @@ class ControllerService {
   void power(String action) {
     final sk = _socket;
     if (sk == null || !sk.connected) return;
-    const allowed = {'shutdown', 'restart', 'sleep', 'hibernate', 'lock', 'unlock'};
+    // FA-power (عقد §12): logout أمر نظام معتمد (تأكيد أمان 10ث في الطبقة الأصلية)
+    const allowed = {'shutdown', 'restart', 'sleep', 'hibernate', 'lock', 'unlock', 'logout'};
     if (!allowed.contains(action)) return;
     sk.emit(RcEvents.power, {'action': action});
   }

@@ -633,7 +633,8 @@ class _SysTabState extends State<_SysTab> {
               runSpacing: 8,
               children: [
                 for (final e in const [
-                  ('lock', Icons.lock_rounded), ('sleep', Icons.brightness_2_rounded),
+                  ('lock', Icons.lock_rounded), ('logout', Icons.logout_rounded),
+                  ('sleep', Icons.brightness_2_rounded),
                   ('hibernate', Icons.dark_mode_rounded), ('restart', Icons.refresh_rounded),
                   ('shutdown', Icons.power_settings_new_rounded),
                 ])
@@ -652,7 +653,21 @@ class _SysTabState extends State<_SysTab> {
             ),
             const SizedBox(height: 6),
             FilledButton.icon(
-              onPressed: () => ctl.wakeLan(),
+              onPressed: () async {
+                // FA-power — متصل: عبر قناة 3004 (rc:wol) · غير متصل: UDP مباشر
+                if (st.phase == RcBridgePhase.online) {
+                  ctl.wakeLan();
+                } else {
+                  final sent = await ctl.wakeDirect();
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(sent > 0 ? 'wake.sent'.tr() : 'wake.fail'.tr()),
+                      duration: const Duration(seconds: 4),
+                    ),
+                  );
+                }
+              },
               icon: const Icon(Icons.bolt_rounded, size: 16),
               label: Text('rctl.sys.wake'.tr(), style: const TextStyle(fontSize: 12)),
             ),

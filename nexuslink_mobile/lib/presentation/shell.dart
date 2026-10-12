@@ -10,6 +10,7 @@ import 'media_screen.dart';
 import 'security_screen.dart';
 import 'settings_screen.dart';
 import 'transfers_screen.dart';
+import 'wake_banner.dart';
 import '../state/transfer_providers.dart';
 import '../data/transfer_engine.dart';
 
@@ -51,7 +52,15 @@ class _NexusShellState extends ConsumerState<NexusShell> {
       SettingsScreen(),
     ];
     return Scaffold(
-      body: IndexedStack(index: _tab, children: pages),
+      // FA-power — شاشة «الكمبيوتر نائم — إيقاظ؟» بارزة أعلى كل التبويبات
+      body: Column(
+        children: [
+          const WakeBanner(),
+          Expanded(
+            child: IndexedStack(index: _tab, children: pages),
+          ),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _tab,
         type: BottomNavigationBarType.fixed,

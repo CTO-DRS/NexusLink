@@ -1,7 +1,8 @@
 // NexusLink Desktop — أيقونة النظام (System Tray)
 // ============================================================
 // أيقونة تعكس حالة الاتصال: متصل (أخضر) / منتظر (أزرق) / موقوف (كهرماني) / خطأ (أحمر)
-// قائمة سريعة: فتح، إيقاف مؤقت/استئناف، الإغلاق إلى الـ Tray (خيار)،
+// قائمة سريعة: فتح، حالة الطاقة + عدد الاتصالات النشطة (FA-power — §12)،
+// إلغاء الإيقاف المجدول، إيقاف مؤقت/استئناف، الإغلاق إلى الـ Tray (خيار)،
 // التشغيل التلقائي مع النظام (خيار)، مجلد التنزيلات…، إنهاء.
 use std::sync::Mutex;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
@@ -13,6 +14,10 @@ pub struct TrayUi {
     pub pause_item: Mutex<MenuItem<tauri::Wry>>,
     pub closetray_item: Mutex<CheckMenuItem<tauri::Wry>>,
     pub autostart_item: Mutex<CheckMenuItem<tauri::Wry>>,
+    // FA-power (عقد §12) — مؤشر الطاقة + الاتصالات + زر إلغاء الإيقاف المجدول
+    pub power_item: Mutex<MenuItem<tauri::Wry>>,
+    pub connections_item: Mutex<MenuItem<tauri::Wry>>,
+    pub cancel_item: Mutex<MenuItem<tauri::Wry>>,
 }
 
 fn icon(name: &str) -> tauri::Result<tauri::image::Image<'static>> {
@@ -27,6 +32,10 @@ fn icon(name: &str) -> tauri::Result<tauri::image::Image<'static>> {
 
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "فتح NexusLink", true, None::<&str>)?;
+    // FA-power — عناصر عرض حالة الطاقة/الاتصالات (غير قابلة للنقر) + إلغاء الإيقاف
+    let power_item = MenuItem::with_id(app, "power", "الطاقة: تعمل", false, None::<&str>)?;
+    let connections_item = MenuItem::with_id(app, "connections", "الاتصالات النشطة: 0", false, None::<&str>)?;
+    let cancel_item = MenuItem::with_id(app, "cancel_power", "لا إيقاف مجدول", false, None::<&str>)?;
     let pause = MenuItem::with_id(app, "pause", "إيقاف مؤقت للسيرفر", true, None::<&str>)?;
     let closetray = CheckMenuItem::with_id(
         app,
@@ -52,7 +61,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     let sep = |app: &AppHandle| PredefinedMenuItem::separator(app);
     let menu = Menu::with_items(
         app,
-        &[&open, &sep(app)?, &pause, &closetray, &autostart, &downloads, &sep(app)?, &quit],
+        &[&open, &sep(app)?, &power_item, &connections_item, &cancel_item, &sep(app)?, &pause, &closetray, &autostart, &downloads, &sep(app)?, &quit],
     )?;
 
     let tray = TrayIconBuilder::with_id("nexuslink-tray")
@@ -61,6 +70,9 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "open" => crate::procman::open_main(app),
+            "cancel_power" => {
+                crate::power::cancel(app, true);
+            }
             "pause" => crate::procman::toggle_pause(app),
             "closetray" => {
                 let ui = app.state::<TrayUi>();
@@ -97,6 +109,9 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         pause_item: Mutex::new(pause),
         closetray_item: Mutex::new(closetray),
         autostart_item: Mutex::new(autostart),
+        power_item: Mutex::new(power_item),
+        connections_item: Mutex::new(connections_item),
+        cancel_item: Mutex::new(cancel_item),
     });
     Ok(())
 }
@@ -157,5 +172,51 @@ pub fn on_pause_toggled(app: &AppHandle, paused: bool) {
     if !paused {
         // الاستئناف: أيقونة انتقالية حتى تكمل دورة الإقلاع
         set_state(app, "booting");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// FA-power (عقد §12) — مؤشر الطاقة + الاتصالات + إلغاء الإيقاف المجدول
+// ---------------------------------------------------------------------------
+
+/// تحديث سطر الطاقة: (نص، Some(ثوانٍ متبقية) أثناء العدّاد / None للعرض الثابت)
+/// أثناء العدّاد يصبح زر الإلغاء مفعلًا بنص الأمر المعلق.
+pub fn update_power(app: &AppHandle, line: (&str, Option<u8>)) {
+    let ui = app.state::<TrayUi>();
+    let (text, pending) = line;
+    if let Ok(mut it) = ui.power_item.lock() {
+        let _ = if let Some(secs) = pending {
+            it.set_text(format!("سيتم {text} خلال {secs}ث…"))
+        } else {
+            it.set_text(text.to_string())
+        };
+    }
+    if let Ok(mut it) = ui.cancel_item.lock() {
+        match pending {
+            Some(_) => {
+                let _ = it.set_enabled(true);
+                let _ = it.set_text(format!("إلغاء {text}"));
+            }
+            None => {
+                let _ = it.set_enabled(false);
+                let _ = it.set_text("لا إيقاف مجدول");
+            }
+        }
+    }
+    if let Ok(tray) = ui.tray.lock() {
+        let tip = if let Some(secs) = pending {
+            format!("NexusLink — سيتم {text} خلال {secs}ث")
+        } else {
+            format!("NexusLink — {text}")
+        };
+        let _ = tray.set_tooltip(Some(tip));
+    }
+}
+
+/// تحديث عدّاد الاتصالات النشطة (من استطلاع الحالة كل ~10ث)
+pub fn update_connections(app: &AppHandle, n: usize) {
+    let ui = app.state::<TrayUi>();
+    if let Ok(mut it) = ui.connections_item.lock() {
+        let _ = it.set_text(format!("الاتصالات النشطة: {n}"));
     }
 }

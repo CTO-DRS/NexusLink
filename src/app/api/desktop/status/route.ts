@@ -18,9 +18,10 @@ import { ensureProdBridge } from "@/lib/nexus/productivity-bridge"
 import { ensureRemoteBridge } from "@/lib/nexus/remote-bridge"
 import { ensureSecurityBridge } from "@/lib/nexus/security-bridge"
 import { jobs } from "@/lib/nexus/transfer-engine"
+import { store as deviceStore } from "@/lib/nexus/devices"
 import { db } from "@/lib/db"
 import { serNotification } from "@/lib/nexus/comms-server"
-import { readShortcuts, readDesktopClip } from "@/lib/nexus/desktop-shortcuts"
+import { readShortcuts, readDesktopClip, readDesktopSecurity } from "@/lib/nexus/desktop-shortcuts"
 
 export const dynamic = "force-dynamic"
 
@@ -65,6 +66,15 @@ export async function GET() {
     } catch { /* قاعدة البيانات غير جاهزة — الافتراضي تلقائي */ }
     const clip = { ...(await readDesktopClip()), mode: clipMode }
 
+    // FA-power (عقد §12) — حالة الطاقة/هوية الكمبيوتر من جسر التحكم + عدد
+    // الاتصالات النشطة من سجل الأجهزة + بوابة القفل التلقائي من المخزن.
+    // فشلها محمي — لا يُسقط الحالة الأساسية.
+    let connections = 0
+    try {
+      connections = deviceStore().devices.filter((d) => d.state === "connected").length
+    } catch { /* السجل غير جاهز — صفر */ }
+    const secCfg = await readDesktopSecurity()
+
     return Response.json({
       ok: true,
       proto: "Nexus/1.2",
@@ -79,6 +89,13 @@ export async function GET() {
         agentId: getAgentDeviceId(),
         shortcuts: await readShortcuts(),
         clip,
+        security: secCfg,
+        connections,
+        power: {
+          state: remote.desktop.power,
+          mac: remote.desktop.mac,
+          name: remote.desktop.name,
+        },
         transfers,
         notifs,
       },

@@ -1,10 +1,12 @@
-// /api/desktop/shortcuts — مزامنة الاختصارات العالمية + إعدادات مراقب الحافظة لسطح المكتب
+// /api/desktop/shortcuts — مزامنة الاختصارات العالمية + إعدادات الحافظة والأمان لسطح المكتب
 // ============================================================
 // المخزن المصدر واحد: zustand store في الواجهة (localStorage: nexus-shortcuts).
 // مكوّن الجسر (desktop-bridge) يقرأ المخزن نفسه ويدفع الخريطة إلى هنا،
 // ومدير العمليات في Tauri (procman) يستطلعها عبر GET ويُسجّلها عالميًا.
 // FA-clipboard-sync: نفس المسار يحمل الآن كائن clip (mode/maxAutoBytes)
 // — مراقب الحافظة في Rust يقرؤه من status.desktop.clip (عقد §11).
+// FA-power: نفس المسار يحمل كائن security (autoLock) — تقرؤه الطبقة
+// الأصلية من status.desktop.security لبوابة القفل التلقائي (عقد §12).
 // تخزين: ملف JSON بجانب بيانات السيرفر (نفس نمط كتابة الخادم الحالي).
 import { promises as fs } from "fs"
 import path from "path"
@@ -14,6 +16,8 @@ import {
   desktopUiStorePath,
   readDesktopClip,
   writeDesktopClip,
+  readDesktopSecurity,
+  writeDesktopSecurity,
 } from "@/lib/nexus/desktop-shortcuts"
 
 export const dynamic = "force-dynamic"
@@ -31,7 +35,12 @@ async function readMap(): Promise<Record<string, string>> {
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, shortcuts: await readMap(), clip: await readDesktopClip() })
+  return NextResponse.json({
+    ok: true,
+    shortcuts: await readMap(),
+    clip: await readDesktopClip(),
+    security: await readDesktopSecurity(),
+  })
 }
 
 export async function PUT(req: NextRequest) {
@@ -41,8 +50,13 @@ export async function PUT(req: NextRequest) {
   }
   const incoming = (body as { shortcuts?: Record<string, unknown> }).shortcuts
   const clipIn = (body as { clip?: unknown }).clip
-  if ((!incoming || typeof incoming !== "object") && (!clipIn || typeof clipIn !== "object")) {
-    return NextResponse.json({ error: "shortcuts أو clip مطلوب" }, { status: 400 })
+  const secIn = (body as { security?: unknown }).security
+  if (
+    (!incoming || typeof incoming !== "object") &&
+    (!clipIn || typeof clipIn !== "object") &&
+    (!secIn || typeof secIn !== "object")
+  ) {
+    return NextResponse.json({ error: "shortcuts أو clip أو security مطلوب" }, { status: 400 })
   }
   // تنظيف: مفاتيح نصية غير فارغة فقط، ودمج فوق القائم (عميل قديم لا يمسح البقية)
   const clean: Record<string, string> = {}
@@ -83,5 +97,17 @@ export async function PUT(req: NextRequest) {
       )
     }
   }
-  return NextResponse.json({ ok: true, shortcuts: merged, clip })
+  // FA-power: تحديث إعدادات الأمان (autoLock) إن وُجد في نفس الطلب
+  let security = await readDesktopSecurity()
+  if (secIn && typeof secIn === "object") {
+    try {
+      security = await writeDesktopSecurity(secIn as Record<string, never>)
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "فشل حفظ إعدادات الأمان" },
+        { status: 500 }
+      )
+    }
+  }
+  return NextResponse.json({ ok: true, shortcuts: merged, clip, security })
 }
