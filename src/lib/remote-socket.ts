@@ -20,6 +20,18 @@ export function getRemoteSocket(): Socket {
     })
     // تسهيل التشخيص في وحدة التحكم
     ;(window as unknown as { __nexusRemoteSocket?: Socket }).__nexusRemoteSocket = socket
+    // FA-input (عقد §13) — في وضع سطح المكتب، وحدة التحكم الويبية هي واجهة
+    // الكمبيوتر نفسها (صاحب الجهاز) — تسجلها ليميّزها الجسر عن الأجهزة البعيدة
+    // (حقن __src=desktop). في المتصفح العادي لا تسجيل (سلوك قائم كما هو).
+    if (typeof window !== "undefined" && (window as unknown as { __NEXUS_DESKTOP__?: boolean }).__NEXUS_DESKTOP__) {
+      import("./tauri")
+        .then(({ tauriInvoke }) =>
+          tauriInvoke<string>("system_mac")
+            .then((mac) => socket?.emit("desktop:register", { name: "NEXUS-PC", mac }))
+            .catch(() => null),
+        )
+        .catch(() => null)
+    }
   }
   return socket
 }

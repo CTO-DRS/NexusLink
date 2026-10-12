@@ -165,6 +165,7 @@ interface TransferJob {
 - `desktop:state {power}` · `desktop:clipboard {text, at?}`
 - `rc:ping {t}`
 - أحداث الإدخال (تُرحَّل broadcast مع بوابة الطاقة): `rc:move {dx, dy}` · `rc:click {button: "left"|"right"}` · `rc:scroll {dy}` · `rc:pinch {scale}` · `rc:key {key?, special?, modifiers?}` · `rc:gamepad {kind: "button"|"axis", button?, action?, ...}` · `rc:presenter {action: "next"|"prev"|"black"|"laser-on"|"laser-off", value?}` · `rc:media {action: "toggle"|"play"|"pause"|"next"|"prev"|"mute"|"unmute"|"volume", value?}` · `rc:clipboard {direction: "toPc"|"pull", text?}`
+  - **FA-input (§13) امتدادات خلفية لا تكسر القائم**: كل حدث إدخال مبثوث يحقن `__src: "desktop"|"controller"|"unknown"` (تمييز المصدر) · `rc:presenter` يضيف `start`|`stop` (F5/Esc) · جلسة التحكم الموثوقة `rc:session` (start/hb/stop) — التفاصيل في §13.
 - `rc:power {action: "shutdown"|"restart"|"sleep"|"hibernate"|"lock"|"unlock"|"logout"}` — **FA-power: logout إضافي (شاشة الدخول = حالة locked)؛ التنفيذ الحقيقي في الطبقة الأصلية (§12) بتأكيد أمان 10ث قابل للإلغاء للأوامر المدمرة**
 - `rc:wol {mac}` — تحقق صارم من MAC وإعادة صياغة الحزمة 6×FF+MAC×16 — **FA-power: إرسال فعلي عبر UDP broadcast إلى المنفذ 9 (NEXUS_WOL_BROADCAST يبدّل الوجهات للاختبار) + سجل نتيجة الإرسال الحقيقي**
 
@@ -517,3 +518,59 @@ interface TransferJob {
 | G-14 | لا إعدادات أمان لسطح المكتب | `security.autoLock` في نفس المخزن desktop-ui.json + بطاقة إعدادات الأمان |
 
 **تحقق E2E**: قسم جديد في scripts/desktop-e2e.mjs — تسجيل desktop:register بMAC حقيقي الشكل → rc:power logout يصل للكمبيوتر → rc:wol بعد تعيين الحالة sleeping → **التقاط الحزمة فعليًا على مستمع UDP :9 (102 بايت = 6×FF + MAC×16)** → رفض already-on → pc:lock بلا منارة بعد مهلة سماح → حقول status.desktop الجديدة.
+
+---
+
+## 13. التحكم الفعلي بالكمبيوتر: enigo وجلسة التحكم الموثوقة (FA-input — مصدر: input.rs + input_exec.rs + desktop-bridge.tsx + remote-bridge.ts + controller_service.dart)
+
+**الاختبار الناجح التعاقدي**: تحرك مؤشر كمبيوترك من شاشة Touchpad بالهاتف + اكتب نصًا عربيًا من كيبورد الهاتف في مستند — **مثبت تنفيذيًا 28/28** (scripts/enigo-verify على Xvfb: حركة المؤشر تُثبت بـ XQueryPointer مستقلًا عن enigo، والعربية تُحقن حرفًا حرفًا عبر XTEST).
+
+### 13.أ حقن الإدخال الأصلي (Rust `input_exec.rs` — نواة نقية بلا Tauri)
+| الحدث | التنفيذ الأصلي |
+|-------|----------------|
+| `move {dx,dy,drag?}` | `move_mouse(dx,dy,Rel)` — قصّ دفاعي ±500؛ **السحب بحواف**: أول `drag:true` يضغط الزر الأيسر وأول حدث بلا drag يرفعه (`DRAG_DOWN: AtomicBool` — بلا تكرار ضغط/رفع) — يحوّل «نقر مطول + تحريك» في الهاتف إلى سحب حقيقي |
+| `click {button,type?}` | Left/Right/Middle؛ `double` = نقرتان متتاليتان (40ms بينهما — عتبة النقر المزدوج للنظام تفسرهما) |
+| `scroll {dy}` | عجلة عمودية — تدرّج 40 بكسل = نقرة واحدة، قصّ ±10 نقرات/حدث (موجب = لأسفل) |
+| `pinch {scale}` | Ctrl + عجلة (تكبير/تصغير شائع): `n = ⌈|scale−1|×3⌉` مقصوص 1..6 |
+| `key {ch\|special\|key, modifiers?}` | نص/حرف عبر `enigo.text()` يونيكوديًا — انظر 13.ب؛ special: enter/backspace/space/arrows/esc/tab/delete/home/end/pageup/pagedown؛ مسماة: f5/f11؛ modifiers اختيارية (ctrl/alt/shift) تُضغط قبل المفتاح وتُحل دائمًا حتى عند الفشل |
+| `presenter {action}` | next→PageDown · prev→PageUp · **start→F5 · stop→Esc** (إضافة FA-input) · black→b (شاشة PowerPoint السوداء) · laser-*: عرض ويبي فقط — لا مقابل نظامي (موثق بصدق) |
+| `media {action,value?}` | toggle/play/pause→MediaPlayPause · next/prev→MediaNext/PrevTrack · mute/unmute→VolumeMute · volume→مستوى مطلق 0..100 (انظر 13.د) |
+
+### 13.ب كتابة نص عربي كامل — معالجة تخطيط الكيبورد (بند 1)
+- **الضمان**: حقن يونيكودي **مستقل تمامًا عن التخطيط النشط** — لا حاجة لتبديل لغة الكمبيوتر ولا توقع أحرف:
+  - **Windows**: `SendInput` مع `KEYEVENTF_UNICODE` — الحرف يمر كما هو مهما كان تخطيط النظام (عربي/إنجليزي/أي لوحة).
+  - **macOS**: `CGEventKeyboardSetUnicodeString` — نفس الضمان.
+  - **Linux/X11**: `Key::Unicode(c)` → keysym يونيكودي (0x1000000+codepoint) عبر XTEST مع إعادة ربط keycodes غير مستخدمة مؤقتًا (نمط xdotool) — يعمل مع أي تطبيق يستقبل إدخال X11 (يشمل XWayland). **Wayland الأصلي غير مسند** في enigo 0.2.1 (موثق) — البديل Wayland (libei) غير مفعّل.
+- الهاتف يرسل حرفًا حرفًا (`rc:key {ch}` من onChanged — كل rune منفصل) والسلاسل الكاملة مسموحة (لصق متعدد الأحرف يمر كاملًا).
+- الاعتماد: `enigo 0.2.1` بميزة `x11rb` الخالصة Rust على لينكس (**بلا libxdo C** — إعادة ربط المفاتيح مدمجة في الخلفية) — إضافة Cargo الوحيدة لهذه المرحلة؛ بناء لينكس في CI يحتاج `libxkbcommon-dev` (تبعية xkbcommon للاختبارات فقط في شجرة enigo).
+
+### 13.ج جلسة التحكم الموثوقة — الأمان (بند 7)
+- **دورة الحياة** (حدث جديد `rc:session` على 3004): الهاتف → `{action:"start", deviceId, name}` عند فتح شاشة التحكم، `{action:"hb"}` نبض **كل 2ث**، `{action:"stop"}` عند الإغلاق/القطع. الجسر يبث `rc:session {active:true, controller:{deviceId,name}, at}` أو `{active:false, reason:"phone-stop"|"desktop-stop"|"timeout"|"disconnected", at}`.
+- **حاجز الثقة على الجسر (قبل التوجيه)**: `deviceId` يجب أن يكون في سجل الأجهزة بـ `trusted:true` (نفس منطق `dev:ctl-start` §4.8) — وإلا `rc:rejected {reason:"untrusted", ev:"rc:session"}` + سجل. جلسة واحدة فقط (`busy` لغيرها). تسجيل وحدة التحكم `rc:hello-controller {name, deviceId}` يوثق السوكِت فقط للهوية الموثوقة (بلا هوية = متحكم ويبي محاكي بلا جلسة).
+- **تمييز المصدر على الإدخال**: الجسر يحقن `__src` في كل حدث rc:* مبثوث: `"desktop"` (سوكِت واجهة الكمبيوتر — صاحب الجهاز) / `"controller"` (هاتف موثوق) / `"unknown"` (حقل إضافي لا يكسر العملاء القائمين). **الطبقة الأصلية ترفض unknown ولا تنفذ controller إلا خلال جلسة نشطة**؛ desktop = واجهة الكمبيوتر نفسها (صاحب الجهاز — عرض ويب داخل التطبيق) تنفَّذ دائمًا عبر `source:"desktop-local"`.
+- **watchdog مزدوج**: الجسر ينهي الجلسة بعد فقدان النبض 6ث (بث `timeout`)؛ وRust محليًا ينهيها بلا أي أحداث 15ث (حارس السلامة — يغطي انقطاع الويبفيو نفسه). انقطاع سوكِت الهاتف ينهيها فورًا (`disconnected`).
+- **القطع الفوري من الطرفين**: زر «قطع فوري» في شريط الجلسة بالهاتف (`phone-stop`) + زر «إنهاء جلسة التحكم» في قائمة Tray الكمبيوتر (`desktop-stop` — يبث للهاتف عبر `rc:session stop` من الويبفيو) + لافتة حمراء داخل واجهة سطح المكتب بزر «إنهاء فوري». نهاية الجلسة تحرر زر السحب إن كان معلقًا (`reset_drag` — لا زر عالق على المستخدم).
+- **الإشعار المرئي الدائم (بند 7)**: أثناء الجلسة — أيقونة Tray تتحول **بنفسجيًا** (tray-input.png) + عنصر قائمة «جلسة تحكم نشطة: <اسم>» + tooltip حي + لافتة بنفسجية داخل الواجهة + إشعار نظام عند البدء والانتهاء (timeout/disconnected). `status.desktop` يضيف `input: {active, deviceId, name, at}` (إضافي لا يكسر).
+
+### 13.د ضبط الصوت المطلق — لكل منصة طريقها الصحيح
+- **macOS**: `osascript -e "set volume output volume N"` — دقيق ومطلق.
+- **Linux**: `pactl set-sink-volume @DEFAULT_SINK@ N%` (PulseAudio/PipeWire) ← `amixer -q set Master N%` (ALSA) ← نقرات مفاتيح الصوت (تقريبي — موثق).
+- **Windows**: نقرات `VK_VOLUME_UP/DOWN` (كل نقرة 2%) مع **مرآة مستوى مُتبَّعة** (`VOL_MIRROR` تبدأ 50) — انزياح ممكن إن غيّر المستخدم الصوت فعليًا ويُصحح عند 0/100؛ ضبط مطلق حقيقي يتطلب COM `IAudioEndpointVolume` — تُرك لتقل الاعتمادات (موثق بصدق).
+- المفوّض `set_volume_override` في `input_exec.rs` يُضبط من `input.rs` عند الإقلاع؛ نواة لينكس تفعل سلسلتها مباشرة.
+
+### 13.هـ تدفق إذن Accessibility على macOS (بند 6)
+- `input_permission` (Tauri): فحص `AXIsProcessTrustedWithOptions` بـ **FFI مباشر** (CoreFoundation + ApplicationServices — بلا crates جديدة؛ قاموس فارغ = فحص قراءة فقط). ويندوز/لينكس ترد `{granted:true}` دائمًا.
+- عند بدء جلسة (أو فشل حقن `desktop://input-error`): الويبفيو يستدعي `input_permission` → بلا إذن → يفتح `input_open_permissions` (فتح `x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility`) + **شاشة إرشادية عربية** (غلاف داكن): خطوات التفعيل (إعدادات النظام ← الخصوصية والأمان ← Accessibility ← NexusLink) + زرّا «فتح إعدادات النظام» و«حسنًا».
+- فشل `Enigo::new` في `input::start` يفشل مبكرًا برسالة عربية واضحة (مثال: بلا X11/بلا إذن) — لا جلسة وهمية.
+
+### 13.و فجوات سيرفرية أُصلحت في هذه المرحلة
+| # | الفجوة | ما نُفّذ |
+|---|--------|----------|
+| G-15 | أحداث rc:* تُبث بلا هوية مصدر — الكمبيوتر لا يستطيع تمييز هاتف موثوق من مجهول | حقن `__src` (desktop/controller/unknown) في الجسرين + توثيق وحدات التحكم بالهوية |
+| G-16 | لا مفهوم جلسة تحكم للاتجاه هاتف→كمبيوتر (الجلسة القديمة §4.8 عكس الاتجاه) | `rc:session` كامل (start/hb/stop + busy + untrusted) + watchdog 6ث + انقطاع السوكِت ينهي |
+| G-17 | presenter بلا بدء/إنهاء عرض | إجراءا `start`/`stop` (F5/Esc) في الجسرين + العقد |
+| G-18 | `status.desktop` بلا حالة جلسة التحكم | `input: {active, deviceId, name, at}` من `remoteBridgeStatus` |
+
+**تحقق E2E**: قسم [6h] في scripts/desktop-e2e.mjs — جلسة موثوقة (galaxy-s24 عبر hello-controller بالهوية) → بث rc:session active + status.desktop.input.active — رفض جهاز غير موثوق (untrusted) — حقن __src: controller للأموثوق وunknown للمجهول — عربي UTF-8 عبر rc:key — presenter start/stop يمران — heartbeat 6ث → بث timeout — إيقاف من سوكِت سطح مكتب مسجل → desktop-stop.
+
+**قيود موثقة بصدق**: Wayland الأصلي غير مسند (XWayland يعمل) — ضبط الصوت المطلق على ويندوز بنقرات مُتبَّعة (انزياح ممكن) — المؤشر الليزري عرض ويبي فقط — التنفيذ الفيزيائي على Windows/macOS يثبت بـ CI 3/3 (الحاوية بلا GUI على تلك المنصات) بينما لينكس **مثبت تنفيذيًا 28/28 على Xvfb** (حركة مؤشر حقيقية بـ XQueryPointer + عربية حقيقية عبر XTEST).

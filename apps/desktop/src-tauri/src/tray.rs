@@ -1,8 +1,10 @@
 // NexusLink Desktop — أيقونة النظام (System Tray)
 // ============================================================
 // أيقونة تعكس حالة الاتصال: متصل (أخضر) / منتظر (أزرق) / موقوف (كهرماني) / خطأ (أحمر)
+// + جلسة تحكم نشطة (بنفسجي — FA-input §13، إشعار مرئي دائم أثناء التحكم من الهاتف)
 // قائمة سريعة: فتح، حالة الطاقة + عدد الاتصالات النشطة (FA-power — §12)،
-// إلغاء الإيقاف المجدول، إيقاف مؤقت/استئناف، الإغلاق إلى الـ Tray (خيار)،
+// إلغاء الإيقاف المجدول، جلسة التحكم + قطعها الفوري (FA-input — §13)،
+// إيقاف مؤقت/استئناف، الإغلاق إلى الـ Tray (خيار)،
 // التشغيل التلقائي مع النظام (خيار)، مجلد التنزيلات…، إنهاء.
 use std::sync::Mutex;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
@@ -18,13 +20,20 @@ pub struct TrayUi {
     pub power_item: Mutex<MenuItem<tauri::Wry>>,
     pub connections_item: Mutex<MenuItem<tauri::Wry>>,
     pub cancel_item: Mutex<MenuItem<tauri::Wry>>,
+    // FA-input (عقد §13) — مؤشر جلسة التحكم + زر القطع الفوري
+    pub session_item: Mutex<MenuItem<tauri::Wry>>,
+    pub stop_session_item: Mutex<MenuItem<tauri::Wry>>,
 }
+
+/// آخر مرحلة اتصال (لأيقونة Tray عند انتهاء جلسة التحكم — نرجع لما قبلها)
+static LAST_STAGE: Mutex<&'static str> = Mutex::new("waiting");
 
 fn icon(name: &str) -> tauri::Result<tauri::image::Image<'static>> {
     let bytes: &[u8] = match name {
         "connected" => include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/icons/tray-connected.png")),
         "paused" => include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/icons/tray-paused.png")),
         "error" => include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/icons/tray-error.png")),
+        "input" => include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/icons/tray-input.png")),
         _ => include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/icons/tray-waiting.png")),
     };
     tauri::image::Image::from_bytes(bytes)
@@ -36,6 +45,9 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     let power_item = MenuItem::with_id(app, "power", "الطاقة: تعمل", false, None::<&str>)?;
     let connections_item = MenuItem::with_id(app, "connections", "الاتصالات النشطة: 0", false, None::<&str>)?;
     let cancel_item = MenuItem::with_id(app, "cancel_power", "لا إيقاف مجدول", false, None::<&str>)?;
+    // FA-input — مؤشر جلسة التحكم (عرض) + زر القطع الفوري (مفعّل أثناء الجلسة فقط)
+    let session_item = MenuItem::with_id(app, "session", "لا جلسة تحكم", false, None::<&str>)?;
+    let stop_session_item = MenuItem::with_id(app, "stop_session", "إنهاء جلسة التحكم", false, None::<&str>)?;
     let pause = MenuItem::with_id(app, "pause", "إيقاف مؤقت للسيرفر", true, None::<&str>)?;
     let closetray = CheckMenuItem::with_id(
         app,
@@ -61,7 +73,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     let sep = |app: &AppHandle| PredefinedMenuItem::separator(app);
     let menu = Menu::with_items(
         app,
-        &[&open, &sep(app)?, &power_item, &connections_item, &cancel_item, &sep(app)?, &pause, &closetray, &autostart, &downloads, &sep(app)?, &quit],
+        &[&open, &sep(app)?, &power_item, &connections_item, &cancel_item, &session_item, &stop_session_item, &sep(app)?, &pause, &closetray, &autostart, &downloads, &sep(app)?, &quit],
     )?;
 
     let tray = TrayIconBuilder::with_id("nexuslink-tray")
@@ -72,6 +84,10 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
             "open" => crate::procman::open_main(app),
             "cancel_power" => {
                 crate::power::cancel(app, true);
+            }
+            "stop_session" => {
+                // FA-input — القطع الفوري لجلسة التحكم (بند 7 من المتطلبات)
+                crate::input::stop_from_tray(app);
             }
             "pause" => crate::procman::toggle_pause(app),
             "closetray" => {
@@ -112,6 +128,8 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         power_item: Mutex::new(power_item),
         connections_item: Mutex::new(connections_item),
         cancel_item: Mutex::new(cancel_item),
+        session_item: Mutex::new(session_item),
+        stop_session_item: Mutex::new(stop_session_item),
     });
     Ok(())
 }
@@ -131,12 +149,13 @@ fn pick_downloads_dir(app: &AppHandle) {
     });
 }
 
-const TIPS: [(&str, &str); 5] = [
+const TIPS: [(&str, &str); 6] = [
     ("waiting", "NexusLink — في انتظار هاتف…"),
     ("connected", "NexusLink — هاتف متصل"),
     ("paused", "NexusLink — موقوف مؤقتًا"),
     ("error", "NexusLink — مشكلة في الخدمات"),
     ("booting", "NexusLink — جارٍ التشغيل…"),
+    ("input", "NexusLink — جلسة تحكم نشطة من الهاتف"),
 ];
 
 pub fn set_state(app: &AppHandle, state: &str) {
@@ -161,7 +180,16 @@ pub fn on_stage(app: &AppHandle, stage: &str) {
         "paused" => "paused",
         _ => "booting",
     };
-    set_state(app, state);
+    // حفظ المرحلة للرجوع إليها عند انتهاء جلسة التحكم (لا نجمد الأيقونة البنفسجية)
+    if let Ok(mut g) = LAST_STAGE.lock() {
+        if state != "booting" {
+            *g = state;
+        }
+    }
+    // أثناء جلسة التحكم نبقى على الأيقونة البنفسجية (الإشعار الدائم — بند 7)
+    if !crate::input::is_active() {
+        set_state(app, state);
+    }
     let _ = app.emit("desktop://tray-state", state);
 }
 
@@ -221,4 +249,36 @@ pub fn update_connections(app: &AppHandle, n: usize) {
     if let Ok(it) = ui.connections_item.lock() {
         let _ = it.set_text(format!("الاتصالات النشطة: {n}"));
     };
+}
+
+// ---------------------------------------------------------------------------
+// FA-input (عقد §13) — مؤشر جلسة التحكم الدائم + زر القطع الفوري
+// ---------------------------------------------------------------------------
+
+/// تحديث عناصر الجلسة: Some(name) = نشطة (أيقونة بنفسجية + زر إنهاء مفعّل)
+pub fn update_session(app: &AppHandle, name: Option<&str>) {
+    let ui = app.state::<TrayUi>();
+    if let Ok(it) = ui.session_item.lock() {
+        let _ = match name {
+            Some(n) => it.set_text(format!("جلسة تحكم نشطة: {n}")),
+            None => it.set_text("لا جلسة تحكم"),
+        };
+    };
+    if let Ok(it) = ui.stop_session_item.lock() {
+        let _ = it.set_enabled(name.is_some());
+    };
+    // فاصلة منقوطة بعد الجملة الأخيرة — حارس E0597
+    if let Ok(tray) = ui.tray.lock() {
+        let _ = match name {
+            Some(n) => tray.set_tooltip(Some(format!("NexusLink — جلسة تحكم نشطة: {n}"))),
+            None => tray.set_tooltip(Some("NexusLink".into())),
+        };
+    };
+    match name {
+        Some(_) => set_state(app, "input"),
+        None => {
+            let stage = LAST_STAGE.lock().map(|g| *g).unwrap_or("waiting");
+            set_state(app, stage);
+        }
+    }
 }

@@ -446,6 +446,122 @@ try {
   check("العقد: §12 موثق (أوامر النظام/الإيقاظ/القفل التلقائي)",
     contract.includes("## 12. أوامر النظام والطاقة الحقيقية") && contract.includes("NEXUS_WOL_BROADCAST") && contract.includes("logout"))
 
+  // ============ 6h) FA-input — جلسة التحكم الموثوقة + حقن المصدر (§13) ============
+  console.log("== [6h] FA-input: trusted control session + __src injection ==")
+
+  // (أ) status.desktop.input موجود (خامل افتراضيًا)
+  const st6a = await fetch("http://127.0.0.1:3000/api/desktop/status").then((r) => r.json())
+  check("FA-input: status.desktop.input {active:false} افتراضيًا",
+    st6a?.desktop?.input?.active === false && typeof st6a?.desktop?.input?.name === "object",
+    `input=${JSON.stringify(st6a?.desktop?.input)}`)
+
+  // (ب) بدء جلسة من جهاز مجهول → رفض untrusted (حاجز الثقة على الجسر — بند 7)
+  const untrust = await new Promise((res) => {
+    rcPhone.on("rc:rejected", (d) => { if (d?.ev === "rc:session") res(d) })
+    rcPhone.emit("rc:session", { action: "start", deviceId: "stranger-device", name: "غريب" })
+    setTimeout(() => res(null), 6000)
+  })
+  check("FA-input: جلسة من جهاز غير موثوق → rc:rejected(untrusted)", untrust?.reason === "untrusted", `reason=${untrust?.reason}`)
+
+  // (ج) وحدة تحكم موثوقة (galaxy-s24 في سجل الأجهزة) → بدء مقبول
+  const rcCtl = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3004" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+  await new Promise((res, rej) => { rcCtl.on("connect", res); rcCtl.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("rc ctl timeout")), 10000) })
+  rcCtl.emit("rc:hello-controller", { name: "Galaxy S24", deviceId: "galaxy-s24" })
+  await sleep(700)
+  const sessionStart = await new Promise((res) => {
+    rcDesk.on("rc:session", (d) => { if (d?.active === true) res(d) })
+    rcCtl.emit("rc:session", { action: "start", deviceId: "galaxy-s24", name: "Galaxy S24" })
+    setTimeout(() => res(null), 6000)
+  })
+  check("FA-input: جلسة موثوقة (galaxy-s24) → بث active:true باسم المتحكم",
+    sessionStart?.controller?.name === "Galaxy S24" && sessionStart?.controller?.deviceId === "galaxy-s24",
+    `got=${JSON.stringify(sessionStart)}`)
+  await sleep(500)
+  const st6c = await fetch("http://127.0.0.1:3000/api/desktop/status").then((r) => r.json())
+  check("FA-input: status.desktop.input.active=true بعد البدء", st6c?.desktop?.input?.active === true && st6c?.desktop?.input?.name === "Galaxy S24",
+    `input=${JSON.stringify(st6c?.desktop?.input)}`)
+
+  // (د) جلسة ثانية من جهاز موثوق آخر → رفض busy
+  rcPhone.emit("rc:hello-controller", { name: "Redmi", deviceId: "redmi-note13" })
+  await sleep(500)
+  const busy = await new Promise((res) => {
+    rcPhone.on("rc:rejected", (d) => { if (d?.ev === "rc:session") res(d) })
+    rcPhone.emit("rc:session", { action: "start", deviceId: "redmi-note13", name: "Redmi" })
+    setTimeout(() => res(null), 6000)
+  })
+  check("FA-input: جلسة ثانية → rc:rejected(busy)", busy?.reason === "busy", `reason=${busy?.reason}`)
+
+  // (هـ) حقن المصدر: أحداث وحدة التحكم الموثوقة تحمل __src=controller
+  const moveInj = await new Promise((res) => {
+    rcDesk.on("rc:move", (d) => res(d))
+    rcCtl.emit("rc:move", { dx: 25, dy: -12, source: "touchpad" })
+    setTimeout(() => res(null), 6000)
+  })
+  check("FA-input: rc:move من موثوق → __src=controller", moveInj?.__src === "controller" && moveInj?.dx === 25,
+    `src=${moveInj?.__src} dx=${moveInj?.dx}`)
+
+  // (و) المجهول يبقى unknown + العربية تمر UTF-8 سليمة
+  const webSock = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3004" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+  await new Promise((res, rej) => { webSock.on("connect", res); webSock.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("web timeout")), 10000) })
+  const unknownInj = await new Promise((res) => {
+    rcDesk.on("rc:key", (d) => res(d))
+    webSock.emit("rc:key", { ch: "مرحبا" })
+    setTimeout(() => res(null), 6000)
+  })
+  check("FA-input: rc:key من سوكِت مجهول → __src=unknown + عربي UTF-8 سليم",
+    unknownInj?.__src === "unknown" && unknownInj?.ch === "مرحبا",
+    `src=${unknownInj?.__src} ch=${unknownInj?.ch}`)
+
+  // (ز) العرض التقديمي: start/stop (F5/Esc) يمران + الوسائط volume
+  const presStart = await new Promise((res) => {
+    rcDesk.on("rc:presenter", (d) => { if (d?.action === "start") res(d) })
+    rcCtl.emit("rc:presenter", { action: "start" })
+    setTimeout(() => res(null), 6000)
+  })
+  check("FA-input: rc:presenter start (F5) يُرحّل", presStart?.action === "start", `got=${JSON.stringify(presStart)}`)
+  const mediaVol = await new Promise((res) => {
+    rcDesk.on("rc:media", (d) => { if (d?.action === "volume") res(d) })
+    rcCtl.emit("rc:media", { action: "volume", value: 70 })
+    setTimeout(() => res(null), 6000)
+  })
+  check("FA-input: rc:media volume 70 يُرحّل", mediaVol?.value === 70, `got=${JSON.stringify(mediaVol)}`)
+
+  // (ح) watchdog الجسر: فقدان النبض 6ث → بث timeout وإعادة الحالة إلى خامل
+  const timeoutEnd = await new Promise((res) => {
+    const onEnd = (d) => { if (d?.active === false) res(d) }
+    rcDesk.on("rc:session", onEnd)
+    rcCtl.on("rc:session", onEnd)
+    setTimeout(() => res(null), 11000) // 6ث مهلة + 2ث دورة المراقبة + هامش
+  })
+  check("FA-input: فقدان النبض → بث {active:false, reason:timeout}",
+    timeoutEnd?.reason === "timeout", `got=${JSON.stringify(timeoutEnd)}`)
+  await sleep(600)
+  const st6h = await fetch("http://127.0.0.1:3000/api/desktop/status").then((r) => r.json())
+  check("FA-input: status.desktop.input.active=false بعد timeout", st6h?.desktop?.input?.active === false)
+
+  // (ط) القطع الفوري من الكمبيوتر: جلسة جديدة ثم إيقاف من سوكِت سطح مكتب مسجل
+  const restartOk = await new Promise((res) => {
+    rcDesk.on("rc:session", (d) => { if (d?.active === true) res(d) })
+    rcCtl.emit("rc:session", { action: "start", deviceId: "galaxy-s24", name: "Galaxy S24" })
+    setTimeout(() => res(null), 6000)
+  })
+  check("FA-input: إعادة بدء الجلسة بعد timeout مقبول", restartOk?.active === true, `got=${JSON.stringify(restartOk)}`)
+  const deskStop = await new Promise((res) => {
+    const onStop = (d) => { if (d?.active === false) res(d) }
+    rcCtl.on("rc:session", onStop)
+    rcDesk.on("rc:session", onStop)
+    rcDesk.emit("rc:session", { action: "stop" }) // من الكمبيوتر نفسه (بند 7)
+    setTimeout(() => res(null), 6000)
+  })
+  check("FA-input: القطع الفوري من الكمبيوتر → بث desktop-stop يصل الهاتف",
+    deskStop?.reason === "desktop-stop", `got=${JSON.stringify(deskStop)}`)
+
+  // (ي) العقد §13 موثق حرفيًا
+  check("العقد: §13 موثق (enigo/جلسة التحكم/حقن __src/عربية)",
+    contract.includes("## 13. التحكم الفعلي بالكمبيوتر") && contract.includes("KEYEVENTF_UNICODE") && contract.includes("__src") && contract.includes("rc:session"))
+
+  rcCtl.disconnect()
+  webSock.disconnect()
   rcDesk.disconnect()
   rcPhone.disconnect()
 } catch (e) {

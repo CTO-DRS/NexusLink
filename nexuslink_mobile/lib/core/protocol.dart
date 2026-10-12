@@ -111,6 +111,12 @@ class RcEvents {
   static const String clipboard = 'rc:clipboard'; // {direction: toPc|pull, text?}
   static const String handoff = 'rc:handoff'; // {url, title?} — FA-9
 
+  // FA-input (عقد §13) — دورة حياة جلسة التحكم الموثوقة:
+  // إرسال: {action: "start"|"stop", deviceId, name?} · {action: "hb"} نبض 2ث
+  // استقبال: {active: true, controller: {deviceId, name}, at} |
+  //          {active: false, reason: "phone-stop"|"desktop-stop"|"timeout"|"disconnected", at}
+  static const String session = 'rc:session';
+
   // استقبال
   static const String desktopClipboard = 'desktop:clipboard'; // {text, at?}
   static const String desktopState = 'desktop:state';

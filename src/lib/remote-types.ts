@@ -42,8 +42,9 @@ export interface RcGamepadPayload {
   action?: string
 }
 
+/** FA-input (عقد §13): أوامر العرض — start/stop إضافة الطبقة الأصلية (F5/Esc) */
 export interface RcPresenterPayload {
-  action: "next" | "prev" | "black" | "laser-on" | "laser-off" | "laser-move"
+  action: "next" | "prev" | "black" | "laser-on" | "laser-off" | "laser-move" | "start" | "stop"
   value?: boolean
   x?: number
   y?: number
@@ -89,6 +90,14 @@ export interface DesktopStateReport {
   gameScore: number
   clipboardLen: number
   notepadLen: number
+  at: number
+}
+
+/** FA-input (عقد §13) — دورة حياة جلسة التحكم الموثوقة */
+export interface RcSessionBroadcast {
+  active: boolean
+  controller?: { deviceId: string | null; name: string }
+  reason?: "phone-stop" | "desktop-stop" | "timeout" | "disconnected"
   at: number
 }
 

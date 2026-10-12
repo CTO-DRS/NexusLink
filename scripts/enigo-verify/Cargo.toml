@@ -1,0 +1,9 @@
+[package]
+name = "enigo-verify"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+enigo = { version = "0.2.1", default-features = false, features = ["x11rb"] }
+serde_json = "1"
+x11rb = "0.13"

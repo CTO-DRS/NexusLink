@@ -10,14 +10,16 @@
 //    العالمي غير مسجّل عمدًا — راجع تعاقد التركيز في shortcuts.rs).
 // 4) تفسير معاملات ?view= القادمة من deep-link/الإشعارات الأصلية.
 // 5) FA-clipboard-sync — استقبال حافظة الهاتف → clip_apply (arboard).
-// 6) FA-power (عقد §12) — سوكِتا 3004/3006 دائمان (يعملان والنافذة مخفية):
-//    · 3004: إعلان هوية الكمبيوتر (desktop:register {name, mac}) + تقرير
-//      desktop:state عند الاتصال + استقبال rc:power → power_request (Rust) +
-//      بث desktop:state عند كل حدث desktop://power من الطبقة الأصلية.
-//    · 3006: استقبال pc:lock (منارة القرب/الابتعاد) → power_request {lock, auto-lock}
-//      — بوابة autoLock يديرها Rust نفسه (من status.desktop.security).
+// 6) FA-power (عقد §12) — سوكِتا 3004/3006 دائمان (يعملان والنافذة مخفية).
+// 7) FA-input (عقد §13) — «شاشة Touchpad تتحكم بالكمبيوتر فعليًا»:
+//    · أحداث rc:move/click/scroll/pinch/key/presenter/media من 3004 → input_exec
+//      (enigo) — تجميع دفعات للحركة (30ms) لتفضيق زمن الاستجابة.
+//    · بوابة المصدر: __src=desktop (واجهة الكمبيوتر نفسها) تنفَّذ دائمًا،
+//      __src=controller (هاتف موثوق) خلال جلسة نشطة فقط، unknown يُرفض.
+//    · دورة حياة جلسة التحكم (rc:session) → input_session + لافتة دائمة
+//      + إنهاء فوري من اللافتة أو الشريط + تدفق إرشاد العربية على ماك.
 // كل ذلك معطّل خارج وضع سطح المكتب (?desktop=1 — تضبطه procman عند فتح النافذة).
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { io, type Socket } from "socket.io-client"
 import { getProdSocket } from "@/lib/prod-socket"
 import { useProd } from "@/lib/prod-store"
@@ -29,7 +31,21 @@ const DESKTOP_DEFAULTS: Partial<Record<ShortcutAction, string>> = {
   toggleWindow: "Ctrl+Shift+D",
 }
 
+// أحداث الإدخال التي تُنفَّذ أصليًا (نفس قائمة RC_INPUT في الجسر — عقد §4.2)
+const RC_INPUT_EVENTS = [
+  "rc:move", "rc:click", "rc:scroll", "rc:pinch", "rc:key",
+  "rc:presenter", "rc:media",
+] as const
+
+interface SessionBanner {
+  name: string
+}
+
 export function DesktopBridge() {
+  // لافتة جلسة التحكم الدائمة (بند 7 — إشعار مرئي دائم) + تدفق إذن ماك (بند 6)
+  const [session, setSession] = useState<SessionBanner | null>(null)
+  const [macGuidance, setMacGuidance] = useState(false)
+
   useEffect(() => {
     if (typeof window === "undefined") return
     const sp = new URLSearchParams(window.location.search)
@@ -96,7 +112,6 @@ export function DesktopBridge() {
       if (e.repeat) return
       const sc = useNexus.getState().shortcuts
       const combo = comboOf(e)
-      // الإجراء الجديد مُنمذج في المخزن المشترك — الافتراضي احتياط لو استخدم عميل قديم
       const target = sc.sendClipboard ?? DESKTOP_DEFAULTS.sendClipboard
       if (combo && combo === target) void sendClipboard()
     }
@@ -112,10 +127,7 @@ export function DesktopBridge() {
       if (views.includes(v as ViewId)) useNexus.getState().setView(v as ViewId)
     }
 
-    // 4) FA-clipboard-sync — استقبال حافظة الهاتف → حافظة النظام (عقد §11.ب):
-    //    clip:new من جهاز غريب + وضع تلقائي → clip_apply (arboard) — يعمل والنافذة
-    //    مخفية في الـ Tray. حرس الصدى: deviceId === pc-office يُتجاهل (إرسالنا نحن).
-    //    إعادة الاشتراك عند تغيّر وضع الحافظة (التبديل في واجهة الإنتاجية).
+    // 5) FA-clipboard-sync — استقبال حافظة الهاتف → حافظة النظام (عقد §11.ب)
     const applyIncoming = (item: { deviceId?: string; kind?: string; content?: string }) => {
       if (!item || item.deviceId === "pc-office") return
       const clipAllowed = useProd.getState().state.clipMode === "auto"
@@ -132,7 +144,6 @@ export function DesktopBridge() {
     // ------------------------------------------------------------------
     // FA-power (عقد §12) — الطبقة الأصلية تنفّذ أوامر النظام/الطاقة الحقيقية
     // ------------------------------------------------------------------
-    // سوكِت 3004: نحن الطرف "desktop" — إعلان الهوية + الحالة + تنفيذ rc:power
     const rcSock: Socket = io("/?XTransformPort=3004", {
       transports: ["websocket", "polling"],
       forceNew: true,
@@ -142,7 +153,6 @@ export function DesktopBridge() {
       timeout: 10000,
     })
     const registerDesktop = () => {
-      // إعلان MAC الحقيقي للأجهزة الموثوقة (Wake-on-LAN) + تقرير الحالة
       void tauriInvoke<string>("system_mac")
         .then((mac) => {
           if (mac) rcSock.emit("desktop:register", { name: "NEXUS-PC", mac })
@@ -151,7 +161,6 @@ export function DesktopBridge() {
       rcSock.emit("desktop:state", { power: "on" })
     }
     rcSock.on("connect", registerDesktop)
-    // أمر نظام من الهاتف → الطبقة الأصلية (فوري أو عدّاد 10ث قابل للإلغاء من الشريط)
     const onRcPower = (d: { action?: string }) => {
       const action = String(d?.action ?? "").trim()
       if (!action) return
@@ -160,13 +169,116 @@ export function DesktopBridge() {
       })
     }
     rcSock.on("rc:power", onRcPower)
-    // تحديثات الطبقة الأصلية → تقرير الحالة للهواتف (desktop:state على 3004)
+
+    // ------------------------------------------------------------------
+    // FA-input (عقد §13) — تنفيذ أحداث اللمس/الكيبورد/الوسائط عبر enigo
+    // ------------------------------------------------------------------
+    let sessionActive = false
+    let sessionName = ""
+    const pendingMoves: Record<string, unknown>[] = []
+    let pendingSource = "desktop-local"
+    let flushTimer: ReturnType<typeof setTimeout> | null = null
+    let volumeLastSent = 0
+
+    const flushMoves = () => {
+      flushTimer = null
+      if (!pendingMoves.length) return
+      const events = pendingMoves.splice(0, pendingMoves.length)
+      void tauriInvoke("input_exec", { events, source: pendingSource }).catch(() => null)
+    }
+
+    const onRcInput = (d: Record<string, unknown> | undefined, ev: string) => {
+      // بوابة المصدر (بند 7): desktop = واجهة الكمبيوتر نفسها (صاحب الجهاز —
+      // دائمًا)؛ controller = هاتف موثوق خلال جلسة نشطة فقط؛ unknown مرفوض.
+      const src = String(d?.__src ?? "unknown")
+      if (src !== "desktop" && src !== "controller") return
+      if (src === "controller" && !sessionActive) return
+      const source = src === "desktop" ? "desktop-local" : "controller"
+      const data = { ...d }
+      delete data.__src
+      const payload: Record<string, unknown> = { ...data, kind: ev.replace("rc:", "") }
+      if (ev === "rc:move") {
+        // تجميع الحركة في دفعات 30ms — سلاسة بلا فيض استدعاءات IPC
+        if (pendingSource !== source) flushMoves()
+        pendingSource = source
+        pendingMoves.push(payload)
+        if (!flushTimer) flushTimer = setTimeout(flushMoves, 30)
+        return
+      }
+      if (ev === "rc:media" && payload.action === "volume") {
+        // مستوى الصوت يصل متصلًا من الشريط — نخففه إلى 150ms (آخر قيمة)
+        const now = Date.now()
+        if (now - volumeLastSent < 150) return
+        volumeLastSent = now
+      }
+      flushMoves() // حفظ ترتيب الأحداث: ما قبل الحركة يُنفَّذ أولًا
+      void tauriInvoke("input_exec", { events: [payload], source }).catch(() => null)
+    }
+    for (const ev of RC_INPUT_EVENTS) {
+      rcSock.on(ev, (d: Record<string, unknown>) => onRcInput(d, ev))
+    }
+
+    // دورة حياة جلسة التحكم (عقد §13): start/hb من الهاتف — stop من أي طرف
+    const endSessionLocal = (reason?: string) => {
+      sessionActive = false
+      setSession(null)
+      if (reason === "desktop-stop") return // بدأنا نحن الإنهاء — لا صدى
+      rcSock.emit("rc:session", { action: "stop" })
+    }
+    const onRcSession = (d: { active?: boolean; controller?: { name?: string }; reason?: string }) => {
+      if (d?.active) {
+        sessionActive = true
+        sessionName = String(d?.controller?.name ?? "جهاز تحكم")
+        setSession({ name: sessionName })
+        // بند 6 — تدفق إذن Accessibility على ماك: فحص فوري + فتح الإعدادات مع الإرشاد
+        void tauriInvoke<{ granted: boolean; platform: string }>("input_permission")
+          .then((p) => {
+            if (!p.granted) {
+              void tauriInvoke("input_open_permissions").catch(() => null)
+              setMacGuidance(true)
+            }
+          })
+          .catch(() => null)
+      } else {
+        endSessionLocal(d?.reason)
+      }
+    }
+    rcSock.on("rc:session", onRcSession)
+
+    // أحداث الطبقة الأصلية: إنهاء من الشريط/watchdog + أخطاء الحقن (إرشاد ماك)
+    type Unlisten = () => void
+    let unlisteners: Unlisten[] = []
+    void (async () => {
+      try {
+        const ev = (window as unknown as {
+          __TAURI__?: { event?: { listen?: <T>(n: string, f: (e: { payload: T }) => void) => Promise<() => void> } }
+        }).__TAURI__?.event
+        if (!ev?.listen) return
+        // إنهاء من الشريط (قطع فوري) أو watchdog محلي → بلاغ الجسر للهاتف
+        const un1 = await ev.listen<{ active: boolean; reason?: string }>("desktop://input-session", (e) => {
+          if (!e.payload?.active) endSessionLocal("desktop-stop")
+        })
+        // أخطاء الحقن — على ماك تعني غالبًا صلاحية Accessibility غائبة
+        const un2 = await ev.listen<{ error: string }>("desktop://input-error", (e) => {
+          void tauriInvoke<{ granted: boolean; platform: string }>("input_permission")
+            .then((p) => {
+              if (!p.granted) setMacGuidance(true)
+              else console.warn("[desktop-bridge] input error:", e.payload?.error)
+            })
+            .catch(() => console.warn("[desktop-bridge] input error:", e.payload?.error))
+        })
+        unlisteners = [un1, un2]
+      } catch {
+        /* خارج Tauri — لا شيء */
+      }
+    })()
+
+    // تحديثات الطبقة الأصلية للطاقة → تقرير الحالة للهواتف (desktop:state على 3004)
     const onPowerEvent = (e: { power?: string }) => {
       const power = String(e?.power ?? "")
       if (power) rcSock.emit("desktop:state", { power })
     }
-    type PowerUnsub = { unlisten: () => void }
-    let powerUn: PowerUnsub | null = null
+    let powerUn: Unlisten | null = null
     void (async () => {
       try {
         const ev = (window as unknown as {
@@ -174,7 +286,7 @@ export function DesktopBridge() {
         }).__TAURI__?.event
         if (ev?.listen) {
           const un = await ev.listen<{ power?: string }>("desktop://power", (e) => onPowerEvent(e.payload))
-          powerUn = { unlisten: un }
+          powerUn = un
         }
       } catch {
         /* خارج Tauri — لا شيء */
@@ -201,12 +313,87 @@ export function DesktopBridge() {
       sock.off("clip:new", applyIncoming)
       rcSock.off("connect", registerDesktop)
       rcSock.off("rc:power", onRcPower)
+      for (const ev of RC_INPUT_EVENTS) rcSock.off(ev)
+      rcSock.off("rc:session", onRcSession)
       rcSock.disconnect()
-      powerUn?.unlisten()
+      powerUn?.()
+      for (const un of unlisteners) un()
       guardSock.off("pc:lock", onPcLock)
       guardSock.disconnect()
     }
   }, [])
 
-  return null
+  // القطع الفوري من اللافتة (بند 7) — الطبقة الأصلية توقف التنفيذ فورًا
+  const cutSession = () => {
+    void tauriInvoke("input_session", { active: false, name: session?.name ?? "" }).catch(() => null)
+    setSession(null)
+  }
+
+  return (
+    <>
+      {session && (
+        <div
+          dir="rtl"
+          style={{
+            position: "fixed", top: 10, left: "50%", transform: "translateX(-50%)", zIndex: 9999,
+            display: "flex", alignItems: "center", gap: 10, padding: "8px 14px",
+            borderRadius: 12, border: "1px solid rgba(167,139,250,.55)",
+            background: "rgba(46,16,101,.92)", color: "#fff",
+            boxShadow: "0 8px 28px rgba(0,0,0,.45)", fontSize: 13, fontWeight: 600,
+          }}
+        >
+          <span style={{ width: 8, height: 8, borderRadius: 99, background: "#A78BFA", boxShadow: "0 0 8px #A78BFA" }} />
+          جلسة تحكم نشطة من «{session.name}» — مؤشر ولوحة مفاتيح الكمبيوتر يعملان الآن
+          <button
+            onClick={cutSession}
+            style={{
+              border: 0, borderRadius: 8, padding: "5px 12px", cursor: "pointer",
+              background: "#ef4444", color: "#fff", fontWeight: 700, fontSize: 12,
+            }}
+          >
+            إنهاء فوري
+          </button>
+        </div>
+      )}
+      {macGuidance && (
+        <div
+          dir="rtl"
+          style={{
+            position: "fixed", inset: 0, zIndex: 10000, display: "flex", alignItems: "center",
+            justifyContent: "center", background: "rgba(0,0,0,.62)", backdropFilter: "blur(3px)",
+          }}
+        >
+          <div
+            style={{
+              width: 460, maxWidth: "92vw", padding: 22, borderRadius: 16, color: "#fff",
+              background: "#101728", border: "1px solid rgba(96,165,250,.4)", lineHeight: 1.9,
+            }}
+          >
+            <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 8 }}>
+              صلاحية مطلوبة على macOS: Accessibility
+            </div>
+            <div style={{ fontSize: 13, opacity: 0.92 }}>
+              لكي يعمل تحريك المؤشر ولوحة المفاتيح من هاتفك، يحتاج NexusLink إذن
+              «Accessibility». افتح: إعدادات النظام ← الخصوصية والأمان ← Accessibility،
+              ثم فعّل NexusLink وأعد المحاولة. (فتحنا الإعدادات لك — إن لم تُفتح اضغط الزر أدناه).
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+              <button
+                onClick={() => void tauriInvoke("input_open_permissions").catch(() => null)}
+                style={{ border: 0, borderRadius: 8, padding: "8px 14px", cursor: "pointer", background: "#2563eb", color: "#fff", fontWeight: 700 }}
+              >
+                فتح إعدادات النظام
+              </button>
+              <button
+                onClick={() => setMacGuidance(false)}
+                style={{ border: "1px solid rgba(255,255,255,.25)", borderRadius: 8, padding: "8px 14px", cursor: "pointer", background: "transparent", color: "#fff" }}
+              >
+                حسنًا
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
 }

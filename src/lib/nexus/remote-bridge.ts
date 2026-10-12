@@ -5,9 +5,13 @@
 // منفذ 3004 · نقل أحداث الهاتف → الكمبيوتر عبر Nexus Protocol.
 // FA-power (عقد §12): أوامر النظام الحقيقية (logout إضافي) + إرسال حزمة
 // Wake-on-LAN السحرية فعليًا عبر UDP broadcast (كانت تُصاغ فقط سابقًا).
+// FA-input (عقد §13): جلسة تحكم موثوقة (rc:session بدء/نبض/إيقاف + watchdog)،
+// حاجز الثقة من سجل الأجهزة، وحقن __src في أحداث الإدخال لتمييز المصدر
+// (desktop = واجهة الكمبيوتر نفسها · controller = هاتف موثوق · unknown).
 import { createServer } from "http"
 import { createSocket } from "dgram"
 import { Server as SocketServer } from "socket.io"
+import { store as deviceStore } from "./devices"
 
 const PORT = 3004
 
@@ -15,6 +19,63 @@ const desktop = {
   name: "NEXUS-PC",
   mac: "A4:5E:60:C1:2D:9F",
   power: "on" as string,
+}
+
+// ------------------------------------------------------------------
+// FA-input (عقد §13) — جلسة التحكم الموثوقة
+// ------------------------------------------------------------------
+const HB_TIMEOUT_MS = 6000 // انقطاع النبض 6ث → إنهاء تلقائي (watchdog)
+interface RcSession {
+  active: boolean
+  deviceId: string | null
+  name: string | null
+  socketId: string | null
+  at: number
+  lastHb: number
+}
+const session: RcSession = {
+  active: false,
+  deviceId: null,
+  name: null,
+  socketId: null,
+  at: 0,
+  lastHb: 0,
+}
+// سوكِتات موثوقة: وحدات تحكم مسجلة بهوية موثوقة + واجهات الكمبيوتر نفسها
+const controllerTrust = new Map<string, { deviceId: string; name: string }>()
+const desktopSocks = new Set<string>()
+
+function sessionInfo() {
+  return {
+    active: session.active,
+    deviceId: session.deviceId,
+    name: session.name,
+    at: session.at,
+  }
+}
+
+function endSession(io2: SocketServer | null, reason: string) {
+  if (!session.active) return
+  const name = session.name
+  session.active = false
+  session.deviceId = null
+  session.name = null
+  session.socketId = null
+  session.lastHb = 0
+  io2?.emit("rc:session", { active: false, reason, at: Date.now() })
+  io2?.emit("rc:log", { id: uid(), text: `انتهت جلسة التحكم (${name ?? "مجهول"}) — السبب: ${reason}`, kind: "info", at: Date.now() })
+}
+
+/** بحث جهاز موثوق في السجل — حاجز الثقة (نفس منطق dev:ctl-start في §4.8) */
+function isTrustedDevice(deviceId: string | null | undefined): boolean {
+  const id = String(deviceId ?? "").trim()
+  if (!id) return false
+  try {
+    const dev = deviceStore().devices.find((d) => d.id === id)
+    return !!(dev && dev.trusted)
+  } catch {
+    return false
+  }
 }
 
 const RC_INPUT = new Set([
@@ -73,6 +134,13 @@ function sendWolPacket(macNorm: string, cb: (ok: boolean, detail: string) => voi
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
 
+// watchdog جلسة التحكم — نبض مفقود 6ث → إنهاء تلقائي (حارس السلامة)
+setInterval(() => {
+  if (session.active && Date.now() - session.lastHb > HB_TIMEOUT_MS) {
+    endSession(io, "timeout")
+  }
+}, 2000).unref?.()
+
 type MinimalSock = { emit: (ev: string, d?: unknown) => void }
 
 function gateInput(socket: MinimalSock, ev: string): boolean {
@@ -93,7 +161,7 @@ const g = globalThis as unknown as { __nexusRemoteBooted?: boolean }
 const BOOT_KEY = "__nexusRemoteBooted"
 
 export function remoteBridgeStatus() {
-  return { booted: !!g[BOOT_KEY], port: PORT, desktop: { ...desktop } }
+  return { booted: !!g[BOOT_KEY], port: PORT, desktop: { ...desktop }, session: sessionInfo() }
 }
 
 export function ensureRemoteBridge() {
@@ -117,15 +185,62 @@ export function ensureRemoteBridge() {
         at: Date.now(),
       })
 
-      socket.on("rc:hello-controller", (data: { name?: string }) => {
+      socket.on("rc:hello-controller", (data: { name?: string; deviceId?: string }) => {
         const name = data?.name || "هاتف التحكم"
-        io2.emit("rc:log", { id: uid(), text: `هاتف تحكم متصل: ${name} — جاهز لإرسال الأوامر`, kind: "ok", at: Date.now() })
+        // FA-input — تسجيل بهوية (deviceId): يُوثق فقط إن كان في سجل الأجهزة موثوقًا.
+        // بلا هوية = متحكم ويبي محاكي (نفس السلوك القائم — بلا تنفيذ أصلي).
+        const deviceId = String(data?.deviceId ?? "").trim()
+        if (deviceId && isTrustedDevice(deviceId)) {
+          controllerTrust.set(socket.id, { deviceId, name })
+          io2.emit("rc:log", { id: uid(), text: `هاتف تحكم موثوق متصل: ${name} — مسموح له بجلسة التحكم`, kind: "ok", at: Date.now() })
+        } else {
+          io2.emit("rc:log", { id: uid(), text: `هاتف تحكم متصل: ${name}${deviceId ? " — الهوية غير موثوقة (لا جلسة تحكم)" : ""}`, kind: deviceId ? "err" : "ok", at: Date.now() })
+        }
         socket.broadcast.emit("rc:controller-online", { name, at: Date.now() })
       })
 
       socket.on("desktop:register", (data: { name?: string; mac?: string }) => {
         if (data?.name) desktop.name = data.name
         if (data?.mac) desktop.mac = data.mac
+        // FA-input — سوكِت واجهة الكمبيوتر نفسها (صاحب الجهاز — أحداثه أصلية دائمًا)
+        desktopSocks.add(socket.id)
+      })
+
+      // FA-input (عقد §13) — دورة حياة جلسة التحكم: start | hb | stop
+      socket.on("rc:session", (data: { action?: string; deviceId?: string; name?: string }) => {
+        const action = String(data?.action ?? "")
+        const isDesktop = desktopSocks.has(socket.id)
+        if (action === "start") {
+          const deviceId = String(data?.deviceId ?? "").trim()
+          const sockDev = controllerTrust.get(socket.id)
+          // بوابة الثقة المزدوجة: سوكِت مسجل موثوق، أو هوية موثوقة في السجل
+          const trusted =
+            (sockDev && (!deviceId || sockDev.deviceId === deviceId)) || isTrustedDevice(deviceId)
+          if (!trusted) {
+            socket.emit("rc:rejected", { reason: "untrusted", ev: "rc:session" })
+            io2.emit("rc:log", { id: uid(), text: `رفض بدء جلسة تحكم: الجهاز غير موثوق (${deviceId || "بلا هوية"})`, kind: "err", at: Date.now() })
+            return
+          }
+          if (session.active && session.deviceId !== deviceId) {
+            socket.emit("rc:rejected", { reason: "busy", ev: "rc:session" })
+            return
+          }
+          const dev = deviceId ? deviceStore().devices.find((d) => d.id === deviceId) : null
+          session.active = true
+          session.deviceId = deviceId || sockDev?.deviceId || null
+          session.name = String(data?.name ?? "") || sockDev?.name || dev?.name || "جهاز تحكم"
+          session.socketId = socket.id
+          session.at = Date.now()
+          session.lastHb = Date.now()
+          io2.emit("rc:session", { active: true, controller: { deviceId: session.deviceId, name: session.name }, at: session.at })
+          io2.emit("rc:log", { id: uid(), text: `بدأت جلسة تحكم بالكمبيوتر من: ${session.name} — إشعار دائم في الشريط والقطع فوري من الطرفين`, kind: "ok", at: Date.now() })
+        } else if (action === "hb") {
+          if (session.active && session.socketId === socket.id) session.lastHb = Date.now()
+        } else if (action === "stop") {
+          if (session.active && (session.socketId === socket.id || isDesktop)) {
+            endSession(io2, isDesktop && session.socketId !== socket.id ? "desktop-stop" : "phone-stop")
+          }
+        }
       })
 
       socket.on("desktop:state", (report: { power?: string }) => {
@@ -145,6 +260,15 @@ export function ensureRemoteBridge() {
       for (const ev of RC_INPUT) {
         socket.on(ev, (data: Record<string, unknown>) => {
           if (!gateInput(socket, ev)) return
+          // FA-input — حقن مصدر الحدث: desktop (واجهة الكمبيوتر) / controller
+          // (هاتف موثوق) / unknown — الطبقة الأصلية ترفض unknown ولا تنفذ
+          // إلا أحداث وحدة تحكم موثوقة خلال جلسة نشطة (أو واجهة الكمبيوتر نفسها).
+          const src = desktopSocks.has(socket.id)
+            ? "desktop"
+            : controllerTrust.has(socket.id)
+              ? "controller"
+              : "unknown"
+          const payload = { ...(data ?? {}), __src: src }
           if (ev === "rc:click") {
             const b = data?.button === "right" ? "أيمن" : "أيسر"
             io2.emit("rc:log", { id: uid(), text: `نقرة ${b} من لوحة لمس الهاتف`, kind: "in", at: Date.now() })
@@ -154,6 +278,8 @@ export function ensureRemoteBridge() {
             const a = data?.action as string
             const text = a === "next" ? "عرض تقديمي: الشريحة التالية ←"
               : a === "prev" ? "عرض تقديمي: → الشريحة السابقة"
+              : a === "start" ? "عرض تقديمي: بدء العرض (F5)" // FA-input (عقد §13)
+              : a === "stop" ? "عرض تقديمي: إنهاء العرض (Esc)" // FA-input
               : a === "black" ? (data?.value ? "عرض تقديمي: شاشة سوداء" : "عرض تقديمي: إلغاء الشاشة السوداء")
               : a === "laser-on" ? "تفعيل المؤشر الليزري"
               : a === "laser-off" ? "إيقاف المؤشر الليزري" : null
@@ -175,9 +301,16 @@ export function ensureRemoteBridge() {
           }
           // بث للجميع بما فيهم المرسل: في وحدة التحكم داخل التطبيق
           // يتشارك الكمبيوتر والهاتف نفس socket — يجب أن يسمع الطرفان
-          io2.emit(ev, data)
+          io2.emit(ev, payload)
         })
       }
+
+      socket.on("disconnect", () => {
+        // FA-input — انقطاع سوكِت صاحب الجلسة ينهيها دائمًا (قاعدة §4.8)
+        if (session.active && session.socketId === socket.id) endSession(io2, "disconnected")
+        controllerTrust.delete(socket.id)
+        desktopSocks.delete(socket.id)
+      })
 
       socket.on("rc:power", (data: { action: string }) => {
         const action = data?.action

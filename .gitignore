@@ -70,3 +70,4 @@ apps/desktop/src-tauri/resources/comms/
 apps/desktop/src-tauri/resources/gateway/
 apps/desktop/src-tauri/binaries/node-*
 apps/desktop/src-tauri/target/
+scripts/enigo-verify/target/

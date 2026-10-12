@@ -17,6 +17,45 @@ const desktop = {
   power: 'on' as string, // يُحدَّث من تقارير desktop:state
 }
 
+// ------------------------------------------------------------------
+// FA-input (عقد §13) — جلسة التحكم الموثوقة
+// الخدمة المستقلة بلا سجل أجهزة (Prisma) — قائمة الثقة من البيئة:
+// NEXUS_TRUSTED_DEVICES="galaxy-s24,abc123" (CSV). فارغة = لا جلسات.
+// (الجسر المدمج في Next هو المصدر المعتمد في الحزمة الحقيقية)
+// ------------------------------------------------------------------
+const TRUSTED = new Set(
+  (process.env.NEXUS_TRUSTED_DEVICES || '').split(',').map((s) => s.trim()).filter(Boolean),
+)
+const HB_TIMEOUT_MS = 6000
+interface RcSession {
+  active: boolean
+  deviceId: string | null
+  name: string | null
+  socketId: string | null
+  at: number
+  lastHb: number
+}
+const session: RcSession = { active: false, deviceId: null, name: null, socketId: null, at: 0, lastHb: 0 }
+const controllerTrust = new Map<string, { deviceId: string; name: string }>()
+const desktopSocks = new Set<string>()
+
+function endSession(reason: string) {
+  if (!session.active) return
+  const name = session.name
+  session.active = false
+  session.deviceId = null
+  session.name = null
+  session.socketId = null
+  session.lastHb = 0
+  io?.emit('rc:session', { active: false, reason, at: Date.now() })
+  rcLog(`انتهت جلسة التحكم (${name ?? 'مجهول'}) — السبب: ${reason}`, 'info')
+}
+
+// watchdog الجلسة — نبض مفقود 6ث → إنهاء تلقائي
+setInterval(() => {
+  if (session.active && Date.now() - session.lastHb > HB_TIMEOUT_MS) endSession('timeout')
+}, 2000).unref?.()
+
 let io: Server
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
 
@@ -123,16 +162,59 @@ io.on('connection', (socket) => {
   })
 
   // ==== تسجيل الطرفين ====
-  socket.on('rc:hello-controller', (data: { name?: string }) => {
+  socket.on('rc:hello-controller', (data: { name?: string; deviceId?: string }) => {
     const name = data?.name || 'هاتف التحكم'
-    rcLog(`هاتف تحكم متصل: ${name} — جاهز لإرسال الأوامر`, 'ok')
+    // FA-input — توثيق وحدة التحكم فقط بهوية موجودة في قائمة الثقة
+    const deviceId = String(data?.deviceId ?? '').trim()
+    if (deviceId && TRUSTED.has(deviceId)) {
+      controllerTrust.set(socket.id, { deviceId, name })
+      rcLog(`هاتف تحكم موثوق متصل: ${name} — مسموح له بجلسة التحكم`, 'ok')
+    } else {
+      rcLog(`هاتف تحكم متصل: ${name}${deviceId ? ' — الهوية غير موثوقة (لا جلسة تحكم)' : ''}`, deviceId ? 'info' : 'ok')
+    }
     socket.broadcast.emit('rc:controller-online', { name, at: Date.now() })
   })
 
   socket.on('desktop:register', (data: { name?: string; mac?: string }) => {
     if (data?.name) desktop.name = data.name
     if (data?.mac) desktop.mac = data.mac
+    desktopSocks.add(socket.id) // FA-input — واجهة الكمبيوتر نفسها
     console.log('desktop registered:', desktop.name, desktop.mac)
+  })
+
+  // ==== FA-input — دورة حياة جلسة التحكم (مطابق للجسر المدمج) ====
+  socket.on('rc:session', (data: { action?: string; deviceId?: string; name?: string }) => {
+    const action = String(data?.action ?? '')
+    const isDesktop = desktopSocks.has(socket.id)
+    if (action === 'start') {
+      const deviceId = String(data?.deviceId ?? '').trim()
+      const sockDev = controllerTrust.get(socket.id)
+      const trusted =
+        (sockDev && (!deviceId || sockDev.deviceId === deviceId)) || (!!deviceId && TRUSTED.has(deviceId))
+      if (!trusted) {
+        socket.emit('rc:rejected', { reason: 'untrusted', ev: 'rc:session' })
+        rcLog(`رفض بدء جلسة تحكم: الجهاز غير موثوق (${deviceId || 'بلا هوية'})`, 'info')
+        return
+      }
+      if (session.active && session.deviceId !== deviceId) {
+        socket.emit('rc:rejected', { reason: 'busy', ev: 'rc:session' })
+        return
+      }
+      session.active = true
+      session.deviceId = deviceId || sockDev?.deviceId || null
+      session.name = String(data?.name ?? '') || sockDev?.name || 'جهاز تحكم'
+      session.socketId = socket.id
+      session.at = Date.now()
+      session.lastHb = Date.now()
+      io?.emit('rc:session', { active: true, controller: { deviceId: session.deviceId, name: session.name }, at: session.at })
+      rcLog(`بدأت جلسة تحكم بالكمبيوتر من: ${session.name}`, 'ok')
+    } else if (action === 'hb') {
+      if (session.active && session.socketId === socket.id) session.lastHb = Date.now()
+    } else if (action === 'stop') {
+      if (session.active && (session.socketId === socket.id || isDesktop)) {
+        endSession(isDesktop && session.socketId !== socket.id ? 'desktop-stop' : 'phone-stop')
+      }
+    }
   })
 
   // ==== تقارير حالة الكمبيوتر → بث للهواتف ====
@@ -159,6 +241,13 @@ io.on('connection', (socket) => {
   for (const ev of RC_INPUT) {
     socket.on(ev, (data: Record<string, unknown>) => {
       if (!gateInput(socket, data, ev)) return
+      // FA-input — حقن مصدر الحدث (نفس الجسر المدمج — عقد §13)
+      const src = desktopSocks.has(socket.id)
+        ? 'desktop'
+        : controllerTrust.has(socket.id)
+          ? 'controller'
+          : 'unknown'
+      const payload = { ...(data ?? {}), __src: src }
       // سجل انتقائي (الأحداث المتكررة مثل الحركة لا تُسجل)
       if (ev === 'rc:click') {
         const b = data?.button === 'right' ? 'أيمن' : 'أيسر'
@@ -170,6 +259,8 @@ io.on('connection', (socket) => {
         const a = data?.action as string
         if (a === 'next') rcLog('عرض تقديمي: الشريحة التالية ←', 'in')
         else if (a === 'prev') rcLog('عرض تقديمي: → الشريحة السابقة', 'in')
+        else if (a === 'start') rcLog('عرض تقديمي: بدء العرض (F5)', 'in') // FA-input
+        else if (a === 'stop') rcLog('عرض تقديمي: إنهاء العرض (Esc)', 'in') // FA-input
         else if (a === 'black') rcLog(`عرض تقديمي: ${data?.value ? 'شاشة سوداء' : 'إلغاء الشاشة السوداء'}`)
         else if (a === 'laser-on') rcLog('تفعيل المؤشر الليزري', 'in')
         else if (a === 'laser-off') rcLog('إيقاف المؤشر الليزري', 'info')
@@ -187,7 +278,7 @@ io.on('connection', (socket) => {
       } else if (ev === 'rc:clipboard' && data?.direction === 'pull') {
         rcLog('حافظة: الهاتف طلب نسخ حافظة الكمبيوتر', 'info')
       }
-      io?.emit(ev, data)
+      io?.emit(ev, payload)
     })
   }
 
@@ -242,6 +333,10 @@ io.on('connection', (socket) => {
   })
 
   socket.on('disconnect', () => {
+    // FA-input — انقطاع صاحب الجلسة ينهيها دائمًا (قاعدة §4.8)
+    if (session.active && session.socketId === socket.id) endSession('disconnected')
+    controllerTrust.delete(socket.id)
+    desktopSocks.delete(socket.id)
     console.log('client disconnected:', socket.id)
   })
 })

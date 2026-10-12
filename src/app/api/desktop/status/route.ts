@@ -96,6 +96,8 @@ export async function GET() {
           mac: remote.desktop.mac,
           name: remote.desktop.name,
         },
+        // FA-input (عقد §13) — حالة جلسة التحكم الموثوقة (من جسر 3004)
+        input: remote.session ?? { active: false, deviceId: null, name: null, at: 0 },
         transfers,
         notifs,
       },

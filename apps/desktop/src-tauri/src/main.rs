@@ -7,6 +7,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod clipboard;
+mod input;
 mod notify;
 mod power;
 mod procman;
@@ -67,16 +68,23 @@ fn main() {
             shortcuts::apply_focus(&handle, false);
             // FA-clipboard-sync — مراقب الحافظة الحي على مستوى النظام (نص/صور/ملفات)
             clipboard::spawn_monitor(handle.clone());
+            // FA-input (عقد §13) — ضبط مفوّض الصوت لكل منصة (osascript/نقرات ويندوز)
+            input::init();
             Ok(())
         })
         // FA-clipboard-sync — أوامر الطبقة الأصلية للحافظة الموحدة (عقد §11)
         // FA-power — أوامر النظام/الطاقة الحقيقية + MAC + إلغاء الإيقاف (عقد §12)
+        // FA-input — جلسة التحكم وتنفيذ أحداث اللمس/الكيبورد عبر enigo (عقد §13)
         .invoke_handler(tauri::generate_handler![
             clipboard::clip_apply,
             clipboard::clip_send_now,
             power::power_request,
             power::power_cancel,
-            power::system_mac
+            power::system_mac,
+            input::input_exec,
+            input::input_session,
+            input::input_permission,
+            input::input_open_permissions
         ])
         .on_window_event(|window, event| match event {
             // إغلاق → إخفاء إلى الـ Tray (قابل للتعطيل من قائمة الـ Tray)
