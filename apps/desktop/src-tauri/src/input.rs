@@ -2,7 +2,7 @@
 // ============================================================================
 // «شاشة Touchpad تتحكم بالكمبيوتر فعليًا»: أحداث الإدخال قادمة من الهاتف عبر
 // جسر 3004 (rc:move/click/scroll/pinch/key/presenter/media) → الويبفيو الدائم
-// (desktop-bridge) → input_exec (enigo) → النظام الحقيقي.
+// (desktop-bridge) → قناة رسائل → خيط input-exec (enigo) → النظام الحقيقي.
 //
 // الأمان (متطلبات البند 7):
 //  · قصرها على الأجهزة الموثوقة: أحداث مصدرها "controller" تُنفَّذ فقط خلال
@@ -17,9 +17,10 @@
 // ماك: حقن الإدخال يتطلب صلاحية Accessibility — تدفق الإذن (بند 6):
 //  · input_permission: فحص AXIsProcessTrustedWithOptions (FFI مباشر بلا crates)
 //  · input_open_permissions: فتح System Settings ← Privacy ← Accessibility
-//  · فشل enigo يبث desktop://input-error → الواجهة تعرض الإرشاد العربي
+//  · فشل الحقن يبث desktop://input-error → الواجهة تعرض الإرشاد العربي
 use serde_json::json;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -31,13 +32,69 @@ use enigo::{Enigo, Settings};
 struct SessionInfo {
     name: String,
     device_id: Option<String>,
+    #[allow(dead_code)]
     started_at: u64,
 }
 
 static SESSION: Mutex<Option<SessionInfo>> = Mutex::new(None);
 static LAST_EVENT_MS: AtomicU64 = AtomicU64::new(0);
 static WATCHDOG: OnceLock<()> = OnceLock::new();
-static ENIGO: Mutex<Option<Enigo>> = Mutex::new(None);
+
+// ---------------------------------------------------------------------------
+// خيط التنفيذ المخصص — Enigo يعيش داخل خيط واحد فقط (لا static Mutex):
+// أنواع CG على ماك (CGEventSource/CGDisplay) غير مضمونة Send — قناة الرسائل
+// تغلب المشكلة كليًا وتمنح دفعات الحركة مسارًا واحدًا مرتبًا (عقد §13).
+// ---------------------------------------------------------------------------
+enum InputMsg {
+    Exec { events: Vec<serde_json::Value>, app: tauri::AppHandle },
+    ResetDrag,
+}
+
+static INPUT_TX: OnceLock<mpsc::Sender<InputMsg>> = OnceLock::new();
+
+fn exec_channel(app: &tauri::AppHandle) -> mpsc::Sender<InputMsg> {
+    INPUT_TX
+        .get_or_init(|| {
+            let (tx, rx) = mpsc::channel::<InputMsg>();
+            let _ = std::thread::Builder::new().name("input-exec".into()).spawn(move || {
+                let mut enigo: Option<Enigo> = None;
+                for msg in rx {
+                    // بناء المحرك كسولًا عند أول استخدام (X11/نظام الإدخال)
+                    if enigo.is_none() {
+                        let s = Settings { release_keys_when_dropped: false, ..Default::default() };
+                        match Enigo::new(&s) {
+                            Ok(e) => enigo = Some(e),
+                            Err(e) => {
+                                println!("[input] enigo init failed: {e}");
+                                if let InputMsg::Exec { app, .. } = &msg {
+                                    emit(
+                                        app,
+                                        "desktop://input-error",
+                                        json!({"op": "init", "error": format!("تعذر تهيئة محرك الإدخال: {e}")}),
+                                    );
+                                }
+                                continue; // إعادة المحاولة مع الدفعة التالية
+                            }
+                        }
+                    }
+                    let en = enigo.as_mut().unwrap();
+                    match msg {
+                        InputMsg::Exec { events, app } => {
+                            for ev in events {
+                                if let Err(e) = exec::apply_event(en, &ev) {
+                                    // فشل الحقن (مثال: بلا صلاحية Accessibility على ماك) — يُبث للواجهة
+                                    emit(&app, "desktop://input-error", json!({"op": ev.get("kind"), "error": e}));
+                                }
+                            }
+                        }
+                        InputMsg::ResetDrag => exec::reset_drag(en),
+                    }
+                }
+            });
+            tx
+        })
+        .clone()
+}
 
 fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
@@ -45,10 +102,6 @@ fn now_ms() -> u64 {
 
 pub fn is_active() -> bool {
     SESSION.lock().unwrap().is_some()
-}
-
-pub fn session_name() -> Option<String> {
-    SESSION.lock().unwrap().as_ref().map(|s| s.name.clone())
 }
 
 /// ضبط مفوّض الصوت لكل منصة (يستدعى من setup — عقد §13)
@@ -61,7 +114,8 @@ pub fn init() {
 }
 
 // ---------------------------------------------------------------------------
-// ضبط الصوت المطلق — macOS عبر osascript (مستوى 0..100 دقيق)
+// ضبط الصوت المطلق — macOS عبر osascript (مستوى 0..100 دقيق) — ينفَّذ داخل
+// خيط input-exec (القناة ترسل الرسائل فقط؛ المفوّض يُستدعى من apply_media)
 // ---------------------------------------------------------------------------
 #[cfg(target_os = "macos")]
 fn macos_volume(_enigo: &mut Enigo, v: f64) -> Result<(), String> {
@@ -97,19 +151,6 @@ fn windows_volume(enigo: &mut Enigo, v: f64) -> Result<(), String> {
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// محرك enigo — يُنشأ عند أول استخدام (اتصال X11/نظام عند البناء)
-// ---------------------------------------------------------------------------
-fn with_enigo<T>(f: impl FnOnce(&mut Enigo) -> Result<T, String>) -> Result<T, String> {
-    let mut guard = ENIGO.lock().unwrap();
-    if guard.is_none() {
-        // release_keys_when_dropped=false — ندير المفاتيح بأنفسنا (Ctrl للقرص)
-        let s = Settings { release_keys_when_dropped: false, ..Default::default() };
-        *guard = Some(Enigo::new(&s).map_err(|e| format!("تعذر تهيئة محرك الإدخال: {e}"))?);
-    }
-    f(guard.as_mut().unwrap())
-}
-
 fn emit(app: &tauri::AppHandle, event: &str, payload: serde_json::Value) {
     use tauri::Emitter;
     let _ = app.emit(event, payload);
@@ -120,14 +161,16 @@ fn emit(app: &tauri::AppHandle, event: &str, payload: serde_json::Value) {
 // ---------------------------------------------------------------------------
 
 pub fn start(app: &tauri::AppHandle, name: &str, device_id: Option<String>) -> Result<String, String> {
-    // تهيئة محرك الإدخال الآن (يفشل مبكرًا وواضحًا — مثلاً بلا صلاحية على ماك)
-    with_enigo(|_| Ok(()))?;
+    // فحص جاهزية مبكر — يفشل واضحًا إن تعذّر النظام (بلا جلسة وهمية).
+    // غياب إذن Accessibility على ماك لا يمنع البدء: فشل الحقن يُدرَك لاحقًا عبر
+    // desktop://input-error → الويبفيو يفتح الإعدادات + الإرشاد العربي (بند 6).
+    ensure_exec_ready(app)?;
     {
         let mut g = SESSION.lock().unwrap();
         if g.is_some() {
             // نفس الجهاز يعيد البدء → تحديث فقط
-            if g.as_ref().map(|s| s.device_id.clone()).flatten() == device_id {
-                let started_at = g.as_ref().unwrap().started_at;
+            if g.as_ref().and_then(|s| s.device_id.clone()) == device_id {
+                let started_at = g.as_ref().map(|s| s.started_at).unwrap_or(0);
                 *g = Some(SessionInfo { name: name.to_string(), device_id: device_id.clone(), started_at });
                 return Ok("جلسة التحكم مستمرة".into());
             }
@@ -154,7 +197,7 @@ pub fn stop(app: &tauri::AppHandle, reason: &str) -> bool {
         return false;
     }
     // لا زر معلق على المستخدم بعد انتهاء الجلسة
-    let _ = with_enigo(|e| exec::reset_drag(e).map(|_| ()));
+    let _ = exec_channel(app).send(InputMsg::ResetDrag);
     crate::tray::update_session(app, None);
     if reason == "timeout" || reason == "disconnected" {
         // الإنهاء من الشريط فعله المستخدم (بلا إشعار)؛ فقدان الهاتف/الانقطاع
@@ -194,8 +237,28 @@ fn spawn_watchdog(app: tauri::AppHandle) {
 }
 
 // ---------------------------------------------------------------------------
-// التنفيذ — دفعات أحداث من الويبفيو (عقد §13)
+// التنفيذ — دفعات أحداث من الويبفيو (عقد §13) → خيط input-exec عبر قناة
 // ---------------------------------------------------------------------------
+
+/// فحص جاهزية مبكر عند بدء الجلسة (بناء محرك تجريبي في خيط عابر):
+/// يكشف أخطاء النظام الحقيقية (بلا X11 مثلاً) قبل قبول الجلسة.
+fn ensure_exec_ready(app: &tauri::AppHandle) -> Result<(), String> {
+    let (tx, rx) = mpsc::channel::<Result<(), String>>();
+    let _ = std::thread::Builder::new().name("input-probe".into()).spawn(move || {
+        let s = Settings { release_keys_when_dropped: false, ..Default::default() };
+        let r = Enigo::new(&s).map(|_| ()).map_err(|e| format!("تعذر تهيئة محرك الإدخال: {e}"));
+        let _ = tx.send(r);
+    });
+    match rx.recv_timeout(Duration::from_secs(5)) {
+        Ok(res) => res,
+        Err(_) => {
+            // الخيط معلق (نادر) — لا نمنع الجلسة؛ القناة المعتادة ستتولى
+            let _ = exec_channel(app);
+            Ok(())
+        }
+    }
+}
+
 pub fn execute(app: &tauri::AppHandle, events: &[serde_json::Value], source: &str) -> Result<String, String> {
     // بوابة الأمان: أحداث هاتف (controller) خلال جلسة نشطة فقط؛
     // desktop-local = واجهة الكمبيوتر نفسها (صاحب الجهاز).
@@ -203,25 +266,10 @@ pub fn execute(app: &tauri::AppHandle, events: &[serde_json::Value], source: &st
         return Err("لا جلسة تحكم نشطة — ابدأ الجلسة من الهاتف الموثوق أولًا".into());
     }
     LAST_EVENT_MS.store(now_ms(), Ordering::Relaxed);
-    let mut done = 0usize;
-    let mut first_err: Option<String> = None;
-    for ev in events {
-        let r = with_enigo(|e| exec::apply_event(e, ev));
-        match r {
-            Ok(_) => done += 1,
-            Err(e) => {
-                // فشل الحقن (مثال: بلا صلاحية Accessibility على ماك) — يُبث للواجهة
-                if first_err.is_none() {
-                    first_err = Some(e.clone());
-                }
-                emit(app, "desktop://input-error", json!({"op": ev.get("kind"), "error": e}));
-            }
-        }
-    }
-    if let Some(e) = first_err {
-        return Err(e);
-    }
-    Ok(format!("نُفِّذ {done} حدثًا"))
+    let tx = exec_channel(app);
+    tx.send(InputMsg::Exec { events: events.to_vec(), app: app.clone() })
+        .map_err(|e| format!("قناة التنفيذ مغلقة: {e}"))?;
+    Ok(format!("جدولة تنفيذ {} حدثًا", events.len()))
 }
 
 // ---------------------------------------------------------------------------
