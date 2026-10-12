@@ -380,6 +380,7 @@ pub fn files_stream_open(
     streams().lock().unwrap().insert(id, StreamState { cancel: cancel.clone() });
     let app2 = app.clone();
     let name2 = safe.clone();
+    let temp_resp = temp.clone();
     std::thread::spawn(move || {
         let res = run_stream(&url, &temp, size, &name2, cancel.clone());
         streams().lock().unwrap().remove(&id);
@@ -403,7 +404,7 @@ pub fn files_stream_open(
             }
         }
     });
-    json!({"ok": true, "streamId": id, "tempPath": temp.to_string_lossy()})
+    json!({"ok": true, "streamId": id, "tempPath": temp_resp.to_string_lossy()})
 }
 
 #[tauri::command]

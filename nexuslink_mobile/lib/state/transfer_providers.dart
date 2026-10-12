@@ -142,7 +142,7 @@ class EngineController extends Notifier<TransferEngine?> {
   /// FA-files (عقد §14) — خادم وسائط الهاتف + مزامنة المجلدات + إعلان النقطة.
   Future<void> _ensurePhoneFilesServices(ServerEndpoint endpoint, String deviceId) async {
     final native = ref.read(nativeBridgeProvider);
-    final log = (String text, {String kind = 'info'}) =>
+    void log(String text, {String kind = 'info'}) =>
         ref.read(activityLogProvider.notifier).add(text, kind: kind);
 
     // 1) خادم الوسائط (idempotent على مستوى العملية) + إعلان النقطة للخدمة الدائمة
