@@ -3,7 +3,7 @@
 // «طبقة الوسائط الأصلية» — اتجاهان حقيقيان عبر WebRTC:
 //
 // أ) شاشة الكمبيوتر → الهاتف (kind="screen" — نحن صاحب الوسائط):
-//    التقاط (scap على ويندوز/ماك · x11rb على لينكس) → تصغير حسب الجودة →
+//    التقاط (scap على ماك · windows-capture على ويندوز · x11rb على لينكس) → تصغير حسب الجودة →
 //    ترميز H264 (OpenH264) → تُراك إرسال (webrtc-rs 0.21). الإشارات عبر جسر
 //    3005 (الويبفيو يرحّل): screen:req من الهاتف → ننشئ rtc:offer → الهاتف
 //    يجيب rtc:answer → RTP مباشرة على الشبكة المحلية (مرشحات host مضمّنة).
@@ -335,6 +335,20 @@ pub struct TargetInfo {
     pub h: u32,
 }
 
+// جسر x11rb: الإرسال يرجع Result<Cookie, ConnectionError> والرد Result<R, ReplyError>
+// — نوعا خطأ مختلفان (لهذا فشلت and_then ثم E0599 في CI جولة 3). ينهار إلى None.
+#[cfg(target_os = "linux")]
+fn x11reply<C, R>(
+    cookie: Result<x11rb::cookie::Cookie<'_, C, R>, x11rb::errors::ConnectionError>,
+) -> Option<R>
+where
+    C: x11rb::connection::RequestConnection + ?Sized,
+    R: x11rb::x11_utils::TryParse,
+{
+    let c = cookie.ok()?;
+    c.reply().ok()
+}
+
 #[cfg(target_os = "linux")]
 fn list_targets() -> Result<Vec<TargetInfo>, String> {
     use x11rb::connection::Connection;
@@ -345,8 +359,7 @@ fn list_targets() -> Result<Vec<TargetInfo>, String> {
     let root = conn.setup().roots[screen_num].root;
     let mut out = Vec::new();
     // ملاحظة x11rb 0.13: دوال الامتداد حرة (randr::get_monitors) — conn.randr() لا وجود لها
-    let monitors = randr::get_monitors(&conn, root, true);
-    if let Ok(reply) = monitors.reply() {
+    if let Some(reply) = x11reply(randr::get_monitors(&conn, root, true)) {
         for (i, m) in reply.monitors.iter().enumerate() {
             out.push(TargetInfo {
                 id: format!("screen:{i}"),
@@ -373,27 +386,24 @@ fn list_targets() -> Result<Vec<TargetInfo>, String> {
         });
     }
     // نوافذ المستوى الأعلى (WM_NAME) — قائمة معقولة
-    if let Ok(reply) = conn.query_tree(root).reply() {
+    if let Some(reply) = x11reply(conn.query_tree(root)) {
         for win in reply.children.iter().take(48) {
-            let name = conn
-                .get_property(
-                    false,
-                    *win,
-                    x11rb::protocol::xproto::AtomEnum::WM_NAME,
-                    x11rb::protocol::xproto::AtomEnum::STRING,
-                    0,
-                    256,
-                )
-                .reply()
-                .ok()
-                .and_then(|r| String::from_utf8(r.value).ok())
-                .unwrap_or_default();
+            let name = x11reply(conn.get_property(
+                false,
+                *win,
+                x11rb::protocol::xproto::AtomEnum::WM_NAME,
+                x11rb::protocol::xproto::AtomEnum::STRING,
+                0,
+                256,
+            ))
+            .and_then(|r| String::from_utf8(r.value).ok())
+            .unwrap_or_default();
             if name.trim().len() < 2 {
                 continue;
             }
-            if let (Ok(geo), Ok(tr)) = (
-                conn.get_geometry(*win).reply(),
-                conn.translate_coordinates(*win, root, 0, 0).reply(),
+            if let (Some(geo), Some(tr)) = (
+                x11reply(conn.get_geometry(*win)),
+                x11reply(conn.translate_coordinates(*win, root, 0, 0)),
             ) {
                 if geo.width < 8 || geo.height < 8 {
                     continue;
@@ -413,7 +423,7 @@ fn list_targets() -> Result<Vec<TargetInfo>, String> {
     Ok(out)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
 fn list_targets() -> Result<Vec<TargetInfo>, String> {
     // scap: شاشات + نوافذ (Windows.Graphics.Capture / ScreenCaptureKit)
     let mut out = Vec::new();
@@ -445,6 +455,83 @@ fn list_targets() -> Result<Vec<TargetInfo>, String> {
                 });
             }
         }
+    }
+    Ok(out)
+}
+
+#[cfg(windows)]
+fn list_targets() -> Result<Vec<TargetInfo>, String> {
+    use windows_capture::monitor::Monitor;
+    let mut out: Vec<TargetInfo> = Vec::new();
+    // الشاشات — Monitor::from_index (ترقيم 1-based) — نفس الترتيب في حلقة الالتقاط
+    let mut i = 1usize;
+    while let Ok(m) = Monitor::from_index(i) {
+        let (w, h) = (m.width().unwrap_or(0), m.height().unwrap_or(0));
+        out.push(TargetInfo {
+            id: format!("screen:{}", i - 1),
+            kind: "screen",
+            title: format!("الشاشة {}", i - 1),
+            origin: (0, 0), // حد موثق §15: الأصل للشاشة الأساسية
+            w,
+            h,
+        });
+        i += 1;
+    }
+    if out.iter().all(|t| t.id != "screen:all") {
+        out.push(TargetInfo {
+            id: "screen:all".into(),
+            kind: "screen",
+            title: "كل الشاشات".into(),
+            origin: (0, 0),
+            w: 0,
+            h: 0,
+        });
+    }
+    // النوافذ العليا المرئية — EnumWindows مباشرة (enumerate في windows-capture
+    // يستعمل EnumChildWindows فيُعدّ عناصر التحكم الداخلية أيضًا — لا يصلح للقائمة)
+    #[link(name = "user32")]
+    extern "system" {
+        fn EnumWindows(cb: Option<extern "system" fn(isize, isize) -> i32>, lparam: isize) -> i32;
+        fn IsWindowVisible(hwnd: isize) -> i32;
+        fn GetWindowTextLengthW(hwnd: isize) -> i32;
+        fn GetWindowTextW(hwnd: isize, buf: *mut u16, max: i32) -> i32;
+    }
+    extern "system" fn enum_cb(hwnd: isize, lparam: isize) -> i32 {
+        unsafe {
+            if IsWindowVisible(hwnd) == 0 {
+                return 1;
+            }
+            let len = GetWindowTextLengthW(hwnd);
+            if len < 2 {
+                return 1;
+            }
+            let mut buf = vec![0u16; len as usize + 1];
+            let n = GetWindowTextW(hwnd, buf.as_mut_ptr(), len + 1);
+            if n <= 0 {
+                return 1;
+            }
+            let title = String::from_utf16_lossy(&buf[..n as usize]);
+            let collected = &mut *(lparam as *mut Vec<(isize, String)>);
+            collected.push((hwnd, title));
+        }
+        1 // متابعة التعداد
+    }
+    let mut collected: Vec<(isize, String)> = Vec::new();
+    unsafe {
+        EnumWindows(
+            Some(enum_cb),
+            &mut collected as *mut Vec<(isize, String)> as isize,
+        );
+    }
+    for (hwnd, title) in collected {
+        out.push(TargetInfo {
+            id: format!("window:{hwnd}"),
+            kind: "window",
+            title: title.chars().take(60).collect(),
+            origin: window_origin(hwnd),
+            w: 0, // يُحدد من أول إطار
+            h: 0,
+        });
     }
     Ok(out)
 }
@@ -523,7 +610,7 @@ fn full_desktop_dims() -> Result<(u32, u32, (i32, i32)), String> {
     use x11rb::protocol::xproto::ConnectionExt;
     let (conn, n) = x11rb::connect(None).map_err(|e| format!("X11: {e}"))?;
     let root = conn.setup().roots[n].root;
-    let geo = conn.get_geometry(root).reply().map_err(|e| e.to_string())?;
+    let geo = x11reply(conn.get_geometry(root)).ok_or_else(|| "X11: get_geometry".to_string())?;
     Ok((geo.width as u32, geo.height as u32, (0, 0)))
 }
 
@@ -588,7 +675,7 @@ fn full_desktop_dims() -> Result<(u32, u32, (i32, i32)), String> {
 // حلقات الالتقاط والترميز — خيط مخصص لكل جلسة
 // ---------------------------------------------------------------------------
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
 fn capture_loop(
     stop: Arc<AtomicBool>,
     rebuild: Arc<AtomicBool>,
@@ -652,7 +739,7 @@ fn capture_loop(
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
 fn build_scap_target(id: &str) -> Option<scap::Target> {
     for t in scap::get_all_targets() {
         match &t {
@@ -669,6 +756,151 @@ fn build_scap_target(id: &str) -> Option<scap::Target> {
         }
     }
     None // افتراضي — الشاشة الأساسية
+}
+
+// ويندوز: windows-capture مباشرة (scap 0.0.8 مكسور مع أي نسخة منشورة — موثق بالأعلى)
+// الدفع: خيط Windows.Graphics.Capture يكتب في فتحة مشتركة، وهذه الحلقة تستهلك بمعدل fps
+#[cfg(windows)]
+fn capture_loop(
+    stop: Arc<AtomicBool>,
+    rebuild: Arc<AtomicBool>,
+    target: String,
+    fps: u32,
+    quality: String,
+    tx: webrtc::runtime::Sender<EncodedFrame>,
+) {
+    use windows_capture::capture::GraphicsCaptureApiHandler;
+    use windows_capture::frame::Frame;
+    use windows_capture::graphics_capture_api::InternalCaptureControl;
+    use windows_capture::monitor::Monitor;
+    use windows_capture::settings::{
+        ColorFormat, CursorCaptureSettings, DrawBorderSettings, Settings,
+    };
+    use windows_capture::window::Window;
+
+    struct WinSlot {
+        data: Vec<u8>,
+        w: u32,
+        h: u32,
+        seq: u64,
+    }
+    struct WinHandler {
+        slot: Arc<Mutex<WinSlot>>,
+    }
+    impl GraphicsCaptureApiHandler for WinHandler {
+        type Flags = Arc<Mutex<WinSlot>>;
+        type Frame = Frame;
+        type Error = Box<dyn std::error::Error + Send + Sync>;
+
+        fn new(slot: Self::Flags) -> Result<Self, Self::Error> {
+            Ok(Self { slot })
+        }
+
+        fn on_frame_arrived(
+            &mut self,
+            frame: &mut Frame,
+            _capture_control: InternalCaptureControl,
+        ) -> Result<(), Self::Error> {
+            let (w, h) = (frame.width(), frame.height());
+            if w < 2 || h < 2 {
+                return Ok(());
+            }
+            // Bgra8 = B,G,R,A معبأة — نفس ترتيب محول BGRA النقي (بلا حشو صفوف)
+            let packed = frame.as_raw_nopadding_buffer()?;
+            let mut s = match self.slot.lock() {
+                Ok(g) => g,
+                Err(_) => return Err("win slot poisoned".into()),
+            };
+            s.data.clear();
+            s.data.extend_from_slice(packed);
+            s.w = w;
+            s.h = h;
+            s.seq = s.seq.wrapping_add(1);
+            Ok(())
+        }
+    }
+
+    loop {
+        if stop.load(Ordering::Relaxed) {
+            return;
+        }
+        let preset = core::quality_preset(&quality);
+        // العنصر: window:HWND أو screen:N (from_index 1-based) — الافتراضي الشاشة الأساسية
+        let item = if target.starts_with("window:") {
+            match target["window:".len()..].parse::<isize>() {
+                Ok(hwnd) => Window::from_raw_hwnd(hwnd as *mut std::ffi::c_void),
+                Err(e) => {
+                    println!("[media] win hwnd: {e}");
+                    std::thread::sleep(Duration::from_secs(2));
+                    continue;
+                }
+            }
+        } else {
+            let idx: usize = target
+                .strip_prefix("screen:")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+            match Monitor::from_index(idx + 1).or_else(|_| Monitor::primary()) {
+                Ok(m) => m,
+                Err(e) => {
+                    println!("[media] win monitor: {e:?}");
+                    std::thread::sleep(Duration::from_secs(2));
+                    continue;
+                }
+            }
+        };
+        let slot = Arc::new(Mutex::new(WinSlot {
+            data: Vec::new(),
+            w: 0,
+            h: 0,
+            seq: 0,
+        }));
+        let settings = Settings::new(
+            item,
+            CursorCaptureSettings::WithCursor,
+            DrawBorderSettings::WithoutBorder,
+            ColorFormat::Bgra8,
+            slot.clone(),
+        );
+        let control = match WinHandler::start_free_threaded(settings) {
+            Ok(c) => c,
+            Err(e) => {
+                println!("[media] win capture: {e:?}");
+                std::thread::sleep(Duration::from_secs(2));
+                continue;
+            }
+        };
+        let frame_dur = Duration::from_nanos(1_000_000_000 / fps.max(1) as u64);
+        let mut last_seq: u64 = 0;
+        let mut encoder: Option<(openh264::encoder::Encoder, u32, u32)> = None;
+        loop {
+            let t0 = Instant::now();
+            if stop.load(Ordering::Relaxed) {
+                let _ = control.stop();
+                return;
+            }
+            if rebuild.swap(false, Ordering::Relaxed) {
+                let _ = control.stop();
+                break; // إعادة بناء بالجودة الجديدة
+            }
+            let (data, w, h, seq) = match slot.lock() {
+                Ok(s) => (s.data.clone(), s.w, s.h, s.seq),
+                Err(_) => (Vec::new(), 0, 0, last_seq),
+            };
+            if seq != last_seq && w >= 2 && h >= 2 && data.len() >= (w as usize) * (h as usize) * 4 {
+                last_seq = seq;
+                let (w2, h2) = core::scaled_dims(w, h, preset.scale);
+                let scaled = core::downscale_bgra(&data, w, h, w2, h2);
+                if let Err(e) = encode_and_send(&mut encoder, &scaled, w2, h2, preset, fps, &tx) {
+                    println!("[media] encode: {e}");
+                }
+            }
+            let el = t0.elapsed();
+            if el < frame_dur {
+                std::thread::sleep(frame_dur - el);
+            }
+        }
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -697,31 +929,27 @@ fn capture_loop(
             }
         };
         let root = conn.setup().roots[screen_num].root;
-        let root_geo = match conn.get_geometry(root).reply() {
-            Ok(g) => g,
-            Err(e) => {
-                println!("[media] X11 geometry: {e}");
+        let root_geo = match x11reply(conn.get_geometry(root)) {
+            Some(g) => g,
+            None => {
+                println!("[media] X11 geometry: فشل الإرسال أو الرد");
                 std::thread::sleep(Duration::from_secs(2));
                 continue;
             }
         };
         let mut region = (0i16, 0i16, root_geo.width, root_geo.height);
         if target.starts_with("screen:") && target != "screen:all" {
-            if let Some(m) = randr::get_monitors(&conn, root, true)
-                .reply()
-                .ok()
-                .and_then(|r| {
-                    let idx: usize = target["screen:".len()..].parse().ok()?;
-                    r.monitors.get(idx)
-                })
-            {
+            if let Some(m) = x11reply(randr::get_monitors(&conn, root, true)).and_then(|r| {
+                let idx: usize = target["screen:".len()..].parse().ok()?;
+                r.monitors.get(idx)
+            }) {
                 region = (m.x as i16, m.y as i16, m.width as u16, m.height as u16);
             }
         } else if target.starts_with("window:") {
             if let Ok(id) = target["window:".len()..].parse::<x11rb::protocol::xproto::Window>() {
-                if let (Ok(geo), Ok(tr)) = (
-                    conn.get_geometry(id).reply(),
-                    conn.translate_coordinates(id, root, 0, 0).reply(),
+                if let (Some(geo), Some(tr)) = (
+                    x11reply(conn.get_geometry(id)),
+                    x11reply(conn.translate_coordinates(id, root, 0, 0)),
                 ) {
                     region = (tr.dst_x as i16, tr.dst_y as i16, geo.width, geo.height);
                 }
@@ -742,18 +970,18 @@ fn capture_loop(
             if rebuild.swap(false, Ordering::Relaxed) {
                 break;
             }
-            let img = match conn
-                .get_image(ImageFormat::Z_PIXMAP, root, rx, ry, rw, rh, !0u32)
-                .reply()
+            let img = match
+                x11reply(conn.get_image(ImageFormat::Z_PIXMAP, root, rx, ry, rw, rh, !0u32))
             {
-                Ok(i) => i,
-                Err(e) => {
-                    println!("[media] X11 get_image: {e}");
+                Some(i) => i,
+                None => {
+                    println!("[media] X11 get_image: فشل الإرسال أو الرد");
                     break;
                 }
             };
             // ZPixmap 32bpp = BGRX (كـ BGRA بلا ألفا — المحول يتجاهل القناة الرابعة)
-            let (w, h) = (img.width as u32, img.height as u32);
+            // GetImageReply بلا width/height (حقوله: depth/sequence/visual/data) — الأبعاد من الطلب
+            let (w, h) = (rw as u32, rh as u32);
             let (w2, h2) = core::scaled_dims(w, h, preset.scale);
             let scaled = core::downscale_bgra(&img.data, w, h, w2, h2);
             if let Err(e) = encode_and_send(&mut encoder, &scaled, w2, h2, preset, fps, &tx) {
@@ -1826,7 +2054,9 @@ fn spawn_cpal_sink(_status: &Value) -> Result<(), String> {
 // ----- FFI مشترك (مفتوح POSIX + ioctl) -----
 
 unsafe extern "C" {
+    // open في libc متغيّرة: int open(const char*, int, ...) — التوقيع الثابت
+    // يرفضه لاينت invalid_runtime_symbol_definitions الجديد (CI ماك جولة 3)
     #[link_name = "open"]
-    fn libc_open(path: *const std::ffi::c_char, flags: i32) -> i32;
+    fn libc_open(path: *const std::ffi::c_char, flags: i32, ...) -> i32;
     fn ioctl(fd: i32, request: std::ffi::c_ulong, arg: *mut std::ffi::c_void) -> i32;
 }
