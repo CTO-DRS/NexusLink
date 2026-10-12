@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  NexusLink — Info.plist إضافي (يُدمج مع الافتراضي من Tauri — عقد §14)
+  ============================================================
+  macOS Services: «إرسال عبر NexusLink» تظهر في قائمة Services لأي تطبيق
+  يوفر ملفات (Finder على رأسها). عند التفعيل يمرر النظام الملفات إلى التطبيق
+  عبر application:openFiles: → tao → RunEvent::Opened { urls } → إضافة
+  deep-link تحوّلها إلى on_open_url → handle_deep_link يوجّهها لتدفق الإرسال
+  (نفس مسار قائمة الزر الأيمن في Windows).
+-->
+<plist version="1.0">
+  <dict>
+    <key>NSServices</key>
+    <array>
+      <dict>
+        <key>NSMenuItem</key>
+        <dict>
+          <key>default</key>
+          <string>إرسال عبر NexusLink</string>
+        </dict>
+        <key>NSMessage</key>
+        <string>sendViaNexusLink</string>
+        <key>NSRequiredContext</key>
+        <dict>
+          <key>NSTextContent</key>
+          <string>FilePath</string>
+        </dict>
+        <key>NSSendFileTypes</key>
+        <array>
+          <string>public.data</string>
+          <string>public.folder</string>
+        </array>
+        <key>NSPortName</key>
+        <string>NexusLink</string>
+      </dict>
+    </array>
+  </dict>
+</plist>

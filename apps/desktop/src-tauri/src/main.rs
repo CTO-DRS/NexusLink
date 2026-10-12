@@ -7,21 +7,32 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod clipboard;
+mod files_menu;
+mod files_menu_core;
 mod input;
 mod notify;
 mod power;
 mod procman;
 mod settings;
 mod shortcuts;
+mod sync;
+mod sync_core;
 mod tray;
 
 use tauri::{Manager, RunEvent, WindowEvent};
 
 fn main() {
+    // FA-files (عقد §14) — مسارات --send من قائمة الزر الأيمن (إقلاع أول)
+    let argv: Vec<String> = std::env::args().collect();
+    files_menu::queue_send_args(&argv);
+
     tauri::Builder::default()
         // المثيل الوحيد — يجب أن يكون أول إضافة (توثيق tauri)
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             // إقلاع ثانٍ → أبرز النافذة القائمة
+            // FA-files — أرجف المثيل الثاني قد تحمل --send (قائمة الزر الأيمن)
+            let args: Vec<String> = argv.iter().cloned().collect();
+            files_menu::queue_send_args(&args);
             procman::open_main(app);
         }))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -32,6 +43,8 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_notification::init())
+        // FA-files — سحب الملفات من التطبيق إلى سطح المكتب/المجلدات (drag-out)
+        .plugin(tauri_plugin_drag::init())
         .setup(|app| {
             let handle = app.handle().clone();
             settings::init(&handle);
@@ -70,11 +83,15 @@ fn main() {
             clipboard::spawn_monitor(handle.clone());
             // FA-input (عقد §13) — ضبط مفوّض الصوت لكل منصة (osascript/نقرات ويندوز)
             input::init();
+            // FA-files (عقد §14) — قائمة الزر الأيمن + مقبض المزامنة الأصلي
+            files_menu::apply_startup();
+            sync::set_app(handle.clone());
             Ok(())
         })
         // FA-clipboard-sync — أوامر الطبقة الأصلية للحافظة الموحدة (عقد §11)
         // FA-power — أوامر النظام/الطاقة الحقيقية + MAC + إلغاء الإيقاف (عقد §12)
         // FA-input — جلسة التحكم وتنفيذ أحداث اللمس/الكيبورد عبر enigo (عقد §13)
+        // FA-files — إظهار في المستكشف/بث الفيديو/قائمة السياق (عقد §14)
         .invoke_handler(tauri::generate_handler![
             clipboard::clip_apply,
             clipboard::clip_send_now,
@@ -84,7 +101,11 @@ fn main() {
             input::input_exec,
             input::input_session,
             input::input_permission,
-            input::input_open_permissions
+            input::input_open_permissions,
+            files_menu::files_reveal,
+            files_menu::files_stream_open,
+            files_menu::files_stream_cancel,
+            files_menu::files_context_menu
         ])
         .on_window_event(|window, event| match event {
             // إغلاق → إخفاء إلى الـ Tray (قابل للتعطيل من قائمة الـ Tray)
@@ -116,8 +137,16 @@ fn main() {
         .run(|_app, event| {
             // أي خروج (قائمة/إغلاق فعلي/Ctrl-C عبر النظام) يقتل العمليات المضمّنة
             match event {
-                RunEvent::ExitRequested { .. } => procman::kill_all(),
-                RunEvent::Exit => procman::kill_all(),
+                RunEvent::ExitRequested { .. } => {
+                    procman::kill_all();
+                    files_menu::cleanup_all();
+                    sync::stop_all();
+                }
+                RunEvent::Exit => {
+                    procman::kill_all();
+                    files_menu::cleanup_all();
+                    sync::stop_all();
+                }
                 _ => {}
             }
         });

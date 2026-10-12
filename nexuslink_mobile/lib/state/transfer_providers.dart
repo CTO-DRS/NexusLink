@@ -9,8 +9,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/protocol.dart';
 import '../data/agent_channel.dart';
 import '../data/database/nexus_db.dart';
+import '../data/echo_registry.dart';
 import '../data/native_bridge.dart';
+import '../data/phone_media_server.dart';
 import '../data/signaling.dart';
+import '../data/sync_service.dart';
 import '../data/transfer_api.dart';
 import '../data/transfer_engine.dart';
 import '../domain/models.dart';
@@ -84,6 +87,9 @@ final nativeBridgeProvider = Provider<NativeBridge>((ref) => NativeBridge());
 
 class EngineController extends Notifier<TransferEngine?> {
   String? _builtFor;
+  // FA-files (عقد §14) — خدمة مزامنة المجلدات (هاتف → كمبيوتر)
+  PhoneSyncService? _sync;
+  String? _syncDeviceId;
 
   @override
   TransferEngine? build() {
@@ -130,6 +136,38 @@ class EngineController extends Notifier<TransferEngine?> {
     state = engine;
     _builtFor = endpoint.key;
     ref.read(activityLogProvider.notifier).add('محرك النقل جاهز (${endpoint.key})', kind: 'ok');
+    unawaited(_ensurePhoneFilesServices(endpoint, deviceId));
+  }
+
+  /// FA-files (عقد §14) — خادم وسائط الهاتف + مزامنة المجلدات + إعلان النقطة.
+  Future<void> _ensurePhoneFilesServices(ServerEndpoint endpoint, String deviceId) async {
+    final native = ref.read(nativeBridgeProvider);
+    final log = (String text, {String kind = 'info'}) =>
+        ref.read(activityLogProvider.notifier).add(text, kind: kind);
+
+    // 1) خادم الوسائط (idempotent على مستوى العملية) + إعلان النقطة للخدمة الدائمة
+    try {
+      final media = PhoneMediaServer.instance;
+      await media.start();
+      await native.setMediaEndpoint(media.port, media.token);
+      log('خدمة وسائط الهاتف على المنفذ ${media.port}', kind: 'ok');
+    } catch (e) {
+      log('تعذر إقلاع خدمة الوسائط: $e', kind: 'warn');
+    }
+
+    // 2) مزامنة المجلدات (الهاتف → الكمبيوتر) — مراقبة فورية بـ Directory.watch
+    try {
+      if (_sync == null || _syncDeviceId != deviceId) {
+        await _sync?.stop();
+        _sync = PhoneSyncService(api: NexusTransferApi(endpoint), deviceId: deviceId, onLog: log);
+        _syncDeviceId = deviceId;
+      }
+      await _sync!.start();
+    } catch (e) {
+      log('تعذر بدء مزامنة المجلدات: $e', kind: 'warn');
+    }
+    // سجل الصدى جاهز (يستخدمه محرك النقل عند نزول عروض المزامنة)
+    EchoRegistry.instance;
   }
 
   /// مصادر الرفع المؤقتة (صور cache/مشاركات) تُحذف بعد اكتمال رفعها.

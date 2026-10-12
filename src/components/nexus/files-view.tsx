@@ -23,11 +23,13 @@ import {
   LayoutGrid, List, Search, FolderPlus, ArrowUpDown, ChevronLeft, Home,
   Copy, Move, Trash2, Pencil, FileArchive, PackageOpen, Send, X, Loader2,
   ArrowDownToLine, Smartphone, Monitor, HardDrive, FolderOpen, CheckSquare,
-  FileArchive as ZipIcon,
+  FileArchive as ZipIcon, Film, ExternalLink,
 } from "lucide-react"
 import { toast } from "sonner"
 import type { FsEntry } from "@/lib/nexus/types"
 import { pickSendTarget } from "@/lib/nexus/pick-target"
+import { revealEntry, dragOutEntry, realPathOf, isDesktopShell } from "@/lib/desktop-files"
+import { PhoneStorageModal } from "./phone-storage-modal"
 
 const QUICK_DIRS = [
   { path: "/", label: "الذاكرة الداخلية", icon: HardDrive },
@@ -54,6 +56,9 @@ export function FilesView() {
   const [moveDirs, setMoveDirs] = useState<FsEntry[]>([])
   const [busy, setBusy] = useState(false)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // FA-files — ذاكرة المسارات الحقيقية (أساس السحب الخارجي السريع أثناء الإيماءة)
+  const realPaths = useRef<Map<string, string>>(new Map())
+  const [phoneStorageOpen, setPhoneStorageOpen] = useState(false)
 
   const active = s.devices.find((d) => d.id === s.activeDeviceId)
   const previewableList = useMemo(() => {
@@ -82,6 +87,22 @@ export function FilesView() {
   }, [s.activeDeviceId, s.cwd])
 
   useEffect(() => { load() }, [load])
+
+  // FA-files — جلب المسارات الحقيقية للإدخالات (خلفيًا — يخدم السحب والإفلات والإظهار)
+  useEffect(() => {
+    const list = s.searchResults ?? s.entries
+    const files = list.filter((e) => e.type === "file").slice(0, 60)
+    if (!files.length) return
+    let alive = true
+    void Promise.all(
+      files.map(async (e) => {
+        if (realPaths.current.has(e.path)) return
+        const rp = await realPathOf(s.activeDeviceId, e.path)
+        if (rp && alive) realPaths.current.set(e.path, rp)
+      })
+    )
+    return () => { alive = false }
+  }, [s.entries, s.searchResults, s.activeDeviceId])
 
   // search debounce
   useEffect(() => {
@@ -153,6 +174,14 @@ export function FilesView() {
           إرسال إلى {s.activeDeviceId === "pc-office" ? "الهاتف" : "الكمبيوتر"}
         </ContextMenuItem>
       )}
+      <ContextMenuItem
+        onClick={async () => {
+          const err = await revealEntry(s.activeDeviceId, e.path)
+          if (err) toast.error(err)
+        }}
+      >
+        <ExternalLink className="w-4 h-4 me-1.5" /> إظهار في المستكشف
+      </ContextMenuItem>
       <ContextMenuItem onClick={() => { setRenameOpen(e); setRenameVal(e.name) }}>
         إعادة تسمية
       </ContextMenuItem>
@@ -290,6 +319,12 @@ export function FilesView() {
               <FolderPlus className="w-4 h-4" />
               <span className="hidden sm:inline">مجلد جديد</span>
             </Button>
+
+            {/* FA-files — تصفح تخزين الهاتف الحقيقي وبث الفيديو للمشغل الافتراضي */}
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setPhoneStorageOpen(true)}>
+              <Smartphone className="w-4 h-4" />
+              <span className="hidden sm:inline">تخزين الهاتف</span>
+            </Button>
           </div>
 
           {/* breadcrumb */}
@@ -366,22 +401,28 @@ export function FilesView() {
                 }}
                 onToggle={(e) => s.toggleSelect(e.path)}
                 actions={entryActions}
+                realPaths={realPaths.current}
               />
             ) : (
               <ListView
                 items={previewableList}
                 selection={s.selection}
+                deviceId={s.activeDeviceId}
                 onOpen={(e) => {
                   if (e.type === "dir") { s.setSearchQuery(""); s.setCwd(e.path) }
                   else s.setPreviewEntry(e)
                 }}
                 onToggle={(e) => s.toggleSelect(e.path)}
                 actions={entryActions}
+                realPaths={realPaths.current}
               />
             )}
           </div>
         </div>
       </div>
+
+      {/* FA-files — تخزين الهاتف الحقيقي + بث الفيديو */}
+      <PhoneStorageModal open={phoneStorageOpen} onOpenChange={setPhoneStorageOpen} />
 
       {/* rename dialog */}
       <Dialog open={!!renameOpen} onOpenChange={(v) => !v && setRenameOpen(null)}>
@@ -465,13 +506,46 @@ export function FilesView() {
 
 /* ---------- grid & list sub-components ---------- */
 
-function Grid({ items, deviceId, selection, onOpen, onToggle, actions }: {
+/** FA-files — معالجات السحب الخارجي (drag-out): عتبة 12px ثم استدعاء أمر الإضافة.
+ * بلا Hooks (نقاط البداية على مستوى الوحدة مفتاحها مسار الملف) — يُستدعى داخل map. */
+const dragStartPts = new Map<string, { x: number; y: number }>()
+
+function dragOutHandlers(deviceId: string, e: FsEntry, realPaths: Map<string, string>) {
+  if (e.type !== "file" || !isDesktopShell()) {
+    return {}
+  }
+  return {
+    onMouseDown: (ev: React.MouseEvent) => {
+      if (ev.button !== 0) return
+      dragStartPts.set(e.path, { x: ev.clientX, y: ev.clientY })
+    },
+    onMouseMove: (ev: React.MouseEvent) => {
+      const st = dragStartPts.get(e.path)
+      if (!st) return
+      if (Math.abs(ev.clientX - st.x) + Math.abs(ev.clientY - st.y) > 12) {
+        dragStartPts.delete(e.path)
+        const real = realPaths.get(e.path)
+        if (!real) {
+          toast.error("هذا الملف ليس نسخة محلية — اسحب ملفات الكمبيوتر الحقيقية فقط")
+          return
+        }
+        void dragOutEntry(deviceId, e.path).then((ok) => {
+          if (!ok) toast.error("تعذر بدء السحب إلى سطح المكتب")
+        })
+      }
+    },
+    onMouseUp: () => { dragStartPts.delete(e.path) },
+  }
+}
+
+function Grid({ items, deviceId, selection, onOpen, onToggle, actions, realPaths }: {
   items: FsEntry[]
   deviceId: string
   selection: Set<string>
   onOpen: (e: FsEntry) => void
   onToggle: (e: FsEntry) => void
   actions: (e: FsEntry) => React.ReactNode
+  realPaths: Map<string, string>
 }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
@@ -479,6 +553,7 @@ function Grid({ items, deviceId, selection, onOpen, onToggle, actions }: {
         const Icon = categoryIcon(e.type === "dir" ? "dir" : e.category)
         const sel = selection.has(e.path)
         const isImg = e.type === "file" && e.category === "image"
+        const drag = dragOutHandlers(deviceId, e, realPaths)
         return (
           <ContextMenu key={e.path}>
             <ContextMenuTrigger asChild>
@@ -486,6 +561,7 @@ function Grid({ items, deviceId, selection, onOpen, onToggle, actions }: {
                 role="button" tabIndex={0}
                 onClick={() => onOpen(e)}
                 onKeyDown={(ev) => ev.key === "Enter" && onOpen(e)}
+                {...drag}
                 className={`group relative rounded-2xl border p-2.5 cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 ${
                   sel ? "border-primary ring-2 ring-primary/40 bg-primary/8" : "bg-background"
                 }`}
@@ -528,12 +604,14 @@ function Grid({ items, deviceId, selection, onOpen, onToggle, actions }: {
   )
 }
 
-function ListView({ items, selection, onOpen, onToggle, actions }: {
+function ListView({ items, selection, onOpen, onToggle, actions, deviceId, realPaths }: {
   items: FsEntry[]
   selection: Set<string>
   onOpen: (e: FsEntry) => void
   onToggle: (e: FsEntry) => void
   actions: (e: FsEntry) => React.ReactNode
+  deviceId: string
+  realPaths: Map<string, string>
 }) {
   return (
     <div className="space-y-0.5">
@@ -545,6 +623,7 @@ function ListView({ items, selection, onOpen, onToggle, actions }: {
       {items.map((e) => {
         const Icon = categoryIcon(e.type === "dir" ? "dir" : e.category)
         const sel = selection.has(e.path)
+        const drag = dragOutHandlers(deviceId, e, realPaths)
         return (
           <ContextMenu key={e.path}>
             <ContextMenuTrigger asChild>
@@ -552,6 +631,7 @@ function ListView({ items, selection, onOpen, onToggle, actions }: {
                 role="button" tabIndex={0}
                 onClick={() => onOpen(e)}
                 onKeyDown={(ev) => ev.key === "Enter" && onOpen(e)}
+                {...drag}
                 className={`group flex items-center gap-3 rounded-xl px-3 py-2 cursor-pointer transition-colors ${
                   sel ? "bg-primary/10 ring-1 ring-primary/35" : "hover:bg-accent"
                 }`}

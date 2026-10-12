@@ -1,7 +1,8 @@
 // NexusLink Desktop — إعدادات محلية (config.json في مجلد إعدادات التطبيق)
 // الإغلاق إلى الـ Tray مفعّل افتراضيًا (المطلوب التعاقدي) وقابل للتغيير من قائمة الـ Tray.
 // الطبقة الأصلية تضيف: autostart (التشغيل مع النظام) + start_hidden (بدء مخفي في الـ Tray)
-// + downloads_dir (مجلد تنزيلات افتراضي لحفظ الملفات الواردة).
+// + downloads_dir (مجلد تنزيلات افتراضي لحفظ الملفات الواردة)
+// + context_menu (قائمة الزر الأيمن «إرسال عبر NexusLink» — عقد §14).
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
@@ -15,11 +16,23 @@ pub struct Settings {
     pub start_hidden: bool,
     #[serde(default)]
     pub downloads_dir: Option<String>,
+    #[serde(default = "dft_context_menu")]
+    pub context_menu: bool,
+}
+
+fn dft_context_menu() -> bool {
+    true
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { close_to_tray: true, autostart: false, start_hidden: false, downloads_dir: None }
+        Self {
+            close_to_tray: true,
+            autostart: false,
+            start_hidden: false,
+            downloads_dir: None,
+            context_menu: true,
+        }
     }
 }
 
@@ -74,6 +87,26 @@ pub fn set_downloads_dir(v: Option<String>) {
     let mut s = cell().lock().unwrap();
     s.downloads_dir = v;
     persist(&s);
+}
+
+/// FA-files (عقد §14) — تفعيل/تعطيل قائمة الزر الأيمن (تسجيل HKCU فوري)
+pub fn set_context_menu(v: bool) {
+    {
+        let mut s = cell().lock().unwrap();
+        if s.context_menu == v {
+            return;
+        }
+        s.context_menu = v;
+        persist(&s);
+    }
+    if v {
+        crate::files_menu::apply_startup();
+    } else {
+        #[cfg(windows)]
+        {
+            let _ = crate::files_menu::files_context_menu("unregister".into());
+        }
+    }
 }
 
 /// «بدء مخفي» فعلي = إعداد المستخدم أو إقلاع تلقائي بوسيطة --hidden

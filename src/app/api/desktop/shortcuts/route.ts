@@ -18,6 +18,8 @@ import {
   writeDesktopClip,
   readDesktopSecurity,
   writeDesktopSecurity,
+  readDesktopSync,
+  writeDesktopSync,
 } from "@/lib/nexus/desktop-shortcuts"
 
 export const dynamic = "force-dynamic"
@@ -40,6 +42,7 @@ export async function GET() {
     shortcuts: await readMap(),
     clip: await readDesktopClip(),
     security: await readDesktopSecurity(),
+    sync: await readDesktopSync(),
   })
 }
 
@@ -51,12 +54,14 @@ export async function PUT(req: NextRequest) {
   const incoming = (body as { shortcuts?: Record<string, unknown> }).shortcuts
   const clipIn = (body as { clip?: unknown }).clip
   const secIn = (body as { security?: unknown }).security
+  const syncIn = (body as { sync?: unknown }).sync
   if (
     (!incoming || typeof incoming !== "object") &&
     (!clipIn || typeof clipIn !== "object") &&
-    (!secIn || typeof secIn !== "object")
+    (!secIn || typeof secIn !== "object") &&
+    (!syncIn || typeof syncIn !== "object")
   ) {
-    return NextResponse.json({ error: "shortcuts أو clip أو security مطلوب" }, { status: 400 })
+    return NextResponse.json({ error: "shortcuts أو clip أو security أو sync مطلوب" }, { status: 400 })
   }
   // تنظيف: مفاتيح نصية غير فارغة فقط، ودمج فوق القائم (عميل قديم لا يمسح البقية)
   const clean: Record<string, string> = {}
@@ -109,5 +114,17 @@ export async function PUT(req: NextRequest) {
       )
     }
   }
-  return NextResponse.json({ ok: true, shortcuts: merged, clip, security })
+  // FA-files: تحديث أزواج مزامنة المجلدات إن وُجد في نفس الطلب
+  let sync = await readDesktopSync()
+  if (syncIn && typeof syncIn === "object") {
+    try {
+      sync = await writeDesktopSync(syncIn as { pairs?: never[] })
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "فشل حفظ أزواج المزامنة" },
+        { status: 500 }
+      )
+    }
+  }
+  return NextResponse.json({ ok: true, shortcuts: merged, clip, security, sync })
 }

@@ -71,3 +71,7 @@ apps/desktop/src-tauri/resources/gateway/
 apps/desktop/src-tauri/binaries/node-*
 apps/desktop/src-tauri/target/
 scripts/enigo-verify/target/
+
+# FA-files — artifacts build/التحقق وبيانات التشغيل
+scripts/files-verify/target/
+/data/nexus-storage/

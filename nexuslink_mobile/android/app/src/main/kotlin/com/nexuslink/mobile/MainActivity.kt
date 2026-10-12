@@ -138,8 +138,9 @@ class MainActivity : FlutterFragmentActivity() {
                     val tempPath = call.argument<String>("tempPath") ?: ""
                     val displayName = call.argument<String>("displayName") ?: "file"
                     val mime = call.argument<String>("mime") ?: "application/octet-stream"
+                    val subPath = call.argument<String>("subPath")
                     Thread {
-                        val path = publishDownload(tempPath, displayName, mime)
+                        val path = publishDownload(tempPath, displayName, mime, subPath)
                         runOnUiThread {
                             if (path != null) {
                                 result.success(mapOf("ok" to true, "path" to path))
@@ -423,6 +424,19 @@ class MainActivity : FlutterFragmentActivity() {
                     result.success(true)
                 }
 
+                // FA-files (عقد §14) — نقطة وسائط الهاتف: الخدمة تعلنها في hello/إعادة الاتصال
+                "setMediaEndpoint" -> {
+                    val port = call.argument<Int>("port") ?: 0
+                    val token = call.argument<String>("token") ?: ""
+                    try {
+                        getSharedPreferences("nexus_ctl", Context.MODE_PRIVATE)
+                            .edit().putInt("media_port", port).putString("media_token", token).apply()
+                    } catch (_: Exception) {
+                    }
+                    AgentForegroundService.liveInstance?.setMediaEndpoint(port, token)
+                    result.success(true)
+                }
+
                 else -> result.notImplemented()
             }
         }
@@ -557,16 +571,26 @@ class MainActivity : FlutterFragmentActivity() {
     // نشر ملف منزّل في Download/NexusLink + إشعار اكتمال (البند 2)
     // ------------------------------------------------------------------
 
-    private fun publishDownload(tempPath: String, displayName: String, mime: String): String? {
+    private fun publishDownload(tempPath: String, displayName: String, mime: String, subPath: String?): String? {
         val temp = File(tempPath)
         if (!temp.exists() || temp.length() == 0L) return null
+        // FA-files (عقد §14): مجلد فرعي آمن تحت NexusLink (مزامنة المجلدات: Sync/<الزوج>)
+        val sub = subPath?.trim()
+            ?.replace("\\", "/")
+            ?.split('/')
+            ?.filter { it.isNotEmpty && it != "." && it != ".." && !it.startsWith(".") }
+            ?.take(4)
+            ?.joinToString("/")
+            ?.ifEmpty { null }
+        val relPath = if (sub != null) Environment.DIRECTORY_DOWNLOADS + "/NexusLink/$sub" else Environment.DIRECTORY_DOWNLOADS + "/NexusLink"
+        val finalName = if (sub != null) "$sub/$displayName" else displayName
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val resolver = contentResolver
                 val values = ContentValues().apply {
                     put(MediaStore.Downloads.DISPLAY_NAME, displayName)
                     put(MediaStore.Downloads.MIME_TYPE, mime)
-                    put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/NexusLink")
+                    put(MediaStore.Downloads.RELATIVE_PATH, relPath)
                     put(MediaStore.Downloads.IS_PENDING, 1)
                 }
                 val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
@@ -576,9 +600,9 @@ class MainActivity : FlutterFragmentActivity() {
                 values.clear()
                 values.put(MediaStore.Downloads.IS_PENDING, 0)
                 resolver.update(uri, values, null, null)
-                "${Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)}/NexusLink/$displayName"
+                "${Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)}/NexusLink/$finalName"
             } else {
-                val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "NexusLink")
+                val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), if (sub != null) "NexusLink/$sub" else "NexusLink")
                 dir.mkdirs()
                 var dst = File(dir, displayName)
                 var i = 1

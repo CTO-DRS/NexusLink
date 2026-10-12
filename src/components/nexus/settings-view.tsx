@@ -17,7 +17,10 @@ import {
   Moon, Sun, Languages, ShieldCheck, Wifi, Cpu, Info, Radio, Contrast,
   Accessibility, Keyboard, Gauge, HardDriveDownload, Sparkles, RotateCcw,
   Ear, Volume2, CheckCircle2, AlertTriangle, Rocket, Package, Globe,
+  FolderSync, Plus, Trash2, FolderOpen,
 } from "lucide-react"
+import { toast } from "sonner"
+import { pickFolder } from "@/lib/desktop-files"
 
 const SHORTCUT_ORDER: ShortcutAction[] = [
   "palette", "help", "sendFile", "lock", "theme", "lang", "contrast", "speedtest", "dnd",
@@ -129,6 +132,48 @@ export function SettingsView() {
       body: JSON.stringify({ security: { autoLock: v } }),
     }).catch(() => null)
     announce(v ? t("القفل التلقائي مفعّل") : t("القفل التلقائي معطل"))
+  }
+
+  // FA-files (عقد §14) — أزواج مزامنة المجلدات الأصلية (نافذة Tauri فقط)
+  interface SyncPair { id: string; name: string; localDir: string; phoneDir: string; enabled: boolean }
+  const [syncPairs, setSyncPairs] = useState<SyncPair[] | null>(null)
+  useEffect(() => {
+    if (!IS_DESKTOP_WINDOW) return
+    void fetch("/api/desktop/shortcuts", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setSyncPairs(Array.isArray(j?.sync?.pairs) ? j.sync.pairs : []))
+      .catch(() => setSyncPairs([]))
+  }, [])
+  const putSyncPairs = (pairs: SyncPair[]) => {
+    setSyncPairs(pairs)
+    void fetch("/api/desktop/shortcuts", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sync: { pairs } }),
+    })
+      .then((r) => r.json())
+      .then((j) => { if (!j?.ok) throw new Error(j?.error) })
+      .catch(() => toast.error(t("تعذر حفظ أزواج المزامنة")))
+  }
+  const addSyncPair = async () => {
+    const dir = await pickFolder()
+    if (!dir) {
+      toast.error(t("اختر مجلدًا من نافذة النظام"))
+      return
+    }
+    const cur = syncPairs ?? []
+    if (cur.some((p) => p.localDir === dir)) {
+      toast.error(t("هذا المجلد مُزامن بالفعل"))
+      return
+    }
+    if (cur.length >= 12) {
+      toast.error(t("الحد الأقصى 12 زوجًا"))
+      return
+    }
+    const id = "pair-" + Math.random().toString(36).slice(2, 8)
+    const name = dir.split(/[\\/]/).filter(Boolean).pop() || id
+    putSyncPairs([...cur, { id, name, localDir: dir, phoneDir: "/Sync/" + id, enabled: true }])
+    announce(t("أُضيف زوج المزامنة"))
   }
 
   const fontBtn = (v: 1 | 1.125 | 1.25, label: string) => (
@@ -318,6 +363,57 @@ export function SettingsView() {
               />
               <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">10s</Badge>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* مزامنة المجلدات (FA-files — نافذة سطح المكتب فقط) */}
+      {IS_DESKTOP_WINDOW && (
+        <Card>
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <SectionTitle
+                icon={FolderSync}
+                title={t("مزامنة المجلدات مع الهاتف")}
+                desc={t("مراقبة أصلية فورية — أي تغيير ينعكس على الجهاز الآخر خلال ثوانٍ. الهاتف يستقبل في Download/NexusLink/Sync/<الزوج>")}
+              />
+              <Button size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={() => void addSyncPair()}>
+                <Plus className="w-3.5 h-3.5" /> {t("إضافة مجلد")}
+              </Button>
+            </div>
+            {syncPairs !== null && syncPairs.length === 0 && (
+              <div className="text-xs text-muted-foreground rounded-xl border border-dashed px-3 py-4 text-center">
+                {t("لا أزواج بعد — أضف مجلدًا من الكمبيوتر ليُزامَن مع مجلد NexusLink على الهاتف")}
+              </div>
+            )}
+            <div className="space-y-1.5">
+              {(syncPairs ?? []).map((p) => (
+                <div key={p.id} className="flex items-center gap-2 rounded-xl border px-3 py-2">
+                  <FolderOpen className="w-4 h-4 opacity-70 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-medium truncate" title={p.localDir}>{p.name}</div>
+                    <div className="text-[10px] text-muted-foreground truncate" dir="ltr">{p.localDir}</div>
+                  </div>
+                  <Switch
+                    checked={p.enabled}
+                    onCheckedChange={(v) => putSyncPairs((syncPairs ?? []).map((x) => (x.id === p.id ? { ...x, enabled: v } : x)))}
+                    aria-label={t("تفعيل الزوج")}
+                  />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 px-2 text-destructive hover:text-destructive shrink-0"
+                    onClick={() => putSyncPairs((syncPairs ?? []).filter((x) => x.id !== p.id))}
+                    aria-label={t("حذف الزوج")}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              {t("ملاحظة: الأحدث يفوز عند التعارض، والحذف لا ينتشر (حد موثق) — الملفات المؤقتة والمخفية مستثناة")}
+            </p>
           </CardContent>
         </Card>
       )}

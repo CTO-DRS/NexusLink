@@ -21,7 +21,8 @@ import { jobs } from "@/lib/nexus/transfer-engine"
 import { store as deviceStore } from "@/lib/nexus/devices"
 import { db } from "@/lib/db"
 import { serNotification } from "@/lib/nexus/comms-server"
-import { readShortcuts, readDesktopClip, readDesktopSecurity } from "@/lib/nexus/desktop-shortcuts"
+import { readShortcuts, readDesktopClip, readDesktopSecurity, readDesktopSync } from "@/lib/nexus/desktop-shortcuts"
+import { agentMedia } from "@/lib/nexus/guard-bridge"
 
 export const dynamic = "force-dynamic"
 
@@ -74,6 +75,7 @@ export async function GET() {
       connections = deviceStore().devices.filter((d) => d.state === "connected").length
     } catch { /* السجل غير جاهز — صفر */ }
     const secCfg = await readDesktopSecurity()
+    const syncCfg = await readDesktopSync()
 
     return Response.json({
       ok: true,
@@ -98,6 +100,9 @@ export async function GET() {
         },
         // FA-input (عقد §13) — حالة جلسة التحكم الموثوقة (من جسر 3004)
         input: remote.session ?? { active: false, deviceId: null, name: null, at: 0 },
+        // FA-files (عقد §14) — نقطة وسائط الهاتف (بث فيديو مباشر) + أزواج مزامنة المجلدات
+        agentMedia: agentMedia(),
+        sync: syncCfg,
         transfers,
         notifs,
       },

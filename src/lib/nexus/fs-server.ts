@@ -90,6 +90,20 @@ export function toVpath(deviceId: string, abs: string): string {
   return abs.slice(root.length).replace(/\\/g, "/") || "/"
 }
 
+/**
+ * FA-files (عقد §14) — المسار الفعلي على قرص الكمبيوتر لملف/مجلد داخل جذر جهاز.
+ * كل الجذور الافتراضية حقيقية على القرص (pc-fs/agents/…) لذا «إظهار في
+ * Explorer/Finder» يُبنى عليها. جهاز غير معروف أو مسار فاسد → ok:false.
+ */
+export function realPathFor(deviceId: string, vpath: string): { ok: true; realPath: string } | { ok: false; error: string } {
+  try {
+    const abs = resolveSafe(deviceId, vpath)
+    return { ok: true, realPath: abs }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "مسار غير صالح" }
+  }
+}
+
 export async function listDir(
   deviceId: string,
   vpath: string

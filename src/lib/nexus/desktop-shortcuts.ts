@@ -108,3 +108,67 @@ export async function writeDesktopClip(patch: Partial<DesktopClipCfg>): Promise<
   )
   return next
 }
+
+// FA-files (عقد §14) — أزواج مزامنة المجلدات لسطح المكتب (نفس المخزن desktop-ui.json)
+// · كل زوج: مجلد حقيقي على الكمبيوتر ↔ مجلد فرعي هاتفي (/Sync/<pairId>).
+// · تقرؤها الطبقة الأصلية من status.desktop.sync وتدير مراقبي notify الأصليين.
+export interface DesktopSyncPair {
+  id: string
+  name: string
+  localDir: string
+  phoneDir: string // دائماً /Sync/<id> — يبقى في العقد للتوسع مستقبلاً
+  enabled: boolean
+}
+export type DesktopSyncCfg = { pairs: DesktopSyncPair[] }
+export const DESKTOP_SYNC_DEFAULTS: DesktopSyncCfg = { pairs: [] }
+
+function sanitizePairs(raw: unknown): DesktopSyncPair[] {
+  if (!Array.isArray(raw)) return []
+  const out: DesktopSyncPair[] = []
+  for (const p of raw) {
+    if (!p || typeof p !== "object") continue
+    const o = p as Record<string, unknown>
+    const id = String(o.id ?? "").replace(/[^a-z0-9-]+/gi, "-").slice(0, 48)
+    const localDir = String(o.localDir ?? "").trim()
+    if (!id || !localDir) continue
+    out.push({
+      id,
+      name: String(o.name ?? id).slice(0, 60),
+      localDir,
+      phoneDir: "/Sync/" + id,
+      enabled: o.enabled !== false,
+    })
+  }
+  return out.slice(0, 12) // حد معقول — 12 زوجًا
+}
+
+/** قراءة أزواج المزامنة — تخطئة آمنة للقيم الغائبة/التالفة */
+export async function readDesktopSync(): Promise<DesktopSyncCfg> {
+  try {
+    const raw = await fs.readFile(desktopUiStorePath(), "utf8")
+    const j = JSON.parse(raw) as { sync?: Partial<DesktopSyncCfg> }
+    return { pairs: sanitizePairs(j.sync?.pairs) }
+  } catch {
+    return { pairs: [] }
+  }
+}
+
+/** كتابة أزواج المزامنة فوق desktop-ui.json (يحفظ البقية كما هي) */
+export async function writeDesktopSync(patch: Partial<DesktopSyncCfg>): Promise<DesktopSyncCfg> {
+  const next: DesktopSyncCfg = {
+    pairs: patch.pairs !== undefined ? sanitizePairs(patch.pairs) : (await readDesktopSync()).pairs,
+  }
+  let parsed: Record<string, unknown> = {}
+  try {
+    parsed = JSON.parse(await fs.readFile(desktopUiStorePath(), "utf8")) as Record<string, unknown>
+  } catch {
+    /* ملف غير موجود/تالف — نبدأ نظيفًا */
+  }
+  await fs.mkdir(path.dirname(desktopUiStorePath()), { recursive: true })
+  await fs.writeFile(
+    desktopUiStorePath(),
+    JSON.stringify({ ...parsed, sync: next, updatedAt: Date.now() }, null, 2),
+    "utf8"
+  )
+  return next
+}

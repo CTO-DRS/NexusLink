@@ -101,14 +101,34 @@ function log(io2: SocketServer, text: string, kind: "in" | "ok" | "info" | "warn
 const g = globalThis as unknown as {
   __nexusGuardBooted?: boolean
   __nexusGuardIo?: SocketServer | null
-  __nexusGuardAgent?: { socketId: string | null; deviceId: string | null }
+  __nexusGuardAgent?: { socketId: string | null; deviceId: string | null; media: AgentMediaInfo | null }
 }
 const BOOT_KEY = "__nexusGuardBooted"
 
+/** FA-files (عقد §14) — نقطة خدمة وسائط الهاتف الحقيقي (بث فيديو مباشر). */
+export interface AgentMediaInfo {
+  deviceId: string | null
+  lanIp: string
+  port: number
+  token: string
+  at: number
+}
+
 // سجل الوكيل الحقيقي (يُخزَّن في globalThis ليبقى بعد hot-reload)
-function agentReg(): { socketId: string | null; deviceId: string | null } {
-  if (!g.__nexusGuardAgent) g.__nexusGuardAgent = { socketId: null, deviceId: null }
+function agentReg(): { socketId: string | null; deviceId: string | null; media: AgentMediaInfo | null } {
+  if (!g.__nexusGuardAgent) g.__nexusGuardAgent = { socketId: null, deviceId: null, media: null }
   return g.__nexusGuardAgent
+}
+
+/** نقطة وسائط الهاتف الحالية — تقرأها الطبقة الأصلية/الواجهة من status.desktop.agentMedia. */
+export function agentMedia(): AgentMediaInfo | null {
+  return agentReg().media
+}
+
+/** تنظيف عنوان TCP (::-ffff:) إلى IPv4/IPv6 نظيف. */
+function cleanIp(raw: string | null | undefined): string {
+  const a = String(raw || "").replace(/^::ffff:/i, "").replace(/^::1$/, "127.0.0.1")
+  return a && a !== "::" ? a : "127.0.0.1"
 }
 
 function currentIo(): SocketServer | null {
@@ -186,14 +206,47 @@ export function ensureGuardBridge() {
       })
 
       // ==== تسجيل الأطراف ====
-      socket.on("guard:hello-phone", (d: { name?: string; deviceId?: string }) => {
-        phoneGuardOnline = true
-        // تسجيل الوكيل الحقيقي (لإرسال عروض النقل tx:offer إليه لاحقًا)
+      socket.on(
+        "guard:hello-phone",
+        (d: { name?: string; deviceId?: string; media?: { port?: unknown; token?: unknown } }) => {
+          phoneGuardOnline = true
+          // تسجيل الوكيل الحقيقي (لإرسال عروض النقل tx:offer إليه لاحقًا)
+          const reg = agentReg()
+          reg.socketId = socket.id
+          if (d?.deviceId) reg.deviceId = String(d.deviceId)
+          // FA-files (عقد §14) — تسجيل نقطة وسائط الهاتف: IP من عنوان الـ TCP الفعلي
+          // للسوكِت (الهاتف على نفس الشبكة المحلية حسب مقصد المنصة) + منفذ/رمز من الوكيل.
+          if (d?.media && typeof d.media === "object") {
+            const port = Number(d.media.port)
+            const token = String(d.media.token ?? "")
+            if (Number.isFinite(port) && port >= 1024 && port <= 65535 && token.length >= 8) {
+              reg.media = {
+                deviceId: reg.deviceId,
+                lanIp: cleanIp(socket.handshake?.address),
+                port: Math.floor(port),
+                token,
+                at: Date.now(),
+              }
+            }
+          }
+          io2.emit("dev:log", { id: uid(), text: `هاتف الحماية متصل: ${d?.name ?? "هاتف Nexus"} — منارة القرب تعمل`, kind: "ok", at: Date.now() })
+          io2.emit("guard:phone-online", { online: true })
+        },
+      )
+      // FA-files — تحديث نقطة الوسائط بعد التسجيل (إعادة تشغيل خدمة الوسائط على الهاتف)
+      socket.on("guard:media", (d: { port?: unknown; token?: unknown }) => {
         const reg = agentReg()
-        reg.socketId = socket.id
-        if (d?.deviceId) reg.deviceId = String(d.deviceId)
-        io2.emit("dev:log", { id: uid(), text: `هاتف الحماية متصل: ${d?.name ?? "هاتف Nexus"} — منارة القرب تعمل`, kind: "ok", at: Date.now() })
-        io2.emit("guard:phone-online", { online: true })
+        const port = Number(d?.port)
+        const token = String(d?.token ?? "")
+        if (Number.isFinite(port) && port >= 1024 && port <= 65535 && token.length >= 8) {
+          reg.media = {
+            deviceId: reg.deviceId,
+            lanIp: cleanIp(socket.handshake?.address),
+            port: Math.floor(port),
+            token,
+            at: Date.now(),
+          }
+        }
       })
       socket.on("disconnect", () => {
         // إن انقطع آخر عميل هاتف نعلم الكمبيوتر (يُلتقط غياب المنارة لاحقاً)
@@ -202,7 +255,10 @@ export function ensureGuardBridge() {
           if (socks && socks.size > 0) return
           phoneGuardOnline = false
           const reg = agentReg()
-          if (reg.socketId === socket.id) reg.socketId = null
+          if (reg.socketId === socket.id) {
+            reg.socketId = null
+            reg.media = null // نقطة الوسائط انقطعت مع السوكِت — البث غير متاح
+          }
           io2?.emit("guard:phone-online", { online: false })
         }, 1500)
       })
