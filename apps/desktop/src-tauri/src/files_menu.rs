@@ -173,24 +173,24 @@ pub fn flush_pending_sends(app: &AppHandle) {
     std::thread::spawn(move || {
         let mut sent = 0usize;
         for p in paths {
-            match stage_and_offer(app2.clone(), &p) {
+            match stage_and_offer(&app2, &p) {
                 Ok(name) => {
                     sent += 1;
-                    crate::notify::plain(app2.clone(), "إرسال عبر NexusLink", &format!("بدأ نقل {name} إلى الهاتف"));
+                    crate::notify::plain(&app2, "إرسال عبر NexusLink", &format!("بدأ نقل {name} إلى الهاتف"));
                 }
                 Err(e) => {
-                    crate::notify::plain(app2.clone(), "تعذّر الإرسال عبر NexusLink", &e);
+                    crate::notify::plain(&app2, "تعذّر الإرسال عبر NexusLink", &e);
                 }
             }
         }
         if sent > 0 {
-            procman::open_main(app2);
+            procman::open_main(&app2);
         }
     });
 }
 
 /// تجهيز ملف/مجلد محلي في Inbox + عرض نقل حي (نفس عقد السحب والإفلات §8.3)
-fn stage_and_offer(app: AppHandle, p: &PathBuf) -> Result<String, String> {
+fn stage_and_offer(app: &AppHandle, p: &PathBuf) -> Result<String, String> {
     // مجلد؟ ضغطه إلى zip مؤقت في temp ثم إرساله (قائمة السياق تقبل مجلدات)
     let file: PathBuf = if p.is_dir() {
         let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("folder").to_string();
@@ -390,7 +390,7 @@ pub fn files_stream_open(
                     let _ = std::fs::remove_file(&temp);
                 } else {
                     crate::notify::plain(
-                        app2,
+                        &app2,
                         "اكتمل البث المؤقت",
                         &format!("{name2} — النسخة الكاملة متاحة مؤقتًا حتى الخروج"),
                     );
@@ -398,7 +398,7 @@ pub fn files_stream_open(
             }
             Err(e) => {
                 println!("[files] stream #{id} failed: {e}");
-                crate::notify::plain(app2, "فشل بث الفيديو", &e);
+                crate::notify::plain(&app2, "فشل بث الفيديو", &e);
                 let _ = std::fs::remove_file(&temp);
             }
         }
@@ -458,7 +458,7 @@ fn run_stream(
         DEFAULT_THRESHOLD,
     )?;
     let _ = opened;
-    let _ = file.flush();
+    let _ = file.sync_all();
     if known > 0 && written < known {
         return Err(format!("انقطع البث عند {written}/{known}"));
     }

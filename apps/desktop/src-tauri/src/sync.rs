@@ -209,7 +209,7 @@ fn schedule_flush(key: String) {
         if let Some(pair_id) = key.strip_prefix("in:") {
             process_inbound(pair_id, &batch);
         } else {
-            process_outbound(app_handle(), &key, &batch);
+            process_outbound(&app_handle(), &key, &batch);
         }
     });
 }
