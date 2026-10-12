@@ -2,7 +2,6 @@ package com.nexuslink.mobile
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Path
@@ -119,20 +118,22 @@ class NexusAccessibilityService : AccessibilityService() {
     // الخدمة مفعّلة مسبقًا بموافقة المستخدم لجلسات التحكم (FA-7)؛ المستمع
     // للقراءة فقط، ويدفع عبر خدمة الوكيل مع حرس الحلقة (clipLastFromPc/
     // clipLastSentToPc) — بلا تخزين، وبلا إرسال في حال التطابق.
-    private var clipWatch: ClipboardManager.OnPrimaryClipChangedListener? = null
+    private var clipWatch: android.content.ClipboardManager.OnPrimaryClipChangedListener? = null
 
     private fun registerClipboardWatch() {
         if (clipWatch != null) return
         try {
-            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val l = ClipboardManager.OnPrimaryClipChangedListener {
-                try {
-                    val clip = cm.primaryClip ?: return@OnPrimaryClipChangedListener
-                    if (clip.itemCount > 0) {
-                        val text = clip.getItemAt(0).coerceToText(this)?.toString().orEmpty()
-                        AgentForegroundService.pushClipTextFromAccessibility(text)
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val l = object : android.content.ClipboardManager.OnPrimaryClipChangedListener {
+                override fun onPrimaryClipChanged() {
+                    try {
+                        val clip = cm.primaryClip ?: return
+                        if (clip.itemCount > 0) {
+                            val text = clip.getItemAt(0).coerceToText(this@NexusAccessibilityService)?.toString().orEmpty()
+                            AgentForegroundService.pushClipTextFromAccessibility(text)
+                        }
+                    } catch (_: Exception) {
                     }
-                } catch (_: Exception) {
                 }
             }
             cm.addOnPrimaryClipChangedListener(l)
@@ -145,8 +146,8 @@ class NexusAccessibilityService : AccessibilityService() {
         val l = clipWatch ?: return
         clipWatch = null
         try {
-            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-                .removeOnPrimaryClipChangedListener(l)
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.removeOnPrimaryClipChangedListener(l)
         } catch (_: Exception) {
         }
     }
