@@ -789,7 +789,6 @@ fn capture_loop(
     }
     impl GraphicsCaptureApiHandler for WinHandler {
         type Flags = Arc<Mutex<WinSlot>>;
-        type Frame = Frame;
         type Error = Box<dyn std::error::Error + Send + Sync>;
 
         fn new(slot: Self::Flags) -> Result<Self, Self::Error> {
@@ -825,10 +824,24 @@ fn capture_loop(
             return;
         }
         let preset = core::quality_preset(&quality);
-        // العنصر: window:HWND أو screen:N (from_index 1-based) — الافتراضي الشاشة الأساسية
-        let item = if target.starts_with("window:") {
+        // العنصر: window:HWND أو screen:N (from_index 1-based) — الافتراضي الشاشة الأساسية.
+        // الإنشاء داخل كل فرع: Window/Monitor نوعان مختلفان وGraphicsCaptureItem نوع WinRT
+        // من crate windows — غلاف enum يتطلب اعتمادها مباشرة؛ ونوع الإرجاع لا يذكر T فيتحد.
+        let slot = Arc::new(Mutex::new(WinSlot {
+            data: Vec::new(),
+            w: 0,
+            h: 0,
+            seq: 0,
+        }));
+        let control = if target.starts_with("window:") {
             match target["window:".len()..].parse::<isize>() {
-                Ok(hwnd) => Window::from_raw_hwnd(hwnd as *mut std::ffi::c_void),
+                Ok(hwnd) => WinHandler::start_free_threaded(Settings::new(
+                    Window::from_raw_hwnd(hwnd as *mut std::ffi::c_void),
+                    CursorCaptureSettings::WithCursor,
+                    DrawBorderSettings::WithoutBorder,
+                    ColorFormat::Bgra8,
+                    slot.clone(),
+                )),
                 Err(e) => {
                     println!("[media] win hwnd: {e}");
                     std::thread::sleep(Duration::from_secs(2));
@@ -841,7 +854,13 @@ fn capture_loop(
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0);
             match Monitor::from_index(idx + 1).or_else(|_| Monitor::primary()) {
-                Ok(m) => m,
+                Ok(m) => WinHandler::start_free_threaded(Settings::new(
+                    m,
+                    CursorCaptureSettings::WithCursor,
+                    DrawBorderSettings::WithoutBorder,
+                    ColorFormat::Bgra8,
+                    slot.clone(),
+                )),
                 Err(e) => {
                     println!("[media] win monitor: {e:?}");
                     std::thread::sleep(Duration::from_secs(2));
@@ -849,20 +868,7 @@ fn capture_loop(
                 }
             }
         };
-        let slot = Arc::new(Mutex::new(WinSlot {
-            data: Vec::new(),
-            w: 0,
-            h: 0,
-            seq: 0,
-        }));
-        let settings = Settings::new(
-            item,
-            CursorCaptureSettings::WithCursor,
-            DrawBorderSettings::WithoutBorder,
-            ColorFormat::Bgra8,
-            slot.clone(),
-        );
-        let control = match WinHandler::start_free_threaded(settings) {
+        let control = match control {
             Ok(c) => c,
             Err(e) => {
                 println!("[media] win capture: {e:?}");
