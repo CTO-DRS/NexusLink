@@ -76,3 +76,8 @@ scripts/enigo-verify/target/
 scripts/files-verify/target/
 /data/nexus-storage/
 scripts/media-verify/target/
+
+# FA-media — سجلات CI المنزّلة ومصادر الكريتات المتحقق منها + فحص أنماط x11rb
+scripts/ci-logs/
+scripts/crate-src/
+scripts/x11-api-check/target/
