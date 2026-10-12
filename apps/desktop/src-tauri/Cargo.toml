@@ -24,6 +24,9 @@ ureq = { version = "2", features = ["json"] }
 # FA-clipboard-sync — ترميز/فك PNG لصور الحافظة (نفس نسخة image في شجرة arboard)
 image = { version = "0.25", default-features = false, features = ["png"] }
 base64 = "0.22"
+# FA-input (عقد §13) — تنفيذ أحداث اللمس/الكيبورد/الوسائط من الهاتف على النظام.
+# x11rb = خلفية X11 خالصة Rust (بلا libxdo C)؛ إعادة ربط keycodes تدعم العربية.
+enigo = { version = "0.2.1", default-features = false, features = ["x11rb"] }
 
 # إشعارات ويندوز الأصلية بأزرار تفاعلية (WinRT Toast)
 [target.'cfg(windows)'.dependencies]

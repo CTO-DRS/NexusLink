@@ -34,6 +34,10 @@ class _RcScreenState extends ConsumerState<RcScreen>
     WidgetsBinding.instance.addObserver(this);
     _ctl = ref.read(controllerControllerProvider.notifier);
     _ctl!.setClipboardWatch(true);
+    // FA-input (عقد §13) — جلسة التحكم الموثوقة: تبدأ مع فتح الشاشة
+    // (نبض 2ث) وتنتهي بإغلاقها — الطبقة الأصلية على الكمبيوتر ترفض
+    // كل الإدخال ما لم تكن الجلسة نشطة (الأجهزة الموثوقة فقط).
+    _ctl!.startSession();
     _drainShare();
   }
 
@@ -41,6 +45,7 @@ class _RcScreenState extends ConsumerState<RcScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _ctl?.setClipboardWatch(false);
+    _ctl?.stopSession();
     _tabs.dispose();
     _handoffUrl.dispose();
     _handoffTitle.dispose();
@@ -74,6 +79,8 @@ class _RcScreenState extends ConsumerState<RcScreen>
     return Column(
       children: [
         _StatusHeader(st: st),
+        // FA-input (عقد §13) — شريط الجلسة: حالة الجلسة + القطع الفوري (بند 7)
+        _SessionBar(st: st, ctl: ctl),
         TabBar(
           controller: _tabs,
           isScrollable: true,
@@ -151,6 +158,74 @@ class _StatusHeader extends StatelessWidget {
           ),
           Container(width: 8, height: 8, decoration: BoxDecoration(color: powerColor, shape: BoxShape.circle)),
         ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// FA-input (عقد §13) — شريط جلسة التحكم: حالة موثوقة + القطع الفوري (بند 7)
+// ---------------------------------------------------------------------------
+
+class _SessionBar extends StatelessWidget {
+  final RcUiState st;
+  final ControllerController ctl;
+  const _SessionBar({required this.st, required this.ctl});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (st.sessionActive) {
+      return Container(
+        margin: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2E1065).withOpacity(0.75),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFA78BFA).withOpacity(0.55)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 8, height: 8,
+              decoration: BoxDecoration(
+                color: const Color(0xFFA78BFA),
+                shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: const Color(0xFFA78BFA).withOpacity(0.6), blurRadius: 6)],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'rctl.session.active'.tr(namedArgs: {'name': st.desktopName.isEmpty ? 'rctl.desktop'.tr() : st.desktopName}),
+                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => ctl.stopSession(),
+              icon: const Icon(Icons.link_off_rounded, size: 14),
+              label: Text('rctl.session.cut'.tr(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: Colors.red.shade600,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    // بلا جلسة — عرض سبب آخر إنهاء إن وُجد (بدء من الكمبيوتر/مهلة/غير موثوق)
+    final reason = st.sessionEndReason;
+    if (reason == null || st.phase != RcBridgePhase.online) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 4),
+      child: Text(
+        'rctl.session.ended'.tr(namedArgs: {'r': reason}),
+        style: TextStyle(fontSize: 10.5, color: theme.hintColor),
       ),
     );
   }
@@ -577,6 +652,46 @@ class _SysTabState extends State<_SysTab> {
     return ListView(
       padding: const EdgeInsets.all(14),
       children: [
+        // FA-input (عقد §13) — العرض التقديمي: PageUp/PageDown + F5/Esc (بند 4)
+        _Card(
+          title: 'rctl.present.title'.tr(),
+          icon: Icons.slideshow_rounded,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                IconButton.filledTonal(
+                  onPressed: () => ctl.presenter('prev'),
+                  icon: const Icon(Icons.navigate_before_rounded, size: 26),
+                  tooltip: 'rctl.present.prev'.tr(),
+                ),
+                FilledButton.icon(
+                  onPressed: () => ctl.presenter('start'),
+                  icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                  label: Text('rctl.present.start'.tr(), style: const TextStyle(fontSize: 12)),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () => ctl.presenter('stop'),
+                  icon: const Icon(Icons.stop_rounded, size: 18),
+                  label: Text('rctl.present.stop'.tr(), style: const TextStyle(fontSize: 12)),
+                ),
+                IconButton.filledTonal(
+                  onPressed: () => ctl.presenter('next'),
+                  icon: const Icon(Icons.navigate_next_rounded, size: 26),
+                  tooltip: 'rctl.present.next'.tr(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Center(
+              child: Text(
+                'rctl.present.hint'.tr(),
+                style: TextStyle(fontSize: 10.5, color: Theme.of(context).hintColor),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
         _Card(
           title: 'rctl.sys.media'.tr(),
           icon: Icons.play_circle_rounded,

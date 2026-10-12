@@ -34,6 +34,11 @@ class RcUiState {
   final int latencyMs;
   final String? lastError;
 
+  // FA-input (عقد §13) — جلسة التحكم الموثوقة بالكمبيوتر
+  final bool sessionActive; // الجلسة مقبولة من السيرفر (جهاز موثوق)
+  final String? sessionEndReason; // سبب آخر إنهاء (phone-stop/desktop-stop/timeout/disconnected/untrusted/busy)
+  final int sessionHeartbeats; // عدد النبضات المرسلة
+
   const RcUiState({
     this.phase = RcBridgePhase.offline,
     this.desktopName = '',
@@ -52,6 +57,9 @@ class RcUiState {
     this.handoffSent = 0,
     this.latencyMs = 0,
     this.lastError,
+    this.sessionActive = false,
+    this.sessionEndReason,
+    this.sessionHeartbeats = 0,
   });
 
   RcUiState copyWith({
@@ -73,6 +81,10 @@ class RcUiState {
     int? latencyMs,
     String? lastError,
     bool clearError = false,
+    bool? sessionActive,
+    String? sessionEndReason,
+    bool clearSessionEnd = false,
+    int? sessionHeartbeats,
   }) =>
       RcUiState(
         phase: phase ?? this.phase,
@@ -92,6 +104,9 @@ class RcUiState {
         handoffSent: handoffSent ?? this.handoffSent,
         latencyMs: latencyMs ?? this.latencyMs,
         lastError: clearError ? null : (lastError ?? this.lastError),
+        sessionActive: sessionActive ?? this.sessionActive,
+        sessionEndReason: clearSessionEnd ? null : (sessionEndReason ?? this.sessionEndReason),
+        sessionHeartbeats: sessionHeartbeats ?? this.sessionHeartbeats,
       );
 }
 
@@ -103,13 +118,18 @@ class RcUiState {
 /// الكمبيوتر مطفأ، وتوقظه إن كان ساكنًا.
 class ControllerService {
   final String deviceName;
+  /// FA-input — هوية الجهاز الثابتة (androidId) لحاجز الثقة على الجسر (عقد §13):
+  /// الجلسة لا تبدأ إلا لجهاز موثوق في سجل الأجهزة.
+  final String deviceId;
 
-  ControllerService({required this.deviceName});
+  ControllerService({required this.deviceName, this.deviceId = ''});
 
   sio.Socket? _socket;
   StreamSubscription<GyroscopeEvent>? _gyroSub;
   Timer? _clipTimer;
   Timer? _pingTimer;
+  Timer? _hbTimer; // نبض جلسة التحكم (FA-input)
+  bool _sessionWanted = false; // الشاشة تريد جلسة نشطة (بدء تلقائي عند الاتصال)
 
   final _state = StreamController<RcUiState>.broadcast();
   RcUiState _cur = const RcUiState();
@@ -167,18 +187,25 @@ class ControllerService {
       void bind(String event, void Function(dynamic) fn) => socket.on(event, fn);
 
       socket.onConnect((_) {
-        socket.emit(RcEvents.helloController, {'name': deviceName});
+        socket.emit(RcEvents.helloController, {'name': deviceName, 'deviceId': deviceId});
         _patch((s) => s.copyWith(phase: RcBridgePhase.online, clearError: true));
+        // FA-input — إعادة بدء الجلسة تلقائيًا بعد كل اتصال إن كانت الشاشة تطلبها
+        if (_sessionWanted) {
+          Future<void>.delayed(const Duration(milliseconds: 300), _requestSessionStart);
+        }
       });
       socket.onDisconnect((_) {
-        _patch((s) => s.copyWith(phase: RcBridgePhase.connecting));
+        _patch((s) => s.copyWith(phase: RcBridgePhase.connecting, sessionActive: false));
         _startAirmouse(false);
+        _hbTimer?.cancel();
+        _hbTimer = null;
       });
 
       bind(RcEvents.hello, _onHello);
       bind(RcEvents.desktopClipboard, _onDesktopClipboard);
       bind(RcEvents.rejected, _onRejected);
       bind(RcEvents.pong, _onPong);
+      bind(RcEvents.session, _onSession);
 
       socket.connect();
       _socket = socket;
@@ -194,6 +221,8 @@ class ControllerService {
     _pingTimer = null;
     _clipTimer?.cancel();
     _clipTimer = null;
+    _hbTimer?.cancel();
+    _hbTimer = null;
     _startAirmouse(false);
     try {
       _socket?.clearListeners();
@@ -244,6 +273,68 @@ class ControllerService {
     if (t == null) return;
     final dt = DateNow.now() - t;
     if (dt >= 0 && dt < 60000) _patch((s) => s.copyWith(latencyMs: dt));
+  }
+
+  // ------------------------------------------------------------------
+  // جلسة التحكم الموثوقة (FA-input — عقد §13)
+  // ------------------------------------------------------------------
+
+  /// استقبال حالة الجلسة من الجسر: قبول (جهاز موثوق) أو إنهاء من أي طرف
+  void _onSession(dynamic raw) {
+    final m = _map(raw);
+    if (m == null) return;
+    final active = m['active'] == true;
+    if (active) {
+      _hbTimer?.cancel();
+      _hbTimer = Timer.periodic(const Duration(seconds: 2), (_) => _heartbeat());
+      _patch((s) => s.copyWith(
+            sessionActive: true,
+            clearSessionEnd: true,
+            lastError: null,
+            clearError: true,
+          ));
+    } else {
+      _hbTimer?.cancel();
+      _hbTimer = null;
+      _sessionWanted = false;
+      final reason = '${m['reason'] ?? 'phone-stop'}';
+      _patch((s) => s.copyWith(sessionActive: false, sessionEndReason: reason));
+    }
+  }
+
+  void _requestSessionStart() {
+    final sk = _socket;
+    if (sk == null || !sk.connected) return;
+    sk.emit(RcEvents.session, {
+      'action': 'start',
+      'deviceId': deviceId,
+      'name': deviceName,
+    });
+  }
+
+  void _heartbeat() {
+    final sk = _socket;
+    if (sk == null || !sk.connected || !_cur.sessionActive) return;
+    sk.emit(RcEvents.session, {'action': 'hb'});
+    _patch((s) => s.copyWith(sessionHeartbeats: s.sessionHeartbeats + 1));
+  }
+
+  /// بدء جلسة التحكم (تستدعيها الشاشة عند فتحها) — إن كان الاتصال جاهزًا
+  /// يبدأ فورًا وإلا سيبدأ تلقائيًا فور نجاح الاتصال (onConnect).
+  void startControlSession() {
+    _sessionWanted = true;
+    _requestSessionStart();
+  }
+
+  /// إنهاء الجلسة — القطع الفوري من الهاتف (بند 7)
+  void stopControlSession() {
+    _sessionWanted = false;
+    _hbTimer?.cancel();
+    _hbTimer = null;
+    final sk = _socket;
+    if (sk == null || !sk.connected) return;
+    sk.emit(RcEvents.session, {'action': 'stop'});
+    _patch((s) => s.copyWith(sessionActive: false, sessionEndReason: 'phone-stop'));
   }
 
   bool get _ready {
@@ -299,6 +390,17 @@ class ControllerService {
     const allowed = {'backspace', 'enter', 'space', 'up', 'down', 'left', 'right', 'esc', 'tab'};
     if (!allowed.contains(special)) return;
     sk.emit(RcEvents.key, {'special': special});
+  }
+
+  /// FA-input (عقد §13) — العرض التقديمي: تقليب شرائح PowerPoint/Keynote/Google
+  /// Slides. next/prev = PageDown/PageUp · start = بدء العرض (F5) ·
+  /// stop = إنهاء العرض (Esc) · black = شاشة سوداء (b).
+  void presenter(String action) {
+    final sk = _socket;
+    if (sk == null || !sk.connected) return;
+    const allowed = {'next', 'prev', 'start', 'stop', 'black'};
+    if (!allowed.contains(action)) return;
+    sk.emit(RcEvents.presenter, {'action': action});
   }
 
   void media(String action, {double? value}) {

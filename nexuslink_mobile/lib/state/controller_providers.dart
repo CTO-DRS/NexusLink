@@ -67,12 +67,15 @@ class ControllerController extends Notifier<RcUiState> {
     await _teardown();
 
     String name = 'Nexus Android';
+    String stableId = '';
     try {
       final identity = await ref.read(deviceIdentityProvider.future);
       name = identity.name;
+      // FA-input (عقد §13) — الهوية الثابتة لحاجز الثقة (جلسة التحكم للأجهزة الموثوقة)
+      stableId = identity.stableId;
     } catch (_) {}
 
-    final svc = ControllerService(deviceName: name);
+    final svc = ControllerService(deviceName: name, deviceId: stableId);
     _svc = svc;
     _boundKey = key;
     _sub = svc.stateStream.listen((s) {
@@ -123,6 +126,14 @@ class ControllerController extends Notifier<RcUiState> {
   void key(String ch) => _svc?.key(ch);
 
   void keySpecial(String special) => _svc?.keySpecial(special);
+
+  void presenter(String action) => _svc?.presenter(action);
+
+  /// FA-input (عقد §13) — دورة حياة جلسة التحكم: تبدأ مع فتح الشاشة
+  /// وتنتهي بإغلاقها، مع نبض 2ث يحييها على الجسر.
+  void startSession() => _svc?.startControlSession();
+
+  void stopSession() => _svc?.stopControlSession();
 
   void media(String action, {double? value}) => _svc?.media(action, value: value);
 

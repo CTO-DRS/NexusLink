@@ -339,6 +339,19 @@
       "count": "Handoffs: {n}",
       "send": "Hand off to the computer",
       "explain": "The link appears in the «Continue where you left off» bar above the server desktop; the «Open here» button opens then removes it."
+    },
+    "session": {
+      "active": "Control session active on \"{name}\" — its pointer and keyboard are yours now",
+      "cut": "Cut now",
+      "ended": "Control session ended ({r}) — close and reopen this screen to start again"
+    },
+    "present": {
+      "title": "Presentation (PowerPoint/Keynote)",
+      "start": "Start F5",
+      "stop": "Stop Esc",
+      "next": "Next slide",
+      "prev": "Previous slide",
+      "hint": "Works inside any open slide deck — PageUp/PageDown to flip, F5 to start, Esc to stop"
     }
   },
   "common": {
