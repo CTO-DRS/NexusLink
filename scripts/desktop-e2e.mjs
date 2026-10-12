@@ -224,6 +224,110 @@ try {
   check("comms/notifications: إشعار قابل للتفاعل", notifRes?.ok === true && !!notifRes?.notification?.id)
   const st3 = await fetch("http://127.0.0.1:3000/api/desktop/status").then((r) => r.json())
   check("status.desktop.notifs يتضمن الإشعار الجديد", (st3?.desktop?.notifs || []).some((n) => n.id === notifRes?.notification?.id))
+
+  // ============ 6f) FA-clipboard-sync — عقد الحافظة الموحدة الحية (§11) ============
+  console.log("== [6f] clipboard-sync contract ==")
+
+  // (أ) إعدادات المراقب في المخزن المشترك: إعادة الضبط ثم فحص القيم
+  await fetch("http://127.0.0.1:3000/api/desktop/shortcuts", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clip: { mode: "auto", maxAutoBytes: 1_048_576 } }),
+  })
+  const getClip = await fetch("http://127.0.0.1:3000/api/desktop/shortcuts").then((r) => r.json())
+  check("desktop/shortcuts: GET يحمل clip افتراضي", getClip?.clip?.mode === "auto" && getClip?.clip?.maxAutoBytes === 1_048_576,
+    `mode=${getClip?.clip?.mode} max=${getClip?.clip?.maxAutoBytes}`)
+  const putClip = await fetch("http://127.0.0.1:3000/api/desktop/shortcuts", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clip: { maxAutoBytes: 131_072 } }),
+  }).then((r) => r.json())
+  check("desktop/shortcuts: PUT clip يحدّث الحد (128KB)", putClip?.ok === true && putClip?.clip?.maxAutoBytes === 131_072)
+
+  // (ب) الوضع التعاقدي من prodState (زر الواجهة) — يظهر في status.desktop.clip
+  await fetch("http://127.0.0.1:3000/api/prod/state", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clipMode: "manual" }),
+  })
+  const st4 = await fetch("http://127.0.0.1:3000/api/desktop/status").then((r) => r.json())
+  check("status.desktop.clip: mode من prodState + الحد من المخزن",
+    st4?.desktop?.clip?.mode === "manual" && st4?.desktop?.clip?.maxAutoBytes === 131_072,
+    `mode=${st4?.desktop?.clip?.mode} max=${st4?.desktop?.clip?.maxAutoBytes}`)
+  await fetch("http://127.0.0.1:3000/api/prod/state", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clipMode: "auto" }),
+  }) // استعادة تلقائي
+
+  // (ج) سجل الحافظة: شكل العناصر + سقف 50
+  const clipList = await fetch("http://127.0.0.1:3000/api/prod/clipboard").then((r) => r.json())
+  const clipItems = clipList?.items || []
+  check("prod/clipboard: السجل ≤ 50 وبشكل سليم",
+    Array.isArray(clipItems) && clipItems.length <= 50 && clipItems.every((i) => "deviceId" in i && "kind" in i && "mode" in i),
+    `n=${clipItems.length}`)
+
+  // (د) الهاتف → الكمبيوتر: clip:push عبر جسر الإنتاجية (نفس ما تصدره مراقبة الإتاحة في Kotlin)
+  const sockProd = io(`http://127.0.0.1:${gwPort}`, {
+    query: { XTransformPort: "3007" },
+    transports: ["polling", "websocket"],
+    reconnection: false,
+    timeout: 15000,
+  })
+  const clipNews = []
+  sockProd.on("clip:new", (item) => clipNews.push(item))
+  await new Promise((res, rej) => {
+    const t = setTimeout(() => rej(new Error("prod socket عبر البوابة لم يتصل")), 15000)
+    sockProd.on("connect", () => { clearTimeout(t); res() })
+  })
+  sockProd.emit("clip:push", { deviceId: "phone-e2e", deviceName: "E2E Phone", kind: "text", content: "نexus-e2e-phone-clip نص عربي", size: 30, mode: "auto" })
+  let phoneClipOk = false
+  for (let i = 0; i < 15 && !phoneClipOk; i++) {
+    await sleep(400)
+    const list = await fetch("http://127.0.0.1:3000/api/prod/clipboard").then((r) => r.json())
+    phoneClipOk = (list?.items || []).some((x) => x.deviceId === "phone-e2e" && (x.content || "").includes("نص عربي"))
+  }
+  check("clip:push من الهاتف → مخزّن ومبثوث (§11.أ)", phoneClipOk)
+
+  // (ه) حرس الصدى التعاقدي: كل clip:new يحمل deviceId (العملاء يتجاهلون صداهم)
+  await fetch("http://127.0.0.1:3000/api/prod/clipboard", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ deviceId: "pc-office", deviceName: "NEXUS-PC", kind: "text", content: "nexus-e2e-echo-guard", mode: "auto" }),
+  })
+  await sleep(1200)
+  const sawPcEcho = clipNews.some((c) => c?.deviceId === "pc-office" && (c?.content || "") === "nexus-e2e-echo-guard")
+  const sawPhoneBroadcast = clipNews.some((c) => c?.deviceId === "phone-e2e")
+  check("prodEmit clip:new يصل العملاء ويتضمن deviceId (حرس §11.ج)", sawPcEcho && sawPhoneBroadcast,
+    `pc=${sawPcEcho} phone=${sawPhoneBroadcast} events=${clipNews.length}`)
+
+  // (و) الصور: POST kind=image (dataURL) — نفس ما يبنيه Rust بعد ترميز PNG
+  const px1 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+  const imgClip = await fetch("http://127.0.0.1:3000/api/prod/clipboard", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ deviceId: "pc-office", deviceName: "NEXUS-PC", kind: "image", content: px1, fileName: "e2e-clip.png", filePath: "/Inbox/e2e-clip.png", size: 95, mode: "auto" }),
+  }).then((r) => r.json())
+  check("prod/clipboard: صورة dataURL تُقبل وتُبث", imgClip?.ok === true && imgClip?.item?.kind === "image")
+
+  // (ز) الملفات المنسوخة: عنصر kind=file + الاستلام الفعلي PUT → نسخ بايتات إلى Downloads
+  await fsMod.writeFile(pathMod.join(inboxDir, "e2e-clipfile.txt"), "clip transfer suggestion " + Date.now())
+  const fileClip = await fetch("http://127.0.0.1:3000/api/prod/clipboard", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ deviceId: "pc-office", deviceName: "NEXUS-PC", kind: "file", content: "", fileName: "e2e-clipfile.txt", filePath: "/Inbox/e2e-clipfile.txt", size: 32, mode: "auto" }),
+  }).then((r) => r.json())
+  check("prod/clipboard: اقتراح نقل kind=file", fileClip?.ok === true && fileClip?.item?.kind === "file")
+  const recv = await fetch("http://127.0.0.1:3000/api/prod/clipboard", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: fileClip?.item?.id }),
+  }).then((r) => r.json())
+  let recvBytes = 0
+  try { recvBytes = (await fsMod.stat(pathMod.join(dataRoot, "nexus-storage", "pc-fs", "Downloads", recv?.name || "x"))).size } catch { /* below */ }
+  check("PUT clip: استلام فعلي → نسخ إلى pc-fs/Downloads", recv?.ok === true && recvBytes > 0, `name=${recv?.name} bytes=${recvBytes}`)
+
+  sockProd.disconnect()
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {

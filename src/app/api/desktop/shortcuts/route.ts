@@ -1,13 +1,20 @@
-// /api/desktop/shortcuts — مزامنة الاختصارات العالمية لسطح المكتب
+// /api/desktop/shortcuts — مزامنة الاختصارات العالمية + إعدادات مراقب الحافظة لسطح المكتب
 // ============================================================
 // المخزن المصدر واحد: zustand store في الواجهة (localStorage: nexus-shortcuts).
 // مكوّن الجسر (desktop-bridge) يقرأ المخزن نفسه ويدفع الخريطة إلى هنا،
 // ومدير العمليات في Tauri (procman) يستطلعها عبر GET ويُسجّلها عالميًا.
+// FA-clipboard-sync: نفس المسار يحمل الآن كائن clip (mode/maxAutoBytes)
+// — مراقب الحافظة في Rust يقرؤه من status.desktop.clip (عقد §11).
 // تخزين: ملف JSON بجانب بيانات السيرفر (نفس نمط كتابة الخادم الحالي).
 import { promises as fs } from "fs"
 import path from "path"
 import { NextRequest, NextResponse } from "next/server"
-import { DESKTOP_SHORTCUT_DEFAULTS, desktopUiStorePath } from "@/lib/nexus/desktop-shortcuts"
+import {
+  DESKTOP_SHORTCUT_DEFAULTS,
+  desktopUiStorePath,
+  readDesktopClip,
+  writeDesktopClip,
+} from "@/lib/nexus/desktop-shortcuts"
 
 export const dynamic = "force-dynamic"
 
@@ -24,7 +31,7 @@ async function readMap(): Promise<Record<string, string>> {
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, shortcuts: await readMap() })
+  return NextResponse.json({ ok: true, shortcuts: await readMap(), clip: await readDesktopClip() })
 }
 
 export async function PUT(req: NextRequest) {
@@ -33,13 +40,16 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "طلب غير صالح" }, { status: 400 })
   }
   const incoming = (body as { shortcuts?: Record<string, unknown> }).shortcuts
-  if (!incoming || typeof incoming !== "object") {
-    return NextResponse.json({ error: "shortcuts مطلوب" }, { status: 400 })
+  const clipIn = (body as { clip?: unknown }).clip
+  if ((!incoming || typeof incoming !== "object") && (!clipIn || typeof clipIn !== "object")) {
+    return NextResponse.json({ error: "shortcuts أو clip مطلوب" }, { status: 400 })
   }
   // تنظيف: مفاتيح نصية غير فارغة فقط، ودمج فوق القائم (عميل قديم لا يمسح البقية)
   const clean: Record<string, string> = {}
-  for (const [k, v] of Object.entries(incoming)) {
-    if (typeof v === "string" && v.trim() && v.length <= 40) clean[k] = v.trim()
+  if (incoming && typeof incoming === "object") {
+    for (const [k, v] of Object.entries(incoming)) {
+      if (typeof v === "string" && v.trim() && v.length <= 40) clean[k] = v.trim()
+    }
   }
   const merged = { ...(await readMap()), ...clean }
   try {
@@ -61,5 +71,17 @@ export async function PUT(req: NextRequest) {
       { status: 500 }
     )
   }
-  return NextResponse.json({ ok: true, shortcuts: merged })
+  // FA-clipboard-sync: تحديث إعدادات مراقب الحافظة إن وُجد في نفس الطلب
+  let clip = await readDesktopClip()
+  if (clipIn && typeof clipIn === "object") {
+    try {
+      clip = await writeDesktopClip(clipIn as Record<string, never>)
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "فشل حفظ إعدادات الحافظة" },
+        { status: 500 }
+      )
+    }
+  }
+  return NextResponse.json({ ok: true, shortcuts: merged, clip })
 }

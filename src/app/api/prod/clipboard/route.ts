@@ -1,4 +1,5 @@
 // الحافظة الموحدة — قائمة/إضافة/مسح
+// FA-clipboard-sync: السجل التعاقدي = آخر 50 عنصرًا (عقد §11)
 import { promises as fs } from "fs"
 import path from "path"
 import { db } from "@/lib/db"
@@ -9,7 +10,7 @@ import { syncDeviceName } from "@/lib/nexus/sync-engine"
 export const dynamic = "force-dynamic"
 
 export async function GET() {
-  const items = await db.prodClip.findMany({ orderBy: { createdAt: "desc" }, take: 60 })
+  const items = await db.prodClip.findMany({ orderBy: { createdAt: "desc" }, take: 50 })
   return Response.json({
     items: items.map((i) => ({ ...i, createdAt: i.createdAt.getTime() })),
   })

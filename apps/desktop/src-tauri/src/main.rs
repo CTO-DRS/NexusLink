@@ -6,6 +6,7 @@
 // حوارات حفظ أصلية + سحب وإفلات إرسال فوري + deep-link nexus:// + تشغيل تلقائي.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod clipboard;
 mod notify;
 mod procman;
 mod settings;
@@ -63,8 +64,15 @@ fn main() {
             // تسجيل أولي للاختصارات العالمية (النافذة تبدأ غير مركّزة/مخفية —
             // يغطي وضع «البدء المخفي» حيث لا تحدث أحداث Focused إطلاقًا)
             shortcuts::apply_focus(&handle, false);
+            // FA-clipboard-sync — مراقب الحافظة الحي على مستوى النظام (نص/صور/ملفات)
+            clipboard::spawn_monitor(handle.clone());
             Ok(())
         })
+        // FA-clipboard-sync — أوامر الطبقة الأصلية للحافظة الموحدة (عقد §11)
+        .invoke_handler(tauri::generate_handler![
+            clipboard::clip_apply,
+            clipboard::clip_send_now
+        ])
         .on_window_event(|window, event| match event {
             // إغلاق → إخفاء إلى الـ Tray (قابل للتعطيل من قائمة الـ Tray)
             WindowEvent::CloseRequested { api, .. } => {
