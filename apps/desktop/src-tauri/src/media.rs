@@ -57,7 +57,6 @@ use rtc::rtp_transceiver::rtp_sender::{
     RTCRtpCodec, RTCRtpCodecParameters, RTCRtpCodingParameters, RTCRtpEncodingParameters,
     RtpCodecKind,
 };
-use rtc::rtp_transceiver::PayloadType;
 use rtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use openh264::formats::YUVSource;
 use webrtc::media_stream::track_local::static_sample::TrackLocalStaticSample;
@@ -347,7 +346,7 @@ fn list_targets() -> Result<Vec<TargetInfo>, String> {
     let mut out = Vec::new();
     // ملاحظة x11rb 0.13: دوال الامتداد حرة (randr::get_monitors) — conn.randr() لا وجود لها
     let monitors = randr::get_monitors(&conn, root, true);
-    if let Ok(reply) = monitors.and_then(|r| r.reply()) {
+    if let Ok(reply) = monitors.reply() {
         for (i, m) in reply.monitors.iter().enumerate() {
             out.push(TargetInfo {
                 id: format!("screen:{i}"),
@@ -374,7 +373,7 @@ fn list_targets() -> Result<Vec<TargetInfo>, String> {
         });
     }
     // نوافذ المستوى الأعلى (WM_NAME) — قائمة معقولة
-    if let Ok(reply) = conn.query_tree(root).and_then(|r| r.reply()) {
+    if let Ok(reply) = conn.query_tree(root).reply() {
         for win in reply.children.iter().take(48) {
             let name = conn
                 .get_property(
@@ -385,7 +384,7 @@ fn list_targets() -> Result<Vec<TargetInfo>, String> {
                     0,
                     256,
                 )
-                .and_then(|r| r.reply())
+                .reply()
                 .ok()
                 .and_then(|r| String::from_utf8(r.value).ok())
                 .unwrap_or_default();
@@ -393,8 +392,8 @@ fn list_targets() -> Result<Vec<TargetInfo>, String> {
                 continue;
             }
             if let (Ok(geo), Ok(tr)) = (
-                conn.get_geometry(*win).and_then(|r| r.reply()),
-                conn.translate_coordinates(*win, root, 0, 0).and_then(|r| r.reply()),
+                conn.get_geometry(*win).reply(),
+                conn.translate_coordinates(*win, root, 0, 0).reply(),
             ) {
                 if geo.width < 8 || geo.height < 8 {
                     continue;
@@ -431,11 +430,16 @@ fn list_targets() -> Result<Vec<TargetInfo>, String> {
                 });
             }
             scap::Target::Window(w) => {
+                // النوع الداخلي للقبض مختلف لكل منصة — الوصول عبر القيمة نفسها
+                #[cfg(windows)]
+                let origin = window_origin(w.raw_handle.0 as isize);
+                #[cfg(target_os = "macos")]
+                let origin = window_origin(w.raw_handle);
                 out.push(TargetInfo {
                     id: format!("window:{}", w.id),
                     kind: "window",
                     title: w.title.clone(),
-                    origin: window_origin(&w),
+                    origin,
                     w: 0,
                     h: 0,
                 });
@@ -446,7 +450,7 @@ fn list_targets() -> Result<Vec<TargetInfo>, String> {
 }
 
 #[cfg(windows)]
-fn window_origin(w: &scap::targets::Window) -> (i32, i32) {
+fn window_origin(hwnd: isize) -> (i32, i32) {
     #[repr(C)]
     struct RECT {
         left: i32,
@@ -458,7 +462,6 @@ fn window_origin(w: &scap::targets::Window) -> (i32, i32) {
     extern "system" {
         fn GetWindowRect(hwnd: isize, rect: *mut RECT) -> i32;
     }
-    let hwnd = w.raw_handle.0 as isize;
     let mut r = RECT { left: 0, top: 0, right: 0, bottom: 0 };
     unsafe {
         if GetWindowRect(hwnd, &mut r) != 0 {
@@ -469,7 +472,7 @@ fn window_origin(w: &scap::targets::Window) -> (i32, i32) {
 }
 
 #[cfg(target_os = "macos")]
-fn window_origin(w: &scap::targets::Window) -> (i32, i32) {
+fn window_origin(cid: u32) -> (i32, i32) {
     #[repr(C)]
     struct CGPoint {
         x: f64,
@@ -489,8 +492,6 @@ fn window_origin(w: &scap::targets::Window) -> (i32, i32) {
     extern "C" {
         fn CGWindowGetBounds(cid: u32) -> CGRect;
     }
-    // CGWindowID في fork سيرفو = type alias لu32 (لا newtype — لا .0)
-    let cid: u32 = w.raw_handle;
     let r = unsafe { CGWindowGetBounds(cid) };
     (r.origin.x as i32, r.origin.y as i32)
 }
@@ -522,7 +523,7 @@ fn full_desktop_dims() -> Result<(u32, u32, (i32, i32)), String> {
     use x11rb::protocol::xproto::ConnectionExt;
     let (conn, n) = x11rb::connect(None).map_err(|e| format!("X11: {e}"))?;
     let root = conn.setup().roots[n].root;
-    let geo = conn.get_geometry(root).and_then(|r| r.reply()).map_err(|e| e.to_string())?;
+    let geo = conn.get_geometry(root).reply().map_err(|e| e.to_string())?;
     Ok((geo.width as u32, geo.height as u32, (0, 0)))
 }
 
@@ -572,13 +573,14 @@ fn full_desktop_dims() -> Result<(u32, u32, (i32, i32)), String> {
     #[link(name = "CoreGraphics", kind = "framework")]
     extern "C" {
         fn CGMainDisplayID() -> CGDirectDisplayID;
-        fn CGDisplayPixelsWide(d: CGDirectDisplayID) -> usize;
-        fn CGDisplayPixelsHigh(d: CGDirectDisplayID) -> usize;
-        fn CGDisplayBounds(d: CGDirectDisplayID) -> CGRect;
+        fn CGDisplayPixelsWide(d: u32) -> usize;
+        fn CGDisplayPixelsHigh(d: u32) -> usize;
+        fn CGDisplayBounds(d: u32) -> CGRect;
     }
-    let d = unsafe { CGMainDisplayID() };
-    let (w, h) = unsafe { (CGDisplayPixelsWide(d) as u32, CGDisplayPixelsHigh(d) as u32) };
-    let b = unsafe { CGDisplayBounds(d) };
+    // CGDirectDisplayID بنية غير Copy — نستخرج الرقم مرة واحدة (الحقل عام في fork سيرفو)
+    let id: u32 = unsafe { CGMainDisplayID().0 };
+    let (w, h) = unsafe { (CGDisplayPixelsWide(id) as u32, CGDisplayPixelsHigh(id) as u32) };
+    let b = unsafe { CGDisplayBounds(id) };
     Ok((w, h, (b.origin.x as i32, b.origin.y as i32)))
 }
 
@@ -695,7 +697,7 @@ fn capture_loop(
             }
         };
         let root = conn.setup().roots[screen_num].root;
-        let root_geo = match conn.get_geometry(root).and_then(|r| r.reply()) {
+        let root_geo = match conn.get_geometry(root).reply() {
             Ok(g) => g,
             Err(e) => {
                 println!("[media] X11 geometry: {e}");
@@ -706,7 +708,7 @@ fn capture_loop(
         let mut region = (0i16, 0i16, root_geo.width, root_geo.height);
         if target.starts_with("screen:") && target != "screen:all" {
             if let Some(m) = randr::get_monitors(&conn, root, true)
-                .and_then(|r| r.reply())
+                .reply()
                 .ok()
                 .and_then(|r| {
                     let idx: usize = target["screen:".len()..].parse().ok()?;
@@ -718,8 +720,8 @@ fn capture_loop(
         } else if target.starts_with("window:") {
             if let Ok(id) = target["window:".len()..].parse::<x11rb::protocol::xproto::Window>() {
                 if let (Ok(geo), Ok(tr)) = (
-                    conn.get_geometry(id).and_then(|r| r.reply()),
-                    conn.translate_coordinates(id, root, 0, 0).and_then(|r| r.reply()),
+                    conn.get_geometry(id).reply(),
+                    conn.translate_coordinates(id, root, 0, 0).reply(),
                 ) {
                     region = (tr.dst_x as i16, tr.dst_y as i16, geo.width, geo.height);
                 }
@@ -742,7 +744,7 @@ fn capture_loop(
             }
             let img = match conn
                 .get_image(ImageFormat::Z_PIXMAP, root, rx, ry, rw, rh, !0u32)
-                .and_then(|r| r.reply())
+                .reply()
             {
                 Ok(i) => i,
                 Err(e) => {
@@ -1260,8 +1262,9 @@ fn audio_output_device_name() -> Option<String> {
     let mut names = Vec::new();
     if let Ok(devs) = host.output_devices() {
         for d in devs {
-            if let Ok(n) = d.name() {
-                names.push(n);
+            // cpal 0.18: name() استُبدلت بdescription().name()
+            if let Ok(desc) = d.description() {
+                names.push(desc.name().to_string());
             }
         }
     }
@@ -1725,7 +1728,7 @@ fn spawn_cpal_sink(_status: &Value) -> Result<(), String> {
     let mut target: Option<cpal::Device> = None;
     if let Ok(devs) = host.output_devices() {
         for d in devs {
-            let name = d.name().unwrap_or_default();
+            let name = d.description().map(|x| x.name().to_string()).unwrap_or_default();
             if core::match_audio_output(&[name.clone()]).is_some() {
                 target = Some(d);
                 break;
@@ -1734,16 +1737,17 @@ fn spawn_cpal_sink(_status: &Value) -> Result<(), String> {
     }
     let device = target.ok_or("لا درايفر صوت افتراضي — ثبّت VB-CABLE/BlackHole (راجع الإرشاد)")?;
     let cfg = device.default_output_config().map_err(|e| format!("صيغة الإخراج: {e}"))?;
-    let rate = cfg.sample_rate().0;
+    let rate = cfg.sample_rate();
     let channels = cfg.channels() as usize;
-    println!("[media] audio sink: {} @ {rate}Hz x{channels}", device.name().unwrap_or_default());
+    let dev_name = device.description().map(|x| x.name().to_string()).unwrap_or_default();
+    println!("[media] audio sink: {dev_name} @ {rate}Hz x{channels}");
     let buffer: Arc<Mutex<VecDeque<i16>>> = Arc::new(Mutex::new(VecDeque::with_capacity(9600)));
     let err_fn = |e| println!("[media] cpal stream error: {e}");
     // مهمة التغذية: قناة PCM (48k) → buffer مع إعادة تشكيل خطية إن لزم
     let buf2 = Arc::clone(&buffer);
     let mut vmic_rx = match vmic_take_rx() {
         Some(r) => r,
-        None => return,
+        None => return Err("قناة الصوت غير مهيأة — أعد تشغيل الويب كام".into()),
     };
     rt().spawn(Box::pin(async move {
         loop {
@@ -1781,7 +1785,7 @@ fn spawn_cpal_sink(_status: &Value) -> Result<(), String> {
     // ستريم الإخراج — يملأ من المخزن أو صمتًا
     let stream = match cfg.sample_format() {
         cpal::SampleFormat::I16 => device.build_output_stream(
-            &cpal::StreamConfig { channels: channels as u16, sample_rate: cfg.sample_rate(), buffer_size: cpal::BufferSize::Default },
+            cpal::StreamConfig { channels: channels as u16, sample_rate: cfg.sample_rate(), buffer_size: cpal::BufferSize::Default },
             move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
                 let mut b = buffer.lock().unwrap();
                 for s in data.iter_mut() {
@@ -1792,7 +1796,7 @@ fn spawn_cpal_sink(_status: &Value) -> Result<(), String> {
             None,
         ),
         cpal::SampleFormat::F32 => device.build_output_stream(
-            &cpal::StreamConfig { channels: channels as u16, sample_rate: cfg.sample_rate(), buffer_size: cpal::BufferSize::Default },
+            cpal::StreamConfig { channels: channels as u16, sample_rate: cfg.sample_rate(), buffer_size: cpal::BufferSize::Default },
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                 let mut b = buffer.lock().unwrap();
                 for s in data.iter_mut() {
