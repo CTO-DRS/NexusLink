@@ -8,9 +8,10 @@ import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import {
   ArrowDownLeft, ArrowUpRight, Pause, Play, X, CheckCircle2,
-  AlertTriangle, ShieldCheck, Loader2, Zap,
+  AlertTriangle, ShieldCheck, Loader2, Zap, ExternalLink,
 } from "lucide-react"
 import { toast } from "sonner"
+import { revealEntry } from "@/lib/desktop-files"
 
 export function TransfersView() {
   const { transfers } = useNexus()
@@ -120,6 +121,22 @@ export function TransfersView() {
                   <Badge variant="outline" className="gap-1 text-[10px] text-emerald-600 border-emerald-500/40">
                     <ShieldCheck className="w-3 h-3" /> تحقق مطابق
                   </Badge>
+                )}
+                {/* FA-files — إظهار في المستكشف للملفات الحقيقية على القرص (نفس عقد §14) */}
+                {t.srcDeviceId && t.srcPath && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 gap-1.5 shrink-0"
+                    onClick={async () => {
+                      const err = await revealEntry(t.srcDeviceId!, t.srcPath)
+                      if (err) toast.error(err)
+                    }}
+                    aria-label="إظهار في المستكشف"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">إظهار</span>
+                  </Button>
                 )}
               </CardContent>
             </Card>

@@ -10,6 +10,7 @@ import 'package:drift/drift.dart' show Value;
 import '../data/database/nexus_db.dart' as db;
 import '../data/transfer_api.dart';
 import '../data/native_bridge.dart';
+import '../data/echo_registry.dart';
 
 /// إشارات النقل عبر قناة 3006 الدائمة (تنفّذها طبقة الإشارة — تُحقن هنا).
 abstract class TxSignaling {
@@ -741,13 +742,19 @@ class TransferEngine extends ChangeNotifier {
     String? finalPath;
     final temp = File(t.tempPath ?? '');
     if (await temp.exists()) {
+      // FA-files (عقد §14): عروض مزامنة المجلدات تهبط في مجلد المزامنة الفرعي
+      // (/Outbox/<الزوج>/… على السيرفر → Download/NexusLink/Sync/<الزوج>/ على الهاتف)
+      final subPath = _syncSubPath(t.srcVPath);
       final published = await _native?.publishDownload(
         tempPath: temp.path,
         displayName: t.fileName,
         mime: t.mime,
+        subPath: subPath,
       );
       if (published != null && published.isNotEmpty) {
         finalPath = published;
+        // صدى: لا ترفع مراقبة المزامنة ما نزل الآن من الكمبيوتر
+        EchoRegistry.instance.record(published);
         await temp.delete().catchError((_) => temp);
       } else {
         // بيئة بلا أندرويد (فحص/تحليل) — أبقِ الملف في مجلد الجزئيات بالاسم النهائي
@@ -769,6 +776,17 @@ class TransferEngine extends ChangeNotifier {
   // ------------------------------------------------------------------
   // أوامر الكمبيوتر الواردة (عبر الإشارة)
   // ------------------------------------------------------------------
+
+  /// FA-files — تحويل srcVPath إلى مجلد فرعي هبوط للمزامنة:
+  /// /Outbox/<pair>/<rel> → Sync/<pair> (والاسم الأساسي يبقى displayName).
+  static String? _syncSubPath(String? srcVPath) {
+    if (srcVPath == null) return null;
+    if (!srcVPath.startsWith('/Outbox/')) return null;
+    final rest = srcVPath.substring('/Outbox/'.length);
+    final pair = rest.split('/').where((s) => s.isNotEmpty).firstOrNull;
+    if (pair == null || pair.startsWith('.') || pair == '..') return null;
+    return 'Sync/$pair';
+  }
 
   /// tx:pause من الكمبيوتر (مهمة تنزيل).
   Future<void> pauseByServer(String offerId) async {

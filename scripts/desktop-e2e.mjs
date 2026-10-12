@@ -560,6 +560,109 @@ try {
   check("العقد: §13 موثق (enigo/جلسة التحكم/حقن __src/عربية)",
     contract.includes("## 13. التحكم الفعلي بالكمبيوتر") && contract.includes("KEYEVENTF_UNICODE") && contract.includes("__src") && contract.includes("rc:session"))
 
+  // ================================================================
+  // FA-files (عقد §14) — دمج الملفات في نظام التشغيل
+  // ================================================================
+  console.log("== ] FA-files: OS file integration ==")
+  {
+    // (أ) realpath — أساس «إظهار في Explorer/Finder»
+    const revealDir = pathMod.join(dataRoot, "nexus-storage", "pc-fs", "Inbox")
+    await fsMod.mkdir(revealDir, { recursive: true })
+    await fsMod.writeFile(pathMod.join(revealDir, "e2e-reveal.txt"), "FA-files")
+    const rp = await fetch(`http://127.0.0.1:3000/api/fs/realpath?device=pc-office&path=${encodeURIComponent("/Inbox/e2e-reveal.txt")}`).then((r) => r.json())
+    const rpExists = rp?.ok && rp.realPath ? await fsMod.stat(rp.realPath).then(() => true).catch(() => false) : false
+    check("FA-files: realpath يعيد مسارًا حقيقيًا موجودًا", rpExists, JSON.stringify(rp).slice(0, 100))
+    const rpBad = await fetch(`http://127.0.0.1:3000/api/fs/realpath?device=no-such-device&path=/x`).then((r) => r.status)
+    check("FA-files: جهاز غير معروف → 404", rpBad === 404, `status=${rpBad}`)
+
+    // (ب) تسجيل نقطة وسائط الهاتف (hello-phone media) + تحديثها (guard:media)
+    const filesSock = io(`http://127.0.0.1:${gwPort}`, {
+      query: { XTransformPort: "3006" },
+      transports: ["polling", "websocket"],
+      reconnection: false,
+      timeout: 15000,
+    })
+    await new Promise((res, rej) => {
+      filesSock.on("connect", res)
+      filesSock.on("connect_error", rej)
+      setTimeout(() => rej(new Error("files socket timeout")), 16000)
+    })
+    filesSock.emit("guard:hello-phone", { name: "E2E-Files-Phone", deviceId: "e2e-files-agent", media: { port: 3010, token: "abcdef1234567890abcdef1234567890" } })
+    await sleep(700)
+    const st1 = await fetch(`http://127.0.0.1:3000/api/desktop/status`).then((r) => r.json())
+    const am = st1?.desktop?.agentMedia
+    check("FA-files: hello-phone media يُسجّل النقطة (ip/port/token)",
+      am?.port === 3010 && am?.token === "abcdef1234567890abcdef1234567890" && !!am?.lanIp && am?.deviceId === "e2e-files-agent",
+      JSON.stringify(am))
+    filesSock.emit("guard:media", { port: 3011, token: "fedcba0987654321fedcba0987654321" })
+    await sleep(500)
+    const st2 = await fetch(`http://127.0.0.1:3000/api/desktop/status`).then((r) => r.json())
+    check("FA-files: guard:media يحدّث النقطة بعد إعادة تشغيل الخدمة", st2?.desktop?.agentMedia?.port === 3011, JSON.stringify(st2?.desktop?.agentMedia))
+
+    // (ج) عروض مزامنة المجلدات: /Outbox/<pair>/ → tx:offer → accept → state done
+    const outbox = pathMod.join(dataRoot, "nexus-storage", "pc-fs", "Outbox", "pair-e2e", "sub")
+    await fsMod.mkdir(outbox, { recursive: true })
+    const syncBytes = Buffer.from("sync-payload-FA-files-عربي")
+    await fsMod.writeFile(pathMod.join(outbox, "file.txt"), syncBytes)
+    const offers = []
+    filesSock.on("tx:offer", (d) => offers.push(d))
+    const send = await fetch(`http://127.0.0.1:3000/api/devices`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "send-file", deviceId: "e2e-files-agent", deviceName: "E2E-Files-Phone", direction: "out", srcDeviceId: "pc-office", srcPath: "/Outbox/pair-e2e/sub/file.txt", fileName: "file.txt", size: syncBytes.length }),
+    }).then((r) => r.json())
+    check("FA-files: send-file من /Outbox عرض حي للوكيل (queued)",
+      send?.ok === true && send?.job?.agent === true && send?.job?.status === "queued",
+      JSON.stringify(send?.job ?? send).slice(0, 110))
+    await sleep(700)
+    const offer = offers.find((o) => o?.srcVPath?.startsWith("/Outbox/pair-e2e/"))
+    check("FA-files: tx:offer وصل بـ srcVPath مزامنة صحيح", !!offer, JSON.stringify(offers[0] ?? {}).slice(0, 120))
+    if (offer) {
+      filesSock.emit("tx:accept", { id: offer.id })
+      filesSock.emit("tx:progress", { id: offer.id, transferred: syncBytes.length })
+      filesSock.emit("tx:state", { id: offer.id, state: "done" })
+      await sleep(600)
+      const jobs2 = await fetch(`http://127.0.0.1:3000/api/transfer`).then((r) => r.json())
+      const j = (jobs2?.jobs ?? []).find((x) => x.id === offer.id)
+      check("FA-files: دورة العرض كاملة (accept→state) → مهمة done",
+        j?.status === "done" && j?.transferred === syncBytes.length,
+        JSON.stringify(j ?? {}).slice(0, 120))
+    }
+
+    // (د) Range على /api/preview (أساس بث الفيديو الاحتياطي — عقد §3.2)
+    const prev = await fetch(`http://127.0.0.1:3000/api/preview?device=pc-office&path=${encodeURIComponent("/Outbox/pair-e2e/sub/file.txt")}`, { headers: { Range: "bytes=5-9" } })
+    const prevBody = Buffer.from(await prev.arrayBuffer())
+    check("FA-files: /api/preview يلبّي Range 206",
+      prev.status === 206 && prevBody.length === 5 && (prev.headers.get("content-range") ?? "").includes("/"),
+      `status=${prev.status} len=${prevBody.length}`)
+
+    // (هـ) أزواج المزامنة: PUT/GET عبر المخزن المشترك + تنقية الفاسد
+    const putS = await fetch(`http://127.0.0.1:3000/api/desktop/shortcuts`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sync: { pairs: [
+        { id: "e2e-pair", name: "تجربة", localDir: "/tmp/nexus-sync-e2e", phoneDir: "/Sync/e2e-pair", enabled: true },
+        { id: "", localDir: "فاسد" },
+        { id: "bad2", localDir: "" },
+      ] } }),
+    }).then((r) => r.json())
+    check("FA-files: PUT sync يقبل وينقّي الفاسد", putS?.ok === true && putS?.sync?.pairs?.length === 1, JSON.stringify(putS?.sync).slice(0, 120))
+    const st3 = await fetch(`http://127.0.0.1:3000/api/desktop/status`).then((r) => r.json())
+    check("FA-files: status.desktop.sync يعرض الزوج للمراقب الأصلي",
+      st3?.desktop?.sync?.pairs?.[0]?.id === "e2e-pair" && st3?.desktop?.sync?.pairs?.[0]?.phoneDir === "/Sync/e2e-pair",
+      JSON.stringify(st3?.desktop?.sync).slice(0, 130))
+    // نظّف (لا تترك زوجًا يفعّل مراقبين على آلة المطوّر)
+    await fetch(`http://127.0.0.1:3000/api/desktop/shortcuts`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sync: { pairs: [] } }) })
+
+    // (و) انقطاع الهاتف يمحو نقطة الوسائط (البث غير متاح بدون قناة حية)
+    filesSock.disconnect()
+    await sleep(2600)
+    const st4 = await fetch(`http://127.0.0.1:3000/api/desktop/status`).then((r) => r.json())
+    check("FA-files: انقطاع الهاتف يمحو نقطة الوسائط", st4?.desktop?.agentMedia == null, JSON.stringify(st4?.desktop?.agentMedia))
+
+    // (ز) العقد §14 موثق حرفيًا
+    check("العقد: §14 موثق (قائمة الزر الأيمن/Services/السحب الخارجي/الإظهار/البث/المزامنة)",
+      contract.includes("## 14.") && contract.includes("--send") && contract.includes("NSServices") && contract.includes("/Outbox/") && contract.includes("/api/fs/upload") && contract.includes("installer-hooks"))
+  }
+
   rcCtl.disconnect()
   webSock.disconnect()
   rcDesk.disconnect()

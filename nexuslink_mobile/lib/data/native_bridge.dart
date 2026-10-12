@@ -75,20 +75,36 @@ class NativeBridge {
 
   /// انشر ملفًا منزلًا في مجلد Download/NexusLink العام (MediaStore)
   /// واعرض إشعار نظام "اكتمل الاستلام". يعيد المسار النهائي.
+  /// [subPath] اختياري (FA-files §14): مجلد فرعي تحت NexusLink —
+  /// مزامنة المجلدات تهبط في Download/NexusLink/Sync/<الزوج>/.
   Future<String?> publishDownload({
     required String tempPath,
     required String displayName,
     String? mime,
+    String? subPath,
   }) async {
     return _guard<String?>(() async {
       final r = await _ch.invokeMethod<dynamic>('publishDownload', {
         'tempPath': tempPath,
         'displayName': displayName,
         'mime': mime ?? 'application/octet-stream',
+        if (subPath != null && subPath.isNotEmpty) 'subPath': subPath,
       });
       if (r is Map && r['path'] != null) return '${r['path']}';
       return null;
     }, null);
+  }
+
+  /// FA-files (عقد §14) — أبلغ الخدمة الدائمة بنقطة وسائط الهاتف (منفذ + رمز)
+  /// لتُعلنها في guard:hello-phone {media:{...}} وتُحدّث بعد كل إعادة اتصال.
+  Future<bool> setMediaEndpoint(int port, String token) async {
+    return _guard<bool>(() async {
+      final r = await _ch.invokeMethod<dynamic>('setMediaEndpoint', {
+        'port': port,
+        'token': token,
+      });
+      return r == true;
+    }, false);
   }
 
   /// اسحب عناصر المشاركة المعلّقة (Share Sheet) — تُنسخ ملفاتها إلى cache أولًا.

@@ -187,6 +187,10 @@ class AgentForegroundService : Service() {
     private var deviceId = ""
     private var deviceName = "Nexus Android"
 
+    // FA-files (عقد §14) — نقطة وسائط الهاتف (تُعلن في hello وتُحدّث ديناميكيًا)
+    private var mediaPort = 0
+    private var mediaToken = ""
+
     private val main = Handler(Looper.getMainLooper())
     private var beaconRun: Runnable? = null
     private var stateRun: Runnable? = null
@@ -1018,7 +1022,18 @@ class AgentForegroundService : Service() {
         try {
             val p = getSharedPreferences("nexus_ctl", Context.MODE_PRIVATE)
             ctlRequireConfirm = p.getBoolean("require_confirm", true)
+            mediaPort = p.getInt("media_port", 0)
+            mediaToken = p.getString("media_token", "") ?: ""
         } catch (_: Exception) {
+        }
+    }
+
+    /** FA-files — حدّث نقطة الوسائط (من الواجهة عبر MethodChannel) وأعد الإعلان فورًا. */
+    fun setMediaEndpoint(port: Int, token: String) {
+        mediaPort = port
+        mediaToken = token
+        if (port > 0 && token.length >= 8) {
+            socket?.emit(AgentBridge.EV_GUARD_MEDIA, JSONObject().put("port", port).put("token", token))
         }
     }
 
@@ -1035,12 +1050,14 @@ class AgentForegroundService : Service() {
         main.post {
             setState("online")
             // 1) تسجيل الحضور لدى جسر الحماية (بمعرّف الجهاز — يفعّل عروض النقل)
-            socket?.emit(
-                AgentBridge.EV_HELLO_PHONE,
-                JSONObject()
-                    .put("name", deviceName)
-                    .put("deviceId", deviceId),
-            )
+            //    + FA-files: نقطة الوسائط (port/token) ليصل بث الفيديو من سطح المكتب
+            val hello = JSONObject()
+                .put("name", deviceName)
+                .put("deviceId", deviceId)
+            if (mediaPort > 0 && mediaToken.length >= 8) {
+                hello.put("media", JSONObject().put("port", mediaPort).put("token", mediaToken))
+            }
+            socket?.emit(AgentBridge.EV_HELLO_PHONE, hello)
             // 2) أبعاد الشاشة الحقيقية (أساس تحويل إحداثيات الويب — عقد §4.8)
             emitScreen()
             // 3) بدء المنارة + تقرير الحالة
@@ -1413,6 +1430,7 @@ object AgentBridge {
     const val SEC_PORT = 3009
 
     const val EV_HELLO_PHONE = "guard:hello-phone"
+    const val EV_GUARD_MEDIA = "guard:media"
     const val EV_BEACON = "prox:beacon"
     const val EV_DEV_STATE = "dev:state"
     const val EV_DEV_ACKED = "dev:acked"

@@ -574,3 +574,55 @@ interface TransferJob {
 **تحقق E2E**: قسم [6h] في scripts/desktop-e2e.mjs — جلسة موثوقة (galaxy-s24 عبر hello-controller بالهوية) → بث rc:session active + status.desktop.input.active — رفض جهاز غير موثوق (untrusted) — حقن __src: controller للأموثوق وunknown للمجهول — عربي UTF-8 عبر rc:key — presenter start/stop يمران — heartbeat 6ث → بث timeout — إيقاف من سوكِت سطح مكتب مسجل → desktop-stop.
 
 **قيود موثقة بصدق**: Wayland الأصلي غير مسند (XWayland يعمل) — ضبط الصوت المطلق على ويندوز بنقرات مُتبَّعة (انزياح ممكن) — المؤشر الليزري عرض ويبي فقط — التنفيذ الفيزيائي على Windows/macOS يثبت بـ CI 3/3 (الحاوية بلا GUI على تلك المنصات) بينما لينكس **مثبت تنفيذيًا 28/28 على Xvfb** (حركة مؤشر حقيقية بـ XQueryPointer + عربية حقيقية عبر XTEST).
+
+---
+
+## 14. دمج الملفات في نظام التشغيل (FA-files — مصدر: files_menu.rs + files_menu_core.rs + sync.rs + sync_core.rs + phone_media_server.dart + sync_service.dart + desktop-files.ts)
+
+### 14.أ قائمة الزر الأيمن Windows — «إرسال عبر NexusLink» (بند 1)
+- **تسجيل HKCU** (بلا صلاحيات مدير): `Software\Classes\*\shell\NexusLink` لكل الملفات + `Software\Classes\Directory\shell\NexusLink` للمجلدات — قيم: الافتراضي = «إرسال عبر NexusLink»، `Icon` = التنفيذي، المفتاح الفرعي `command` = `"<exe>" --send "%1"`.
+- **مصدر الحقيقة للنص**: `files_menu_core::menu_spec()` — دالة نقية تُضمَّن حرفيًا في محرك التحقق (56/56 تشمل اقتباس المسافات والعربية).
+- **الدورة**: قائمة السياق → مثيل ثانٍ بـ `--send <path>` → إضافة single-instance تمرر الأرجف للمثيل الأول (`queue_send_args`) → بعد جاهزية السيرفر (`flush_pending_sends` في monitor_tick) → تجهيز في `pc-fs/Inbox` + `POST /api/devices send-file` (نفس عقد §8.3 حرفيًا) → tx:offer للهاتف → إشعار أصلي + فتح النافذة. **المجلد** يُضغط zip مؤقتًا قبل التجهيز (crate zip، deflate).
+- **إزالة التثبيت**: `installer-hooks.nsh` → `NSIS_HOOK_POSTUNINSTALL` يحذف المفتاحين (`DeleteRegKey HKCU`) — مسجّل في tauri.conf.json عبر `bundle.windows.nsis.installerHooks`. تعطيل الإعداد من `settings.context_menu` يزيلها فوريًا (`set_context_menu`).
+- **حد موثق**: `%1` يمرر أول عنصر محدد فقط — تعدد التحديد الحقيقي يتطلب COM `DelegateExecute` (خارج النطاق).
+
+### 14.ب macOS Services (بند 2)
+- `src-tauri/Info.plist` يُدمج تلقائيًا مع الافتراضي (`bundle.macOS.infoPlist`): `NSServices` بـ `NSSendFileTypes [public.data, public.folder]` + `NSMessage sendViaNexusLink` — «إرسال عبر NexusLink» تظهر في قائمة Services (Finder على رأسها).
+- التسليم: macOS يفتح التطبيق بالملفات → tao → `RunEvent::Opened { urls }` → إضافة deep-link تعيد توجيهها إلى `on_open_url` → `handle_deep_link` يتعرف على `file://` ويدفعها إلى طابور `--send` نفسه (مسار واحد لكلا النظامين).
+- **حد موثق**: Share Extension كـ .appex يتطلب هدف Xcode مستقلًا — Services هي مسار المشاركة من Finder (نفس الإجراء من قائمة الزر الأيمن).
+
+### 14.ج السحب الخارجي Drag-Out (بند 3)
+- `tauri-plugin-drag 2.1.1` (Builder `drag`) — الواجهة تستدعي `plugin:drag|start_drag` عبر `__TAURI__.core` مباشرة (Channel + أيقونة base64 مضمّنة) — **بلا حزم npm جديدة**.
+- files-view: جلب خلفي للمسارات الحقيقية لكل إدخالات المجلد (ذاكرة `realPaths`) → إيماءة mousedown+12px → `dragOutEntry` → OLE/NSFilePromise/XDND حسب المنصة.
+
+### 14.د إظهار في Explorer/Finder (بند 4)
+- **جديد**: `GET /api/fs/realpath?device=&path=` → `{ok, realPath}` (كل الجذور حقيقية على قرص الكمبيوتر: pc-fs/agents/…) — فشل = 404.
+- أمر Tauri `files_reveal(path)`: Windows `explorer /select,<abs>` · macOS `open -R` · Linux `FileManager1.ShowItems` عبر dbus-send ← fallback `xdg-open` المجلد.
+- الواجهة: عنصر قائمة السياق في متصفح الملفات + زر «إظهار» في شاشة النقل للمهام ذات `srcDeviceId`.
+
+### 14.هـ بث فيديو الهاتف → مشغل الكمبيوتر (بند 5)
+- **الهاتف**: `phone_media_server.dart` (dart:io خالص) — منفذ 3010 (بديل عشوائي عند الانشغال)، رمز 32 خانة لكل إقلاع، CORS مفتوح:
+  - `GET /health?token=` · `GET /list?token=&dir=` (مجلدات + فيديو فقط) · `GET /stream?token=&path=` — **Range كامل**: 206 + `Content-Range bytes s-e/total` + `Accept-Ranges` + 416 خارج النطاق.
+- **الإعلان**: Dart → MethodChannel `setMediaEndpoint(port, token)` → `AgentForegroundService` يضمّنها في `guard:hello-phone {media:{port,token}}` وأي تحديث لاحق عبر `guard:media`. **السيرفر** يلتقط `socket.handshake.address` (lanIp حقيقي) ويخزن في سجل الوكيل → `status.desktop.agentMedia {deviceId, lanIp, port, token, at}` — **انقطاع السوكِت يمحوها**.
+- **الكمبيوتر**: `files_stream_open(url, fileName, size)` — تنزيل تقدّمي (Range) إلى `%TEMP%/NexusLink-stream/<id>-<اسم>` → **عند العتبة (2MB أو 1.5ث — `pump_stream` نقية)** يُفتح بالمشغّل الافتراضي عبر ربط الامتداد (ShellExecute/open/xdg-open — يعمل مع كل المشغلات لأنه ملف حقيقي) → استكمال حتى الاكتمال → `files_stream_cancel(id)` فوري → تنظيف المجلد عند الخروج (`cleanup_all` مع kill_all). سقف 4 بثوث متوازية.
+- **حد موثق**: البث أثناء حياة التطبيق/الخدمة فقط؛ التقديم السريع للنهايات البعيدة يتوفر بعد وصول التنزيل إليها (ملف تقدّمي لا HTTP-Range-Proxy).
+
+### 14.و مزامنة المجلدات — مراقبة أصلية فورية (بند 6)
+- **الزوج**: مجلد حقيقي على الكمبيوتر ↔ `Download/NexusLink/Sync/<pairId>/` على الهاتف (مرآة السيرفر: `agents/<agent>/Sync/<pairId>/`).
+- **الإدارة**: بطاقة «مزامنة المجلدات» في إعدادات نافذة سطح المكتب → اختيار مجلد أصلي (`__TAURI__.dialog`) → PUT `/api/desktop/shortcuts {sync:{pairs[]}}` (تنقية صارمة، حد 12) → Rust يقرأ من `status.desktop.sync` ويدير دورة حياة مراقبي **notify 8** (inotify/FSEvents/ReadDirectoryChangesW) بتوقيع تغيير (الأزواج أو الوكيل تغيّر = إعادة بناء).
+- **صادر (كمبيوتر → هاتف)**: حدث محلي → تهادئة 700ms → `process_outgoing` (نقية: تخطي مخفي/مؤقت/أكبر من 200MB) → نسخ إلى `pc-fs/Outbox/<pair>/<rel>` → **send-file offer** بـ `srcPath=/Outbox/<pair>/<rel>` → الهاتف يهبطها بـ `publishDownload(subPath="Sync/<pair>")` → `Download/NexusLink/Sync/<pair>/<rel>`.
+- **وارد (هاتف → كمبيوتر)**: `sync_service.dart` يراقب جذر Sync بـ `Directory.watch` → رفع مجزّأ عبر §8.2 إلى `/Sync/<rel-dir>` (taskId مستقر للاستئناف) → يهبط في `agents/<agent>/Sync/` → مراقب Rust ينسخه للمجلد المحلي وفق **LWW** (متطابق ±1.5ث → تخطٍ؛ المحلي أحدث → يخرج في الاتجاه الآخر).
+- **حارس الصدى**: `EchoRegistry` (هاتف: نافذة 6ث بعد publishDownload، مطابقة حجم+زمن لمقاومة اختلاف مسارات FUSE) + `recent_out` (كمبيوتر) — لا حلقة رفع/تنزيل.
+- **حدود موثقة**: الحذف لا ينتشر (كلا الاتجاهين) — المزامنة أثناء حياة التطبيق (الهاتف) — التعارض: الأحدث يفوز.
+
+### 14.ز فجوات سيرفرية أُصلحت في هذه المرحلة
+| # | الفجوة | ما نُفّذ |
+|---|--------|----------|
+| G-19 | **`/api/fs/upload` غير موجود في الشجرة رغم توثيقه في §8.2 واستخدامه بمحرك الهاتف** (ضاع في تنظيف مبكر) | أُعيد بناؤه حرفيًا: init حتمي الـ uploadId من taskId + PUT مع 409 drift/paused + complete بإعادة تسمية فريدة + pause/resume/abort + GET حالة — **مثبت: 2GB sparse مع قتل عند 40% → استئناف → sha256 مطابق (a7c744c13cc101ed) بسرعة 115-198MB/s** |
+| G-20 | لا نقطة وسائط للهاتف الحقيقي (الجذور الافتراضية مرايا رفع فقط) | تسجيل media{port,token} + lanIp من handshake في guard-bridge + `status.desktop.agentMedia` + حدث `guard:media` للتحديث الديناميكي |
+| G-21 | لا مسار فعلي لإدخالات الجذر (أساس «إظهار في المستكشف») | `realPathFor` + `/api/fs/realpath` |
+| G-22 | المخزن المشترك بلا أزواج مزامنة | `readDesktopSync/writeDesktopSync` (نفس desktop-ui.json) + `status.desktop.sync` |
+
+**تحقق E2E**: قسم ] في scripts/desktop-e2e.mjs — realpath موجود فعليًا + 404 لجهاز فاسد — تسجيل نقطة الوسائط عبر hello-phone media + تحديث guard:media + محوها عند الانقطاع — دورة عرض مزامنة كاملة (send-file /Outbox → tx:offer بـ srcVPath → accept/progress/state → مهمة done) — Range 206 على /api/preview — PUT/GET أزواج المزامنة مع تنقية الفاسد — توثيق §14. محرك تنفيذي إضافي: **scripts/files-verify (56/56)** — مواصفات Registry (اقتباس/عربية) — pump_stream ضد خادم Range محلي (403 لرمز فاسد، 206، اكتمال 2.5MB، فتح مرة واحدة عند العتبة، إلغاء فوري) — مزامنة حقيقية بمجلدات مؤقتة (صادر/وارد/LWW/صدى/استثناءات) — مراقب notify حقيقي.
+
+**قيود موثقة بصدق**: تعدد تحديد قائمة السياق يمرر أول عنصر (%1) — Share Extension .appex يتطلب هدف Xcode (Services تغطي Finder) — البث أثناء حياة التطبيق — الحذف لا ينتشر — الضغط الفيزيائي لقائمة السياق/Services/Drag يثبت بـ CI 3/3 (بناء فعلي بالطبقات) بينما النواة مثبتة تنفيذيًا 56/56 محليًا.

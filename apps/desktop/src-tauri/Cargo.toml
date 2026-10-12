@@ -17,6 +17,8 @@ tauri-plugin-autostart = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-notification = "2"
+# FA-files — سحب الملفات من التطبيق إلى سطح المكتب/المجلدات (drag-out)
+tauri-plugin-drag = "2.1.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 arboard = "3"
@@ -28,9 +30,17 @@ base64 = "0.22"
 # x11rb = خلفية X11 خالصة Rust (بلا libxdo C)؛ إعادة ربط keycodes تدعم العربية.
 enigo = { version = "0.2.1", default-features = false, features = ["x11rb"] }
 
+# FA-files (عقد §14) — دمج الملفات في نظام التشغيل:
+# notify: مراقب ملفات أصلي فوري (inotify/FSEvents/ReadDirectoryChangesW) للمزامنة
+notify = "8"
+# zip: ضغط المجلدات من قائمة الزر الأيمن قبل الإرسال
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
 # إشعارات ويندوز الأصلية بأزرار تفاعلية (WinRT Toast)
 [target.'cfg(windows)'.dependencies]
 tauri-winrt-notification = "0.8"
+# FA-files — قائمة الزر الأيمن Windows (HKCU — بلا صلاحيات مدير)
+winreg = "0.56"
 
 [profile.release]
 opt-level = "s"

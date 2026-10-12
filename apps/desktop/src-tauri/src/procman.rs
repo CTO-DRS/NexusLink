@@ -393,6 +393,8 @@ fn monitor_tick(app: &AppHandle, state: &DesktopState) {
                 }
             }
         }
+        // FA-files (عقد §14) — تفريغ مسارات قائمة الزر الأيمن المعلّقة (--send)
+        crate::files_menu::flush_pending_sends(app);
     }
 }
 
@@ -428,6 +430,10 @@ fn poll_native_events(app: &AppHandle, state: &DesktopState, j: &serde_json::Val
         if sec.is_object() {
             crate::power::update_cfg(sec);
         }
+    }
+    // (ز) FA-files (عقد §14) — أزواج مزامنة المجلدات الأصلية (notify)
+    if dt.get("sync").map(|v| v.is_object()).unwrap_or(false) {
+        crate::sync::update_pairs(app, j);
     }
     if let Some(pw) = dt.get("power").and_then(|v| v.as_object()) {
         let state = pw.get("state").and_then(|v| v.as_str()).unwrap_or("on");
@@ -692,8 +698,19 @@ pub fn navigate_main(app: &AppHandle, view: &str) {
 }
 
 /// deep-link: nexus://open | nexus://comms | nexus://transfers | nexus://send?text=…
+/// + FA-files (عقد §14): file:// — ملفات macOS Services (NSServices تمرر مسارات
+/// كروابط ملف عبر RunEvent::Opened → تُوجّه إلى تدفق الإرسال نفسه).
 pub fn handle_deep_link(app: &AppHandle, urls: Vec<tauri::Url>) {
     for u in urls {
+        // ملفات الخدمات على ماك — أضفها لطابور الإرسال ثم افتح النافذة
+        if u.scheme() == "file" {
+            if let Ok(p) = u.to_file_path() {
+                println!("[deeplink] file (Services): {}", p.display());
+                let argv = vec!["--send".to_string(), p.to_string_lossy().to_string()];
+                crate::files_menu::queue_send_args(&argv);
+            }
+            continue;
+        }
         let host = u.host_str().unwrap_or("").to_lowercase();
         println!("[deeplink] {}", u);
         match host.as_str() {
@@ -719,6 +736,26 @@ pub fn handle_deep_link(app: &AppHandle, urls: Vec<tauri::Url>) {
             _ => open_main(app),
         }
     }
+}
+
+/// FA-files (عقد §14) — كتابة بايتات في pc-fs/Inbox باسم بديل غير حائزي
+/// (نفس نمط الحافظة §11) — يعيد (الاسم الافتراضي، الحجم). يخدم قائمة الزر
+/// الأيمن (--send) وأي إرسال من الطبقة الأصلية.
+pub fn stage_file_to_inbox(app: &AppHandle, name: &str, bytes: &[u8]) -> Result<(String, usize), String> {
+    let inbox = server_root(app)
+        .join("data")
+        .join("nexus-storage")
+        .join("pc-fs")
+        .join("Inbox");
+    std::fs::create_dir_all(&inbox).map_err(|e| format!("mkdir: {e}"))?;
+    let dest = unique_dest(&inbox, name);
+    std::fs::write(&dest, bytes).map_err(|e| format!("write: {e}"))?;
+    let vname = dest
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(name)
+        .to_string();
+    Ok((vname, bytes.len()))
 }
 
 /// اسم بديل غير حائزي داخل مجلد (نمط PUT clip في السيرفر)

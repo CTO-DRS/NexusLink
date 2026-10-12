@@ -39,6 +39,14 @@
       "resources/server",
       "resources/comms",
       "resources/gateway"
-    ]
+    ],
+    "macOS": {
+      "infoPlist": "Info.plist"
+    },
+    "windows": {
+      "nsis": {
+        "installerHooks": "./installer-hooks.nsh"
+      }
+    }
   }
 }

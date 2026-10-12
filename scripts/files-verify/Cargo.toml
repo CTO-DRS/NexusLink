@@ -1,0 +1,13 @@
+[package]
+name = "files-verify"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde_json = "1"
+notify = "8"
+ureq = { version = "2", features = ["json"] }
+
+[[bin]]
+name = "files-verify"
+path = "src/main.rs"
