@@ -370,8 +370,9 @@ fn list_targets() -> Result<Vec<TargetInfo>, String> {
                     format!("الشاشة {i}")
                 },
                 origin: (m.x as i32, m.y as i32),
-                w: m.width,
-                h: m.height,
+                // RandR MonitorInfo: width/height بصيغة u16 — TargetInfo بالـ u32
+                w: m.width as u32,
+                h: m.height as u32,
             });
         }
     }
@@ -560,6 +561,9 @@ fn window_origin(hwnd: isize) -> (i32, i32) {
 
 #[cfg(target_os = "macos")]
 fn window_origin(cid: u32) -> (i32, i32) {
+    // CGWindowGetBounds ليست API عامة (جولة 3cea500 استعملتها وكشفها الرابط أول مرة
+    // بعد اجتياز الترجمة). الطريق الصحيح: CGWindowListCopyWindowInfo + kCGWindowBounds
+    // + CGRectMakeWithDictionaryRepresentation — تحقق حرفي من رؤوس CGWindow.h.
     #[repr(C)]
     struct CGPoint {
         x: f64,
@@ -575,12 +579,69 @@ fn window_origin(cid: u32) -> (i32, i32) {
         origin: CGPoint,
         size: CGSize,
     }
+    type CFTypeRef = *const std::ffi::c_void;
+    type CFArrayRef = *const std::ffi::c_void;
+    type CFDictionaryRef = *const std::ffi::c_void;
+    type CFStringRef = *const std::ffi::c_void;
+    type CFNumberRef = *const std::ffi::c_void;
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFArrayGetCount(arr: CFArrayRef) -> isize;
+        fn CFArrayGetValueAtIndex(arr: CFArrayRef, idx: isize) -> CFTypeRef;
+        fn CFDictionaryGetValue(dict: CFDictionaryRef, key: CFTypeRef) -> CFTypeRef;
+        fn CFNumberGetValue(num: CFNumberRef, ntype: isize, value: *mut std::ffi::c_void) -> u8;
+        fn CFRelease(cf: CFTypeRef);
+    }
     #[link(name = "CoreGraphics", kind = "framework")]
     extern "C" {
-        fn CGWindowGetBounds(cid: u32) -> CGRect;
+        fn CGWindowListCopyWindowInfo(option: u32, relative_to: u32) -> CFArrayRef;
+        fn CGRectMakeWithDictionaryRepresentation(dict: CFDictionaryRef, rect: *mut CGRect) -> u8;
+        static kCGWindowNumber: CFStringRef;
+        static kCGWindowBounds: CFStringRef;
     }
-    let r = unsafe { CGWindowGetBounds(cid) };
-    (r.origin.x as i32, r.origin.y as i32)
+    // kCGWindowListOptionAll = 0 · kCGNullWindowID = 0
+    let list = unsafe { CGWindowListCopyWindowInfo(0, 0) };
+    if list.is_null() {
+        return (0, 0);
+    }
+    let mut out = (0i32, 0i32);
+    let n = unsafe { CFArrayGetCount(list) };
+    for i in 0..n {
+        let dict = unsafe { CFArrayGetValueAtIndex(list, i) as CFDictionaryRef };
+        let num = unsafe { CFDictionaryGetValue(dict, kCGWindowNumber as CFTypeRef) };
+        if num.is_null() {
+            continue;
+        }
+        let mut wid: u32 = 0;
+        unsafe {
+            CFNumberGetValue(
+                num as CFNumberRef,
+                9, // kCFNumberIntType
+                &mut wid as *mut u32 as *mut std::ffi::c_void,
+            );
+        }
+        if wid != cid {
+            continue;
+        }
+        let bounds = unsafe { CFDictionaryGetValue(dict, kCGWindowBounds as CFTypeRef) };
+        if !bounds.is_null() {
+            let mut rect = CGRect {
+                origin: CGPoint { x: 0.0, y: 0.0 },
+                size: CGSize {
+                    width: 0.0,
+                    height: 0.0,
+                },
+            };
+            unsafe {
+                if CGRectMakeWithDictionaryRepresentation(bounds as CFDictionaryRef, &mut rect) != 0 {
+                    out = (rect.origin.x as i32, rect.origin.y as i32);
+                }
+            }
+        }
+        break;
+    }
+    unsafe { CFRelease(list as CFTypeRef) };
+    out
 }
 
 /// حل الهدف المطلوب — "default" = الشاشة الكاملة/الأساسية
@@ -804,8 +865,10 @@ fn capture_loop(
             if w < 2 || h < 2 {
                 return Ok(());
             }
-            // Bgra8 = B,G,R,A معبأة — نفس ترتيب محول BGRA النقي (بلا حشو صفوف)
-            let packed = frame.as_raw_nopadding_buffer()?;
+            // Bgra8 = B,G,R,A معبأة — نفس ترتيب محول BGRA النقي (بلا حشو صفوف).
+            // buffer() يرجع FrameBuffer وas_raw_nopadding_buffer عليه وليس على Frame
+            let mut fb = frame.buffer()?;
+            let packed = fb.as_raw_nopadding_buffer()?;
             let mut s = match self.slot.lock() {
                 Ok(g) => g,
                 Err(_) => return Err("win slot poisoned".into()),
@@ -945,11 +1008,15 @@ fn capture_loop(
         };
         let mut region = (0i16, 0i16, root_geo.width, root_geo.height);
         if target.starts_with("screen:") && target != "screen:all" {
-            if let Some(m) = x11reply(randr::get_monitors(&conn, root, true)).and_then(|r| {
-                let idx: usize = target["screen:".len()..].parse().ok()?;
-                r.monitors.get(idx)
-            }) {
-                region = (m.x as i16, m.y as i16, m.width as u16, m.height as u16);
+            // مملوكة لا مستعارة: المرجع داخل r المحلية يهرب من الإغلاق (E0515)
+            if let Some((mx, my, mw, mh)) =
+                x11reply(randr::get_monitors(&conn, root, true)).and_then(|r| {
+                    let idx: usize = target["screen:".len()..].parse().ok()?;
+                    let m = r.monitors.get(idx)?;
+                    Some((m.x as i16, m.y as i16, m.width as u16, m.height as u16))
+                })
+            {
+                region = (mx, my, mw, mh);
             }
         } else if target.starts_with("window:") {
             if let Ok(id) = target["window:".len()..].parse::<x11rb::protocol::xproto::Window>() {
