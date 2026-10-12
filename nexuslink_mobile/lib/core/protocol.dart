@@ -105,6 +105,7 @@ class RcEvents {
   static const String scroll = 'rc:scroll'; // {dy}
   static const String pinch = 'rc:pinch'; // {scale}
   static const String key = 'rc:key'; // {ch?} أو {special}
+  static const String presenter = 'rc:presenter'; // {action: next|prev|start|stop|black} — FA-input §13
   static const String media = 'rc:media'; // {action, value?}
   static const String power = 'rc:power'; // {action}
   static const String wol = 'rc:wol'; // {mac}
