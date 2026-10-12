@@ -2,7 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/agent_channel.dart' show AgentLinkState;
+import '../domain/models.dart' show AgentLinkState;
 import '../state/controller_providers.dart';
 import '../state/providers.dart';
 

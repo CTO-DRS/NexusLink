@@ -184,14 +184,14 @@ pub fn on_pause_toggled(app: &AppHandle, paused: bool) {
 pub fn update_power(app: &AppHandle, line: (&str, Option<u8>)) {
     let ui = app.state::<TrayUi>();
     let (text, pending) = line;
-    if let Ok(mut it) = ui.power_item.lock() {
+    if let Ok(it) = ui.power_item.lock() {
         let _ = if let Some(secs) = pending {
             it.set_text(format!("سيتم {text} خلال {secs}ث…"))
         } else {
             it.set_text(text.to_string())
         };
     }
-    if let Ok(mut it) = ui.cancel_item.lock() {
+    if let Ok(it) = ui.cancel_item.lock() {
         match pending {
             Some(_) => {
                 let _ = it.set_enabled(true);
@@ -203,6 +203,7 @@ pub fn update_power(app: &AppHandle, line: (&str, Option<u8>)) {
             }
         }
     }
+    // فاصلة منقوطة بعد الجملة الأخيرة — الحارس المؤقت يموت قبل إسقاط ui (درس E0597 الموثق)
     if let Ok(tray) = ui.tray.lock() {
         let tip = if let Some(secs) = pending {
             format!("NexusLink — سيتم {text} خلال {secs}ث")
@@ -210,13 +211,14 @@ pub fn update_power(app: &AppHandle, line: (&str, Option<u8>)) {
             format!("NexusLink — {text}")
         };
         let _ = tray.set_tooltip(Some(tip));
-    }
+    };
 }
 
 /// تحديث عدّاد الاتصالات النشطة (من استطلاع الحالة كل ~10ث)
 pub fn update_connections(app: &AppHandle, n: usize) {
     let ui = app.state::<TrayUi>();
-    if let Ok(mut it) = ui.connections_item.lock() {
+    // فاصلة منقوطة بعد الجملة الأخيرة — نفس درس E0597
+    if let Ok(it) = ui.connections_item.lock() {
         let _ = it.set_text(format!("الاتصالات النشطة: {n}"));
-    }
+    };
 }
