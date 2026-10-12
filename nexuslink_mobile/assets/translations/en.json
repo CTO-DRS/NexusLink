@@ -312,7 +312,8 @@
         "sleep": "Sleep",
         "hibernate": "Hibernate",
         "restart": "Restart",
-        "shutdown": "Shut down"
+        "shutdown": "Shut down",
+        "logout": "Log out"
       }
     },
     "clip": {
@@ -505,5 +506,17 @@
     "doneTitle": "Everything is ready",
     "doneSub": "The background agent is running now — close the app and it stays connected, with all the tools across the eight tabs",
     "doneHint": "Everything you saw can be changed later from Settings — and the replay button always lives there"
+  },
+  "wake": {
+    "title": "Computer is asleep",
+    "subtitle": "Server unreachable — wake the computer with a Wake-on-LAN packet in one tap",
+    "action": "Wake",
+    "sending": "Sending wake packets…",
+    "sent": "Wake packet sent — waiting for the computer to wake and reconnect…",
+    "fail": "Could not send the packet — check your network",
+    "still": "Computer not responding yet — make sure Wake-on-LAN is enabled in BIOS/UEFI",
+    "awake": "Computer is awake — reconnecting…",
+    "mac": "Computer MAC",
+    "noMac": "The computer has not announced its MAC yet — open the app near the PC once"
   }
 }

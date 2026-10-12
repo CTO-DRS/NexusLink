@@ -15,6 +15,12 @@ export const DESKTOP_SHORTCUT_DEFAULTS: Record<string, string> = {
 export type DesktopClipCfg = { mode: "auto" | "manual"; maxAutoBytes: number }
 export const DESKTOP_CLIP_DEFAULTS: DesktopClipCfg = { mode: "auto", maxAutoBytes: 1_048_576 }
 
+// FA-power (عقد §12) — إعدادات أمان سطح المكتب (نفس المخزن desktop-ui.json)
+// · autoLock: تنفيذ القفل فعليًا على الطبقة الأصلية عند pc:lock من جسر الحماية
+//   (القرب/الابتعاد). الافتراضي مفعّل — يديره مفتاح «القفل التلقائي» في إعدادات الأمان.
+export type DesktopSecurityCfg = { autoLock: boolean }
+export const DESKTOP_SECURITY_DEFAULTS: DesktopSecurityCfg = { autoLock: true }
+
 export function desktopUiStorePath(): string {
   return path.join(process.cwd(), "data", "desktop-ui.json")
 }
@@ -43,6 +49,39 @@ export async function readDesktopClip(): Promise<DesktopClipCfg> {
   } catch {
     return { ...DESKTOP_CLIP_DEFAULTS }
   }
+}
+
+/** قراءة إعدادات أمان سطح المكتب — تخطئة آمنة للقيم الغائبة/التالفة */
+export async function readDesktopSecurity(): Promise<DesktopSecurityCfg> {
+  try {
+    const raw = await fs.readFile(desktopUiStorePath(), "utf8")
+    const j = JSON.parse(raw) as { security?: Partial<DesktopSecurityCfg> }
+    const s = j.security || {}
+    return { autoLock: typeof s.autoLock === "boolean" ? s.autoLock : DESKTOP_SECURITY_DEFAULTS.autoLock }
+  } catch {
+    return { ...DESKTOP_SECURITY_DEFAULTS }
+  }
+}
+
+/** دمج تحديث إعدادات الأمان فوق desktop-ui.json (يحفظ البقية كما هي) */
+export async function writeDesktopSecurity(patch: Partial<DesktopSecurityCfg>): Promise<DesktopSecurityCfg> {
+  const cur = await readDesktopSecurity()
+  const next: DesktopSecurityCfg = {
+    autoLock: typeof patch.autoLock === "boolean" ? patch.autoLock : cur.autoLock,
+  }
+  let parsed: Record<string, unknown> = {}
+  try {
+    parsed = JSON.parse(await fs.readFile(desktopUiStorePath(), "utf8")) as Record<string, unknown>
+  } catch {
+    /* ملف غير موجود/تالف — نبدأ نظيفًا */
+  }
+  await fs.mkdir(path.dirname(desktopUiStorePath()), { recursive: true })
+  await fs.writeFile(
+    desktopUiStorePath(),
+    JSON.stringify({ ...parsed, security: next, updatedAt: Date.now() }, null, 2),
+    "utf8"
+  )
+  return next
 }
 
 /** دمج تحديث إعدادات الحافظة فوق desktop-ui.json (يحفظ الاختصارات كما هي) */

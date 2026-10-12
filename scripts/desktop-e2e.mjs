@@ -70,7 +70,7 @@ try {
   // ============ 1) Next standalone (PORT=3000) ============
   console.log("== [1] next standalone on :3000 ==")
   spawnProc("next", process.execPath, [`${ROOT}.next/standalone/server.js`],
-    { PORT: "3000", HOSTNAME: "127.0.0.1", NODE_ENV: "production" },
+    { PORT: "3000", HOSTNAME: "127.0.0.1", NODE_ENV: "production", NEXUS_WOL_BROADCAST: "127.0.0.1", NEXUS_WOL_PORT: "9009" },
     (l) => { if (/ready|error|Error/i.test(l)) console.log("   " + l.slice(0, 160)) })
 
   const health = await waitHttp("next /api/health", "http://127.0.0.1:3000/api/health", 90000)
@@ -328,6 +328,126 @@ try {
   check("PUT clip: استلام فعلي → نسخ إلى pc-fs/Downloads", recv?.ok === true && recvBytes > 0, `name=${recv?.name} bytes=${recvBytes}`)
 
   sockProd.disconnect()
+
+  // ============ 6g) FA-power — أوامر النظام/الطاقة الحقيقية + Wake-on-LAN (§12) ============
+  console.log("== [6g] FA-power: system commands + real WOL packet + auto-lock ==")
+
+  // (أ) سوكِت desktop (نفس ما يفعله الويبفيو: تسجيل MAC الحقيقي + استقبال rc:power)
+  //     + سوكِت هاتف ثانٍ يتحقق من إعلان MAC عبر rc:hello
+  const E2E_MAC = "AA:BB:CC:DD:EE:FF"
+  const rcDesk = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3004" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+  await new Promise((res, rej) => { rcDesk.on("connect", res); rcDesk.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("rc desktop timeout")), 10000) })
+  rcDesk.emit("desktop:register", { name: "NEXUS-PC", mac: E2E_MAC })
+  await sleep(800)
+  const rcPhone = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3004" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+  const helloMac = await new Promise((res) => {
+    rcPhone.on("rc:hello", (d) => res(String(d?.desktop?.mac ?? "")))
+    setTimeout(() => res(""), 6000)
+  })
+  check("FA-power: إعلان MAC عبر desktop:register → rc:hello للأجهزة اللاحقة", helloMac === E2E_MAC, `mac=${helloMac}`)
+
+  // (ب) rc:power logout يُرحّل للكمبيوتر (الطبقة الأصلية تنفذه فعليًا في التطبيق)
+  const powerCmd = await new Promise((res) => {
+    rcDesk.on("rc:power", (d) => res(d))
+    rcPhone.emit("rc:power", { action: "logout" })
+    setTimeout(() => res(null), 6000)
+  })
+  check("FA-power: rc:power logout يُرحّل للكمبيوتر", powerCmd?.action === "logout", `got=${JSON.stringify(powerCmd)}`)
+  // استعادة الحالة على الجسر (logout وضعها locked)
+  rcDesk.emit("desktop:state", { power: "on" })
+  await sleep(600)
+
+  // (ج) rc:wol بMAC غير صالح → رفض mac
+  const wolBad = await new Promise((res) => {
+    rcPhone.on("rc:rejected", (d) => res(d))
+    rcPhone.emit("rc:wol", { mac: "ZZ:00:00:00:00:00" })
+    setTimeout(() => res(null), 6000)
+  })
+  check("FA-power: rc:wol بMAC غير صالح → rc:rejected(mac)", wolBad?.reason === "mac", `reason=${wolBad?.reason}`)
+
+  // (د) rc:wol بMAC صالح والكمبيوتر يعمل → رفض already-on
+  const wolOn = await new Promise((res) => {
+    rcPhone.on("rc:rejected", (d) => res(d))
+    rcPhone.emit("rc:wol", { mac: E2E_MAC })
+    setTimeout(() => res(null), 6000)
+  })
+  check("FA-power: rc:wol والكمبيوتر يعمل → rc:rejected(already-on)", wolOn?.reason === "already-on", `reason=${wolOn?.reason}`)
+
+  // (هـ) الحقيقي: الحالة sleeping → rc:wol → التقاط الحزمة فعليًا على UDP:9009
+  // (NEXUS_WOL_PORT — حاوية بلا صلاحية الربط على :9 التعاقدي، مثل :81 سابقًا)
+  rcDesk.emit("desktop:state", { power: "sleeping" })
+  await sleep(600)
+  const dgram = await import("node:dgram")
+  const captured = await new Promise((res) => {
+    let pkt = null
+    let wakeEv = null
+    const s = dgram.createSocket({ type: "udp4", reuseAddr: true })
+    s.on("error", () => { try { s.close() } catch {}; res({ pkt, wakeEv }) })
+    s.on("message", (m) => { pkt = m; try { s.close() } catch {} })
+    s.bind(9009, "0.0.0.0", () => {})
+    rcPhone.emit("rc:wol", { mac: E2E_MAC })
+    const onWake = (d) => {
+      if (d?.source === "wol") {
+        wakeEv = d
+        setTimeout(() => { try { s.close() } catch {} }, 500)
+      }
+    }
+    rcDesk.on("desktop:wake", onWake)
+    rcPhone.on("desktop:wake", onWake)
+    setTimeout(() => { try { s.close() } catch {}; res({ pkt, wakeEv }) }, 8000)
+  })
+  const p = captured?.pkt
+  const expected = Buffer.from("FFFFFFFFFFFF" + E2E_MAC.replace(/:/g, "").repeat(16), "hex")
+  const pktOk = !!p && p.length === 102 && p.equals(expected)
+  check("FA-power: حزمة WOL السحرية أُرسلت فعليًا (UDP = 102 بايت 6×FF+MAC×16)", pktOk,
+    `len=${p?.length ?? 0} head=${p ? p.subarray(0, 12).toString("hex") : "—"}`)
+  check("FA-power: بث desktop:wake {source:wol, packet}", captured?.wakeEv?.mac === E2E_MAC && typeof captured?.wakeEv?.packet === "string",
+    `mac=${captured?.wakeEv?.mac ?? "—"}`)
+  rcDesk.emit("desktop:state", { power: "on" }) // استعادة
+
+  // (و) القفل التلقائي: بلا منارة بعد مهلة سماح قصيرة → pc:lock من جسر الحماية
+  // (فتح يدوي أولًا — القفل ربما أُطلق مبكرًا بعد انقطاع هاتف القسم 5)
+  const guardWeb = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3006" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+  await new Promise((res, rej) => { guardWeb.on("connect", res); guardWeb.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("guard timeout")), 10000) })
+  guardWeb.emit("guard:settings", { enabled: true, graceSec: 3 })
+  await sleep(800)
+  guardWeb.emit("prox:manual-unlock") // إعادة الحالة إلى near كي يُطلق القفل من جديد ضمن مهلة الاختبار
+  await sleep(600)
+  const pcLock = await new Promise((res) => {
+    guardWeb.on("pc:lock", (d) => res(d))
+    setTimeout(() => res(null), 14000) // مهلة سماح 3ث + نبضة المراقبة 1ث + هامش
+  })
+  check("FA-power: بلا منارة → pc:lock تلقائي بعد مهلة السماح (§12.ج)",
+    pcLock?.reason === "no-beacon" || pcLock?.reason === "weak-signal", `reason=${pcLock?.reason}`)
+  guardWeb.disconnect()
+
+  // (ز) حقول status.desktop الجديدة + بوابة security.autoLock
+  const putSec = await fetch("http://127.0.0.1:3000/api/desktop/shortcuts", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ security: { autoLock: false } }),
+  }).then((r) => r.json())
+  check("FA-power: PUT security.autoLock=false يقبل", putSec?.ok === true && putSec?.security?.autoLock === false)
+  const st5 = await fetch("http://127.0.0.1:3000/api/desktop/status").then((r) => r.json())
+  check("status.desktop.security يعكس المخزن", st5?.desktop?.security?.autoLock === false)
+  check("status.desktop.connections عدّاد رقمي", typeof st5?.desktop?.connections === "number",
+    `n=${st5?.desktop?.connections}`)
+  check("status.desktop.power {state, mac, name} من جسر التحكم",
+    typeof st5?.desktop?.power?.state === "string" && typeof st5?.desktop?.power?.mac === "string",
+    `state=${st5?.desktop?.power?.state} mac=${st5?.desktop?.power?.mac}`)
+  await fetch("http://127.0.0.1:3000/api/desktop/shortcuts", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ security: { autoLock: true } }),
+  }) // استعادة
+
+  // (ح) العقد موثق حرفيًا
+  const contract = await fsMod.readFile(pathMod.join(ROOT, "docs", "protocol-contract.md"), "utf8")
+  check("العقد: §12 موثق (أوامر النظام/الإيقاظ/القفل التلقائي)",
+    contract.includes("## 12. أوامر النظام والطاقة الحقيقية") && contract.includes("NEXUS_WOL_BROADCAST") && contract.includes("logout"))
+
+  rcDesk.disconnect()
+  rcPhone.disconnect()
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {

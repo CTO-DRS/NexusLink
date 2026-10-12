@@ -161,12 +161,12 @@ interface TransferJob {
 | `rc:rejected` | `{reason: "off"|"hibernating"|"mac"|"already-on", ev}` |
 
 **Client → Server (الهاتف يرسل):**
-- تسجيل: `rc:hello-controller {name}` · `desktop:register {name, mac}` (للكمبيوتر)
+- تسجيل: `rc:hello-controller {name}` · `desktop:register {name, mac}` (للكمبيوتر — **FA-power: MAC الحقيقي المعلن من الطبقة الأصلية عند كل اتصال، ويُخزّن في الهاتف للإيقاظ دون اتصال**)
 - `desktop:state {power}` · `desktop:clipboard {text, at?}`
 - `rc:ping {t}`
 - أحداث الإدخال (تُرحَّل broadcast مع بوابة الطاقة): `rc:move {dx, dy}` · `rc:click {button: "left"|"right"}` · `rc:scroll {dy}` · `rc:pinch {scale}` · `rc:key {key?, special?, modifiers?}` · `rc:gamepad {kind: "button"|"axis", button?, action?, ...}` · `rc:presenter {action: "next"|"prev"|"black"|"laser-on"|"laser-off", value?}` · `rc:media {action: "toggle"|"play"|"pause"|"next"|"prev"|"mute"|"unmute"|"volume", value?}` · `rc:clipboard {direction: "toPc"|"pull", text?}`
-- `rc:power {action: "shutdown"|"restart"|"sleep"|"hibernate"|"lock"|"unlock"}`
-- `rc:wol {mac}` — تحقق صارم من MAC وإعادة صياغة الحزمة 6×FF+MAC×16
+- `rc:power {action: "shutdown"|"restart"|"sleep"|"hibernate"|"lock"|"unlock"|"logout"}` — **FA-power: logout إضافي (شاشة الدخول = حالة locked)؛ التنفيذ الحقيقي في الطبقة الأصلية (§12) بتأكيد أمان 10ث قابل للإلغاء للأوامر المدمرة**
+- `rc:wol {mac}` — تحقق صارم من MAC وإعادة صياغة الحزمة 6×FF+MAC×16 — **FA-power: إرسال فعلي عبر UDP broadcast إلى المنفذ 9 (NEXUS_WOL_BROADCAST يبدّل الوجهات للاختبار) + سجل نتيجة الإرسال الحقيقي**
 
 ### 4.3 جسر 3005 — الوسائط والكاميرا
 **Client → Server:** `media:role {role: "pc"|"phone"|"tv", name?}` (الهاتف يسجل role=phone) · `rtc:offer/rtc:answer/rtc:ice` `{kind: "cam"|"mic"|"baby", ...SDP/ICE}` (ترحيل شفاف broadcast مع حقن kind وfrom) · `cam:state` · `cam:shutter {timer 0..30}` · `cam:captured {name, device}` · `sec:motion {source?, level?}` · `baby:alert {from?, level?}` · `cast:cmd {...}` · `cast:state {...}` · `slideshow:cmd {...}` · `media:ping {t}`
@@ -472,3 +472,48 @@ interface TransferJob {
 - **حد الإرسال التلقائي**: `data/desktop-ui.json → clip.maxAutoBytes` (1KB..20MB، افتراضي 1MB) عبر `PUT /api/desktop/shortcuts {clip:{...}}`.
 - يقرأهما Rust من `status.desktop.clip = {mode (من prodState), maxAutoBytes (من المخزن)}` — فشلها لا يُسقط الحالة.
 - **السجل**: `GET /api/prod/clipboard` = آخر **50** عنصرًا (`kind: text|image|file` + `mode` + `deviceId`) — عرضه في واجهة الإنتاجية «سجل الحافظة — آخر 50».
+
+## 12. أوامر النظام والطاقة الحقيقية (FA-power — مصدر: power.rs + remote-bridge.ts + wol_service.dart + desktop-bridge.tsx)
+
+«أوامر النظام حقيقية لا محاكاة: إيقاف/إعادة تشغيل/إسبات/قفل/خروج من الهاتف، إيقاظ الكمبيوتر النائم من الهاتف، وقفل تلقائي عند ابتعاد الهاتف» — البنية القائمة (§4.2 و§4.4) تُعاد استخدامها **حرفيًا** بلا مساس، والجديد هو ربطها بالطبقة الأصلية (Tauri) وبالهاتف دون اتصال.
+
+### 12.أ أوامر النظام عبر WebSocket — التنفيذ الأصلي (Rust `power.rs`)
+- **المسار**: الهاتف → `rc:power {action}` على 3004 → الجسر يرحّل broadcast (سلوك §4.2 كما هو) → **الويبفيو دائمًا حي (حتى مع النافذة مخفية في الـ Tray) يستقبل `rc:power` ويستدعي أمر Tauri `power_request {action, source:"phone"}`** → `power.rs` ينفّذ على النظام فعليًا.
+- **الأوامر الفورية** (غير مدمرة): `lock` · `sleep` — تنفيذ مباشر.
+- **الأوامر المدمرة** (تأكيد أمان 10 ثوانٍ **قابل للإلغاء من الشريط**): `shutdown` · `restart` · `hibernate` · `logout` — عدّاد ظاهر في قائمة الـ Tray (`سيتم {الأمر} خلال Nث…` + زر `إلغاء {الأمر}`) وتُبث الحالة كل ثانية عبر حدث Tauri داخلي `desktop://power {phase:"pending", action, secondsLeft}` → الجسر الواجهي يحوّلها `desktop:state {power:"shutting-down"}` للهواتف.
+- **لكل منصة الطريقة الرسمية** (+ بديل احتياطي موثق):
+  | الأمر | Windows | macOS | Linux |
+  |---|---|---|---|
+  | shutdown | `shutdown /s /t 0` | osascript System Events `shut down` | `systemctl poweroff` |
+  | restart | `shutdown /r /t 0` | osascript `restart` | `systemctl reboot` |
+  | hibernate | `shutdown /h` ← `rundll32 powrprof.dll,SetSuspendState 0,1,0` | `pmset sleepnow` (Safe Sleep) | `systemctl hibernate` ← `suspend` |
+  | sleep | `rundll32 powrprof.dll,SetSuspendState 0,1,0` | `pmset sleepnow` | `systemctl suspend` |
+  | lock | `rundll32 user32.dll,LockWorkStation` | `CGSession -suspend` ← `pmset displaysleepnow` | `loginctl lock-session` ← `gnome-screensaver-command -l` |
+  | logout | `shutdown /l` | osascript `log out` (قد يعرض تأكيد النظام — حد موثق) | `loginctl terminate-session self` ← `gnome-session-quit --logout --no-prompt` |
+- **`unlock` يُرفض أمنيًا على الطبقة الحقيقية** (`power_request` يرد خطأ «فتح القفل عن بُعد غير مسموح») — المحاكاة الويبية ل§4.2 تبقى مسموحة كما هي.
+- إبلاغ الهواتف: بعد التنفيذ يبث الجسر الواجهي `desktop:state {power}` (locked/sleeping/shutting-down) — بوابة الطاقة §4.2 تعمل كالمعتاد.
+
+### 12.ب إعلان MAC والتنبيه دون اتصال (Wake-on-LAN)
+- **إعلان MAC للأجهزة الموثوقة**: عند اتصال سوكِت 3004 في الجسر الواجهي → `system_mac` (Tauri) يكشف MAC المحوّل النشط فعليًا (Linux: واجهة المسار الافتراضي من `/proc/net/route` ثم `/sys/class/net` · macOS: `ifconfig ether` · Windows: `Get-NetAdapter Status=Up` ← `getmac`) → `desktop:register {name, mac}` — فيصل لكل عميل لاحق عبر `rc:hello {desktop:{name, mac}}` (§4.2) ويُخزّن في الهاتف (SharedPreferences `nexus.desktopMac`).
+- **الإيقاظ عبر القناة الحية**: `rc:wol {mac}` → الجسر يتحقق ويصوغ الحزمة **ويرسلها فعليًا** UDP broadcast منفذ 9 (102 بايت = 6×FF + MAC×16) ويبث `desktop:wake {source:"wol", mac, packet}` + يسجل نتيجة الإرسال الحقيقية (`NEXUS_WOL_BROADCAST` env يبدّل الوجهات — للاختبار فقط).
+- **الإيقاظ دون اتصال (المسار التعاقدي)**: السيرفر غير قابل للوصول = الكمبيوتر نائم → Flutter يرسل الحزمة **مباشرة** عبر `RawDatagramSocket` (WolService: 255.255.255.255:9 + broadcast الشبكة الفرعية للخادم المحفوظ ×3 محاولات) — بلا أي اتصال مسبق.
+- **شاشة الإيقاظ** (`wake_banner.dart`): تظهر بارزة أعلى التطبيق عندما (القناة الخلفية/الاتصال غير متاح) **و** MAC محفوظ — «الكمبيوتر نائم — إيقاظ؟» بضغطة واحدة → إرسال → انتظار 6ث → فحص صحة → اتصال كامل idempotent (`reconnect`) — **اختبار النجاح: تسبت الكمبيوتر → من الهاتف تضغط «إيقاظ» → يستيقظ ويتصل تلقائيًا** (الاستيقاظ الفيزيائي ميداني — يحتاج BIOS/UEFI + دعم NIC؛ إرسال الحزمة وبنيتها ومسار إعادة الاتصال مثبتة تعاقديًا).
+
+### 12.ج القفل التلقائي عند ابتعاد الهاتف (منارة القرب §4.4 كما هي — التنفيذ الحقيقي)
+- **لا تغيير على العقد القائم**: الهاتف يرسل `prox:beacon {rssi, device}` كل 5ث على 3006 (§7)، ومحرك القرب يدير العتبة/مهلة السماح ويبث `pc:lock {reason: "manual"|"weak-signal"|"no-beacon", rssi?, at}` و`pc:unlock {reason}` (§4.4). فقدان المنارة = انقطاع الهاتف عن الشبكة (ابتعاد فعلي) → `no-beacon` بعد مهلة السماح.
+- **التنفيذ الأصلي**: الويبفيو يستقبل `pc:lock` → `power_request {action:"lock", source:"auto-lock"}` → قفل فوري للجلسة + إشعار نظام «قفل تلقائي: ابتعد هاتفك عن النطاق».
+- **بوابة الإعداد**: `data/desktop-ui.json → security.autoLock` (افتراضي `true`) عبر `PUT /api/desktop/shortcuts {security:{autoLock}}` — مفتاح «القفل التلقائي عند ابتعاد الهاتف» في إعدادات الأمان (نافذة سطح المكتب فقط) — يقرأها Rust من `status.desktop.security` ويرفض `auto-lock` حين تُعطّل (القفل اليدوي من الهاتف غير متأثر).
+- **حد صادق**: RSSI البلوتوث الحقيقي يتطلب محوّل BT على الكمبيوتر + صلاحيات موقع على أندرويد 12+ — مسار `weak-signal` جاهز كاملًا في المحرك (عتبة thresholdRssi)، والافتراضي العملي اليوم هو فقدان المنارة عبر الشبكة (ابتعاد = انقطاع). القيود موثقة هنا لا في التسويق.
+
+### 12.د مؤشرات الشريط (Tray) والواجهات
+- قائمة الـ Tray تضيف: `الطاقة: تعمل|مقفل|سكون|جارٍ الإيقاف|…` (عرض) · `الاتصالات النشطة: N` (عدّاد الأجهزة connected من سجل الأجهزة) · `لا إيقاف مجدول / إلغاء {الأمر}` (زر الإلغاء أثناء العدّاد فقط) — التحديث من استطلاع `status.desktop` كل ~10ث + من خيط العدّاد كل ثانية.
+- `status.desktop` يضيف (إضافي لا يكسر): `security: {autoLock}` · `connections: <number>` · `power: {state, mac, name}` (من `remoteBridgeStatus`).
+
+### 12.هـ فجوات سيرفرية أُصلحت في هذه المرحلة
+| # | الفجوة | ما نُفّذ |
+|---|--------|----------|
+| G-12 | `rc:power` لا يدعم `logout` | إضافة الأمر في الجسرين (مدمج Next + mini-service) بحالة `locked` + ترجمة عربية |
+| G-13 | `rc:wol` كان يصوغ الحزمة ويكتب «أُرسلت» **بلا إرسال فعلي** | إرسال UDP broadcast حقيقي (dgram → :9) + سجل نتيجة الإرسال الصادق |
+| G-14 | لا إعدادات أمان لسطح المكتب | `security.autoLock` في نفس المخزن desktop-ui.json + بطاقة إعدادات الأمان |
+
+**تحقق E2E**: قسم جديد في scripts/desktop-e2e.mjs — تسجيل desktop:register بMAC حقيقي الشكل → rc:power logout يصل للكمبيوتر → rc:wol بعد تعيين الحالة sleeping → **التقاط الحزمة فعليًا على مستمع UDP :9 (102 بايت = 6×FF + MAC×16)** → رفض already-on → pc:lock بلا منارة بعد مهلة سماح → حقول status.desktop الجديدة.

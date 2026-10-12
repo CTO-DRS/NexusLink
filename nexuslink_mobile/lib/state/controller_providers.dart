@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/controller_service.dart';
+import '../domain/wol_service.dart';
 import 'providers.dart';
 
 // ---------------------------------------------------------------------------
@@ -11,7 +13,19 @@ import 'providers.dart';
 // ControllerController:
 //  · يبني ControllerService عند اتصال الخادم (endpoint) ويقطعه عند الفصل.
 //  · يبث حالة الخدمة (الجسر/الكمبيوتر/الحافظة/الماوس الهوائي) للواجهة.
+//  · FA-power (عقد §12): يخزن MAC/اسم الكمبيوتر المعلن (rc:hello) في
+//    SharedPreferences — هو ما يُستعمل لاحقًا للإيقاظ المباشر دون اتصال.
 // ---------------------------------------------------------------------------
+
+/// مفاتيح التخزين المحلي لهوية الكمبيوتر (الإيقاظ دون اتصال)
+const String kPrefDesktopMac = 'nexus.desktopMac';
+const String kPrefDesktopName = 'nexus.desktopName';
+
+/// MAC الكمبيوتر المحفوظ — يُستعمل لشاشة «الكمبيوتر نائم — إيقاظ؟»
+final storedDesktopMacProvider = FutureProvider<String>((ref) async {
+  final p = await SharedPreferences.getInstance();
+  return p.getString(kPrefDesktopMac) ?? '';
+});
 
 class ControllerController extends Notifier<RcUiState> {
   ControllerService? _svc;
@@ -62,7 +76,13 @@ class ControllerController extends Notifier<RcUiState> {
     _svc = svc;
     _boundKey = key;
     _sub = svc.stateStream.listen((s) {
-      if (_svc == svc) state = s;
+      if (_svc == svc) {
+        state = s;
+        // FA-power — حفظ MAC/الاسم المعلن من rc:hello للإيقاظ لاحقًا دون اتصال
+        if (s.desktopMac.isNotEmpty) {
+          unawaited(_persistDesktop(s.desktopMac, s.desktopName));
+        }
+      }
     });
     final ok = svc.connect(host: endpoint.host, port: endpoint.port, mode: endpoint.mode.name);
     ref.read(activityLogProvider.notifier).add(
@@ -107,6 +127,47 @@ class ControllerController extends Notifier<RcUiState> {
   void media(String action, {double? value}) => _svc?.media(action, value: value);
 
   void power(String action) => _svc?.power(action);
+
+  /// FA-power — حفظ هوية الكمبيوتر المعلنة (MAC/اسم) في التخزين المحلي
+  Future<void> _persistDesktop(String mac, String name) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(kPrefDesktopMac, mac);
+      if (name.isNotEmpty) await p.setString(kPrefDesktopName, name);
+    } catch (_) {/* تخزين غير متاح — الإيقاظ سيقرأ من الحالة الحية فقط */}
+  }
+
+  /// MAC الكمبيوتر المتاح للإيقاظ: الحي أولًا ثم المحفوظ
+  Future<String> _wakeMac() async {
+    final live = state.desktopMac.trim();
+    if (live.isNotEmpty) return live;
+    try {
+      final p = await SharedPreferences.getInstance();
+      return p.getString(kPrefDesktopMac) ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// FA-power — إيقاظ مباشر عبر UDP broadcast (عند تعذر الوصول للسيرفر):
+  /// حزمة سحرية إلى 255.255.255.255:9 + broadcast الشبكة الفرعية للخادم.
+  /// يعيد عدد الإرسالات الناجحة (0 = فشل — MAC غائب/لا شبكة).
+  Future<int> wakeDirect({String? serverHost}) async {
+    final mac = await _wakeMac();
+    if (mac.isEmpty) return 0;
+    final targets = <String>[
+      if (serverHost != null && serverHost.isNotEmpty)
+        WolService.subnetBroadcast(serverHost) ?? '',
+    ].where((t) => t.isNotEmpty).toList();
+    final sent = await WolService.sendMagicPacket(mac, extraTargets: targets);
+    ref.read(activityLogProvider.notifier).add(
+          sent > 0
+              ? 'أُرسلت حزمة إيقاظ (Wake-on-LAN) إلى $mac — $sent إرسالة'
+              : 'فشل إرسال حزمة الإيقاظ إلى $mac',
+          kind: sent > 0 ? 'ok' : 'error',
+        );
+    return sent;
+  }
 
   void wakeLan([String? mac]) {
     final svc = _svc;

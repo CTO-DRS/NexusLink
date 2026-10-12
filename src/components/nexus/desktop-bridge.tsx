@@ -9,8 +9,16 @@
 // 3) تنفيذ داخل التطبيق لإجراء sendClipboard (عند تركيز النافذة، حيث الاختصار
 //    العالمي غير مسجّل عمدًا — راجع تعاقد التركيز في shortcuts.rs).
 // 4) تفسير معاملات ?view= القادمة من deep-link/الإشعارات الأصلية.
+// 5) FA-clipboard-sync — استقبال حافظة الهاتف → clip_apply (arboard).
+// 6) FA-power (عقد §12) — سوكِتا 3004/3006 دائمان (يعملان والنافذة مخفية):
+//    · 3004: إعلان هوية الكمبيوتر (desktop:register {name, mac}) + تقرير
+//      desktop:state عند الاتصال + استقبال rc:power → power_request (Rust) +
+//      بث desktop:state عند كل حدث desktop://power من الطبقة الأصلية.
+//    · 3006: استقبال pc:lock (منارة القرب/الابتعاد) → power_request {lock, auto-lock}
+//      — بوابة autoLock يديرها Rust نفسه (من status.desktop.security).
 // كل ذلك معطّل خارج وضع سطح المكتب (?desktop=1 — تضبطه procman عند فتح النافذة).
 import { useEffect } from "react"
+import { io, type Socket } from "socket.io-client"
 import { getProdSocket } from "@/lib/prod-socket"
 import { useProd } from "@/lib/prod-store"
 import { useNexus, type ShortcutAction, type ViewId } from "@/lib/store"
@@ -121,10 +129,82 @@ export function DesktopBridge() {
     const sock = getProdSocket()
     sock.on("clip:new", applyIncoming)
 
+    // ------------------------------------------------------------------
+    // FA-power (عقد §12) — الطبقة الأصلية تنفّذ أوامر النظام/الطاقة الحقيقية
+    // ------------------------------------------------------------------
+    // سوكِت 3004: نحن الطرف "desktop" — إعلان الهوية + الحالة + تنفيذ rc:power
+    const rcSock: Socket = io("/?XTransformPort=3004", {
+      transports: ["websocket", "polling"],
+      forceNew: true,
+      reconnection: true,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 15000,
+      timeout: 10000,
+    })
+    const registerDesktop = () => {
+      // إعلان MAC الحقيقي للأجهزة الموثوقة (Wake-on-LAN) + تقرير الحالة
+      void tauriInvoke<string>("system_mac")
+        .then((mac) => {
+          if (mac) rcSock.emit("desktop:register", { name: "NEXUS-PC", mac })
+        })
+        .catch(() => null)
+      rcSock.emit("desktop:state", { power: "on" })
+    }
+    rcSock.on("connect", registerDesktop)
+    // أمر نظام من الهاتف → الطبقة الأصلية (فوري أو عدّاد 10ث قابل للإلغاء من الشريط)
+    const onRcPower = (d: { action?: string }) => {
+      const action = String(d?.action ?? "").trim()
+      if (!action) return
+      void tauriInvoke("power_request", { action, source: "phone" }).catch((e) => {
+        console.warn("[desktop-bridge] power_request:", e)
+      })
+    }
+    rcSock.on("rc:power", onRcPower)
+    // تحديثات الطبقة الأصلية → تقرير الحالة للهواتف (desktop:state على 3004)
+    const onPowerEvent = (e: { power?: string }) => {
+      const power = String(e?.power ?? "")
+      if (power) rcSock.emit("desktop:state", { power })
+    }
+    type PowerUnsub = { unlisten: () => void }
+    let powerUn: PowerUnsub | null = null
+    void (async () => {
+      try {
+        const ev = (window as unknown as {
+          __TAURI__?: { event?: { listen?: <T>(n: string, f: (e: { payload: T }) => void) => Promise<() => void> } }
+        }).__TAURI__?.event
+        if (ev?.listen) {
+          const un = await ev.listen<{ power?: string }>("desktop://power", (e) => onPowerEvent(e.payload))
+          powerUn = { unlisten: un }
+        }
+      } catch {
+        /* خارج Tauri — لا شيء */
+      }
+    })()
+
+    // سوكِت 3006: القفل التلقائي عند ابتعاد الهاتف (منارة القرب → pc:lock)
+    const guardSock: Socket = io("/?XTransformPort=3006", {
+      transports: ["websocket", "polling"],
+      forceNew: true,
+      reconnection: true,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 15000,
+      timeout: 10000,
+    })
+    const onPcLock = () => {
+      void tauriInvoke("power_request", { action: "lock", source: "auto-lock" }).catch(() => null)
+    }
+    guardSock.on("pc:lock", onPcLock)
+
     return () => {
       unsub()
       window.removeEventListener("keydown", onKey)
       sock.off("clip:new", applyIncoming)
+      rcSock.off("connect", registerDesktop)
+      rcSock.off("rc:power", onRcPower)
+      rcSock.disconnect()
+      powerUn?.unlisten()
+      guardSock.off("pc:lock", onPcLock)
+      guardSock.disconnect()
     }
   }, [])
 

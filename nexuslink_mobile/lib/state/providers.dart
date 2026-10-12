@@ -330,6 +330,28 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
       serverName: row.name,
     );
   }
+
+  /// FA-power (عقد §12) — إعادة محاولة الاتصال بنفس الخادم الأخير.
+  /// تُستدعى بعد إرسال حزمة الإيقاظ: فحص صحة سريع (السيرفر استيقظ؟) ثم
+  /// اتصال كامل مع الاقتران idempotent. يعيد true عند نجاح الصحة والاتصال.
+  Future<bool> reconnect() async {
+    final cur = state.value;
+    final ep = cur?.endpoint;
+    if (ep == null || cur == null) return false;
+    final log = ref.read(activityLogProvider.notifier);
+    try {
+      await NexusApi(ep).healthCheck();
+      log.add('السيرفر استجاب بعد الإيقاظ — جارٍ إعادة الاتصال…', kind: 'ok');
+    } catch (_) {
+      return false;
+    }
+    try {
+      await connect(endpoint: ep, serverName: cur.serverName ?? 'Nexus PC');
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 }
 
 final connectionProvider = AsyncNotifierProvider<ConnectionController, ConnectionStateModel>(

@@ -423,6 +423,23 @@ fn poll_native_events(app: &AppHandle, state: &DesktopState, j: &serde_json::Val
         }
     }
 
+    // (و) FA-power (عقد §12) — بوابة القفل التلقائي + حالة الطاقة + اتصالات للـ Tray
+    if let Some(sec) = dt.get("security") {
+        if sec.is_object() {
+            crate::power::update_cfg(sec);
+        }
+    }
+    if let Some(pw) = dt.get("power").and_then(|v| v.as_object()) {
+        let state = pw.get("state").and_then(|v| v.as_str()).unwrap_or("on");
+        // أثناء عدّاد إيقاف مجدول لا نجاري تحديث سطر الطاقة (خيط العدّاد أسبق)
+        if !crate::power::is_pending() {
+            crate::tray::update_power(app, (crate::power::power_ar(state), None));
+        }
+    }
+    if let Some(n) = dt.get("connections").and_then(|v| v.as_u64()) {
+        crate::tray::update_connections(app, n as usize);
+    }
+
     // (ج) ملفات وصلت من الهاتف → إشعار أصلي بأزرار (حفظ في… / فتح المجلد)
     if let Some(arr) = dt.get("transfers").and_then(|v| v.as_array()) {
         let ids: Vec<String> = arr

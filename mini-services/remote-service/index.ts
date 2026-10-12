@@ -5,6 +5,7 @@
 // الماوس الهوائي (الجيروسكوب)، يد الألعاب، جهاز العروض، الوسائط،
 // أوامر النظام + Wake-on-LAN، ومزامنة الحافظة المشتركة.
 import { createServer } from 'http'
+import { createSocket } from 'dgram'
 import { Server } from 'socket.io'
 
 const PORT = 3004
@@ -43,6 +44,46 @@ const POWER_AR_ACTION: Record<string, string> = {
   hibernate: 'الإسبات',
   lock: 'قفل الشاشة',
   unlock: 'فتح القفل',
+  logout: 'تسجيل الخروج', // FA-power (عقد §12)
+}
+
+/**
+ * FA-power — إرسال حزمة Wake-on-LAN السحرية فعليًا عبر UDP broadcast
+ * (نفس منطق src/lib/nexus/remote-bridge.ts — النسختان متطابقتان تعاقديًا).
+ * NEXUS_WOL_BROADCAST = الوجهات (افتراضي 255.255.255.255) ·
+ * NEXUS_WOL_PORT = المنفذ (افتراضي 9 التعاقدي — يُبدّل في الاختبار).
+ */
+function sendWolPacket(macNorm: string, cb: (ok: boolean, detail: string) => void) {
+  const pkt = Buffer.from('FFFFFFFFFFFF' + macNorm.replace(/:/g, '').repeat(16), 'hex')
+  const targets = (process.env.NEXUS_WOL_BROADCAST || '255.255.255.255')
+    .split(',').map((s) => s.trim()).filter(Boolean).slice(0, 4)
+  const port = Number(process.env.NEXUS_WOL_PORT || 9) || 9
+  if (!targets.length) {
+    cb(false, 'لا وجهات broadcast')
+    return
+  }
+  const sock = createSocket({ type: 'udp4', reuseAddr: true })
+  let done = false
+  const finish = (ok: boolean, detail: string) => {
+    if (done) return
+    done = true
+    try { sock.close() } catch { /* مغلق بالفعل */ }
+    cb(ok, detail)
+  }
+  sock.on('error', (e) => finish(false, `socket: ${e.message}`))
+  sock.bind(() => {
+    try { sock.setBroadcast(true) } catch { /* محجوب — نكمل */ }
+    let pending = targets.length
+    let sent = 0
+    for (const t of targets) {
+      sock.send(pkt, port, t, (err) => {
+        if (!err) sent++
+        if (--pending === 0) {
+          finish(sent > 0, `${sent}/${targets.length} وجهة → ${targets.join(',')}:${port} (${pkt.length} بايت)`)
+        }
+      })
+    }
+  })
 }
 
 function rcLog(text: string, kind: 'in' | 'ok' | 'info' = 'in') {
@@ -166,6 +207,7 @@ io.on('connection', (socket) => {
     else if (action === 'hibernate') desktop.power = 'shutting-down'
     else if (action === 'lock') desktop.power = 'locked'
     else if (action === 'unlock') desktop.power = 'on'
+    else if (action === 'logout') desktop.power = 'locked' // شاشة الدخول = جلسة مقفلة
   })
 
   // ==== Wake-on-LAN ====
@@ -189,7 +231,13 @@ io.on('connection', (socket) => {
       return
     }
     const hex = 'FFFFFFFFFFFF' + norm.replace(/:/g, '').repeat(16)
-    rcLog(`حزمة Wake-on-LAN السحرية أُرسلت إلى ${norm} — 6×FF + MAC×16 = ${hex.length / 2} بايت`, 'in')
+    rcLog(`Wake-on-LAN: صياغة الحزمة السحرية إلى ${norm} — 6×FF + MAC×16 = ${hex.length / 2} بايت — جارٍ الإرسال الفعلي…`, 'in')
+    // FA-power: الإرسال الفعلي عبر UDP broadcast (لا مجرد صياغة)
+    sendWolPacket(norm, (ok, detail) => {
+      rcLog(ok
+        ? `حزمة Wake-on-LAN السحرية أُرسلت فعليًا إلى ${norm} — ${detail}`
+        : `فشل إرسال حزمة Wake-on-LAN (${detail})`, ok ? 'in' : 'info')
+    })
     io?.emit('desktop:wake', { source: 'wol', mac: norm, packet: hex })
   })
 

@@ -8,6 +8,7 @@
 
 mod clipboard;
 mod notify;
+mod power;
 mod procman;
 mod settings;
 mod shortcuts;
@@ -69,9 +70,13 @@ fn main() {
             Ok(())
         })
         // FA-clipboard-sync — أوامر الطبقة الأصلية للحافظة الموحدة (عقد §11)
+        // FA-power — أوامر النظام/الطاقة الحقيقية + MAC + إلغاء الإيقاف (عقد §12)
         .invoke_handler(tauri::generate_handler![
             clipboard::clip_apply,
-            clipboard::clip_send_now
+            clipboard::clip_send_now,
+            power::power_request,
+            power::power_cancel,
+            power::system_mac
         ])
         .on_window_event(|window, event| match event {
             // إغلاق → إخفاء إلى الـ Tray (قابل للتعطيل من قائمة الـ Tray)

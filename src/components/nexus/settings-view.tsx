@@ -111,6 +111,26 @@ export function SettingsView() {
   const devices = useNexus((s) => s.devices)
   const connected = devices.filter((d) => d.state === "connected").length
 
+  // FA-power (عقد §12) — إعدادات أمان سطح المكتب (وضع نافذة Tauri فقط):
+  // القفل التلقائي عند ابتعاد الهاتف (منارة القرب) — يقرؤها Rust من status.desktop.security
+  const [autoLock, setAutoLock] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (!IS_DESKTOP_WINDOW) return
+    void fetch("/api/desktop/shortcuts", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setAutoLock(typeof j?.security?.autoLock === "boolean" ? j.security.autoLock : true))
+      .catch(() => setAutoLock(true))
+  }, [])
+  const putAutoLock = (v: boolean) => {
+    setAutoLock(v)
+    void fetch("/api/desktop/shortcuts", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ security: { autoLock: v } }),
+    }).catch(() => null)
+    announce(v ? t("القفل التلقائي مفعّل") : t("القفل التلقائي معطل"))
+  }
+
   const fontBtn = (v: 1 | 1.125 | 1.25, label: string) => (
     <Button
       key={v}
@@ -271,6 +291,36 @@ export function SettingsView() {
           </div>
         </CardContent>
       </Card>
+
+      {/* الأمان (FA-power — نافذة سطح المكتب فقط) */}
+      {IS_DESKTOP_WINDOW && (
+        <Card>
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <SectionTitle
+                icon={ShieldCheck}
+                title={t("القفل التلقائي عند ابتعاد الهاتف")}
+                desc={t("عند فقدان منارة هاتفك (قرب/اتصال) تُقفل جلسة الكمبيوتر تلقائيًا مع إشعار — قابل للإلغاء خلال مهلة السماح من لوحة الحماية")}
+              />
+              <Switch
+                checked={autoLock ?? true}
+                onCheckedChange={putAutoLock}
+                disabled={autoLock === null}
+                aria-label={t("القفل التلقائي")}
+              />
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between gap-3">
+              <SectionTitle
+                icon={AlertTriangle}
+                title={t("تأكيد أمان أوامر النظام")}
+                desc={t("الإيقاف/إعادة التشغيل/الإسبات/تسجيل الخروج من الهاتف تُنفَّذ بعد عدّاد 10 ثوانٍ ظاهر في الشريط — قابل للإلغاء")}
+              />
+              <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">10s</Badge>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* التحديث */}
       <Card>
