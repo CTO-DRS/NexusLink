@@ -577,3 +577,26 @@ Work Log:
 Stage Summary:
 - الحلقة التعاقدية كاملة: طلب من الهاتف → screen:req → عرض كمبيوتر kind=screen → إجابة هاتفية → RTP محلي مباشر → شاشة الكمبيوتر على هاتفك بجودة 15-60fps قابلة للتبديل — لمسها يتحكم بالمؤشر حقنيًا خلال جلسة موثوقة (نقرة/سحب/تمرير/قرص/أيمن + عربي كامل). وبالعكس: زر «تشغيل الويب كام» → cam:cmd → بث كاميرا الهاتف (فيديو+صوت) → فك H264/Opus → حقن YUYV في كاميرا افتراضية وPCM في ميكروفون افتراضي — تظهران كأجهزة نظامية في Zoom/Meet/Camera.
 - الدوايفور: لينكس v4l2loopback + PulseAudio (إرشاد modprobe) — ويندوز akvirtualcamera + VB-CABLE — ماك akvirtualcamera + BlackHole — غياب أي منها لا يكسر شيئًا: حالة صادقة + إرشاد تثبيت عربي في البطاقة (حدود موثقة في §15: قيود توقيع macOS الحديث، OBS بديل عملي).
+
+---
+Task ID: FA-media-CI-r3..r5
+Agent: main (Super Z)
+Task: إغلاق حلقة CI لطبقة الوسائط الأصلية — الجولات 3-5: تشخيص ثلاثية الفشل على a803bb1، إصلاحات متحققة من مصادر الكريتات، أخطاء كامنة تكشفت تباعًا، أخضر كامل 3/3 + Release، واستبدال أصول v1.0.0
+
+Work Log:
+- استئناف بعد إعادة ضبط الحاوية: rust اختفى (أعيد تثبيته) وlocal main كان عالقًا عند التزام عابة تلقائي a5231e0 (رسالة UUID) وشجرة العمل مطابقة للمحتوى البعيد بايتًا-بايتًا لكل الملفات الموجودة — فرع أمان backup/stale-snapshot-a5231e0 ثم reset --hard إلى a803bb1 (صفر فقد عمل).
+- CI على a803bb1: Release أخضر، Desktop 3/3 فاشل. ثلاثية أسباب متحققة من المصادر (تنزيل crates.io):
+  (1) ويندوز: scap 0.0.8 مكسور مع أي windows-capture منشورة (يورد windows_capture::capture::Context المحذوفة — E0432 ×3، والتثبيت 1.3.6 لم ينفع) → scap صار ماك فقط في Cargo.toml، والالتقاط على ويندوز عبر windows-capture 1.3.6 مباشرة: GraphicsCaptureApiHandler (الطريقة on_frame_arrived تأخذ InternalCaptureControl ثالثة!) + start_free_threaded + CaptureControl::stop + Settings::new خمسية + ColorFormat::Bgra8. وقائمة النوافذ عبر EnumWindows يدويًا لأن enumerate في الكرِيت يستعمل EnumChildWindows (يعدّ عناصر التحكم الداخلية).
+  (2) لينكس: الإرسال Result<Cookie, ConnectionError> والرد Result<_, ReplyError> — نوعا خطأ مختلفان أفشلا المحاولتين السابقتين (and_then ثم .reply() مباشرة) → جسر x11reply<C,R> → Option بـ 11 موقعًا.
+  (3) ماك: libc_open بتوقيع ثابت تحت link_name="open" وopen متغيّرة int open(const char*, int, ...) → لاينت invalid_runtime_symbol_definitions الجديد → إعلان متغيّر.
+- درس متكرر حاسم: **إصلاح أخطاء الترجمة يكشف أخطاء كامنة خلفها** —
+  r4: GetImageReply بلا حقلي width/height (الأبعاد من الطلب rw×rh) + E0308 RandR width/height هما u16 والبنية تريد u32 + E0515 الإغلاق أرجع مرجعًا داخل r.monitors المحلية → صف مملوك (mx,my,mw,mh).
+  r5: ربط ماك — CGWindowGetBounds ليست API عامة (اخترعها 3cea500 ولم يكشفها الرابط لأن الترجمة كانت تفشل أولًا) → CGWindowListCopyWindowInfo + kCGWindowNumber/kCGWindowBounds + CGRectMakeWithDictionaryRepresentation (رؤوس CGWindow.h) مع CF* CoreFoundation FFI كامل + CFRelease. وويندوز: as_raw_nopadding_buffer على FrameBuffer لا على Frame (سلسلة frame.buffer()?) — إصلاح ذاتي قبل الجولة مع إزالة type Frame غير الموجود في الـ trait (E0220) وتوحيد فرعي Window/Monitor ببناء Settings داخل كل فرع (نوع الإرجاع لا يذكر T).
+- إثبات محلي قبل كل دفعة: كرِيت فحص أنماط scripts/x11-api-check يجمّع كل أشكال الاستدعاء + media-verify 38/38 (حلقة WebRTC حقيقية: 20 إطار H264 + 40 حزمة Opus عبر RTP) + E2E 90/90 بعد إعادة بناء standalone.
+- دروس بيئة إعادة الضبط: E2E يحتاج من build-resources.sh خطوتَي comms+gateway فقط (نسخة server الثقيلة ~3GB للـ CI حصرًا) · القرص 9.9GB يمتلئ (standalone 3.2GB + أهداف التحقق) → تحرير 2.4GB · الأنبوب عبر head يخفي فشل أمر سابق في السلسلة (رمز خروج الأنبوب = الأخير).
+- الجولات: r3 (a803bb1) 3×فاشل → إصلاحات 33ebfee → r4: linux 3 أخطاء كامنة + ماك ربط + ويندوز E0599 → إصلاح ذاتي fdee612 → r4b فاشل 3 أخطاء → 35907f4 → **r5 أخضر كامل: Desktop 3/3 (deb/nsis/dmg) + Release (analyze الصفرية + APK/AAB/iOS)**.
+- أصول v1.0.0 استُبدلت من الجولة الخضراء 35907f4: apk عام (635058652، 139.5MB) + exe (635063882، 197.0MB) + deb (635068893، 273.4MB) + dmg (635074698، 282.2MB) — بقي arm64-release.apk القديم كما هو (النمط المتحفظ السابق). الوسم والأرقام لم تُمَس (v1.0.0 في tauri.conf/Cargo/pubspec كما هي).
+
+Stage Summary:
+- طبقة الوسائط الأصلية مغلقة أعلى مستوى ممكن: تنفيذيًا 38/38 (WebRTC loopback حقيقي)، تعاقديًا E2E 90/90، وبناء فعلي 3/3 منصات + Release كامل — والبِنيات الأربعة الحية على Release v1.0.0 تشمل كل ميزات A-F.
+- المهمات الست (A desktop-native، B clipboard، C power، D input، E files، F media) كلها ملتزمة ومدفوعة وخضراء CI.
