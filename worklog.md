@@ -647,3 +647,26 @@ Work Log:
 
 Stage Summary:
 - main عند a1a3211 مدفوعًا ونظيفًا من الأسرار — خط الإصدار يُطلق عليه.
+
+---
+Task ID: R3-CI-and-Release
+Agent: main (Super Z)
+Task: إغلاق حلقة CI للجولة 3 (r1..r9) + رفع أصول Release v1.0.0 الكاملة (NSIS+MSI+Portable / DMG+app.tar.gz / AppImage+deb + تواقيع + latest.json + SHA256SUMS)
+
+Work Log:
+- **r1**: فشل 3/3 عند الحل — objc2-local-authentication بميزة LAPolicy مخترعة (المصدر: crate 0.3.2 — الـ enum يأتي مع LAContext، mod.rs cfg). الدرس: حاسم Cargo موحّد لكل الأهداف ⇒ ميزة ماك تُفشل لينكس أيضًا. تثبيت rust محليًا (cargo metadata) أعاد إنتاج الفشل وأثبت الإصلاح (732 حزمة).
+- **r2**: الحل مرّ — 6 أخطاء ترجمة كامنة (نمط «الأخطاء الكامنة تكشفت تباعًا»): ureq 2.10+ أزال impl Read for Response (→ into_reader، القفل 2.12.1) · tauri-plugin-updater on_chunk يمرر طولًا (usize) لا شريحة · ويندوز 0.58: UserConsentVerificationResult (لا ConsentVerificationResult) + RequestVerificationAsync (بلا لاحقة Consent — vtbl IUserConsentVerifierStatics) + HRESULT في windows::core + COINIT_MULTITHREADED ثابت حرّ. كلها متحققة من مصادر الكريتات/windows-rs 0.58 قبل الإصلاح.
+- **r3**: الترجمة خضراء 3/3 — الفشل انتقل للـ bundling: linuxdeploy يبتلع stderr بتصميمه (linuxdeploy.rs «we have to ignore the output») → جولة -v تشخيصية.
+- **r5 verbose** كشف الاثنين: (G-28) linuxdeploy يفشل على ELF musl مضمّن (sharp-linuxmusl-x64 — «libc.musl-x86_64.so.1») — حذف *musl* من node_modules المضمنة؛ (LGHT0311) قاعدة MSI code page 1252 لا تشفر العربية — الوصفان ASCII نقيان.
+- **r6**: G-28 بنمط *-musl* أفشله غياب الشرطة في sharp-linuxmusl → *musl*؛ وماك خضراء من r4 (dmg app أنتج أصل updater).
+- **r7**: لينكس خضراء (deb+AppImage) — NO_STRIP=true (linuxdeploy strip يفشل على .relr.dyn — tauri#14796 بتأكيد FabianLars) + VBScript Add-WindowsCapability (light.exe ICE على runners 2026 — tauri#13336/#13752 بصمة مطابقة). ويندوز: LGHT0311 عاد عند main.wxs(122) رغم ASCII الوصف.
+- **r7→r8 التحقيق**: مسارات غير ASCII داخل الموارد نفسها — تتبّع Next/Turbopack جرّ شجرة المستودع كاملة إلى standalone (skills/ بأسماء صينية + download/scripts/.git — ~160MB): (G-29) keep-list prune في build-resources.sh (server.js+.next+public+db+node_modules+package.json) — الحزمة 556MB→152MB وصفر مسارات غير ASCII مثبت محليًا. و(G-30) جذر بيانات قابل للكتابة: MSI per-machine في Program Files — procman data_root()=app_config_dir/nexus-data + NEXUS_DATA_ROOT للعمليات الثلاث + data-root.ts (fallback cwd/data — سلوك dev/E2E لم يتغير) + مواقع Rust الكتابة (procman/clipboard/sync) + notify يفك «data/».
+- **r8**: NSIS+MSI أخضران مع تواقيع — فشل خطوة portable فقط: tauri CLI يعيد تسمية sidecar إلى node.exe في target/release (النمط node-*.exe قديم — fallback محفوظ).
+- **r9**: **أخضر كامل 3/3** (linux deb+AppImage · mac dmg+app+sigs · win nsis+msi+portable+sigs + test 3/3 + android + ios).
+- **الرفع**: desktop artifacts من r9 → استبدال exe/deb/dmg (بأصول الجولة الأخضر الكاملة G-27/28/29/30) + إضافة msi/portable/appimage/app.tar.gz + 4 تواقيع + latest.json جديدة (نفس المفتاح — pubkey tauri.conf لم يتغير) + SHA256SUMS.txt شاملة (14 أصلًا) + جسم الإصدار بالعربية. ملاحظة API: حذف الأصل عبر /releases/assets/{id} (بلا معرّف الإصدار) وurllib يفشل في PATCH الإصدار (404) بينما curl 200.
+- التحقق الحي: latest.json تعيد 1.0.0 والمنصات الثلاث (windows→exe، linux→AppImage، darwin→app.tar.gz) — SHA256SUMS تعود بالأصول — صفحة الإصدار منشورة.
+- APKs لم تُمس (خضراء FA-media كما هي) — الوسم v1.0.0 والأرقام مقفولة طوال الجولة.
+
+Stage Summary:
+- الجولة 3 مغلقة أعلى مستوى ممكن: CI يبني الصيغ الست فعليًا على 3 منصات، صفحة الإصدار تحمل 15 أصلًا، والمحدّث الموقّع حي بنقطة فحص صحيحة. اختبار النجاح الميداني (تثبيت نظيف → يعمل مع الهاتف) موثق خطوة-خطوة في docs/e2e-checklist.md §1 — والفجوات الفيزيائية الوحيدة المتبقية هي عتادية بحتة (بصمة/بطارية/ميكروفون Zoom) موثقة بصدق.
+- عيوب كامنة أصلحت خلال الجولة (إلى جانب G-27/28/29/30): resolve_resources (الخادم المضمّن كان ميتًا في كل حزمة مثبتة) — mDNS مكسور في كل حزمة منشورة سابقًا — تجميع comms خارجي التبعية.
