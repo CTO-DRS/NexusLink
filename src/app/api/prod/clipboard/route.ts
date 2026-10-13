@@ -6,6 +6,7 @@ import { db } from "@/lib/db"
 import { resolveSafe } from "@/lib/nexus/fs-server"
 import { prodEmit } from "@/lib/nexus/productivity-bridge"
 import { syncDeviceName } from "@/lib/nexus/sync-engine"
+import { writeServerAudit } from "@/lib/nexus/desktop-hardening"
 
 export const dynamic = "force-dynamic"
 
@@ -34,6 +35,13 @@ export async function POST(req: Request) {
     },
   })
   prodEmit("clip:new", { ...item, createdAt: item.createdAt.getTime() })
+  // FA-harden (عقد §16) — تدقيق الحافظة (أصل: هاتف/ويب/المراقب الأصلي)
+  void writeServerAudit({
+    action: "clipboard",
+    detail: `مشاركة حافظة (${item.kind}${item.size ? `, ${item.size} بايت` : ""}) — وضع ${item.mode}`,
+    actor: item.deviceName || item.deviceId,
+    deviceId: item.deviceId,
+  }).catch(() => null)
   return Response.json({ ok: true, item: { ...item, createdAt: item.createdAt.getTime() } })
 }
 

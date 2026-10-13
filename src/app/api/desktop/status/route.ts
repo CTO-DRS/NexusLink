@@ -22,6 +22,7 @@ import { store as deviceStore } from "@/lib/nexus/devices"
 import { db } from "@/lib/db"
 import { serNotification } from "@/lib/nexus/comms-server"
 import { readShortcuts, readDesktopClip, readDesktopSecurity, readDesktopSync, readDesktopMedia } from "@/lib/nexus/desktop-shortcuts"
+import { readDesktopHardening } from "@/lib/nexus/desktop-hardening"
 import { agentMedia } from "@/lib/nexus/guard-bridge"
 
 export const dynamic = "force-dynamic"
@@ -106,6 +107,9 @@ export async function GET() {
         sync: syncCfg,
         // FA-media (عقد §15) — حالة طبقة الوسائط الأصلية (بث الشاشة + الويب كام الافتراضي)
         media: mediaCfg,
+        // FA-harden (عقد §16) — إعدادات التقوية المشتركة (نفس SQLite):
+        // قفل التطبيق + الخمول + المحدّث — يقرؤها Rust دوريًا وطبّقها محليًا
+        hardening: await readDesktopHardening(),
         transfers,
         notifs,
       },

@@ -242,3 +242,14 @@ model SecState {
   seedVer      Int      @default(0)
   updatedAt    DateTime @updatedAt
 }
+
+// ============ المرحلة G — صلّب الإصدار (عقد §16) ============
+// إعدادات سطح المكتب المشتركة (نفس SQLite): نسخة الويب والتطبيق يقرآن
+// ويكتبان الكائن نفسه عبر /api/desktop/settings — المفتاح الواحد يحمل JSON.
+// المزامنة: التطبيق يسحب دوريًا خفيفًا ويدفع عند كل تغيير محلي، والويب
+// يكتب مباشرة — الكائن الأخير هو الصالح (آخر كاتب يفوز كما في desktop-ui.json).
+model DesktopSetting {
+  key       String   @id
+  value     String   // JSON: appLock | idle | updater | general
+  updatedAt DateTime @updatedAt
+}
