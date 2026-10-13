@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { useNexus } from "@/lib/store"
 import { useI18n } from "@/lib/i18n"
+import { isTauri, tauriInvoke } from "@/lib/tauri"
 import { CliTerminal } from "./cli-terminal"
 import {
   Gauge, Stethoscope, SquareTerminal, Package, Download, Upload, Timer,
@@ -211,6 +212,32 @@ function DiagnosticsTab() {
   const { t } = useI18n()
   const [checks, setChecks] = useState<Check[]>([])
   const [running, setRunning] = useState(false)
+  const [nativeBusy, setNativeBusy] = useState(false)
+  const versionRef = useRef<string>("1.0.0")
+
+  // FA-harden — القياس الأصلي الحقيقي (من محرك Rust لا المتصفح): تنزيل 24MB + رفع 8MB
+  const runNativeSpeed = useCallback(async () => {
+    if (!isTauri()) return
+    setNativeBusy(true)
+    try {
+      const r = await tauriInvoke<{ ok: boolean; downMBs: number | null; upMBs: number | null; downError?: string; upError?: string }>("diag_speed_test")
+      setChecks((cur) => [
+        ...cur.filter((c) => c.id !== "native-speed"),
+        {
+          id: "native-speed",
+          label: t("قياس السرعة الأصلي (محرك Rust)"),
+          status: r?.ok ? "pass" : "fail",
+          detail: r?.ok
+            ? `↓ ${r.downMBs ?? "—"} MB/s · ↑ ${r.upMBs ?? "—"} MB/s`
+            : r?.downError || r?.upError || t("تعذر القياس"),
+        },
+      ])
+    } catch {
+      setChecks((cur) => [...cur.filter((c) => c.id !== "native-speed"), { id: "native-speed", label: t("قياس السرعة الأصلي (محرك Rust)"), status: "fail", detail: t("متاح في نافذة التطبيق فقط") }])
+    } finally {
+      setNativeBusy(false)
+    }
+  }, [t])
 
   const runDiag = useCallback(async () => {
     setRunning(true)
@@ -228,7 +255,7 @@ function DiagnosticsTab() {
       push("rtt", t("زمن استجابة النواة"), "fail", t("تعذر الوصول إلى النواة"))
     }
 
-    // 2) server snapshot
+    // 2) server snapshot + كل منافذ Sidecar (العقد §1 حرفيًا — FA-harden بند 5)
     try {
       const r = await fetch("/api/tools/diag", { cache: "no-store" })
       const j = await r.json()
@@ -236,8 +263,26 @@ function DiagnosticsTab() {
       push("remote", t("جسر التحكم عن بُعد"), j.services.remoteBridge === "up" ? "pass" : "fail", `:3004 ${j.services.remoteBridge}`)
       push("srvmem", t("ذاكرة النواة (RSS)"), j.memory.rssMB < 200 ? "pass" : "warn", `${j.memory.rssMB} MB · ${j.runtime}`)
       push("storage", t("تخزين NexusLink المحلي"), "pass", `${(j.storageBytes / 1048576).toFixed(1)} MB`)
+      // منافذ الجسور المتبقية + البوابة — فحص handshake فعلي من النواة
+      const roleNames: Record<string, string> = { media: t("الوسائط"), guard: t("الحماية"), prod: t("الإنتاجية"), sec: t("التشفير E2E"), gateway: t("البوابة العامة") }
+      for (const p of j.ports ?? []) {
+        if (p.port === 3000 || p.port === 3003 || p.port === 3004) continue // مغطاة أعلاه
+        push(`port-${p.port}`, `${t("منفذ Sidecar")} :${p.port} (${roleNames[p.role] ?? p.role})`, p.ok ? "pass" : "warn", p.ok ? t("يعمل") : t("متوقف"))
+      }
     } catch {
       push("srv", t("لقطة النواة التشخيصية"), "fail", t("تعذر جلب /api/tools/diag"))
+    }
+
+    // 2-ب) FA-harden — الفحص الأصلي من الطبقة Rust (TCP حقيقي + حالة الخمول/القفل)
+    if (isTauri()) {
+      try {
+        const r = await tauriInvoke<{ ports: { port: number; role: string; ok: boolean; ms: number }[]; up: number; total: number }>("diag_sidecar_ports")
+        push("native-ports", t("فحص أصلي لمنافذ Sidecar (TCP)"), r?.up === r?.total ? "pass" : r?.up ? "warn" : "fail", `${r?.up ?? 0}/${r?.total ?? 0} ${t("تعمل")} · ${r?.ports?.map((p) => `:${p.port}${p.ok ? "✓" : "✗"}`).join(" ") ?? ""}`)
+      } catch { push("native-ports", t("فحص أصلي لمنافذ Sidecar (TCP)"), "na", t("الطبقة الأصلية غير جاهزة")) }
+      try {
+        const r = await tauriInvoke<{ idleSecs: number | null; idleMode: boolean; locked: boolean }>("diag_idle_state")
+        push("native-idle", t("كشف الخمول الأصلي"), r?.idleSecs !== null && r?.idleSecs !== undefined ? "pass" : "na", r?.idleSecs != null ? `${r.idleSecs}s · ${r.idleMode ? t("وضع التوفير مفعّل") : t("نشط")} · ${r.locked ? t("مقفول") : t("غير مقفول")}` : t("المنصة بلا كشف خمول (Wayland)"))
+      } catch { push("native-idle", t("كشف الخمول الأصلي"), "na", "—") }
     }
 
     // 3) browser heap
@@ -308,9 +353,34 @@ function DiagnosticsTab() {
     return () => clearTimeout(tm)
   }, [runDiag])
 
-  const exportReport = () => {
-    const report = { app: "NexusLink", version: "2.4.1", at: new Date().toISOString(), checks }
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" })
+  const exportReport = async () => {
+    // FA-harden — الإصدار الحقيقي + كامل التفاصيل؛ في نافذة التطبيق حوار حفظ أصلي
+    try {
+      const v = await fetch("/api/version", { cache: "no-store" }).then((r) => r.json()).catch(() => null)
+      versionRef.current = v?.current ?? "1.0.0"
+    } catch { /* محلي */ }
+    const report = {
+      app: "NexusLink",
+      version: versionRef.current,
+      at: new Date().toISOString(),
+      checks,
+      platform: typeof navigator !== "undefined" ? navigator.userAgent : "",
+    }
+    const content = JSON.stringify(report, null, 2)
+    if (isTauri()) {
+      try {
+        const saved = await tauriInvoke<{ save: string | null }>("plugin:dialog|save", {
+          options: { title: "NexusLink — تقرير التشخيص", defaultPath: "nexuslink-diagnostic-report.json", filters: [{ name: "JSON", extensions: ["json"] }] },
+        })
+        const path = (saved as unknown as { save?: string })?.save ?? (saved as unknown as string)
+        if (typeof path === "string" && path) {
+          const r = await tauriInvoke<{ ok: boolean; bytes: number }>("diag_export", { path, content })
+          if (r?.ok) setChecks((cur) => [...cur, { id: "export", label: t("تصدير التقرير"), status: "pass", detail: path }])
+          return
+        }
+      } catch { /* يسقط إلى التنزيل */ }
+    }
+    const blob = new Blob([content], { type: "application/json" })
     const a = document.createElement("a")
     a.href = URL.createObjectURL(blob)
     a.download = "nexuslink-diagnostic-report.json"
@@ -335,7 +405,12 @@ function DiagnosticsTab() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={exportReport} disabled={!checks.length} className="gap-2">
+              {isTauri() && (
+                <Button variant="outline" onClick={() => void runNativeSpeed()} disabled={nativeBusy} className="gap-2">
+                  <Gauge className={`w-4 h-4 ${nativeBusy ? "animate-pulse" : ""}`} /> {t("قياس أصلي")}
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => void exportReport()} disabled={!checks.length} className="gap-2">
                 <FileDown className="w-4 h-4" /> {t("تصدير التقرير")}
               </Button>
               <Button onClick={runDiag} disabled={running} className="gap-2">

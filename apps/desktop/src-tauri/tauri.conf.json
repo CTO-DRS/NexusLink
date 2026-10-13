@@ -16,6 +16,13 @@
   "plugins": {
     "deep-link": {
       "schemes": ["nexus"]
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/CTO-DRS/NexusLink/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFENUNGRjAyNUEzQ0FDNkMKUldSc3JEeGFBdjljSGVDWjIrck1uMmpNSWd3enJ5MGwzNUsvdHY0aUVzV0pjczREZnNPeDdYd2EK",
+      "dialog": false
     }
   },
   "bundle": {
@@ -23,6 +30,7 @@
     "category": "Utility",
     "shortDescription": "NexusLink — device bridge",
     "longDescription": "NexusLink: جسر الأجهزة — الهاتف وسطح المكتب في منصة واحدة. يضم سيرفر Nexus كاملاً داخل التطبيق (واجهة + جسور + بوابة + mDNS).",
+    "createUpdaterArtifacts": true,
     "targets": [
       "deb",
       "nsis",

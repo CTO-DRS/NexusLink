@@ -1,0 +1,17 @@
+[package]
+name = "hardening-verify"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# نفس تبعيات نواة التقوية (harden_core) حرفيًا
+hmac = "0.12"
+sha2 = "0.10"
+serde_json = "1"
+
+[[bin]]
+name = "hardening-verify"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 2

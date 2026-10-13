@@ -159,6 +159,19 @@ pub fn get_json(path: &str) -> Result<serde_json::Value, String> {
     resp.into_json().map_err(|e| format!("json: {e}"))
 }
 
+/// FA-harden (عقد §16) — PUT JSON إلى REST المحلي (دفع مرآة hasPin للمخزن المشترك)
+pub fn put_json(path: &str, body: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let url = format!("http://127.0.0.1:{REST_PORT}{path}");
+    let resp = http_agent().put(&url).send_json(body).map_err(|e| match e {
+        ureq::Error::Status(c, r) => format!(
+            "HTTP {c}: {}",
+            r.into_string().unwrap_or_default().chars().take(120).collect::<String>()
+        ),
+        ureq::Error::Transport(t) => format!("transport: {t}"),
+    })?;
+    resp.into_json().map_err(|e| format!("json: {e}"))
+}
+
 /// قراءة نص حافظة النظام
 pub fn read_clipboard_text() -> Result<String, String> {
     arboard::Clipboard::new()
