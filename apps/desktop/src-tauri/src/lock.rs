@@ -30,7 +30,7 @@ fn random_salt() -> [u8; 16] {
     }
     #[cfg(windows)]
     {
-        use windows::Win32::Security::Authentication::Identity::{BCryptGenRandom, BCRYPT_USE_SYSTEM_PREFERRED_RNG};
+        use windows::Win32::Security::Cryptography::{BCryptGenRandom, BCRYPT_USE_SYSTEM_PREFERRED_RNG};
         let mut s = [0u8; 16];
         unsafe {
             // NTSTATUS في windows 0.58 بلا expect — ok() يعيد Result
