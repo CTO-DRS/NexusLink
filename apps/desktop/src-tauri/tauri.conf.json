@@ -15,7 +15,9 @@
   },
   "plugins": {
     "deep-link": {
-      "schemes": ["nexus"]
+      "schemes": [
+        "nexus"
+      ]
     },
     "updater": {
       "endpoints": [
@@ -28,8 +30,8 @@
   "bundle": {
     "active": true,
     "category": "Utility",
-    "shortDescription": "NexusLink — device bridge",
-    "longDescription": "NexusLink: جسر الأجهزة — الهاتف وسطح المكتب في منصة واحدة. يضم سيرفر Nexus كاملاً داخل التطبيق (واجهة + جسور + بوابة + mDNS).",
+    "shortDescription": "NexusLink - LAN device bridge",
+    "longDescription": "NexusLink: device bridge for your LAN - the desktop app is the hub (embedded full Nexus server: UI + bridges + gateway + mDNS), the phone app is the agent. MSI constraint: this text must stay ASCII (code page 1252) - see the packaging contract.",
     "createUpdaterArtifacts": true,
     "targets": [
       "deb",
