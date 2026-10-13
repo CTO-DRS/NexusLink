@@ -794,6 +794,113 @@ try {
   webSock.disconnect()
   rcDesk.disconnect()
   rcPhone.disconnect()
+
+  // ==========================================================================
+  // FA-harden (عقد §16) — صلّب الإصدار: الإعدادات المشتركة + التدقيق + المحدّث + التشخيص
+  // ==========================================================================
+  {
+    const base = "http://127.0.0.1:3000"
+
+    // (أ) إعدادات التقوية المشتركة — نفس SQLite (بند 6): GET افتراضيات + PUT صالح + فاسد يُنقى
+    const hs0 = await fetch(`${base}/api/desktop/settings`).then((r) => r.json()).catch(() => null)
+    check("§16: GET /api/desktop/settings يعيد appLock+idle+updater",
+      hs0?.appLock && hs0?.idle && hs0?.updater, JSON.stringify(hs0 ?? {}).slice(0, 110))
+    const hsPut = await fetch(`${base}/api/desktop/settings`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appLock: { enabled: true, idleLockMin: 15 }, idle: { optMinutes: 3 }, updater: { autoCheck: false } }),
+    }).then((r) => r.json()).catch(() => null)
+    check("§16: PUT صالح يُحفظ ويُعاد (نفس SQLite)",
+      hsPut?.ok === true && hsPut?.appLock?.enabled === true && hsPut?.appLock?.idleLockMin === 15 && hsPut?.idle?.optMinutes === 3 && hsPut?.updater?.autoCheck === false,
+      JSON.stringify(hsPut ?? {}).slice(0, 130))
+    const hsBad = await fetch(`${base}/api/desktop/settings`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appLock: { enabled: true, idleLockMin: 9999 }, idle: { optMinutes: 0 } }),
+    }).then((r) => r.json()).catch(() => null)
+    check("§16: فاسد يُنقى (خارج النطاق ⇒ افتراضي — رفض لا حصر)",
+      hsBad?.ok === true && hsBad?.appLock?.idleLockMin === 0 && hsBad?.idle?.optMinutes === 5,
+      JSON.stringify(hsBad ?? {}).slice(0, 130))
+    // نظافة: إعادة الافتراضيات للمخزن المشترك
+    await fetch(`${base}/api/desktop/settings`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appLock: { enabled: false, idleLockMin: 0, biometric: false, hasPin: false }, idle: { optMinutes: 5, reducePolling: true }, updater: { autoCheck: true } }),
+    }).catch(() => null)
+
+    // (ب) التدقيق (بند 3): POST native-* → GET (مرشح) → فعل غريب يُرفض → مسار سيرفر يُدقَّق → DELETE native فقط
+    const ap = await fetch(`${base}/api/desktop/audit`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "native-lock", detail: "قفل تجريبي E2E", severity: "info" }),
+    }).then((r) => r.json()).catch(() => null)
+    check("§16: POST /api/desktop/audit يقبل native-*", ap?.ok === true, JSON.stringify(ap ?? {}))
+    const badAudit = await fetch(`${base}/api/desktop/audit`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "hax", detail: "x" }),
+    }).catch((e) => ({ status: 0, err: String(e) }))
+    check("§16: فعل غير native يُرفض من المسار الأصلي (400)", badAudit.status === 400, `HTTP ${badAudit.status}`)
+    await sleep(250)
+    const ag = await fetch(`${base}/api/desktop/audit?take=50&severity=info`).then((r) => r.json()).catch(() => null)
+    check("§16: GET يعيد الحدث المدقق (مرشح severity=info)",
+      (ag?.events ?? []).some((e) => e.action === "native-lock" && String(e.detail).includes("E2E")),
+      `count=${ag?.events?.length ?? 0}`)
+    // تدقيق مسار السيرفر: نفس استدعاء القسم السابق المثبت (galaxy-s24 + pc-office/Inbox)
+    const srvBefore = await fetch(`${base}/api/desktop/audit?take=500&category=transfer`).then((r) => r.json()).catch(() => null)
+    await fetch(`${base}/api/devices`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "send-file", deviceId: "galaxy-s24", deviceName: "Galaxy S24", direction: "out", srcDeviceId: "pc-office", srcPath: "/Inbox/e2e-drop.txt", fileName: "e2e-drop.txt" }),
+    }).then((r) => r.json()).then((j) => console.log(`   [audit-probe] ok=${j?.ok} err=${j?.error ?? "-"}`)).catch((e) => console.log(`   [audit-probe] fetch-fail: ${String(e).slice(0, 80)}`))
+    await sleep(400)
+    const srvAfter = await fetch(`${base}/api/desktop/audit?take=500&category=transfer`).then((r) => r.json()).catch(() => null)
+    check("§16: نقل مسار السيرفر يُدقَّق (transfer مرئي في واجهة المراجعة)",
+      (srvAfter?.events?.length ?? 0) >= (srvBefore?.events?.length ?? 0) + 1,
+      `before=${srvBefore?.events?.length ?? 0} after=${srvAfter?.events?.length ?? 0}`)
+    const ad = await fetch(`${base}/api/desktop/audit`, { method: "DELETE" }).then((r) => r.json()).catch(() => null)
+    const afterDel = await fetch(`${base}/api/desktop/audit?take=500`).then((r) => r.json()).catch(() => null)
+    check("§16: DELETE يمسح native-* فقط (تدقيق FA-10 لا يُمس)",
+      ad?.ok === true && !(afterDel?.events ?? []).some((e) => String(e.action).startsWith("native-")),
+      JSON.stringify(ad ?? {}).slice(0, 80))
+
+    // (ج) status.desktop.hardening — يقرؤه Rust دوريًا (بندا 1+4)
+    const st = await fetch(`${base}/api/desktop/status`).then((r) => r.json()).catch(() => null)
+    check("§16: status.desktop.hardening (appLock/idle/updater)",
+      st?.ok === true && st?.desktop?.hardening?.appLock && st?.desktop?.hardening?.idle && st?.desktop?.hardening?.updater,
+      JSON.stringify(st?.desktop?.hardening ?? {}).slice(0, 120))
+
+    // (د) /api/version — الإصدار المقفول 1.0.0 + سجل إصدارات حقيقي (بند 2)
+    const ver = await fetch(`${base}/api/version`).then((r) => r.json()).catch(() => null)
+    check("§16: /api/version — current=1.0.0 مقفول + سجل إصدارات",
+      ver?.current === "1.0.0" && Array.isArray(ver?.changelog) && ver.changelog.some((c) => String(c.version).replace(/^v/, "") === "1.0.0"),
+      JSON.stringify({ current: ver?.current, entries: ver?.changelog?.length }).slice(0, 90))
+
+    // (هـ) التشخيص (بند 5): /api/tools/diag يفحص منافذ §1 الثمانية
+    const diag = await fetch(`${base}/api/tools/diag`).then((r) => r.json()).catch(() => null)
+    const ports = diag?.ports ?? []
+    const wantPorts = [3000, 3003, 3004, 3005, 3006, 3007, 3009, 81]
+    const allReported = wantPorts.every((p) => ports.some((x) => x.port === p))
+    check("§16: diag يفحص منافذ §1 الثمانية (النواة + البوابة حياة)",
+      allReported && ports.find((x) => x.port === 3000)?.ok === true && ports.find((x) => x.port === 81)?.ok === true,
+      ports.map((p) => `${p.port}:${p.ok ? "✓" : "✗"}`).join(" "))
+
+    // (و) أصول المحدّث + lock.html + حصرية native-
+    const fsSync = (await import("node:fs")).default
+    const conf = JSON.parse(fsSync.readFileSync(pathMod.join(ROOT, "apps/desktop/src-tauri/tauri.conf.json"), "utf8"))
+    check("§16: tauri.conf — updater endpoints+pubkey+createUpdaterArtifacts+إصدار 1.0.0",
+      Array.isArray(conf?.plugins?.updater?.endpoints) && conf.plugins.updater.endpoints.some((e) => String(e).endsWith("/latest/download/latest.json"))
+      && String(conf?.plugins?.updater?.pubkey ?? "").length > 100
+      && conf?.bundle?.createUpdaterArtifacts === true
+      && conf?.version === "1.0.0",
+      "tauri.conf.json")
+    const lockPath = pathMod.join(ROOT, "apps/desktop/splash/lock.html")
+    check("§16: lock.html ضمن frontendDist ويستدعي أوامر القفل",
+      fsSync.existsSync(lockPath) && fsSync.readFileSync(lockPath, "utf8").includes("lock_verify_pin"),
+      "lock.html")
+    const hardTs = fsSync.readFileSync(pathMod.join(ROOT, "src/lib/nexus/desktop-hardening.ts"), "utf8")
+    check("§16: بادئة native- حصرية للطبقة الأصلية (المسار السيرفي بلا بادئة)",
+      hardTs.includes('startsWith("native-")'), "desktop-hardening.ts")
+
+    // (ز) العقد §16 موثق حرفيًا
+    check("العقد: §16 موثق (قفل PIN+بصمة + محدّث موقّع + تدقيق native-* + خمول + تشخيص أصلي + نفس SQLite)",
+      contract.includes("## 16.") && contract.includes("PBKDF2-HMAC-SHA256") && contract.includes("tauri-plugin-updater")
+      && contract.includes("native-") && contract.includes("DesktopSetting") && contract.includes("idle_decision"))
+  }
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {

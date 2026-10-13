@@ -18,6 +18,7 @@ import {
   Accessibility, Keyboard, Gauge, HardDriveDownload, Sparkles, RotateCcw,
   Ear, Volume2, CheckCircle2, AlertTriangle, Rocket, Package, Globe,
   FolderSync, Plus, Trash2, FolderOpen, MonitorPlay, Camera, Mic,
+  Lock, Fingerprint, ScrollText, History,
 } from "lucide-react"
 import { toast } from "sonner"
 import { pickFolder } from "@/lib/desktop-files"
@@ -219,6 +220,159 @@ export function SettingsView() {
     putSyncPairs([...cur, { id, name, localDir: dir, phoneDir: "/Sync/" + id, enabled: true }])
     announce(t("أُضيف زوج المزامنة"))
   }
+
+  // ===========================================================================
+  // FA-harden (عقد §16) — قفل التطبيق + الخمول + المحدّث الموقّع + سجل التدقيق
+  // ===========================================================================
+  interface AppLockCfg { enabled: boolean; idleLockMin: number; biometric: boolean; hasPin: boolean }
+  interface HardeningCfg { appLock: AppLockCfg; idle: { optMinutes: number; reducePolling: boolean }; updater: { autoCheck: boolean } }
+  interface LockState { locked: boolean; hasPin: boolean; biometric: boolean; appLockEnabled: boolean; idleLockMin: number; platform: string }
+  interface HistoryEntry { version: string; tag?: string; date: string; items: string[] }
+  interface AuditEvent { id: string; at: string; actor: string; action: string; detail: string; severity: string }
+
+  const [hardening, setHardening] = useState<HardeningCfg | null>(null)
+  const [lockState, setLockState] = useState<LockState | null>(null)
+  const [pinMode, setPinMode] = useState(false)
+  const [pinA, setPinA] = useState("")
+  const [pinB, setPinB] = useState("")
+  const [pinBusy, setPinBusy] = useState(false)
+  const [updBusy, setUpdBusy] = useState(false)
+  const [updResult, setUpdResult] = useState("")
+  const [hist, setHist] = useState<HistoryEntry[] | null>(null)
+  const [histOpen, setHistOpen] = useState(false)
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[] | null>(null)
+  const [auditCat, setAuditCat] = useState("all")
+  const [auditSev, setAuditSev] = useState("all")
+  const [auditConfirm, setAuditConfirm] = useState(false)
+
+  // المخزن المشترك (نفس SQLite — بند 6): الويب والتطبيق يقرآن/يكتبان الكائن نفسه
+  const loadHardening = useCallback(() => {
+    void fetch("/api/desktop/settings", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.appLock && j?.idle && j?.updater) setHardening({ appLock: j.appLock, idle: j.idle, updater: j.updater })
+      })
+      .catch(() => null)
+    if (IS_DESKTOP_WINDOW) {
+      void tauriInvoke<LockState>("lock_state").then(setLockState).catch(() => null)
+    }
+  }, [])
+  useEffect(() => {
+    loadHardening()
+    const iv = setInterval(loadHardening, 15000)
+    return () => clearInterval(iv)
+  }, [loadHardening])
+
+  const putHardening = (patch: Record<string, unknown>) => {
+    void fetch("/api/desktop/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j?.ok) throw new Error(j?.error)
+        setHardening({ appLock: j.appLock, idle: j.idle, updater: j.updater })
+        // Rust يسحب السياسة خلال ≤10ث — إعادة القراء الفورية تظهر مرآة hasPin/biometric
+        setTimeout(loadHardening, 400)
+      })
+      .catch(() => toast.error(t("تعذر حفظ إعدادات التقوية")))
+  }
+
+  const savePin = async () => {
+    if (pinA.length < 4) { toast.error(t("الرمز 4 محارف على الأقل")); return }
+    if (pinA !== pinB) { toast.error(t("الرمزان غير متطابقين")); return }
+    setPinBusy(true)
+    try {
+      const r = await tauriInvoke<{ ok: boolean; error?: string }>("lock_set_pin", { pin: pinA })
+      if (r?.ok) {
+        toast.success(t("رمز القفل مضبوط — الهاش محلي ولا يغادر جهازك"))
+        setPinA(""); setPinB(""); setPinMode(false)
+      } else toast.error(r?.error ?? t("فشل الضبط"))
+    } catch {
+      toast.error(t("متاح في نافذة التطبيق فقط"))
+    } finally {
+      setPinBusy(false)
+      loadHardening()
+    }
+  }
+  const clearPin = async () => {
+    try {
+      const r = await tauriInvoke<{ ok: boolean; error?: string }>("lock_clear_pin")
+      if (!r?.ok && r?.error) toast.error(r.error)
+      else toast.success(t("مُسح رمز القفل"))
+    } catch { toast.error(t("متاح في نافذة التطبيق فقط")) }
+    loadHardening()
+  }
+  const lockNow = async () => {
+    try {
+      const r = await tauriInvoke<{ ok: boolean; locked: boolean }>("lock_now_cmd")
+      if (r?.ok && !r.locked) toast.info(t("فعّل قفل التطبيق واضبط رمزًا أولًا — بلا وسيلة فتح يُتجاهل القفل بصدق"))
+    } catch { toast.error(t("متاح في نافذة التطبيق فقط")) }
+  }
+
+  const loadHistory = useCallback(() => {
+    if (IS_DESKTOP_WINDOW) {
+      void tauriInvoke<{ history: HistoryEntry[] }>("updater_state")
+        .then((r) => setHist(r?.history ?? []))
+        .catch(() => null)
+    } else {
+      void fetch("/api/version", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j) => setHist(j?.changelog ?? []))
+        .catch(() => null)
+    }
+  }, [])
+  useEffect(() => { loadHistory() }, [loadHistory])
+
+  const checkUpdateNow = async () => {
+    setUpdBusy(true)
+    try {
+      if (IS_DESKTOP_WINDOW) {
+        const r = await tauriInvoke<{ ok: boolean; available: boolean; version: string; error?: string }>("updater_check_now")
+        setUpdResult(
+          r?.ok
+            ? r.available
+              ? `${t("يتوفر تحديث موقّع:")} v${r.version}`
+              : `${t("أنت على أحدث إصدار")} (v${r.version})`
+            : (r?.error ?? t("تعذر الفحص")),
+        )
+      } else {
+        const r = await fetch("/api/version", { cache: "no-store" }).then((x) => x.json())
+        setUpdResult(r.current === r.latest ? `${t("أنت على أحدث إصدار")} (v${r.current})` : `${t("يتوفر تحديث")} v${r.latest}`)
+      }
+    } finally {
+      setUpdBusy(false)
+      setHistOpen(true)
+      loadHistory()
+    }
+  }
+
+  const loadAudit = useCallback(() => {
+    const q = new URLSearchParams({ take: "200" })
+    if (auditCat !== "all") q.set("category", auditCat)
+    if (auditSev !== "all") q.set("severity", auditSev)
+    void fetch(`/api/desktop/audit?${q}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setAuditEvents(Array.isArray(j?.events) ? j.events : []))
+      .catch(() => setAuditEvents([]))
+  }, [auditCat, auditSev])
+  useEffect(() => { loadAudit() }, [loadAudit])
+
+  const clearAudit = async () => {
+    if (!auditConfirm) {
+      setAuditConfirm(true)
+      setTimeout(() => setAuditConfirm(false), 4000)
+      return
+    }
+    setAuditConfirm(false)
+    try {
+      await fetch("/api/desktop/audit", { method: "DELETE" })
+      toast.success(t("مُسح سجل التدقيق الأصلي (أحداث native-* فقط)"))
+    } catch { toast.error(t("تعذر المسح")) }
+    loadAudit()
+  }
+  // ===========================================================================
 
   const fontBtn = (v: 1 | 1.125 | 1.25, label: string) => (
     <Button
@@ -529,6 +683,231 @@ export function SettingsView() {
           </CardContent>
         </Card>
       )}
+
+      {/* FA-harden (عقد §16 بندا 1+2+4) — قفل التطبيق + الخمول + المحدّث (نافذة سطح المكتب) */}
+      {IS_DESKTOP_WINDOW && (
+        <Card>
+          <CardContent className="p-5 space-y-4">
+            <SectionTitle
+              icon={Lock}
+              title={t("قفل وحماية التطبيق")}
+              desc={t("رمز PIN + بصمة النظام (Windows Hello / Touch ID) + قفل خمول — سياسات مشتركة بين الويب والتطبيق (نفس SQLite) والهاش محلي حصرًا")}
+            />
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <Label className="text-sm">{t("قفل التطبيق")}</Label>
+                <p className="text-xs text-muted-foreground">{t("يُقفل فورًا من الشريط أو تلقائيًا بعد خمول محدد")}</p>
+              </div>
+              <Switch
+                checked={hardening?.appLock.enabled ?? false}
+                onCheckedChange={(v) => putHardening({ appLock: { ...(hardening?.appLock ?? { enabled: false, idleLockMin: 0, biometric: false, hasPin: false }), enabled: v } })}
+                aria-label={t("قفل التطبيق")}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl border px-3 py-2 flex items-center gap-2">
+                <Fingerprint className="w-4 h-4 opacity-70 shrink-0" />
+                <div className="min-w-0 text-xs">
+                  <div className="font-medium">{t("رمز PIN")}</div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {lockState?.hasPin || hardening?.appLock.hasPin ? t("مضبوط محليًا") : t("غير مضبوط")}
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-xl border px-3 py-2 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 opacity-70 shrink-0" />
+                <div className="min-w-0 text-xs">
+                  <div className="font-medium">{t("بصمة النظام")}</div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {hardening?.appLock.biometric
+                      ? t("متاحة — Windows Hello / Touch ID")
+                      : t("غير متاحة على هذا الجهاز — PIN فقط")}
+                  </div>
+                </div>
+              </div>
+            </div>
+            {pinMode ? (
+              <div className="rounded-xl border px-3 py-3 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="password" inputMode="numeric" autoComplete="new-password" dir="ltr"
+                    value={pinA} onChange={(e) => setPinA(e.target.value.slice(0, 32))}
+                    placeholder={t("الرمز الجديد")}
+                    className="h-9 rounded-lg border bg-transparent px-3 text-sm outline-none"
+                  />
+                  <input
+                    type="password" inputMode="numeric" autoComplete="new-password" dir="ltr"
+                    value={pinB} onChange={(e) => setPinB(e.target.value.slice(0, 32))}
+                    placeholder={t("تأكيد الرمز")}
+                    className="h-9 rounded-lg border bg-transparent px-3 text-sm outline-none"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => void savePin()} disabled={pinBusy}>{t("حفظ الرمز")}</Button>
+                  <Button size="sm" variant="outline" onClick={() => { setPinMode(false); setPinA(""); setPinB("") }}>{t("إلغاء")}</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => setPinMode(true)}>{t("ضبط رمز القفل…")}</Button>
+                {(lockState?.hasPin || hardening?.appLock.hasPin) && (
+                  <Button size="sm" variant="outline" onClick={() => void clearPin()}>{t("مسح الرمز")}</Button>
+                )}
+                <Button size="sm" variant="outline" onClick={() => void lockNow()}>{t("قفل الآن")}</Button>
+              </div>
+            )}
+            <Separator />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">{t("قفل تلقائي بعد خمول (دقائق، 0 = تعطيل)")}</Label>
+                <select
+                  className="mt-1 h-9 w-full rounded-lg border bg-transparent px-2 text-sm"
+                  value={hardening?.appLock.idleLockMin ?? 0}
+                  onChange={(e) => putHardening({ appLock: { ...(hardening?.appLock ?? { enabled: false, idleLockMin: 0, biometric: false, hasPin: false }), idleLockMin: Number(e.target.value) } })}
+                >
+                  {[0, 1, 5, 10, 15, 30, 60].map((m) => (
+                    <option key={m} value={m}>{m === 0 ? t("معطل") : m}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">{t("وضع توفير الخمول (دقائق)")}</Label>
+                <select
+                  className="mt-1 h-9 w-full rounded-lg border bg-transparent px-2 text-sm"
+                  value={hardening?.idle.optMinutes ?? 5}
+                  onChange={(e) => putHardening({ idle: { ...(hardening?.idle ?? { optMinutes: 5, reducePolling: true }), optMinutes: Number(e.target.value) } })}
+                >
+                  {[1, 2, 5, 10, 15, 30, 60].map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              {t("في وضع الخمول تتوقف مراقبة الحافظة وتخف استطلاعات الواجهة تلقائيًا (حدث desktop://idle) — الهدف ذاكرة مستقرة <150MB واستهلاك طاقة أدنى")}
+            </p>
+            <Separator />
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <Label className="text-sm">{t("المحدّث الموقّع")}</Label>
+                <p className="text-xs text-muted-foreground">{t("فحص عند الإقلاع ضد GitHub Releases بتوقيع minisign — فشل الشبكة = تخطٍ بلا انكسار")}</p>
+              </div>
+              <Switch
+                checked={hardening?.updater.autoCheck ?? true}
+                onCheckedChange={(v) => putHardening({ updater: { autoCheck: v } })}
+                aria-label={t("المحدّث الموقّع")}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => void checkUpdateNow()} disabled={updBusy} className="gap-1.5">
+                <RotateCcw className={`w-3.5 h-3.5 ${updBusy ? "animate-spin" : ""}`} /> {t("فحص التحديث الآن")}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setHistOpen((v) => !v)} className="gap-1.5">
+                <History className="w-3.5 h-3.5" /> {t("سجل الإصدارات")}
+              </Button>
+              {updResult && <span className="text-xs text-muted-foreground" dir="auto">{updResult}</span>}
+            </div>
+            {histOpen && (
+              <div className="rounded-xl border px-3 py-2 space-y-2 max-h-52 overflow-y-auto">
+                {(hist ?? []).length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2">{t("لا سجل متاح الآن — قد تكون أوفلاين")}</p>
+                ) : (
+                  (hist ?? []).map((h, i) => (
+                    <div key={i} className="text-xs border-b last:border-0 pb-2 last:pb-0">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={i === 0 ? "default" : "outline"} className="shrink-0" data-no-i18n>v{h.version}</Badge>
+                        <span className="text-muted-foreground" data-no-i18n>{h.date}</span>
+                      </div>
+                      {(h.items ?? []).slice(0, 4).map((it, j) => (
+                        <div key={j} className="text-muted-foreground mt-0.5 leading-5" dir="auto">• {it}</div>
+                      ))}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* FA-harden (عقد §16 بند 3) — سجل التدقيق الأصلي (نفس SQLite — ظاهر للويب والتطبيق) */}
+      <Card>
+        <CardContent className="p-5 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <SectionTitle
+              icon={ScrollText}
+              title={t("سجل التدقيق الأصلي")}
+              desc={t("كل عملية (نقل/تحكم/حافظة/طاقة/وسائط/قفل/تشخيص) تُكتب في SQLite واحدة يشاركها التطبيق ونسخة الويب")}
+            />
+            <div className="flex gap-1.5 shrink-0">
+              <Button size="sm" variant="outline" onClick={loadAudit} className="gap-1.5">
+                <RotateCcw className="w-3.5 h-3.5" /> {t("تحديث")}
+              </Button>
+              <Button size="sm" variant={auditConfirm ? "destructive" : "ghost"} onClick={() => void clearAudit()} className="gap-1.5">
+                <Trash2 className="w-3.5 h-3.5" /> {auditConfirm ? t("تأكيد المسح؟") : t("مسح")}
+              </Button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              className="h-9 rounded-lg border bg-transparent px-2 text-sm"
+              value={auditCat}
+              onChange={(e) => setAuditCat(e.target.value)}
+              aria-label={t("تصفية الفئة")}
+            >
+              <option value="all">{t("كل الفئات")}</option>
+              {[
+                ["native-transfer", t("نقل")], ["native-clipboard", t("حافظة")],
+                ["native-power", t("طاقة")], ["native-input", t("تحكم لمسي")],
+                ["native-screen", t("بث الشاشة")], ["native-vcam", t("ويب كام افتراضي")],
+                ["native-files", t("ملفات")], ["native-sync", t("مزامنة مجلدات")],
+                ["native-lock", t("قفل التطبيق")], ["native-updater", t("تحديث")],
+                ["native-diag", t("تشخيص")],
+                ["transfer", t("نقل (مسار ويب)")], ["clipboard", t("حافظة (مسار ويب)")],
+                ["settings", t("إعدادات (مسار ويب)")], ["screen", t("شاشة (مسار ويب)")],
+              ].map(([v, l]) => (
+                <option key={v} value={v} data-no-i18n>{l}</option>
+              ))}
+            </select>
+            <select
+              className="h-9 rounded-lg border bg-transparent px-2 text-sm"
+              value={auditSev}
+              onChange={(e) => setAuditSev(e.target.value)}
+              aria-label={t("تصفية الخطورة")}
+            >
+              <option value="all">{t("كل المستويات")}</option>
+              <option value="info">{t("معلومات")}</option>
+              <option value="warn">{t("تحذير")}</option>
+              <option value="critical">{t("حرج")}</option>
+            </select>
+          </div>
+          <div className="rounded-xl border max-h-64 overflow-y-auto divide-y">
+            {auditEvents === null ? (
+              <p className="text-xs text-muted-foreground p-3">{t("جارٍ التحميل…")}</p>
+            ) : auditEvents.length === 0 ? (
+              <p className="text-xs text-muted-foreground p-3">{t("لا أحداث مطابقة — سجل فارغ بصدق")}</p>
+            ) : (
+              auditEvents.slice(0, 50).map((ev) => (
+                <div key={ev.id} className="flex items-start gap-2 px-3 py-2 text-xs">
+                  <span
+                    className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${ev.severity === "critical" ? "bg-red-500" : ev.severity === "warn" ? "bg-amber-500" : "bg-emerald-500"}`}
+                    aria-hidden
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className="text-[10px] shrink-0" data-no-i18n>{ev.action}</Badge>
+                      <span className="text-muted-foreground truncate">{ev.detail}</span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5" data-no-i18n>
+                      {new Date(ev.at).toLocaleString()} · {ev.actor}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* التحديث */}
       <Card>

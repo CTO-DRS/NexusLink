@@ -43,6 +43,8 @@ fn icon(name: &str) -> tauri::Result<tauri::image::Image<'static>> {
 
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "فتح NexusLink", true, None::<&str>)?;
+    // FA-harden (عقد §16 بند 1) — قفل فوري من الشريط (يتطلب وسيلة فتح مضبوطة)
+    let lock_item = MenuItem::with_id(app, "lock", "قفل التطبيق", true, None::<&str>)?;
     // FA-power — عناصر عرض حالة الطاقة/الاتصالات (غير قابلة للنقر) + إلغاء الإيقاف
     let power_item = MenuItem::with_id(app, "power", "الطاقة: تعمل", false, None::<&str>)?;
     let connections_item = MenuItem::with_id(app, "connections", "الاتصالات النشطة: 0", false, None::<&str>)?;
@@ -77,7 +79,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     let sep = |app: &AppHandle| PredefinedMenuItem::separator(app);
     let menu = Menu::with_items(
         app,
-        &[&open, &sep(app)?, &power_item, &connections_item, &cancel_item, &session_item, &stop_session_item, &media_item, &sep(app)?, &pause, &closetray, &autostart, &downloads, &sep(app)?, &quit],
+        &[&open, &lock_item, &sep(app)?, &power_item, &connections_item, &cancel_item, &session_item, &stop_session_item, &media_item, &sep(app)?, &pause, &closetray, &autostart, &downloads, &sep(app)?, &quit],
     )?;
 
     let tray = TrayIconBuilder::with_id("nexuslink-tray")
@@ -86,6 +88,10 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "open" => crate::procman::open_main(app),
+            "lock" => {
+                // بند 1 — قفل يدوي من الشريط (بلا وسيلة فتح يُتجاهل بصدق)
+                crate::lock::lock_now(app, "tray");
+            }
             "cancel_power" => {
                 crate::power::cancel(app, true);
             }

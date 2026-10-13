@@ -6,10 +6,20 @@
 // حوارات حفظ أصلية + سحب وإفلات إرسال فوري + deep-link nexus:// + تشغيل تلقائي.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod audit;
 mod clipboard;
+// FA-harden (عقد §16) — التشخيص الأصلي (بند 5)
+mod diag;
 mod files_menu;
 mod files_menu_core;
+// FA-harden (عقد §16) — النواة النقية للتقوية (PBKDF2 + القرار الخالص +
+// طابور التدقيق + تنقية السياسة) — تُضمَّن حرفيًا في hardening-verify
+mod harden_core;
 mod input;
+// FA-harden (عقد §16) — كشف الخمول (بندا 1 و4 من مصدر واحد)
+mod idle;
+// FA-harden (عقد §16) — قفل التطبيق: PIN + Windows Hello / Touch ID (بند 1)
+mod lock;
 mod media;
 mod notify;
 mod power;
@@ -19,6 +29,8 @@ mod shortcuts;
 mod sync;
 mod sync_core;
 mod tray;
+// FA-harden (عقد §16) — المحدّث الموقّع + سجل الإصدارات (بند 2)
+mod updater;
 
 use tauri::{Manager, RunEvent, WindowEvent};
 
@@ -46,6 +58,8 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         // FA-files — سحب الملفات من التطبيق إلى سطح المكتب/المجلدات (drag-out)
         .plugin(tauri_plugin_drag::init())
+        // FA-harden (عقد §16 بند 2) — المحدّث الموقّع (endpoints + pubkey في tauri.conf.json)
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let handle = app.handle().clone();
             settings::init(&handle);
@@ -89,6 +103,15 @@ fn main() {
             sync::set_app(handle.clone());
             // FA-media (عقد §15) — الطبقة الأصلية للوسائط (بث الشاشة + الويب كام)
             media::set_app(handle.clone());
+            // -----------------------------------------------------------------
+            // FA-harden (عقد §16):
+            //  بند 6 — سحب سياسات المخزن المشترك كل 10ث (نفس SQLite)
+            //  بندا 1+4 — مراقب الخمول 15ث (قفل الخمول + وضع التوفير)
+            //  بند 2 — فحص التحديث الموقّع عند الإقلاع (بعد جاهزية السيرفر)
+            // -----------------------------------------------------------------
+            settings::spawn_hardening_sync(handle.clone());
+            idle::spawn_idle_watcher(handle.clone());
+            updater::startup_check(handle.clone());
             Ok(())
         })
         // FA-clipboard-sync — أوامر الطبقة الأصلية للحافظة الموحدة (عقد §11)
@@ -96,6 +119,7 @@ fn main() {
         // FA-input — جلسة التحكم وتنفيذ أحداث اللمس/الكيبورد عبر enigo (عقد §13)
         // FA-files — إظهار في المستكشف/بث الفيديو/قائمة السياق (عقد §14)
         // FA-media — بث الشاشة + الويب كام الافتراضية (عقد §15)
+        // FA-harden — قفل التطبيق + المحدّث + التشخيص الأصلي (عقد §16)
         .invoke_handler(tauri::generate_handler![
             clipboard::clip_apply,
             clipboard::clip_send_now,
@@ -110,6 +134,19 @@ fn main() {
             files_menu::files_stream_open,
             files_menu::files_stream_cancel,
             files_menu::files_context_menu,
+            lock::lock_state,
+            lock::lock_set_pin,
+            lock::lock_clear_pin,
+            lock::lock_verify_pin,
+            lock::lock_biometric,
+            lock::lock_now_cmd,
+            updater::updater_state,
+            updater::updater_check_now,
+            updater::updater_install,
+            diag::diag_sidecar_ports,
+            diag::diag_speed_test,
+            diag::diag_export,
+            diag::diag_idle_state,
             media::media_screen_start,
             media::media_screen_answer,
             media::media_screen_ice,

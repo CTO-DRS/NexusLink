@@ -57,9 +57,22 @@ audiopus = "=0.3.0-rc.0"
 async-trait = "0.1"
 bytes = "1"
 
+# ---------------------------------------------------------------------------
+# FA-harden (عقد §16) — تقوية الإصدار:
+#  · hmac+sha2: PBKDF2-HMAC-SHA256 لرمز القفل (تنفيذ يدوي — متجهات RFC في
+#    scripts/hardening-verify). الهاش والملح محليان في config.json حصرًا.
+#  · tauri-plugin-updater: المحدّث الموقّع (minisign/Ed25519) — نقطة الفحص
+#    latest.json على GitHub Releases + pubkey في tauri.conf.json + مفاتيح
+#    التوقيع أسرار CI (TAURI_SIGNING_PRIVATE_KEY*).
+# ---------------------------------------------------------------------------
+hmac = "0.12"
+sha2 = "0.10"
+tauri-plugin-updater = "2"
+
 # الالتقاط على لينكس — x11rb (نفس خلفية enigo): GetImage + RandR للشاشات + نوافذ
+# + screensaver (FA-harden — كشف الخمول XScreenSaver)
 [target.'cfg(target_os = "linux")'.dependencies]
-x11rb = { version = "0.13", features = ["randr"] }
+x11rb = { version = "0.13", features = ["randr", "screensaver"] }
 
 # الالتقاط: ماك فقط عبر scap (ScreenCaptureKit — Options/Target/FrameType من
 # مصدر v0.0.8 المنشورة حرفيًا). لينكس لا يلمسها إطلاقًا.
@@ -70,17 +83,35 @@ x11rb = { version = "0.13", features = ["randr"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 cpal = "0.18"
 scap = "0.0.8"
+# FA-harden — قفل التطبيق على ماك: Touch ID عبر LocalAuthentication
+# (objc2-local-authentication 0.3 — تواقيع متحققة من مصدره: LAContext::new()
+#  unsafe + canEvaluatePolicy_error + evaluatePolicy_localizedReason_reply
+#  ببلوك Fn(Bool, *mut NSError))
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSString", "NSError"] }
+objc2-local-authentication = { version = "0.3", features = ["block2", "LAContext", "LAPolicy"] }
+block2 = "0.6"
 
 # إخراج صوت الهاتف إلى درايفر الصوت الافتراضي (VB-CABLE على ويندوز / BlackHole على ماك)
 # — على لينكس لا حاجة: module-pipe-source عبر pactl (FIFO خام) بلا أي crate.
 # إشعارات ويندوز الأصلية بأزرار تفاعلية (WinRT Toast)
 # FA-files — قائمة الزر الأيمن Windows (HKCU — بلا صلاحيات مدير)
 # FA-media — الالتقاط على ويندوز مباشرة (بديل scap المكسور)
+# FA-harden — قفل التطبيق: Windows Hello (UserConsentVerifier) + BCryptGenRandom
+#   (ملح PIN) + GetLastInputInfo (كشف الخمول) — نفس نسخة windows 0.58 التي
+#   تعتمدها windows-capture (ترجمة مشتركة لا مضاعفة)
 [target.'cfg(windows)'.dependencies]
 cpal = "0.18"
 tauri-winrt-notification = "0.8"
 winreg = "0.56"
 windows-capture = "1.3.6"
+windows = { version = "0.58", features = [
+  "Security_Credentials_UI",
+  "Win32_Security_Authentication_Identity",
+  "Win32_System_Com",
+  "Win32_System_SystemInformation",
+  "Win32_UI_Input_KeyboardAndMouse",
+] }
 
 [profile.release]
 opt-level = "s"

@@ -680,3 +680,54 @@ interface TransferJob {
 **تحقق E2E**: قسم جديد في scripts/desktop-e2e.mjs — screen:req صالح/فاسد (fps=60 يمر، 90 يُرفض) — rtc:offer kind=screen/answer/ICE ثنائي — cam:cmd cam-start — rtc:offer kind=cam — screen:state on/w/h — PUT media صالح/فاسد + status.desktop.media — rc:pointer صالح (__src=controller + مطبّع) وفاسد (رفض صامت) — توثيق §15.
 
 **قيود موثقة بصدق**: البث أثناء حياة التطبيق (الهاتف) وحياة الطبقة الأصلية (الكمبيوتر) — تغيير الجودة أثناء البث يُطبق عند إعادة البث — توقيع akvirtualcamera على macOS الحديث قد يمنع ظهور الصورة (حد النظام — OBS بديل عملي) — تعدد تحديد شاشة ماك/ويندوز بأصل الشاشة الأساسية للنقر المطلق (الأصول الدقيقة لكل شاشة: لينكس RandR كامل، ماك CGDisplayBounds للرئيسية، ويندوز سطح المكتب المركب) — البناء الفيزيائي للطبقة يثبت بـ CI 3/3 بينما النواة مثبتة تنفيذيًا 38/38 (incl. loopback WebRTC حقيقي).
+
+## 16. صلّب الإصدار — التقوية الأصلية (FA-harden — مصدر: harden_core.rs + lock.rs + idle.rs + audit.rs + updater.rs + diag.rs + desktop-hardening.ts + /api/desktop/{settings,audit})
+
+### 16.أ قفل التطبيق (بند 1)
+- **وسيلتا فتح**: PIN (4..32 محرفًا) و/أو بصمة النظام. قفل بلا أي وسيلة يُتجاهل بصدق (`lock_now` يعيد LOCKED=false ويطبع سببًا).
+- **PIN — أسرار محلية حصرًا**: `PBKDF2-HMAC-SHA256` بعشرة آلاف جولة (تنفيذ يدوي في harden_core.rs — متحقق بمتجهات معيارية في scripts/hardening-verify: c=1/2/4096 كلاسيكية + RFC 7914 (كما scrypt) c=1 + متجه جولات الإنتاج 10_000 محسوب مستقلًا بـ Python hashlib). الملح 16 بايت من مصدر النظام (`/dev/urandom` أو `BCryptGenRandom`) — **الهاش والملح في config.json المحلي ولا يغادران الجهاز أبدًا**؛ المخزن المشترك يحمل مرآة `hasPin` للعرض فقط (يدفعها Rust عبر push_shared).
+- **البصمة**: ويندوز `UserConsentVerifier` (Windows.Security.Credentials.UI — CheckAvailabilityAsync/RequestConsentVerificationAsync عبر windows 0.58) · ماك `LAContext` (objc2-local-authentication 0.3 — canEvaluatePolicy_error + evaluatePolicy_localizedReason_reply ببلوك `Fn(Bool, *mut NSError)` — تواقيع متحققة من مصدر الكرِيت) · **لينكس: غير مدعوم بصدق — PIN فقط**.
+- **دورة القفل**: `lock_now(reason)` يعرض نافذة `lock.html` (ضمن frontendDist splash — نفس CSP، مقفولة الأبعاد وalways_on_top). فكّ الرمز: `lock_verify_pin` (مقارنة هاش بثابت الزمن عبر مقارنة hex) → إغلاق النافذة. فكّ البصمة: `lock_biometric` → Some(true/false)/None (غير متاح). كل محاولات فك فاشلة تُدقَّق warn.
+- **أوامر الطبقة**: `lock_state/lock_set_pin/lock_clear_pin/lock_verify_pin/lock_biometric/lock_now_cmd` — lock_state يعيد {locked, hasPin, biometric, appLockEnabled, idleLockMin, platform}.
+- **قفل الخمول**: من مراقب واحد مع بند 4 (idle.rs، دورة 15ث): `appLock.enabled && idleLockMin>0 && idle_secs ≥ idleLockMin*60` ⇒ قفل (reason=idle). عنصر Tray «قفل التطبيق» (reason=tray).
+- **كشف الخمول لكل منصة**: ويندوز `GetLastInputInfo` (فرق ملفوف حول GetTickCount — صحيح حسابيًا) · ماك `CGEventSourceSecondsSinceLastEventType(0, -1)` · لينكس X11 `screensaver_query_info` (Wayland: بلا معيار موحد ⇒ None بصدق وتتعطل ميزتا الخمول بأمان).
+
+### 16.ب المحدّث الموقّع (بند 2)
+- **tauri-plugin-updater** مع `plugins.updater.endpoints = ["https://github.com/CTO-DRS/NexusLink/releases/latest/download/latest.json"]` و`pubkey` (minisign/Ed25519 — base64 في tauri.conf.json) و`bundle.createUpdaterArtifacts = true`.
+- **مفاتيح التوقيع**: يولدها `tauri signer generate`؛ الخاص في سر CI `TAURI_SIGNING_PRIVATE_KEY` (وكلمة المرور الفارغة في `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) — **لا يُلتزم الخاص إطلاقًا**؛ العام موثق في tauri.conf.json. CI desktop.yml ينتج أصولًا موقعة تلقائيًا مع كل إصدار جديد.
+- **الإصدار مقفول 1.0.0** (المطلوب الصارم): latest.json على Release v1.0.0 يعلن version=1.0.0 بتواقيع الأصول الثلاثة الموجودة — الفحص يعيد «أنت على الأحدث» فلا حلقة ترقية/تخفيض. عند صدور إصدار مستقبلي يبني CI latest.json موقعة جديدة تلقائيًا.
+- **فحص الإقلاع**: updater.rs::startup_check — ينتظر جاهزية السيرفر المضمّن (حتى 90ث)، يقرأ `updater.autoCheck` من المخزن المشترك (افتراضي مفعّل؛ تعطيله = تخطٍ بلا اتصال خارجي)، ثم فحص واحد. نتيجة «يتوفر تحديث» ⇒ حدث `desktop://update` + إشعار نظام + تدقيق warn. **الفحص هو الاتصال الخارجي الوحيد للتطبيق** (سجل GitHub API 10 دقائق كاش لسجل الإصدارات).
+- **أوامر**: `updater_state` (إصدار + autoCheck + endpoint + history) · `updater_check_now` (فحص يدوي + تدقيق) · `updater_install` (تنزيل-تثبيت موقّع — لن يُستدعى عمليًا طالما 1.0.0 مقفول؛ المسار مكتمل لأول إصدار مستقبلي).
+
+### 16.ج سجل التدقيق الأصلي (بند 3)
+- **جدول واحد مشترك** `db.AuditEvent` (نفس SQLite) — أفعال الطبقة الأصلية **ببادئة `native-*` حصرية لنا**: native-transfer/clipboard/power/input/screen/vcam/files/sync/lock/updater/diag. مسارات السيرفر تكتب مفرداتها القائمة (transfer/clipboard/settings/screen) عبر `writeServerAudit` — و`GET /api/desktop/audit` يرجع الاثنين (مرشح category/severity، take ≤ 500).
+- **الكتابة من Rust**: طابور fire-and-forget (audit.rs) — `audit(action, severity, detail)` لا يحجب المتصل أبدًا ولا يُسقط العملية الأصلية؛ دفعة كل 1.5ث عبر `POST /api/desktop/audit`؛ امتلأ الطابور (سيرفر مطفأ) ⇒ إسقاط الأقدم بلا ضجيج (سعة 200). القائمة البيضاء/بتر التفاصيل 400/الطابور في harden_core (مُختبر تنفيذيًا).
+- **واجهة المراجعة**: بطاقة «سجل التدقيق الأصلي» في الإعدادات (ظاهرة للويب والتطبيق — نفس البيانات): تصفية فئة/خطورة + قائمة آخر 50 + تحديث + مسح (DELETE يحذف native-* فقط — تدقيق أمان الهاتف FA-10 لا يُمس).
+- **تدقيق مسارات السيرفر**: نقل من الويب/السحب (`POST /api/devices` action=transfer) + حافظة prod (`POST /api/prod/clipboard` action=clipboard) — فشل التدقيق محمي ولا يُسقط المسار الأصلي.
+
+### 16.د تحسين الخمول (بند 4)
+- مصدر حقيقة واحد: idle.rs (دورة 15ث، استدعاء نظام واحد/دورة) + القرار الخالص `harden_core::idle_decision(idle_secs, opt_minutes, lock_minutes, enabled) → (idle_on, lock_on)` — مُختبر بمتجهات صريحة (Wayland/عتبات/تعطيلات).
+- دخول الخمول (idle.optMinutes من المشترك، 1..120) ⇒ حدث `desktop://idle {idle:true, ts}` — الواجهة تخفف استطلاعاتها، ومراقب الحافظة يتوقف عن الاستطلاع (تنفيذ الواجهة عبر الحدث؛ المراقب الأصلي يستمر في توفير الحالة فقط). الخروج ⇒ استئناف. الهدف: دوران CPU أدنى وذاكرة مستقرة <150MB (قياس قصير قابل للتنفيذ محليًا + بروتوكول 24 ساعة يدوي على أجهزة حقيقية موثق في worklog).
+- السياسات تُسحب من المخزن المشترك كل 10ث إلى كاش محلي (config.json) — تعمل أوفلاين.
+
+### 16.هـ التشخيص الأصلي (بند 5 — أدوات المرحلة 11 تعمل أصلًا)
+- `diag_sidecar_ports`: فحص TCP فعلي من الطبقة الأصلية لكل منافذ §1 (3000/3003/3004/3005/3006/3007/3009/81) بزمن استجابة.
+- `diag_speed_test`: قياس نقل حقيقي من محرك Rust (تنزيل 24MB + رفع 8MB عبر /api/tools/speedtest نفس مسار المتصفح) — MB/s حقيقية لا وهمية.
+- `diag_idle_state`: حالة الخمول/القفل الحقيقية (لعرضها في التشخيص).
+- `diag_export(path, content)`: تصدير التقرير إلى ملف عبر حوار حفظ أصلي (صلاحية `dialog:allow-save` في capabilities/hardening.json — الوحيدة الممنوحة؛ أقل سطح هجوم) — خارج التطبيق: تنزيل blob كما كان.
+- `/api/tools/diag` موسع: services تضم mediaBridge/guardBridge/prodBridge/secBridge/gateway + مصفوفة ports (8 منافذ بتحديد دورها). واجهة التشخيص تعرض كلها + «فحص أصلي» + «قياس أصلي» (زر).
+- **تقرير التشخيص** يحمل الإصدار الحقيقي من /api/version (لا القيمة القديمة 2.4.1 — أُصلحت إلى 1.0.0 المقفول).
+
+### 16.و مزامنة الإعدادات — نفس SQLite (بند 6)
+- **المخزن المصدر**: `db.DesktopSetting {key, value(JSON), updatedAt}` — نسخة الويب (متصفح) ونسخة التطبيق (Tauri) يقرآن ويكتبان الكائن نفسه عبر `GET/PUT /api/desktop/settings` (دمج جزئي — آخر كاتب يفوز، تنقية صارمة فاسد ⇒ افتراضي: appLock{enabled,idleLockMin 0..120,biometric,hasPin} · idle{optMinutes 1..120,reducePolling} · updater{autoCheck}).
+- **قاعدة الحزمة الموزعة (G-26)**: Next ينسخ .env مع DATABASE_URL مطلق لآلة البناء (مكسور على أجهزة المستخدمين) — build-resources.sh يحذفها، procman.rs يضبط `DATABASE_URL=file:<app_config_dir>/nexuslink.db` (قيمة env تتفوق على .env) ويزرع seed من resources/server/db/custom.db عند أول إقلاع (prisma db push قبل الحزم).
+- **طبقة Rust**: سحب دوري 10ث (settings.rs::spawn_hardening_sync) يطبّق السياسات على كاش محلي عبر `harden_core::policy_from_shared` (مرآة تنقية السيرفر حرفيًا — خارج النطاق ⇒ الافتراضي رفضًا لا حصرًا)؛ دفع مرآة hasPin/biometric بعد ضبط/مسح PIN (put_json قراءة-تعديل-كتابة لا يمس الحقول المُدارة من الواجهات).
+- **بطاقة الإعدادات**: «قفل وحماية التطبيق» (نافذة سطح المكتب — تقرأ/تكتب المشترك كله؛ PIN/البصمة/قفل-الآن عبر أوامر Rust) — وسياسات المشترك قابلة للكتابة من أي نسخة ويب أيضًا (نفس نقاط النهاية).
+
+### 16.ز التحقق
+- **تنفيذيًا (scripts/hardening-verify)**: نواة نقية واحدة تُضمَّن حرفيًا (نمط media_core) — متجهات PBKDF2 معيارية (4) + حتمية/ملح + hex + متجهات قرار الخمول (7) + طابور التدقيق (8: FIFO/إسقاط-أقدم/قائمة بيضاء/بتر) + تنقية السياسة (4: صالح/خارج-نطاق/فارغ/غير-عددي) + أصول المحدّث (conf/pubkey/endpoints/createUpdaterArtifacts/lock.html/أوامر مسجلة/حصرية native-). **47/47**.
+- **تعاقديًا (E2E §16)**: settings GET/PUT (صالح/فاسد يُنقى) — audit POST→GET→مرشحات→DELETE — status.desktop.hardening — تدقيق نقل المسار السيرفي — /api/version current=1.0.0 + changelog — /api/tools/diag ports الثمانية.
+- **بنائيًا (CI)**: desktop.yml يبني 3 منصات مع tauri-plugin-updater + windows 0.58 (Hello/BCrypt/GetLastInputInfo) + objc2-local-authentication (Touch ID) + x11rb screensaver — والبناء الفيزيائي للحزم الموقعة إثبات CI.
+- **بروتوكول اختبار النجاح (يدوي على أجهزة حقيقية — الحاوية بلا GUI/بطارية)**: 1) ضبط PIN ثم القفل من الشريط والفتح بالرمز ثم بالبصمة 2) ضبط قفل خمول 1 دقيقة وترك الجهاز ⇒ قفل تلقائي 3) خمول 24 ساعة ⇒ استنزاف بطارية <3% وذاكرة مستقرة (طابور التدقيق وسحب السياسات بلا نشاط شبكة خارج محلي) 4) تغيير إعداد من متصفح الويب ⇒ ظهوره في التطبيق خلال ≤10ث والعكس.
+
+**قيود موثقة بصدق**: البصمة على لينكس غير مدعومة (PIN فقط) — Wayland بلا كشف خمول (ميزتا الخمول/التوفير تتعطلان بأمان) — الإصدار مقفول 1.0.0 فلا تنفيذ فعلي للتحديث (المسار مكتمل وموقع) — استنزاف البطارية 24 ساعة لا يمكن قياسه في حاوية بلا GUI (بروتوكول يدوي موثق أعلاه) — التدقيق يتطلب السيرفر المضمّن حيًا (الطابور يمتص الانقطاع حتى 200 حدث ثم يسقط الأقدم بصدق).

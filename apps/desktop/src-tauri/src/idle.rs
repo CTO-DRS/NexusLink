@@ -58,8 +58,10 @@ pub fn idle_secs() -> Option<f64> {
     use x11rb::protocol::screensaver::ConnectionExt as _;
     let (conn, screen) = x11rb::connect(None).ok()?;
     let root = conn.setup().roots.get(screen)?.root;
+    // متحقق من مصدر x11rb-protocol 0.13: QueryInfoReply بلا حقل ms —
+    // حقوله ms_until_server/ms_since_user_input — المطلوب: ثوانٍ منذ آخر إدخال
     let reply = conn.screensaver_query_info(root).ok()?.reply().ok()?;
-    Some(reply.ms as f64 / 1000.0)
+    Some(reply.ms_since_user_input as f64 / 1000.0)
 }
 
 // ---------------------------------------------------------------------------
@@ -83,14 +85,17 @@ fn tick(app: &AppHandle) {
         return;
     };
     let cfg = crate::settings::get();
-
+    // القرار من النواة النقية harden_core (مُختبر بمتجهات صريحة في hardening-verify)
+    let (idle_on, lock_on) = crate::harden_core::idle_decision(
+        Some(secs),
+        cfg.idle_opt_minutes,
+        cfg.idle_lock_minutes,
+        cfg.app_lock_enabled,
+    );
     // (أ) وضع تحسين الخمول (بند 4)
-    let opt_min = cfg.idle_opt_minutes as f64;
-    set_idle(app, opt_min > 0.0 && secs >= opt_min * 60.0);
-
-    // (ب) قفل الخمول (بند 1) — appLock.enabled + idleLockMin > 0
-    let lock_min = cfg.idle_lock_minutes;
-    if cfg.app_lock_enabled && lock_min > 0 && secs >= (lock_min as f64) * 60.0 {
+    set_idle(app, idle_on);
+    // (ب) قفل الخمول (بند 1)
+    if lock_on {
         crate::lock::lock_now(app, "idle");
     }
 }

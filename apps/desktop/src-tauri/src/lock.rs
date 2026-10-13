@@ -1,50 +1,20 @@
 // NexusLink Desktop — قفل التطبيق: PIN + Windows Hello / Touch ID (FA-harden — بند 1)
 // ============================================================
-// · PIN: PBKDF2-HMAC-SHA256 (10k جولة) — الهاش والملح في config.json المحلي فقط
+// · PIN: PBKDF2-HMAC-SHA256 (10k جولة — النواة النقية harden_core متحققة
+//   بمتجهات RFC) — الهاش والملح في config.json المحلي فقط
 //   (لا يغادران الجهاز أبدًا؛ المخزن المشترك يحمل مرآة hasPin للعرض فقط).
 // · بصمة: Windows Hello (UserConsentVerifier — Windows.Security.Credentials.UI)
 //   / Touch ID (LocalAuthentication LAContext) — لينكس: غير مدعوم بصدق (PIN فقط).
 // · نافذة القفل: lock.html (ضمن splash — نفس CSP) — إطار علوي دائم + مقفول أبعاده.
 // · قفل الخمول: idle.rs يستدعي lock_now عند تجاوز idleLockMin.
-use hmac::{Hmac, Mac};
 use serde_json::json;
-use sha2::Sha256;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 static LOCKED: AtomicBool = AtomicBool::new(false);
-const PBKDF2_ROUNDS: u32 = 10_000;
 
 pub fn is_locked() -> bool {
     LOCKED.load(Ordering::Relaxed)
-}
-
-// ---------------------------------------------------------------------------
-// PBKDF2-HMAC-SHA256 — تنفيذ يدوي متحقق منه بمتجهات RFC (scripts/hardening-verify)
-// ---------------------------------------------------------------------------
-
-fn pbkdf2_hmac_sha256(password: &[u8], salt: &[u8], rounds: u32, out: &mut [u8; 32]) {
-    let mut mac = Hmac::<Sha256>::new_from_slice(password).expect("hmac accepts any key length");
-    mac.update(salt);
-    mac.update(&[0, 0, 0, 1]); // INT(1) — كتلة أولى فقط (dkLen=32 = hLen)
-    let mut u = mac.finalize().into_bytes();
-    let mut acc = [0u8; 32];
-    acc.copy_from_slice(&u);
-    for _ in 1..rounds {
-        let mut mac2 = mac.clone();
-        mac2.update(&u);
-        u = mac2.finalize().into_bytes();
-        for (a, b) in acc.iter_mut().zip(u.iter()) {
-            *a ^= *b;
-        }
-    }
-    *out = acc;
-}
-
-pub fn hash_pin(pin: &str, salt: &[u8]) -> [u8; 32] {
-    let mut out = [0u8; 32];
-    pbkdf2_hmac_sha256(pin.as_bytes(), salt, PBKDF2_ROUNDS, &mut out);
-    out
 }
 
 fn random_salt() -> [u8; 16] {
@@ -63,7 +33,9 @@ fn random_salt() -> [u8; 16] {
         use windows::Win32::Security::Authentication::Identity::{BCryptGenRandom, BCRYPT_USE_SYSTEM_PREFERRED_RNG};
         let mut s = [0u8; 16];
         unsafe {
+            // NTSTATUS في windows 0.58 بلا expect — ok() يعيد Result
             BCryptGenRandom(None, &mut s, BCRYPT_USE_SYSTEM_PREFERRED_RNG)
+                .ok()
                 .expect("BCryptGenRandom");
         }
         s
@@ -155,10 +127,13 @@ fn touch_id_available() -> bool {
 #[cfg(target_os = "macos")]
 fn touch_id_verify(reason: &str) -> Option<bool> {
     use block2::RcBlock;
+    use objc2_foundation::NSError;
     use objc2_local_authentication::{LAContext, LAPolicy};
     let ctx = unsafe { LAContext::new() };
     let (tx, rx) = std::sync::mpsc::channel::<bool>();
-    let blk = RcBlock::new(move |ok: objc2::runtime::Bool, _err: *mut NSObject| {
+    // تواقيع objc2-local-authentication 0.3 (متحقق من المصدر):
+    // reply: &DynBlock<dyn Fn(Bool, *mut NSError)> — RcBlock يُفوَّض بالدeref
+    let blk = RcBlock::new(move |ok: objc2::runtime::Bool, _err: *mut NSError| {
         let _ = tx.send(ok.as_bool());
     });
     let reason_ns = objc2_foundation::NSString::from_str(reason);
@@ -249,9 +224,9 @@ pub fn lock_set_pin(app: AppHandle, pin: String) -> serde_json::Value {
         return json!({ "ok": false, "error": "الرمز يجب أن يكون بين 4 و32 محرفًا" });
     }
     let salt = random_salt();
-    let h = hash_pin(p, &salt);
-    let hex = h.iter().map(|b| format!("{b:02x}")).collect::<String>();
-    let salt_hex = salt.iter().map(|b| format!("{b:02x}")).collect::<String>();
+    let h = crate::harden_core::hash_pin(p, &salt);
+    let hex = crate::harden_core::to_hex(&h);
+    let salt_hex = crate::harden_core::to_hex(&salt);
     crate::settings::set_pin(Some(salt_hex), Some(hex));
     // مرآة hasPin للمخزن المشترك (الهاش نفسه لا يغادر الجهاز — عقد §16)
     crate::settings::push_shared(&app);
@@ -276,12 +251,11 @@ pub fn lock_verify_pin(app: AppHandle, pin: String) -> serde_json::Value {
     let (Some(salt_hex), Some(hash_hex)) = (&cfg.pin_salt, &cfg.pin_hash) else {
         return json!({ "ok": false, "error": "لا رمز مضبوط" });
     };
-    let mut salt = [0u8; 16];
-    for i in 0..16 {
-        salt[i] = u8::from_str_radix(salt_hex.get(i * 2..i * 2 + 2).unwrap_or("00"), 16).unwrap_or(0);
-    }
-    let h = hash_pin(pin.trim(), &salt);
-    let hex = h.iter().map(|b| format!("{b:02x}")).collect::<String>();
+    let salt = crate::harden_core::from_hex(salt_hex, 16).unwrap_or_else(|| vec![0u8; 16]);
+    let mut salt_arr = [0u8; 16];
+    salt_arr.copy_from_slice(&salt[..16]);
+    let h = crate::harden_core::hash_pin(pin.trim(), &salt_arr);
+    let hex = crate::harden_core::to_hex(&h);
     if hex == *hash_hex {
         if is_locked() {
             unlock(&app);

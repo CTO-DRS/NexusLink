@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "hardening-dialog",
+  "description": "FA-harden (عقد §16 بند 5) — صلاحية حوار الحفظ الأصلي لتصدير تقرير التشخيص من نافذة التطبيق؛ باقي أوامر الإضافات تبقى مسدودة (أقل سطح هجوم) والطبقة الأصلية في Rust لا تحتاج صلاحيات",
+  "windows": ["main", "splash", "lock"],
+  "permissions": ["dialog:allow-save"]
+}

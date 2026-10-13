@@ -31,10 +31,18 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   let take = Number(url.searchParams.get("take") || 200)
   take = Math.max(1, Math.min(take, 500))
-  const category = url.searchParams.get("category") // مثل native-clipboard (اختياري)
+  const category = url.searchParams.get("category") // مثل native-clipboard أو transfer (اختياري)
   const severity = url.searchParams.get("severity") // info | warn | critical (اختياري)
-  const where: Record<string, unknown> = { action: { startsWith: "native-" } }
-  if (category && category.startsWith("native-")) where.action = { startsWith: category }
+  // عقد §16 — السجل موحّد: أفعال الطبقة الأصلية (native-* حصرية لنا) + أفعال
+  // مسارات السيرفر (transfer/clipboard/settings/screen — مفردات FA-10 القائمة).
+  const SERVER_ACTIONS = ["transfer", "clipboard", "settings", "screen"] as const
+  const where: Record<string, unknown> = {
+    OR: [{ action: { startsWith: "native-" } }, { action: { in: [...SERVER_ACTIONS] } }],
+  }
+  if (category) {
+    if (category.startsWith("native-")) where.action = { startsWith: category }
+    else if ((SERVER_ACTIONS as readonly string[]).includes(category)) where.action = category
+  }
   if (severity && ["info", "warn", "critical"].includes(severity)) where.severity = severity
   try {
     const rows = await db.auditEvent.findMany({ where, orderBy: { at: "desc" }, take })

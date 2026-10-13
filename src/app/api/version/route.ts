@@ -1,43 +1,93 @@
 import { NextResponse } from "next/server"
 
-// Version + update channel — the ONLY outbound-checkable endpoint in NexusLink.
-// Auto-update policy: silent download in background, install on next restart,
-// signature-verified (minisign). Fully disableable (offline-only mode).
+// FA-harden (عقد §16 بند 2) — الإصدار + سجل الإصدارات الحقيقي.
+// ============================================================
+// الإصدار مقفول 1.0.0 (المطلوب الصارم: لا تغيير رقم الإصدار مهما فعلنا —
+// tauri.conf.json/Cargo.toml/pubspec كلها 1.0.0، والقيمة السابقة 2.4.1 هنا
+// كانت بيانات واجهة قديمة لا إصدارًا فعليًا).
+// سجل الإصدارات = GitHub Releases للمستودع العام (كاش 10 دقائق) — بلا
+// مفاتيح API، وفشل الجلب (أوفلاين/معدل) يعيد قائمة من الإصدار المحلي وحده.
+const CURRENT = "1.0.0"
+const RELEASES_API = "https://api.github.com/repos/CTO-DRS/NexusLink/releases?per_page=12"
+
+type HistoryEntry = { version: string; tag: string; date: string; items: string[] }
+
+let cache: { at: number; history: HistoryEntry[] } | null = null
+const CACHE_MS = 10 * 60 * 1000
+
+function localHistory(): HistoryEntry[] {
+  return [
+    {
+      version: CURRENT,
+      tag: "v1.0.0",
+      date: "2026-10-12",
+      items: [
+        "تطبيق سطح المكتب (Tauri 2) بكل الطبقات الأصلية: بث شاشة WebRTC، حافظة نظام، طاقة، تحكم لمسي، ملفات، وسائط افتراضية",
+        "صلّب الإصدار: قفل التطبيق (PIN + Windows Hello/Touch ID) + قفل الخمول",
+        "محدّث موقّع (minisign) + سجل إصدارات",
+        "سجل تدقيق أصلي موحّد (نفس SQLite) + تحسين الخمول + تشخيص فعلي",
+      ],
+    },
+  ]
+}
+
+async function fetchHistory(): Promise<HistoryEntry[]> {
+  if (cache && Date.now() - cache.at < CACHE_MS) return cache.history
+  try {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 4000)
+    const r = await fetch(RELEASES_API, {
+      signal: ctrl.signal,
+      cache: "no-store",
+      headers: { "User-Agent": "NexusLink-Server/1.0.0", Accept: "application/vnd.github+json" },
+    })
+    clearTimeout(timer)
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    const arr = (await r.json()) as Array<{
+      tag_name?: string
+      name?: string
+      body?: string
+      published_at?: string
+      draft?: boolean
+    }>
+    const history: HistoryEntry[] = arr
+      .filter((rel) => !rel.draft)
+      .slice(0, 12)
+      .map((rel) => ({
+        version: (rel.tag_name ?? "").replace(/^v/, ""),
+        tag: rel.tag_name ?? "",
+        date: (rel.published_at ?? "").slice(0, 10),
+        // body = ملاحظات الإصدار — مقسمة أسطرًا (الواجهة تعرضها قائمة)
+        items: (rel.body ?? "")
+          .split(/\r?\n/)
+          .map((l) => l.replace(/^[-*#\s]+/, "").trim())
+          .filter(Boolean)
+          .slice(0, 10),
+      }))
+      .filter((h) => h.version)
+    if (!history.some((h) => h.version === CURRENT)) {
+      history.push(...localHistory())
+    }
+    cache = { at: Date.now(), history }
+    return history
+  } catch {
+    // أوفلاين/محدود المعدل — لا نُخزّن الفشل؛ الإصدار المحلي يكفي بصدق
+    return localHistory()
+  }
+}
+
 export async function GET() {
+  const history = await fetchHistory()
+  const latest = history[0]?.version ?? CURRENT
   return NextResponse.json(
     {
-      current: "2.4.1",
-      latest: "2.4.1",
+      current: CURRENT,
+      latest,
       channel: "stable",
-      updatedAt: "2026-10-09",
+      updatedAt: history[0]?.date ?? "",
       portable: true,
-      signature: "minisign (Ed25519)",
-      changelog: [
-        {
-          version: "2.4.1",
-          date: "2026-10-09",
-          items: [
-            "المرحلة 11: Onboarding تفاعلي + i18n عربي/إنجليزي + إتاحة كاملة",
-            "اختصارات كيبورد قابلة للتخصيص + لوحة أوامر (Ctrl+K)",
-            "اختبار سرعة الشبكة + أداة تشخيص + طرفية CLI",
-          ],
-        },
-        {
-          version: "2.4.0",
-          date: "2026-10-08",
-          items: [
-            "المرحلة 10: E2E حقيقي X25519 + AES-256-GCM على كل القنوات",
-            "سجل تدقيق كامل + مسح آمن + وضع التخفي",
-          ],
-        },
-        {
-          version: "2.3.0",
-          date: "2026-10-07",
-          items: [
-            "المرحلة 9: الحافظة الموحدة + المزامنة الثنائية + استكمال الجلسات",
-          ],
-        },
-      ],
+      signature: "minisign (Ed25519) — tauri-plugin-updater",
+      changelog: history,
       t: Date.now(),
     },
     { headers: { "Cache-Control": "no-store" } },
