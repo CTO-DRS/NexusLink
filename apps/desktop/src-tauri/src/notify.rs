@@ -19,7 +19,15 @@ pub enum NotifyCtx {
 }
 
 fn server_file_abs(app: &AppHandle, rel_path: &str) -> PathBuf {
-    crate::procman::server_root(app).join(rel_path.replace('\\', "/").trim_start_matches('/'))
+    let rel = rel_path.replace('\\', "/").trim_start_matches('/').to_string();
+    // G-30: destPath التعاقدي يبدأ «data/nexus-storage/...» — بعد إعادة توجيه
+    // الجذر القابل للكتابة: «data/» ⇒ data_root (nexus-data)؛ وإلا المسارات
+    // القديمة تحت جذر الحزمة كما هي.
+    if let Some(rest) = rel.strip_prefix("data/") {
+        crate::procman::data_root(app).join(rest)
+    } else {
+        crate::procman::server_root(app).join(rel)
+    }
 }
 
 /// إظهار إشعار نظام. buttons = [(نص الزر, action)]

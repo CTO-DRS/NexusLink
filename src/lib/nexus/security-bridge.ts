@@ -14,6 +14,7 @@ import path from "path"
 import { db } from "@/lib/db"
 import { store as deviceStore } from "./devices"
 import { secureWipe, wipableFiles } from "./secure-wipe"
+import { nexusStorageRoot } from "./data-root"
 
 const PORT = 3009
 export const SUITE = "X25519 · HKDF-SHA256 · AES-256-GCM · PBKDF2(150k)"
@@ -391,7 +392,7 @@ async function persistBlocked() {
 }
 
 // ---------- تصدير pcap حقيقي (يفتح في Wireshark) ----------
-const PCAP_DIR = path.join(process.cwd(), "data", "nexus-storage", "security")
+const PCAP_DIR = path.join(nexusStorageRoot(), "security")
 
 export async function exportPcap(): Promise<{ ok: boolean; file?: string; packets?: number; error?: string }> {
   try {
