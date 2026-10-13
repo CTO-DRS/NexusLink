@@ -4,6 +4,7 @@ import { store, heartbeatBump } from "@/lib/nexus/devices"
 import { startTransfer, createAgentOfferJob, jobs } from "@/lib/nexus/transfer-engine"
 import { resolveSafe, ensureDeviceRoot, mimeOf } from "@/lib/nexus/fs-server"
 import { isAgentOnline, getAgentDeviceId, guardEmitToAgent } from "@/lib/nexus/guard-bridge"
+import { writeServerAudit } from "@/lib/nexus/desktop-hardening"
 import type { NexusDevice } from "@/lib/nexus/types"
 
 export const dynamic = "force-dynamic"
@@ -115,7 +116,16 @@ export async function POST(req: NextRequest) {
             device: targetId,
             at: Date.now(),
           })
-          if (offered) return NextResponse.json({ ok: true, job })
+          if (offered) {
+            // FA-harden (عقد §16) — تدقيق النقل (أصل ويب/سحب-وإفلات/قائمة السياق)
+            void writeServerAudit({
+              action: "transfer",
+              detail: `عرض نقل «${job.fileName}» (${job.totalBytes} بايت) → ${targetId}`,
+              actor: srcName,
+              deviceId: targetId,
+            }).catch(() => null)
+            return NextResponse.json({ ok: true, job })
+          }
           // فشل الإرسال (انقطع الوكيل لحظيًا) → تسقط إلى النسخ المحلية
           jobs().delete(job.id)
         } catch {
@@ -132,6 +142,13 @@ export async function POST(req: NextRequest) {
         fileName: body.fileName,
       })
       if ("error" in job) return NextResponse.json(job, { status: 400 })
+      // FA-harden (عقد §16) — تدقيق النقل المحلي (نسخ إلى مجلد الجهاز)
+      void writeServerAudit({
+        action: "transfer",
+        detail: `نقل «${job.fileName}» (${direction === "in" ? "وارد" : "صادر"}) ↔ ${body.deviceId ?? ""}`,
+        actor: String(body.deviceName ?? body.deviceId ?? "الكمبيوتر"),
+        deviceId: String(body.deviceId ?? ""),
+      }).catch(() => null)
       return NextResponse.json({ ok: true, job })
     }
     default:

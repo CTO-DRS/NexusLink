@@ -146,6 +146,19 @@ pub fn post_json(path: &str, body: &serde_json::Value) -> Result<serde_json::Val
     resp.into_json().map_err(|e| format!("json: {e}"))
 }
 
+/// FA-harden (عقد §16) — GET JSON من REST المحلي (مزامنة الإعدادات المشتركة)
+pub fn get_json(path: &str) -> Result<serde_json::Value, String> {
+    let url = format!("http://127.0.0.1:{REST_PORT}{path}");
+    let resp = http_agent().get(&url).call().map_err(|e| match e {
+        ureq::Error::Status(c, r) => format!(
+            "HTTP {c}: {}",
+            r.into_string().unwrap_or_default().chars().take(120).collect::<String>()
+        ),
+        ureq::Error::Transport(t) => format!("transport: {t}"),
+    })?;
+    resp.into_json().map_err(|e| format!("json: {e}"))
+}
+
 /// قراءة نص حافظة النظام
 pub fn read_clipboard_text() -> Result<String, String> {
     arboard::Clipboard::new()
@@ -518,6 +531,32 @@ pub fn start(app: AppHandle) {
     let server_name = machine_name();
     println!("[procman] node={node:?} resources={res:?} name={server_name:?}");
 
+    // ------------------------------------------------------------------
+    // FA-harden (G-26) — قاعدة البيانات للحزمة الموزعة:
+    // Next ينسخ .env إلى standalone مع DATABASE_URL المطلق لآلة البناء
+    // (مكسور على أجهزة المستخدمين) — build-resources.sh يحذفها، ونضبط هنا
+    // مسارًا قابلًا للكتابة لكل جهاز ونزرع seed عند أول إقلاع.
+    // قيمة env الأب تتفوق دائمًا على .env (دلالات dotenv — لا تجاوز).
+    // ------------------------------------------------------------------
+    let data_dir = app
+        .path()
+        .app_config_dir()
+        .unwrap_or_else(|_| std::env::temp_dir().join("nexuslink"));
+    let _ = std::fs::create_dir_all(&data_dir);
+    let db_path = data_dir.join("nexuslink.db");
+    if !db_path.exists() {
+        let seed = res.join("server/db/custom.db");
+        if seed.is_file() {
+            match std::fs::copy(&seed, &db_path) {
+                Ok(n) => println!("[procman] db seeded from bundle ({n} bytes) → {db_path:?}"),
+                Err(e) => println!("[procman] db seed copy failed: {e}"),
+            }
+        } else {
+            println!("[procman] db seed missing in resources — prisma سينشئ قاعدة فارغة");
+        }
+    }
+    let db_url = format!("file:{}", db_path.to_string_lossy());
+
     let next_spec = ProcSpec {
         name: "next",
         script: res.join("server/server.js").to_string_lossy().to_string(),
@@ -525,6 +564,8 @@ pub fn start(app: AppHandle) {
             ("PORT".into(), REST_PORT.to_string()),
             ("HOSTNAME".into(), "0.0.0.0".into()),
             ("NODE_ENV".into(), "production".into()),
+            // FA-harden (G-26) — قاعدة SQLite قابلة للكتابة لكل جهاز (عقد §16)
+            ("DATABASE_URL".into(), db_url),
         ],
         cwd: Some(res.join("server").to_string_lossy().to_string()),
     };

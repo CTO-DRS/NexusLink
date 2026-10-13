@@ -19,6 +19,17 @@ cp -r .next/standalone/. "$RES/server/"
 [ -d "$RES/server/.next/static" ] || { echo "نسخ .next/static يدويًا…"; cp -r .next/static "$RES/server/.next/static"; }
 [ -d "$RES/server/public" ] || { echo "نسخ public يدويًا…"; cp -r public "$RES/server/public"; }
 
+# FA-harden (G-26): حذف .env المضمنة — Next ينسخها مع مسار DATABASE_URL المطلق
+# لآلة البناء (مكسور على أجهزة المستخدمين). procman يضبط DATABASE_URL بيئيًا
+# إلى مسار قابل للكتابة لكل جهاز (قيمة env الأب تتفوق على .env دائمًا)، ويزرع
+# قاعدة seed أدناه عند أول إقلاع.
+rm -f "$RES/server/.env" "$RES/server/.env.production"
+
+# FA-harden (G-26): قاعدة seed (SQLite) — تُزرع إلى مجلد إعدادات التطبيق عند أول
+# إقلاع وتُحدَّث نسختها عند إعادة الحزم (prisma db push قبل البناء).
+mkdir -p "$RES/server/db"
+cp db/custom.db "$RES/server/db/custom.db"
+
 echo "== [2/4] comms-service → $RES/comms/comms.cjs =="
 mkdir -p "$RES/comms"
 bunx esbuild mini-services/comms-service/index.ts --bundle --platform=node --format=cjs \
