@@ -8,6 +8,7 @@
 // 5) هاتف محاكى عبر البوابة (نفس مسار الوكيل: ?XTransformPort) → beacon → tray=متصل
 // النجاح: كل الفحوص خضراء ثم نظافة المنافذ عند الخروج.
 import { spawn } from "node:child_process"
+import dgram from "node:dgram"
 import { setTimeout as sleep } from "node:timers/promises"
 
 const ROOT = new URL("..", import.meta.url).pathname
@@ -559,6 +560,181 @@ try {
   // (ي) العقد §13 موثق حرفيًا
   check("العقد: §13 موثق (enigo/جلسة التحكم/حقن __src/عربية)",
     contract.includes("## 13. التحكم الفعلي بالكمبيوتر") && contract.includes("KEYEVENTF_UNICODE") && contract.includes("__src") && contract.includes("rc:session"))
+
+  // ================================================================
+  // الجولة 4 (عقد §18) — NexusLive: قناة UDP عالية التردد للإدخال الحي
+  // ================================================================
+  console.log("== ] R4: NexusLive live UDP channel ==")
+  {
+    // (أ) حوض وهمي على 3011 — E2E بلا تطبيق سطح مكتب: يستقبل ما يمرره الجسر
+    const sink = dgram.createSocket("udp4")
+    const sinkPkts = []
+    await new Promise((res) => {
+      sink.on("message", (m, rinfo) => { if (rinfo.address === "127.0.0.1") sinkPkts.push(m) })
+      sink.bind(3011, "127.0.0.1", res)
+    })
+
+    // نبض صيانة الجلسة طوال القسم (watchdog الجسر 6ث)
+    const hbIv = setInterval(() => rcCtl.emit("rc:session", { action: "hb" }), 2000)
+
+    // (ب) رفض hello بلا ثقة/جلسة (سوكِت ويبي مجهول)
+    const rejLive = await new Promise((res) => {
+      webSock.on("rc:rejected", (d) => { if (d?.ev === "rc:live-hello") res(d) })
+      webSock.emit("rc:live-hello")
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §18: rc:live-hello بلا جلسة/ثقة → rc:rejected(untrusted)", rejLive?.reason === "untrusted", `got=${JSON.stringify(rejLive)}`)
+
+    // ترميز مرآة live_core (big-endian — رأس 22B)
+    const enc = (type, flags, seq, ts, keyHex, payload = Buffer.alloc(0)) => {
+      const head = Buffer.alloc(22)
+      head.writeUInt16BE(0x4e58, 0)
+      head[2] = 1
+      head[3] = type
+      head[4] = flags
+      head.writeUInt32BE(seq >>> 0, 6)
+      head.writeUInt32BE(ts >>> 0, 10)
+      head.write(keyHex, 14, "hex")
+      return Buffer.concat([head, payload])
+    }
+    const touchPayload = () => {
+      const b = Buffer.alloc(8) // nx/ny 0.5/0.25 · action=click · id=0 · pad
+      b.writeUInt16BE(0x8000, 0)
+      b.writeUInt16BE(0x4000, 2)
+      b[4] = 3
+      return b
+    }
+    const udp = dgram.createSocket("udp4")
+    await new Promise((res) => udp.bind(0, "127.0.0.1", res))
+    const udpSend = (buf) => udp.send(buf, 3010, "127.0.0.1")
+
+    // (ج) جلسة موثوقة → hello → live-ready {port, key, mtu, proto}
+    const liveReady = await new Promise((res) => {
+      rcCtl.on("rc:live-ready", (d) => res(d))
+      rcCtl.emit("rc:session", { action: "start", deviceId: "galaxy-s24", name: "Galaxy S24" })
+      setTimeout(() => rcCtl.emit("rc:live-hello"), 700)
+      setTimeout(() => res(null), 9000)
+    })
+    check("R4 §18: rc:live-ready (port=3010 · key 16-hex · mtu=128 · proto=1)",
+      liveReady?.port === 3010 && typeof liveReady?.key === "string" && liveReady.key.length === 16 && liveReady?.mtu === 128 && liveReady?.proto === 1,
+      `got=${JSON.stringify(liveReady)}`)
+
+    if (liveReady?.key) {
+      // (د) ping UDP → pong بنفس seq وts الجسر + RTT loopback
+      const tPing = Date.now()
+      const pong = await new Promise((res) => {
+        const onMsg = (m) => { if (m[3] === 0x7e) { udp.off("message", onMsg); res(m) } }
+        udp.on("message", onMsg)
+        udpSend(enc(0x7f, 0, 4242, Date.now() & 0xffffffff, liveReady.key))
+        setTimeout(() => { udp.off("message", onMsg); res(null) }, 4000)
+      })
+      const rtt = Date.now() - tPing
+      check("R4 §18: ping → pong (نفس seq + ts الجسر) وRTT loopback < 100ms",
+        !!pong && pong.readUInt32BE(6) === 4242 && pong.readUInt32BE(10) > 0 && rtt < 100,
+        pong ? `rtt=${rtt}ms seq=${pong.readUInt32BE(6)}` : "no pong")
+
+      // (هـ) 3 حزم touch صالحة → تمرر كما هي إلى الحوض على 3011
+      const baseTs = Date.now() & 0xffffffff
+      for (let i = 1; i <= 3; i++) udpSend(enc(4, 0, i, baseTs, liveReady.key, touchPayload()))
+      await sleep(800)
+      const okFwd = sinkPkts.length === 3 && sinkPkts.every((m) => m[3] === 4 && m.readUInt16BE(0) === 0x4e58)
+      check("R4 §18: 3 حزم touch → الحوض (loopback 3011) تستلم كما هي", okFwd, `sink=${sinkPkts.length}`)
+
+      // (و) تدفق جديد (إعادة hello): فقد/ترتيب معكوس/تكرار
+      const ready2 = await new Promise((res) => {
+        rcCtl.on("rc:live-ready", (d) => res(d))
+        rcCtl.emit("rc:live-hello") // إعادة فتح = استبدال التدفق (إعادة اتصال)
+        setTimeout(() => res(null), 6000)
+      })
+      if (ready2?.key) {
+        const k2 = ready2.key
+        const ts2 = Date.now() & 0xffffffff
+        udpSend(enc(4, 0, 10, ts2, k2, touchPayload())) // last=10
+        udpSend(enc(4, 0, 13, ts2, k2, touchPayload())) // lost += 2 (11-12)
+        udpSend(enc(4, 0, 14, ts2, k2, touchPayload())) // last=14
+        udpSend(enc(4, 0, 12, ts2, k2, touchPayload())) // reorder (12 < 14)
+        udpSend(enc(4, 0, 12, ts2, k2, touchPayload())) // dup
+        await sleep(800)
+        const stats = await new Promise((res) => {
+          rcCtl.on("rc:live-stats", function h(d) { rcCtl.off("rc:live-stats", h); res(d) })
+          rcCtl.emit("rc:live-stats?")
+          setTimeout(() => res(null), 4000)
+        })
+        const f = stats?.flows?.[0]
+        check("R4 §18: إحصاء التدفق الجديد (received=5 · lost=2 · reorder=1 · dup=1)",
+          f?.stats?.received === 5 && f?.stats?.lost === 2 && f?.stats?.reorder === 1 && f?.stats?.dup === 1,
+          `stats=${JSON.stringify(f?.stats)}`)
+        check("R4 §18: sinkPort=3011 في الإحصاء + التدفق مثبت بعنوان", f?.bound === udp.address().address + ":" + udp.address().port && stats?.sinkPort === 3011, `bound=${f?.bound}`)
+
+        // (ز) الفاسد: توقيع خاطئ → droppedMalformed · مفتاح مجهول → droppedNoKey
+        const badMagic = Buffer.from(enc(4, 0, 99, ts2, k2, touchPayload()))
+        badMagic[0] = 0x00
+        udpSend(badMagic)
+        udpSend(enc(4, 0, 98, ts2, "0000000000000000", touchPayload()))
+        await sleep(600)
+        const stats2 = await new Promise((res) => {
+          rcCtl.on("rc:live-stats", function h(d) { rcCtl.off("rc:live-stats", h); res(d) })
+          rcCtl.emit("rc:live-stats?")
+          setTimeout(() => res(null), 4000)
+        })
+        check("R4 §18: الفاسد والمفتاح المجهول يُرفضان (malformed≥1 · noKey≥1)",
+          stats2?.global?.droppedMalformed >= 1 && stats2?.global?.droppedNoKey >= 1,
+          `global=${JSON.stringify(stats2?.global)}`)
+
+        // (ح) تثبيت العنوان: نفس المفتاح من منفذ آخر → droppedAddr
+        const udp2 = dgram.createSocket("udp4")
+        await new Promise((res) => udp2.bind(0, "127.0.0.1", res))
+        udp2.send(enc(4, 0, 97, ts2, k2, touchPayload()), 3010, "127.0.0.1")
+        await sleep(600)
+        udp2.close()
+        const stats3 = await new Promise((res) => {
+          rcCtl.on("rc:live-stats", function h(d) { rcCtl.off("rc:live-stats", h); res(d) })
+          rcCtl.emit("rc:live-stats?")
+          setTimeout(() => res(null), 4000)
+        })
+        check("R4 §18: حزمة من عنوان آخر بمفتاح سليم → droppedAddr", stats3?.global?.droppedAddr >= 1, `global=${JSON.stringify(stats3?.global)}`)
+      }
+
+      // (ط) نهاية الجلسة تموت التدفق: إيقاف من الكمبيوتر → حزمة بمفتاح ميت → noKey
+      const beforeStop = sinkPkts.length
+      rcDesk.emit("rc:session", { action: "stop" })
+      await sleep(700)
+      udpSend(enc(4, 0, 50, Date.now() & 0xffffffff, liveReady.key, touchPayload()))
+      await sleep(600)
+      const stats4 = await new Promise((res) => {
+        rcCtl.on("rc:live-stats", function h(d) { rcCtl.off("rc:live-stats", h); res(d) })
+        rcCtl.emit("rc:live-stats?")
+        setTimeout(() => res(null), 4000)
+      })
+      check("R4 §18: نهاية الجلسة تموت التدفق (لا حزم جديدة للحوض + مفتاح ميت مرفوض)",
+        sinkPkts.length === beforeStop && stats4?.global?.droppedNoKey >= 2 && (stats4?.flows?.length ?? 0) === 0,
+        `sinkDelta=${sinkPkts.length - beforeStop} noKey=${stats4?.global?.droppedNoKey} flows=${stats4?.flows?.length}`)
+    }
+    clearInterval(hbIv)
+    udp.close()
+    sink.close()
+
+    // (ي) توثيق §18 + بنية القناة (الجسران + النواة + الحوض + العميل + الترجمات)
+    const rbTs = await fsMod.readFile("src/lib/nexus/remote-bridge.ts", "utf8").catch(() => "")
+    const msTs = await fsMod.readFile("mini-services/remote-service/index.ts", "utf8").catch(() => "")
+    const liveRs = await fsMod.readFile("apps/desktop/src-tauri/src/live.rs", "utf8").catch(() => "")
+    const coreRs = await fsMod.readFile("apps/desktop/src-tauri/src/live_core.rs", "utf8").catch(() => "")
+    const liveDart = await fsMod.readFile("nexuslink_mobile/lib/data/live_channel.dart", "utf8").catch(() => "")
+    const arDict = await fsMod.readFile("nexuslink_mobile/assets/translations/ar.json", "utf8").catch(() => "")
+    check("R4 §18: العقد موثق (topology/protocol/events/verify)",
+      contract.includes("## 18. القناة الحية NexusLive") && contract.includes("rc:live-hello") && contract.includes("0x4E58") && contract.includes("NEXUS_LIVE_SINK_PORT"),
+      "contract §18")
+    check("R4 §18: الجسران متطابقان (hello/ready/stats/relay 3010→3011)",
+      rbTs.includes("rc:live-hello") && rbTs.includes("rc:live-ready") && rbTs.includes("LIVE_SINK_PORT") && msTs.includes("rc:live-hello") && msTs.includes("rc:live-ready") && msTs.includes("LIVE_SINK_PORT"),
+      "bridges")
+    check("R4 §18: Rust حوض loopback حصري + نواة صارمة (bind 127.0.0.1 · HEADER_LEN=22 · coalesce)",
+      liveRs.includes('UdpSocket::bind(("127.0.0.1", port))') && coreRs.includes("HEADER_LEN: usize = 22") && coreRs.includes("pub fn coalesce") && liveRs.includes("execute_sync"),
+      "rust")
+    check("R4 §18: عميل Flutter (UDP · إعادة اتصال · RTT · رأس 22)",
+      liveDart.includes("_headerLen = 22") && liveDart.includes("RawDatagramSocket") && liveDart.includes("_retryBackoffMs") && liveDart.includes("_rttEma"),
+      "flutter")
+    check("R4 §18: ترجمات rctl.live في القاموسين (ar/en)", arDict.includes('"live"') && arDict.includes("UDP حي"), "i18n")
+  }
 
   // ================================================================
   // FA-files (عقد §14) — دمج الملفات في نظام التشغيل

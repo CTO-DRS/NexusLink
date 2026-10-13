@@ -1,0 +1,14 @@
+[package]
+name = "live-verify"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# الجولة 4 (عقد §18) — نفس تبعيات النواة النقية حصرًا (بلا crates جديدة):
+# live_core.rs يريد serde_json فقط، وinput_exec.rs يريد enigo كما في enigo-verify
+serde_json = "1"
+enigo = { version = "0.2.1", default-features = false, features = ["x11rb"] }
+
+[[bin]]
+name = "live-verify"
+path = "src/main.rs"

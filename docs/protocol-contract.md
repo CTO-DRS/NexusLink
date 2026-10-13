@@ -763,3 +763,51 @@ interface TransferJob {
 - **تعاقديًا (E2E §17)**: release.yml بناء حقيقي بلا echo + مصفوفة الصيغ + خطوة portable + latest.json + dispatch inputs — tauri.conf targets الخمسة — procman resolve_resources بالبادئة — PORTABLE-README — BUILD.md (NSIS/MSI/Portable/AppImage/notarization/مفاتيح) — README §0 (المركز/الوكيل + جدول الحزم) — e2e-checklist (اختبار التثبيت النظيف) — توحيد الإصدار بالملفات الأربعة.
 - **بنائيًا (CI)**: release.yml على 3 منصات ينتج الصيغ الست فعليًا — NSIS/MSI/ZIP وDMG وAppImage+deb.
 - **يدويًا**: اختبار النجاح — تنزيل المثبت على ويندوز نظيف ⇒ تثبيت ⇒ كل شيء يعمل مع الهاتف **بلا أي خطوة يدوية إضافية** (docs/e2e-checklist.md §1).
+
+---
+
+## 18. القناة الحية NexusLive — UDP للإدخال الحي (الجولة 4 — مصدر: live.rs + live_core.rs + remote-bridge.ts + mini-services/remote-service + live_channel.dart)
+
+«كل ميزة حساسة للأداء تعمل فوق قناة UDP عالية التردد — لا TCP للإدخال الحي»: قلم/ماوس/جيروسكوب/لمس من الهاتف إلى سطح المكتب بداتاجرام واحد لكل حدث، بلا تجزئة ولا إعادة إرسال (دلالة حية — أحدث حالة تفوز، الفقد يُعدّ إحصاءً فقط). القنوات القائمة (§4.2/§13 rc:* و§15 rtc:*) قائمة كما هي — NexusLive مضافة لا تمس شيئًا.
+
+### 18.أ الطوبولوجيا والثقة
+- **المنافذ الجديدة**: `3010/udp` هاتف→جسر (`NEXUS_LIVE_PORT`) · `3011/udp` جسر→Rust على **127.0.0.1 حصرًا** (`NEXUS_LIVE_SINK_PORT`) — لا سطح هجوم شبكي على الطبقة الأصلية.
+- **لماذا مرور عبر الجسر لا إرسال مباشر للهاتف→Rust؟** بوابة الثقة مركزية عند جسر 3004 (controllerTrust + rc:session §13) — إحصاء الفقد/الترتيب/RTT رصده من E2E (فحوص Node-side) — Rust حوض معزول يثق بـ loopback فقط. كلفة الحلقة المحلية عشرات الميكروثانية (لا تهدد أهداف 20/30ms).
+- **دورة الثقة**: هاتف موثوق + جلسة نشطة → `rc:live-hello` (socket.io) → الجسر يولد مفتاح **8B عشوائي** (crypto.randomBytes) لكل تدفق → `rc:live-ready {port, key (16-hex), mtu:128, proto:1}` → أول حزمة UDP تحمل المفتاح **تُثبّت عنوان المرسل** (رفض ما بعده من عنوان آخر — droppedAddr) → نهاية الجلسة/انقطاع السوكِت/إعادة hello تحذف التدفق فورًا (القناة الحية ترث عمر الجلسة حرفيًا).
+- **حاجزان متتاليان**: الجسر يتحقق (توقيع/إصدار/نوع/طول/مفتاح/عنوان) ثم Rust يفك صارمًا (live_core) — الفاسد يُرفض صامتًا مع إحصاء (نفس سياسة الجسور القائمة).
+- Flutter: الجلسة النشطة تفتح التدفق تلقائيًا (rc:live-hello بعد 150ms من قبول rc:session)، وعند نشاط القناة تتحول `move`/`sendPointer` فوق UDP حصرًا (socket.io للبقية) — رقاقة حالة في شاشة التحكم (rctl.live.*).
+
+### 18.ب البروتوكول الثنائي (v1 — big-endian — مرآة حرفية live_core.rs ↔ live_channel.dart)
+```
+رأس 22B: [0..2) magic u16be=0x4E58 ("NX") · [2] ver=1 · [3] type · [4] flags (bit0=نسبي للماوس)
+         [5] محجوز · [6..10) seq u32be · [10..14) ts u32be (ms epoch مقتطعة) · [14..22) key 8B
+حمولات:  pen 10B  = nx·ny u16 (0..65535) · pressure u16 · tiltX·tiltY i8 · phase u8 (0=hover 1=down 2=move 3=up) · buttons u8
+         mouse 8B = nx|dx · ny|dy (مطلق u16 / نسبي i16 ±500) · phase u8 (0=move 1=down 2=up 3=click 4=dblclick 5=rclick) · buttons u8 (bit0=أيسر) · wheel i16
+         gyro 12B = ax·ay·az i16 (milli-g) · gx·gy·gz i16 (milli-dps)
+         touch 8B = nx·ny u16 · action u8 (إجراءات pointer الستة) · pointerId u8 · pad u16
+         ping 0B  → يرد الجسر pong (type=0x7E) بنفس seq وts=زمن الجسر (مزامنة إزاحة NTP-نمط)
+```
+- ping كل 500ms من الهاتف → RTT (EMA α=0.3) + إزاحة ساعة: `offset ≈ pongTs − (t0+t1)/2` — ts حزم البيانات = ساعة الهاتف + الإزاحة ⇒ Rust يقيس **الكمون طرف-إ-to-طرف** (`now−ts`) ويحسب P50/P95 (نافذة 256 عينة، العينات ≥60ث تُهمل انحراف ساعة).
+- watchdog الهاتف: بلا pong 3ث → إعادة `rc:live-hello` بتراجع أُسي 500ms→8s (يُصفّر عند أول pong).
+
+### 18.ج التحويل إلى محلّل الإدخال القائم (بلا مسار حقن موازٍ)
+- pen (hover/move/down/up) → `kind=pointer {nx, ny, action, pressure}` — الضغط محمول في الحدث استعدادًا لمهمة لوحة الرسم (لا يفسده apply_pointer القائم).
+- touch/mouse-مطلق → `kind=pointer` بالإجراءات الستة نفسها (§15) · wheel≠0 → `kind=scroll {dy = wheel×40}` (تدرّج §13).
+- mouse-نسبي (flags bit0) → `kind=move {dx, dy, drag: buttons.bit0}` — **حالة الزر في كل حزمة**: حافة السحب تُحسب في set_drag، وفقد حزمة up يصححه أول حزمة تالية (دلالة حية ذاتية التصحيح) + حدث click إضافي عند phase=click/dblclick/rclick.
+- gyro → بلا حقن في هذه المرحلة — يُعدّ إحصاءً (مستهلكه مهمة الجيمباد القادمة).
+- **الدمج الحي (latest-wins — live_core::coalesce)**: يستقبل live.rs دفعة (أول حزمة حاجزة ثم تفريغ غير حاجز حتى **4 حزم**) ويدمجها قبل الحقن: حركات المؤشر (pointer-move المطلق / move النسبي) تُستبدل بأحدثها في slotين مستقلين، والأحداث المنفصلة (نقر/ضغط/رفع/عجلة) تُحفظ كلها بالترتيب، والحركة المعلقة تُفرغ قبل أول حدث منفصل بعده (الموضع قبل النقرة). هذا يمنع نمو الكمون خطيًا تحت التحميل (كان 700ms بلا دمج عند 250Hz إجهادية) — دلالة حية بلا تراكم.
+- الحقن: `input::execute_sync` — نفس خيط enigo ونفس بوابة الجلسة §13 (رفض بلا جلسة) + انتظار اكتمال الحقن الفعلي (قياس صادق لا جدولة فقط) — أمر Tauri `live_state` يعيد {listening, sinkPort, sessionActive, stats{rx, injected, droppedMalformed, droppedNoSession, injectErrors, gyro, clockSkew}, latency{p50Ms, p95Ms, samples, lastInjectUs}}.
+
+### 18.د أحداث socket.io المضافة (الجسران متطابقان — المدمج والمرجع)
+| الحدث | الاتجاه | الحمولة |
+|---|---|---|
+| `rc:live-hello` | هاتف→جسر | — (يتطلب ثقة + جلسة) |
+| `rc:live-ready` | جسر→هاتف | `{port, key, mtu, proto, at}` |
+| `rc:live-stats` | جسر→الجميع | `{port, sinkPort, flows:[{deviceId,name,bound,stats}], global{droppedMalformed,droppedNoKey,droppedAddr,forwardErrors,pongErrors}, at}` — بث دوري 5ث عند نشاط تدفق + عند الطلب `rc:live-stats?` |
+| `rc:rejected` | جسر→هاتف | `{reason:"untrusted", ev:"rc:live-hello"}` — بلا جلسة/ثقة |
+
+### 18.هـ التحقق
+- **تنفيذيًا (scripts/live-verify — نمط media-verify — النتيجة الفعلية 49/49)**: يضمّن live_core.rs + input_exec.rs حرفيًا — متجهات فك/ترميز لكل الأنواع + رفض الفاسد (قصير/توقيع/إصدار/نوع/طول/سقف) + متجهات التسلسل (ok/lost/reorder/dup/wrap) + خريطة الأحداث (ضغط القلم محمول، drag الذاتي التصحيح، العجلة→scroll، النقر المزدوج) + متجهات الدمج الحي (5) + **UDP loopback حقيقي عبر Xvfb**: حقن enigo فعلي بقياس طرف-إ-to-طرف — **معيار النجاح: حدث قلم مفرد P95=13ms < 20ms ✓** + تدفق مستمر 60Hz مختلط P50=8ms/P95=25ms مقيّد بلا تراكم + النقرات المنفصلة محفوظة 25/25 رغم الدمج. حد موثق بصدق: فوق إنتاجية XTEST المتزامنة (~7ms/عملية — تختلف بالمنصة) ينمو الكمون مؤقتًا رغم الدمج؛ المعدلات الحقيقية (60-120Hz) تحت الهدف.
+- **تعاقديًا (E2E §18)**: رفض hello بلا جلسة/ثقة — hello مع جلسة موثوقة → live-ready — ping→pong بنفس seq — تمرير touch إلى حوض loopback (مستمع E2E) — فقد (فجوة seq) → lost — ترتيب معكوس → reorder — تكرار → dup — فاسد → droppedMalformed — مفتاح مجهول → droppedNoKey — عنوان آخر → droppedAddr — نهاية الجلسة تموت التدفق — RTT loopback < 100ms — توثيق §18 + البنية (الجسران + live_core/live.rs/live_channel + الترجمات).
+- **بنائيًا (CI)**: desktop.yml يبني live.rs/main.rs على المنصات الثلاث (الترجمة الفيزيائية للطبقة الأصلية).
+- **قيود صادقة**: ts الهاتف يعتمد جودة مزامنة الإزاحة (انحراف الساعة المفرط يُهمل إحصائيًا) — لا ضمان تسليم (هذه هي الدلالة الحية المقصودة) — Wayland بلا حقن إدخال (نفس حد §13) — الحاوية بلا هاتف حقيقي: بروتوكول الاختبار الميداني موثق في docs/e2e-checklist.md (قسم جديد §2).
