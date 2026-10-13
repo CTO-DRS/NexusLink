@@ -5,7 +5,8 @@
 // الماوس الهوائي (الجيروسكوب)، يد الألعاب، جهاز العروض، الوسائط،
 // أوامر النظام + Wake-on-LAN، ومزامنة الحافظة المشتركة.
 import { createServer } from 'http'
-import { createSocket } from 'dgram'
+import { createSocket, Socket as UdpSocket, RemoteInfo } from 'dgram'
+import { randomBytes } from 'crypto'
 import { Server } from 'socket.io'
 
 const PORT = 3004
@@ -42,6 +43,8 @@ const desktopSocks = new Set<string>()
 function endSession(reason: string) {
   if (!session.active) return
   const name = session.name
+  // الجولة 4 (عقد §18) — القناة الحية ترث عمر الجلسة
+  dropLiveFlows(session.socketId ?? '', reason)
   session.active = false
   session.deviceId = null
   session.name = null
@@ -150,6 +153,142 @@ function rcLog(text: string, kind: 'in' | 'ok' | 'info' = 'in') {
   console.log('[rc]', text)
 }
 
+// ---------------------------------------------------------------------------
+// الجولة 4 (عقد §18) — NexusLive: قناة UDP عالية التردد للإدخال الحي
+// (مرآة حرفية لمنطق src/lib/nexus/remote-bridge.ts — النسختان متطابقتان تعاقديًا)
+// ---------------------------------------------------------------------------
+const LIVE_UDP_PORT = Number(process.env.NEXUS_LIVE_PORT || 3010)
+const LIVE_SINK_PORT = Number(process.env.NEXUS_LIVE_SINK_PORT || 3011)
+const LIVE_MAGIC = 0x4e58
+const LIVE_VERSION = 1
+const LIVE_MAX_DATAGRAM = 128
+const LIVE_TYPES = new Set([1, 2, 3, 4, 0x7f]) // pen mouse gyro touch ping
+const LIVE_PING = 0x7f
+const LIVE_PONG = 0x7e
+
+interface LiveStats {
+  received: number
+  forwarded: number
+  lost: number
+  reorder: number
+  dup: number
+  pings: number
+}
+interface LiveFlow {
+  key: Buffer
+  socketId: string
+  deviceId: string | null
+  name: string
+  bound: string | null
+  lastSeq: number | null
+  stats: LiveStats
+}
+const liveFlows = new Map<string, LiveFlow>()
+const liveGlobal = { droppedMalformed: 0, droppedNoKey: 0, droppedAddr: 0, forwardErrors: 0, pongErrors: 0 }
+let liveUdp: UdpSocket | null = null
+
+function liveStatsSnapshot() {
+  const flows = [...liveFlows.values()].map((f) => ({
+    deviceId: f.deviceId,
+    name: f.name,
+    bound: f.bound,
+    stats: { ...f.stats },
+  }))
+  return { port: LIVE_UDP_PORT, sinkPort: LIVE_SINK_PORT, flows, global: { ...liveGlobal }, at: Date.now() }
+}
+
+function dropLiveFlows(socketId: string, reason: string) {
+  for (const [k, f] of liveFlows) {
+    if (f.socketId === socketId) {
+      liveFlows.delete(k)
+      rcLog(`انتهى التدفق الحي (NexusLive) لـ ${f.name} — ${reason}`, 'info')
+    }
+  }
+}
+
+function liveSeqUpdate(f: LiveFlow, seq: number) {
+  if (f.lastSeq === null) {
+    f.lastSeq = seq
+    return
+  }
+  const d = (seq - f.lastSeq) >>> 0
+  if (d === 0) {
+    f.stats.dup++
+    return
+  }
+  if (d < 0x80000000) {
+    if (d > 1) f.stats.lost += d - 1
+  } else {
+    f.stats.reorder++
+  }
+  f.lastSeq = seq
+}
+
+function ensureLiveUdp() {
+  if (liveUdp) return
+  const sock = createSocket({ type: 'udp4', reuseAddr: false })
+  sock.on('error', (e) => {
+    console.error('[rc] NexusLive UDP error:', e.message)
+    liveGlobal.forwardErrors++
+  })
+  sock.on('message', (buf: Buffer, rinfo: RemoteInfo) => {
+    if (buf.length < 22 || buf.length > LIVE_MAX_DATAGRAM) {
+      liveGlobal.droppedMalformed++
+      return
+    }
+    if (buf.readUInt16BE(0) !== LIVE_MAGIC || buf[2] !== LIVE_VERSION) {
+      liveGlobal.droppedMalformed++
+      return
+    }
+    const ptype = buf[3]
+    if (!LIVE_TYPES.has(ptype)) {
+      liveGlobal.droppedMalformed++
+      return
+    }
+    const keyHex = buf.subarray(14, 22).toString('hex')
+    const flow = liveFlows.get(keyHex)
+    if (!flow) {
+      liveGlobal.droppedNoKey++
+      return
+    }
+    const addr = `${rinfo.address}:${rinfo.port}`
+    if (flow.bound && flow.bound !== addr) {
+      liveGlobal.droppedAddr++
+      return
+    }
+    if (!flow.bound) {
+      flow.bound = addr
+      rcLog(`التدفق الحي (NexusLive) ارتبط بعنوان ${addr} — ${flow.name}`, 'ok')
+    }
+    if (ptype === LIVE_PING) {
+      flow.stats.pings++
+      const pong = Buffer.from(buf)
+      pong[3] = LIVE_PONG
+      pong.writeUInt32BE(Date.now() & 0xffffffff, 10)
+      sock.send(pong, rinfo.port, rinfo.address, (err) => {
+        if (err) liveGlobal.pongErrors++
+      })
+      return
+    }
+    liveSeqUpdate(flow, buf.readUInt32BE(6))
+    flow.stats.received++
+    sock.send(buf, LIVE_SINK_PORT, '127.0.0.1', (err) => {
+      if (err) {
+        liveGlobal.forwardErrors++
+      } else {
+        flow.stats.forwarded++
+      }
+    })
+  })
+  sock.bind(LIVE_UDP_PORT, () => {
+    console.log(`[rc] NexusLive UDP relay on :${LIVE_UDP_PORT} → 127.0.0.1:${LIVE_SINK_PORT}`)
+  })
+  liveUdp = sock
+  setInterval(() => {
+    if (liveFlows.size) io?.emit('rc:live-stats', liveStatsSnapshot())
+  }, 5000).unref?.()
+}
+
 // هل الإدخال مسموح حسب حالة الطاقة؟
 function gateInput(socket: { emit: (ev: string, d?: unknown) => void }, data: { __kind?: string } | undefined, ev: string): boolean {
   if (desktop.power === 'off' || desktop.power === 'hibernating') {
@@ -173,6 +312,8 @@ io = new Server(httpServer, {
   pingTimeout: 60000,
   pingInterval: 25000,
 })
+// الجولة 4 (عقد §18) — سوكِت UDP للقناة الحية بجانب WebSocket
+ensureLiveUdp()
 
 io.on('connection', (socket) => {
   console.log('client connected:', socket.id)
@@ -255,6 +396,42 @@ io.on('connection', (socket) => {
   // ==== قناة أخبار قياس زمن الاستجابة ====
   socket.on('rc:ping', (data: { t: number }) => {
     socket.emit('rc:pong', { t: data?.t ?? Date.now() })
+  })
+
+  // ---------------------------------------------------------------------------
+  // الجولة 4 (عقد §18) — فتح التدفق الحي (مرآة الجسر المدمج حرفيًا):
+  // هاتف موثوق + جلسة نشطة حصرًا — مفتاح 8B عشوائي يرد في rc:live-ready
+  // ---------------------------------------------------------------------------
+  socket.on('rc:live-hello', () => {
+    const trust = controllerTrust.get(socket.id)
+    if (!trust || !session.active || session.socketId !== socket.id) {
+      socket.emit('rc:rejected', { reason: 'untrusted', ev: 'rc:live-hello' })
+      rcLog('رفض فتح القناة الحية (NexusLive): يتطلب جلسة تحكم نشطة من هاتف موثوق', 'info')
+      return
+    }
+    dropLiveFlows(socket.id, 'إعادة فتح')
+    const key = randomBytes(8)
+    liveFlows.set(key.toString('hex'), {
+      key,
+      socketId: socket.id,
+      deviceId: trust.deviceId,
+      name: trust.name,
+      bound: null,
+      lastSeq: null,
+      stats: { received: 0, forwarded: 0, lost: 0, reorder: 0, dup: 0, pings: 0 },
+    })
+    socket.emit('rc:live-ready', {
+      port: LIVE_UDP_PORT,
+      key: key.toString('hex'),
+      mtu: LIVE_MAX_DATAGRAM,
+      proto: LIVE_VERSION,
+      at: Date.now(),
+    })
+    rcLog(`فتح التدفق الحي (NexusLive) لـ ${trust.name} — UDP :${LIVE_UDP_PORT} مفتاح 16-hex`, 'ok')
+  })
+
+  socket.on('rc:live-stats?', () => {
+    socket.emit('rc:live-stats', liveStatsSnapshot())
   })
 
   // ==== نقل أحداث الإدخال مع بوابة الطاقة ====
@@ -361,6 +538,8 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     // FA-input — انقطاع صاحب الجلسة ينهيها دائمًا (قاعدة §4.8)
     if (session.active && session.socketId === socket.id) endSession('disconnected')
+    // الجولة 4 (عقد §18) — تدفقات القناة الحية تموت مع سوكِتها
+    dropLiveFlows(socket.id, 'انقطاع السوكِت')
     controllerTrust.delete(socket.id)
     desktopSocks.delete(socket.id)
     console.log('client disconnected:', socket.id)
