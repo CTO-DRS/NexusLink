@@ -47,6 +47,9 @@ static WATCHDOG: OnceLock<()> = OnceLock::new();
 // ---------------------------------------------------------------------------
 enum InputMsg {
     Exec { events: Vec<serde_json::Value>, app: tauri::AppHandle },
+    /// NexusLive (عقد §18) — دفعة قناة حية: نفس التنفيذ + إشعار اكتمال الحقن
+    /// الفعلي في خيط enigo (قياس كمون طرف-إلى-طرف صادق — لا جدولة فقط).
+    ExecSync { events: Vec<serde_json::Value>, app: tauri::AppHandle, done: mpsc::Sender<()> },
     ResetDrag,
 }
 
@@ -80,12 +83,11 @@ fn exec_channel(app: &tauri::AppHandle) -> mpsc::Sender<InputMsg> {
                     let en = enigo.as_mut().unwrap();
                     match msg {
                         InputMsg::Exec { events, app } => {
-                            for ev in events {
-                                if let Err(e) = exec::apply_event(en, &ev) {
-                                    // فشل الحقن (مثال: بلا صلاحية Accessibility على ماك) — يُبث للواجهة
-                                    emit(&app, "desktop://input-error", json!({"op": ev.get("kind"), "error": e}));
-                                }
-                            }
+                            exec_events(en, &events, &app);
+                        }
+                        InputMsg::ExecSync { events, app, done } => {
+                            exec_events(en, &events, &app);
+                            let _ = done.send(()); // اكتمل الحقن الفعلي — المستدعي يقيس المدة
                         }
                         InputMsg::ResetDrag => exec::reset_drag(en),
                     }
@@ -98,6 +100,16 @@ fn exec_channel(app: &tauri::AppHandle) -> mpsc::Sender<InputMsg> {
 
 fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+
+/// حلقة تنفيذ دفعة واحدة مشتركة بين المسارين (الجسر وNexusLive) — مصدر واحد
+fn exec_events(en: &mut Enigo, events: &[serde_json::Value], app: &tauri::AppHandle) {
+    for ev in events {
+        if let Err(e) = exec::apply_event(en, ev) {
+            // فشل الحقن (مثال: بلا صلاحية Accessibility على ماك) — يُبث للواجهة
+            emit(app, "desktop://input-error", json!({"op": ev.get("kind"), "error": e}));
+        }
+    }
 }
 
 pub fn is_active() -> bool {
@@ -257,6 +269,23 @@ fn ensure_exec_ready(app: &tauri::AppHandle) -> Result<(), String> {
             Ok(())
         }
     }
+}
+
+/// NexusLive (عقد §18) — حقن متزامن: يحجب حتى اكتمال تنفيذ الدفعة في خيط
+/// enigo فعلًا (المدة يقيسها live.rs بساعتها). نفس بوابة الجلسة الأصلية §13 —
+/// بلا مسار حقن موازٍ: نفس القناة ونفس المحرك ونفس فشل الـ Accessibility.
+pub fn execute_sync(app: &tauri::AppHandle, events: &[serde_json::Value], source: &str) -> Result<(), String> {
+    // بوابة الأمان نفسها في execute (مرآة حرفية — مسار واحد للثقة)
+    if source != "desktop-local" && !is_active() {
+        return Err("لا جلسة تحكم نشطة — ابدأ الجلسة من الهاتف الموثوق أولًا".into());
+    }
+    LAST_EVENT_MS.store(now_ms(), Ordering::Relaxed);
+    let (tx, rx) = mpsc::channel::<()>();
+    exec_channel(app)
+        .send(InputMsg::ExecSync { events: events.to_vec(), app: app.clone(), done: tx })
+        .map_err(|e| format!("قناة التنفيذ مغلقة: {e}"))?;
+    rx.recv_timeout(Duration::from_secs(2))
+        .map_err(|_| "انتهت مهلة اكتمال الحقن (خيط enigo مشغول/معلق)".to_string())
 }
 
 pub fn execute(app: &tauri::AppHandle, events: &[serde_json::Value], source: &str) -> Result<String, String> {

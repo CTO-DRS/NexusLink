@@ -18,6 +18,8 @@ mod harden_core;
 mod input;
 // FA-harden (عقد §16) — كشف الخمول (بندا 1 و4 من مصدر واحد)
 mod idle;
+// الجولة 4 (عقد §18) — NexusLive: مستقبل UDP للإدخال الحي (loopback حصرًا)
+mod live;
 // FA-harden (عقد §16) — قفل التطبيق: PIN + Windows Hello / Touch ID (بند 1)
 mod lock;
 mod media;
@@ -103,6 +105,8 @@ fn main() {
             sync::set_app(handle.clone());
             // FA-media (عقد §15) — الطبقة الأصلية للوسائط (بث الشاشة + الويب كام)
             media::set_app(handle.clone());
+            // الجولة 4 (عقد §18) — NexusLive: مستقبل UDP الحي على loopback
+            live::spawn(handle.clone());
             // -----------------------------------------------------------------
             // FA-harden (عقد §16):
             //  بند 6 — سحب سياسات المخزن المشترك كل 10ث (نفس SQLite)
@@ -159,7 +163,8 @@ fn main() {
             media::media_answer,
             media::media_ice,
             media::media_kind_stop,
-            media::media_status
+            media::media_status,
+            live::live_state
         ])
         .on_window_event(|window, event| match event {
             // إغلاق → إخفاء إلى الـ Tray (قابل للتعطيل من قائمة الـ Tray)
