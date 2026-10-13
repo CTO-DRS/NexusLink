@@ -57,17 +57,23 @@ jobs:
             # deb أولًا: الأكثر حساسية ثم AppImage (NO_STRIP مطلوب — linuxdeploy
             # يفشل على strip لمكتبات تحوي .relr.dyn — موثق في tauri#14796)
             bundles: "deb appimage"
+            # -v: البندر يبتلع مخرجات linuxdeploy عند مستوى الخطأ فقط —
+            # output_ok يطبع عند debug (تشخيص فشل r3/r4 الصامت)
+            tauri-args: "-v"
             node-dist: "linux-x64"
             node-triple: "x86_64-unknown-linux-gnu"
           - os: windows-latest
             os-name: windows
             bundles: "nsis msi"
+            # -v: light.exe يبتلع مخرجاته أيضًا (فشل r3/r4 بعد 56-58ث بلا سبب مرئي)
+            tauri-args: "-v"
             node-dist: "win-x64"
             node-triple: "x86_64-pc-windows-msvc"
           - os: macos-latest
             os-name: macos
             # app مع dmg: أصل updater (.app.tar.gz + .sig) يُنتج فقط عند bundling التطبيق
             bundles: "dmg app"
+            tauri-args: ""
             node-dist: "darwin-arm64"
             node-triple: "aarch64-apple-darwin"
     runs-on: ${{ matrix.os }}
@@ -160,7 +166,7 @@ jobs:
             # بلا مفتاح: عطّل updater artifacts وإلا فشل البناء (pubkey بلا مفتاح خاص)
             CONFIG='{"bundle":{"externalBin":["binaries/node"],"createUpdaterArtifacts":false}}'
           fi
-          bunx @tauri-apps/cli@^2 build \
+          bunx @tauri-apps/cli@^2 build ${{ matrix.tauri-args }} \
             --bundles ${{ matrix.bundles }} \
             --config "$CONFIG"
 
