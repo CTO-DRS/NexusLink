@@ -54,7 +54,9 @@ jobs:
         include:
           - os: ubuntu-latest
             os-name: linux
-            bundles: "appimage deb"
+            # deb أولًا: الأكثر حساسية ثم AppImage (NO_STRIP مطلوب — linuxdeploy
+            # يفشل على strip لمكتبات تحوي .relr.dyn — موثق في tauri#14796)
+            bundles: "deb appimage"
             node-dist: "linux-x64"
             node-triple: "x86_64-unknown-linux-gnu"
           - os: windows-latest
@@ -64,7 +66,8 @@ jobs:
             node-triple: "x86_64-pc-windows-msvc"
           - os: macos-latest
             os-name: macos
-            bundles: "dmg"
+            # app مع dmg: أصل updater (.app.tar.gz + .sig) يُنتج فقط عند bundling التطبيق
+            bundles: "dmg app"
             node-dist: "darwin-arm64"
             node-triple: "aarch64-apple-darwin"
     runs-on: ${{ matrix.os }}
@@ -114,6 +117,14 @@ jobs:
           # cmake + g++: بناء openh264/audiopus_sys (libopus) المضمنين (FA-media §15)
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxkbcommon-dev cmake g++
 
+      - name: Enable VBScript (WiX ICE validation needs it — GH runners ship without)
+        if: matrix.os-name == 'windows'
+        shell: powershell
+        run: |
+          $cap = Get-WindowsCapability -Online | Where-Object Name -like 'VBSCRIPT*'
+          if ($cap -and $cap.State -ne 'Installed') { Add-WindowsCapability -Online -Name $cap.Name }
+          (Get-WindowsCapability -Online | Where-Object Name -like 'VBSCRIPT*').State
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri
@@ -136,6 +147,8 @@ jobs:
         env:
           # linuxdeploy AppImage لا يعمل بلا FUSE على المُشغّل — استخراج ذاتي بدل التحميل
           APPIMAGE_EXTRACT_AND_RUN: "1"
+          # linuxdeploy يفشل على strip لمكتبات .relr.dyn (جولات 24.04) — تعطيل strip
+          NO_STRIP: "true"
           # CMake 4 الجديد أزال توافق <3.5 — libopus المضمن في audiopus_sys قديم
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}

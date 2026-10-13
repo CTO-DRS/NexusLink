@@ -737,9 +737,9 @@ interface TransferJob {
 **مبدأ الإصدار**: رقم إصدار موحّد **1.0.0** مقفول عبر الأربعة (tauri.conf.json / Cargo.toml / pubspec.yaml / package.json الجذر) — أي اختلاف = فشل تعاقدي. أصول إصدار منشور **لا تُستبدل** (تواقيع latest.json مبنية على محتواها)؛ الإصدار الجديد = وسم v* جديد فقط.
 
 ### 17.أ مصفوفة الحزم (job desktop — matrix ثلاث منصات)
-- **Windows**: `NexusLink_<v>_x64-setup.exe` (NSIS — webviewInstallMode downloadBootstrapper: يثبّت WebView2 تلقائيًا إن غاب) + `NexusLink_<v>_x64_en-US.msi` (WiX) + **`NexusLink_<v>_x64-portable.zip`** (بلا تثبيت).
-- **macOS**: `NexusLink_<v>_aarch64.dmg` (+ أصل updater `.app.tar.gz` عند وجود مفتاح التوقيع). غير موقّع افتراضيًا — دليل Developer ID + Notarization في BUILD.md §3.
-- **Linux**: `*.AppImage` + `NexusLink_<v>_amd64.deb`.
+- **Windows**: `NexusLink_<v>_x64-setup.exe` (NSIS — webviewInstallMode downloadBootstrapper: يثبّت WebView2 تلقائيًا إن غاب) + `NexusLink_<v>_x64_en-US.msi` (WiX — **يتطلب تفعيل VBScript** على runners 2026 بلا VBSCRIPT: `Add-WindowsCapability` لأن ICE validation في light.exe يعتمده) + **`NexusLink_<v>_x64-portable.zip`** (بلا تثبيت).
+- **macOS**: `NexusLink_<v>_aarch64.dmg` — البناء بـ `--bundles "dmg app"` لأن أصل updater (`.app.tar.gz` + `.sig`) يُنتج فقط عند bundling التطبيق نفسه. غير موقّع افتراضيًا — دليل Developer ID + Notarization في BUILD.md §3.
+- **Linux**: `NexusLink_<v>_amd64.deb` أولاً ثم `*.AppImage` — الأخير يتطلب `NO_STRIP=true` (linuxdeploy يفشل صامتًا على strip لمكتبات `.relr.dyn` — tauri#14796) و`APPIMAGE_EXTRACT_AND_RUN=1` (بلا FUSE).
 
 ### 17.ب تخطيط الحزمة المدمجة (مصدر الحقيقة: tauri-bundler debian.rs + settings.rs::copy_resources + tauri-utils resources.rs اختباراته الرسمية)
 - الموارد تُنسخ **بالمسار النسبي الكامل من src-tauri محفوظًا**: `<resource_dir>/resources/server/...` (+ comms/ + gateway/) — البادئة `resources/` جزء من الهدف.
