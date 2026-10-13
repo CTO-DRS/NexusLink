@@ -911,6 +911,8 @@ try {
 
     // (أ) release.yml — بناء حقيقي لا echo + مصفوفة الصيغ المطلوبة
     const rel = rd(".github/workflows/release.yml")
+    const brs = rd("apps/desktop/build-resources.sh")
+    const conf3 = JSON.parse(rd("apps/desktop/src-tauri/tauri.conf.json"))
     check("§17: release.yml — أمر بناء Tauri حقيقي (لا echo) بوصفة standalone+resources+sidecar",
       rel.includes("@tauri-apps/cli@^2 build") && !rel.includes('echo "tauri build')
       && rel.includes("build-resources.sh") && rel.includes("v20.18.1"))
@@ -919,6 +921,11 @@ try {
     check("§17: release.yml — NO_STRIP (linuxdeploy .relr.dyn) + تفعيل VBScript (WiX ICE على runners 2026)",
       rel.includes('NO_STRIP: "true"') && rel.includes("Where-Object Name -like 'VBSCRIPT*'")
       && rel.includes("Add-WindowsCapability"))
+    // G-28 + LGHT0311 (جولة r5 verbose كشفت الاثنين)
+    check("§17: G-28 — حذف متغيرات musl من node_modules المضمنة (linuxdeploy يفشل على ELF musl)",
+      brs.includes("-type d -name \"*-musl*\" -exec rm -rf"))
+    check("§17: وصفا الحزمة ASCII نقيان (LGHT0311: قاعدة MSI code page 1252 لا تشفر العربية)",
+      (() => { const b = conf3?.bundle ?? {}; return [b.shortDescription, b.longDescription].every((s) => typeof s === "string" && [...s].every((c) => c.charCodeAt(0) < 128)); })())
     check("§17: release.yml — خطوة Portable ZIP (تجميع بنفس تخطيط NSIS + bsdtar + README)",
       rel.includes("Assemble Windows portable ZIP") && rel.includes("NexusLink_${VERSION}_x64-portable.zip")
       && rel.includes("PORTABLE-README.txt") && rel.includes("/c/Windows/System32/tar.exe -a -cf"))
@@ -931,7 +938,6 @@ try {
       rel.includes("APPIMAGE_EXTRACT_AND_RUN") && rel.includes("CMAKE_POLICY_VERSION_MINIMUM"))
 
     // (ب) tauri.conf — الصيغ الخمسة
-    const conf3 = JSON.parse(rd("apps/desktop/src-tauri/tauri.conf.json"))
     const targets = conf3?.bundle?.targets ?? []
     check("§17: tauri.conf targets الخمسة (deb nsis msi appimage dmg) + إصدار 1.0.0",
       ["deb", "nsis", "msi", "appimage", "dmg"].every((t) => targets.includes(t)) && conf3?.version === "1.0.0",

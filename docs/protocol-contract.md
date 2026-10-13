@@ -746,6 +746,8 @@ interface TransferJob {
 - `<resource_dir>`: ويندوز = مجلد التنفيذي · لينكس = `/usr/lib/NexusLink` (اسم productName من tauri-codegen) · ماك = `Contents/Resources`.
 - **resolve_resources (procman.rs)** يفحص بالترتيب: `<rd>/resources/server/server.js` (المدمج) → `<rd>/server/server.js` (مسطّح — توافق) → `<exe_dir>/resources/server/server.js` (portable) → `CARGO_MANIFEST_DIR/resources` (تطوير). قبل الجولة 3 كان الفحص الأول وحده مسطّحًا ⇒ الخادم المضمّن لا يبدأ في أي حزمة مثبتة (عيب كامن أُصلح — جوهر اختبار نجاح التثبيت النظيف).
 - **resolve_node**: `node.exe`/`node` بجوار التنفيذي (الحزم تُسقط اللاحقة الثلاثية) — Portable يعيد تسمية sidecar إلى node.exe يدويًا.
+- **G-28 (r5 verbose)**: متغيرات musl في node_modules المضمّن (`@img/sharp-linuxmusl-*` و`@next/swc-linux-x64-musl`) غير مستعملة على أي منصة مستهدفة — وlinuxdeploy يفشل عليها صامتًا (`Could not find dependency: libc.musl-x86_64.so.1`) — build-resources.sh يحذف كل `*-musl*` من resources/server.
+- **LGHT0311 (r5 verbose)**: قاعدة بيانات MSI مقيّدة بصفحة الشفرة 1252 — وصفا الحزمة في tauri.conf.json **ASCII نقيان إلزامًا** (العربية فشلت light.exe صامتة). و-`-v` لبناء لينكس/ويندوز يكشف مخرجات البندر (output_ok يطبع عند debug فقط).
 - **سلامة تجميع comms (G-27)**: تبعيات mini-services/comms-service حصرية في ملفها (الجذر بلا workspaces) — build-resources.sh يضمن تثبيتها قبل esbuild وإلا تُرك `import("bonjour-service")` خارجيًا ⇒ mDNS مكسور صامتًا داخل الحزم (كان CI يبنيه كذلك حتى هذه الجولة). الفحص: لا `await import("<pkg>")` لتبعية خارجية داخل comms.cjs.
 - **Portable ZIP**: نفس تخطيط NSINS حرفيًا (exe + node.exe + resources/) + README.txt (PORTABLE-README.txt) — تُجمَّع بعد البناء بـ bsdtar (`tar -a -cf`) تفاديًا لمشاكل المسارات الطويلة في Compress-Archive.
 
