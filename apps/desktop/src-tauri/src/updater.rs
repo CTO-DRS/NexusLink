@@ -163,7 +163,8 @@ pub fn updater_install(app: AppHandle) -> serde_json::Value {
         update
             .download_and_install(
                 |chunk, total| {
-                    downloaded += chunk.len();
+                    // tauri-plugin-updater: chunk هو طول الجزء (usize) لا شريحة بايتات
+                    downloaded += chunk;
                     let _ = (total, downloaded);
                 },
                 || {},

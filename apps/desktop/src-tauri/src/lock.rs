@@ -94,23 +94,26 @@ fn hello_available() -> bool {
 
 #[cfg(windows)]
 fn hello_verify(reason: &str) -> Option<bool> {
-    use windows::Security::Credentials::UI::{ConsentVerificationResult, UserConsentVerifier};
+    use windows::Security::Credentials::UI::{UserConsentVerificationResult, UserConsentVerifier};
     use windows::core::HSTRING;
     com_init();
     let hint = HSTRING::from(reason);
-    let op = UserConsentVerifier::RequestConsentVerificationAsync(&hint).ok()?;
+    // windows 0.58 يولّد الاسم بدون لاحقة Consent (المصدر: UserConsentVerifier::RequestVerificationAsync)
+    let op = UserConsentVerifier::RequestVerificationAsync(&hint).ok()?;
     match op.get() {
-        Ok(r) => Some(r == ConsentVerificationResult::Verified),
+        Ok(r) => Some(r == UserConsentVerificationResult::Verified),
         Err(_) => None,
     }
 }
 
 #[cfg(windows)]
 fn com_init() {
-    use windows::Win32::System::Com::{CoInitializeEx, COINIT, HRESULT};
+    // windows 0.58: HRESULT في windows::core (لا Win32::System::Com) + COINIT_MULTITHREADED ثابت حرّ (لا قرين)
+    use windows::core::HRESULT;
+    use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
     unsafe {
         // RPC_E_CHANGED_MODE (0x80010106) مقبول — لقد هيأ الخيط شقته مسبقًا
-        let hr: HRESULT = CoInitializeEx(None, COINIT::MULTITHREADED);
+        let hr: HRESULT = CoInitializeEx(None, COINIT_MULTITHREADED);
         let _ = hr;
     }
 }

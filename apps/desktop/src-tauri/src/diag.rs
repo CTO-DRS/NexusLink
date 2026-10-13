@@ -56,13 +56,15 @@ fn speed_once(bytes: usize, download: bool) -> Result<f64, String> {
     let url = format!("http://127.0.0.1:3000/api/tools/speedtest?bytes={bytes}");
     let t0 = Instant::now();
     if download {
-        let mut resp = ureq::get(&url)
+        let resp = ureq::get(&url)
             .call()
             .map_err(|e| format!("تنزيل: {e}"))?;
+        // ureq 2.10+ أزال impl Read for Response — المسار الصحيح into_reader()
+        let mut reader = resp.into_reader();
         let mut total = 0usize;
         let mut buf = [0u8; 64 * 1024];
         loop {
-            let n = resp.read(&mut buf).map_err(|e| format!("قراءة: {e}"))?;
+            let n = reader.read(&mut buf).map_err(|e| format!("قراءة: {e}"))?;
             if n == 0 {
                 break;
             }
