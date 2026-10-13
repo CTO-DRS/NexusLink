@@ -66,7 +66,6 @@ fn file_mtime_size(p: &Path) -> Option<(i64, u64)> {
 pub fn update_pairs(app: &AppHandle, status: &serde_json::Value) {
     let pairs = pairs_from_status(status);
     let agent = procman::current_agent_id();
-    let server_root = procman::server_root(app);
 
     // توقيع للتغيير — لا لمس للمراقبين إن لم يتغير شيء؛ تغيّر الوكيل = إعادة كاملة
     let sig = pairs
@@ -100,7 +99,7 @@ pub fn update_pairs(app: &AppHandle, status: &serde_json::Value) {
         *lp = pairs.clone();
     }
 
-    let agents_root = server_root.join("data").join("nexus-storage").join("agents");
+    let agents_root = procman::data_root(app).join("nexus-storage").join("agents");
     let mut rt = runtimes().lock().unwrap();
     let mut keep: HashSet<String> = HashSet::new();
     for p in pairs.iter().filter(|p| p.enabled) {
@@ -240,8 +239,7 @@ fn agent_sync_dir(pair_id: &str) -> Option<PathBuf> {
     let app = app_handle()?;
     let agent = procman::current_agent_id();
     Some(
-        procman::server_root(&app)
-            .join("data")
+        procman::data_root(&app)
             .join("nexus-storage")
             .join("agents")
             .join(agent)
@@ -254,8 +252,7 @@ fn agent_sync_dir(pair_id: &str) -> Option<PathBuf> {
 fn process_outbound(app: &Option<AppHandle>, pair_id: &str, rels: &[String]) {
     let Some(app) = app else { return };
     let (Some(local_dir), _) = pair_dirs(pair_id) else { return };
-    let pc_fs = procman::server_root(app)
-        .join("data")
+    let pc_fs = procman::data_root(app)
         .join("nexus-storage")
         .join("pc-fs");
     let outbox = pc_fs.join("Outbox").join(pair_id);

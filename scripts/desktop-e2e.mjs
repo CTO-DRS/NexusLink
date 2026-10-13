@@ -926,6 +926,16 @@ try {
       brs.includes("-type d -name \"*musl*\" -exec rm -rf"))
     check("§17: وصفا الحزمة ASCII نقيان (LGHT0311: قاعدة MSI code page 1252 لا تشفر العربية)",
       (() => { const b = conf3?.bundle ?? {}; return [b.shortDescription, b.longDescription].every((s) => typeof s === "string" && [...s].every((c) => c.charCodeAt(0) < 128)); })())
+    // G-30 (جولة r8): جذر بيانات قابل للكتابة — procman يمرر NEXUS_DATA_ROOT والسيرفر يقرؤه
+    check("§17: G-30 — procman data_root + NEXUS_DATA_ROOT للعمليات الثلاث + فك data/ في notify",
+      (() => { const pm = rd("apps/desktop/src-tauri/src/procman.rs"); const nf = rd("apps/desktop/src-tauri/src/notify.rs"); return pm.includes("pub fn data_root") && pm.includes('("NEXUS_DATA_ROOT".into(), ndr_str.clone())') && pm.includes('NEXUS_DATA_ROOT".into(), ndr_str') && nf.includes('strip_prefix("data/")') && nf.includes("procman::data_root"); })())
+    check("§17: G-30 — data-root.ts (env مع fallback cwd/data) + مستهلكو nexusStorageRoot",
+      fsp.existsSync(pathMod.join(ROOT, "src/lib/nexus/data-root.ts"))
+      && (() => { const d = rd("src/lib/nexus/data-root.ts"); return d.includes("NEXUS_DATA_ROOT") && d.includes("nexusStorageRoot"); })()
+      && rd("src/lib/nexus/fs-server.ts").includes("nexusStorageRoot()")
+      && rd("src/lib/nexus/transfer-engine.ts").includes("nexusStorageRoot()"))
+    check("§17: G-29 — تقليم standalone بkeep-list (تسرّب شجرة المستودع + أسماء صينية كسرت MSI)",
+      brs.includes("! -name 'server.js' ! -name '.next' ! -name 'public' ! -name 'db'") && brs.includes("-exec rm -rf {} +"))
     check("§17: release.yml — خطوة Portable ZIP (تجميع بنفس تخطيط NSIS + bsdtar + README)",
       rel.includes("Assemble Windows portable ZIP") && rel.includes("NexusLink_${VERSION}_x64-portable.zip")
       && rel.includes("PORTABLE-README.txt") && rel.includes("/c/Windows/System32/tar.exe -a -cf"))

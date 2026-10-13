@@ -4,6 +4,7 @@ import path from "path"
 import { createHash } from "crypto"
 import type { TransferJob } from "./types"
 import { resolveSafe } from "./fs-server"
+import { nexusDataRoot, nexusStorageRoot } from "./data-root"
 
 const g = globalThis as unknown as { __nexusJobs?: Map<string, TransferJob> }
 
@@ -14,8 +15,9 @@ export function jobs(): Map<string, TransferJob> {
 
 const CHUNK = 256 * 1024          // 256 KB chunks
 const TICK_MS = 70                // pacing so progress is visible in UI
-const PC_RECV = path.join(process.cwd(), "data", "nexus-storage", "pc-fs", "Downloads")
-const PHONE_RECV = path.join(process.cwd(), "data", "nexus-storage", "media", "Download")
+// G-30: جذر قابل للكتابة (نفس البنية data/nexus-storage التاريخية)
+const PC_RECV = path.join(nexusStorageRoot(), "pc-fs", "Downloads")
+const PHONE_RECV = path.join(nexusStorageRoot(), "media", "Download")
 
 async function uniqueDest(dir: string, name: string): Promise<string> {
   const dot = name.lastIndexOf(".")
@@ -55,7 +57,7 @@ export async function startTransfer(opts: {
     direction: opts.direction,
     fileName: opts.fileName,
     srcPath: opts.srcVPath,
-    destPath: destAbs.replace(process.cwd() + "/", ""),
+    destPath: destAbs.replace(nexusDataRoot() + path.sep, "data").replace(process.cwd() + path.sep, "data"),
     totalBytes: st.size,
     transferred: 0,
     status: "queued",

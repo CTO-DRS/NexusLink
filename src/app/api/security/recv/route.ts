@@ -3,10 +3,11 @@
 import { NextRequest } from "next/server"
 import { promises as fs } from "fs"
 import path from "path"
+import { nexusStorageRoot } from "@/lib/nexus/data-root"
 
 export const dynamic = "force-dynamic"
 
-const RECV = path.join(process.cwd(), "data", "nexus-storage", "media", "Download")
+const RECV = path.join(nexusStorageRoot(), "media", "Download")
 
 export async function POST(req: NextRequest) {
   try {

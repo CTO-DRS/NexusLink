@@ -144,6 +144,18 @@ pub fn server_root(app: &AppHandle) -> PathBuf {
     resolve_resources(app).join("server")
 }
 
+/// G-30 (الجولة 3 — عقد §17): جذر بيانات قابل للكتابة — التثبيت per-machine
+/// (MSI) يضع الحزمة في Program Files غير القابل للكتابة، وكل مسارات
+/// nexus-storage كانت نسبيّة لcwd. نفس القيمة تُمرر env (NEXUS_DATA_ROOT)
+/// لعمليات node الثلاث — وفي التطوير بلا env: cwd/data كما كان.
+pub fn data_root(app: &AppHandle) -> PathBuf {
+    let base = app
+        .path()
+        .app_config_dir()
+        .unwrap_or_else(|_| std::env::temp_dir().join("nexuslink"));
+    base.join("nexus-data")
+}
+
 // ---------- HTTP + الحافظة (طبقة أصلية) ----------
 
 fn http_agent() -> &'static ureq::Agent {
@@ -588,6 +600,11 @@ pub fn start(app: AppHandle) {
     }
     let db_url = format!("file:{}", db_path.to_string_lossy());
 
+    // G-30 — جذر بيانات قابل للكتابة (نفس قاعدة db) يُمرر لكل عمليات node
+    let nexus_data = data_root(&app);
+    let _ = std::fs::create_dir_all(&nexus_data);
+    let ndr_str = nexus_data.to_string_lossy().to_string();
+
     let next_spec = ProcSpec {
         name: "next",
         script: res.join("server/server.js").to_string_lossy().to_string(),
@@ -597,13 +614,19 @@ pub fn start(app: AppHandle) {
             ("NODE_ENV".into(), "production".into()),
             // FA-harden (G-26) — قاعدة SQLite قابلة للكتابة لكل جهاز (عقد §16)
             ("DATABASE_URL".into(), db_url),
+            // G-30 — جذر بيانات قابل للكتابة (nexus-storage/desktop-ui.json)
+            ("NEXUS_DATA_ROOT".into(), ndr_str.clone()),
         ],
         cwd: Some(res.join("server").to_string_lossy().to_string()),
     };
     let gw_spec = ProcSpec {
         name: "gateway",
         script: res.join("gateway/gateway.cjs").to_string_lossy().to_string(),
-        env: vec![("GATEWAY_PORT".into(), "81".into()), ("REST_PORT".into(), REST_PORT.to_string())],
+        env: vec![
+            ("GATEWAY_PORT".into(), "81".into()),
+            ("REST_PORT".into(), REST_PORT.to_string()),
+            ("NEXUS_DATA_ROOT".into(), ndr_str.clone()),
+        ],
         cwd: None,
     };
     let comms_spec = ProcSpec {
@@ -614,6 +637,7 @@ pub fn start(app: AppHandle) {
             ("NEXT_BASE".into(), format!("http://127.0.0.1:{REST_PORT}")),
             ("NEXUSLINK_NAME".into(), server_name.clone()),
             ("NEXUSLINK_GATEWAY_PORT".into(), "81".into()), // يُحدَّث بعد إقلاع البوابة
+            ("NEXUS_DATA_ROOT".into(), ndr_str),
         ],
         cwd: None,
     };
@@ -814,11 +838,7 @@ pub fn handle_deep_link(app: &AppHandle, urls: Vec<tauri::Url>) {
 /// (نفس نمط الحافظة §11) — يعيد (الاسم الافتراضي، الحجم). يخدم قائمة الزر
 /// الأيمن (--send) وأي إرسال من الطبقة الأصلية.
 pub fn stage_file_to_inbox(app: &AppHandle, name: &str, bytes: &[u8]) -> Result<(String, usize), String> {
-    let inbox = server_root(app)
-        .join("data")
-        .join("nexus-storage")
-        .join("pc-fs")
-        .join("Inbox");
+    let inbox = data_root(app).join("nexus-storage").join("pc-fs").join("Inbox");
     std::fs::create_dir_all(&inbox).map_err(|e| format!("mkdir: {e}"))?;
     let dest = unique_dest(&inbox, name);
     std::fs::write(&dest, bytes).map_err(|e| format!("write: {e}"))?;
@@ -848,7 +868,7 @@ pub fn unique_dest(dir: &Path, name: &str) -> PathBuf {
 pub fn handle_dropped_files(app: &AppHandle, paths: Vec<PathBuf>) {
     let app2 = app.clone();
     std::thread::spawn(move || {
-        let inbox = server_root(&app2).join("data").join("nexus-storage").join("pc-fs").join("Inbox");
+        let inbox = data_root(&app2).join("nexus-storage").join("pc-fs").join("Inbox");
         if let Err(e) = std::fs::create_dir_all(&inbox) {
             println!("[drop] mkdir failed: {e}");
             return;

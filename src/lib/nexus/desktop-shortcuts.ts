@@ -2,6 +2,7 @@
 // المصدر: data/desktop-ui.json (يُكتب عبر /api/desktop/shortcuts PUT من جسر الواجهة)
 import { promises as fs } from "fs"
 import path from "path"
+import { nexusDataRoot } from "./data-root"
 
 export const DESKTOP_SHORTCUT_DEFAULTS: Record<string, string> = {
   sendClipboard: "Ctrl+Shift+N",
@@ -22,7 +23,7 @@ export type DesktopSecurityCfg = { autoLock: boolean }
 export const DESKTOP_SECURITY_DEFAULTS: DesktopSecurityCfg = { autoLock: true }
 
 export function desktopUiStorePath(): string {
-  return path.join(process.cwd(), "data", "desktop-ui.json")
+  return path.join(nexusDataRoot(), "desktop-ui.json")
 }
 
 export async function readShortcuts(): Promise<Record<string, string>> {

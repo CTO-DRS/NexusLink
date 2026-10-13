@@ -295,8 +295,7 @@ fn flow_files(app: &AppHandle, files: &[PathBuf]) {
 
 /// كتابة بايتات داخل pc-fs/Inbox باسم بديل غير حائزي — يعيد (الاسم، الحجم)
 fn stage_to_inbox(app: &AppHandle, name: &str, bytes: &[u8]) -> Result<(String, usize), String> {
-    let inbox = crate::procman::server_root(app)
-        .join("data")
+    let inbox = crate::procman::data_root(app)
         .join("nexus-storage")
         .join("pc-fs")
         .join("Inbox");

@@ -35,6 +35,17 @@ cp db/custom.db "$RES/server/db/custom.db"
 # («Could not find dependency: libc.musl-x86_64.so.1» — r5 verbose) — حذفها من الحزمة
 find "$RES/server/node_modules" -depth -type d -name "*musl*" -exec rm -rf {} + 2>/dev/null || true
 
+# الجولة 3 (G-29): تتبع Next (Turbopack) يضمّن شجرة المستودع كاملة في standalone
+# (skills/ بأسماء ملفات صينية + download/ scripts/ .git/ …) — تسرّب حجم (~160MB)
+# وكسر MSI (LGHT0311: أسماء غير ASCII خارج code page 1252). Keep-list:
+# ما يحتاجه server.js وقت التشغيل حصرًا.
+cd "$RES/server"
+find . -mindepth 1 -maxdepth 1 \
+  ! -name 'server.js' ! -name '.next' ! -name 'public' ! -name 'db' \
+  ! -name 'node_modules' ! -name 'package.json' \
+  -exec rm -rf {} + 2>/dev/null || true
+cd - >/dev/null
+
 echo "== [2/4] comms-service → $RES/comms/comms.cjs =="
 # الجولة 3 (G-27): تبعيات comms-service حصرية في ملفه (الجذر بلا workspaces —
 # وbun install الجذر لا يثبتها). بلا هذا الحرس يفشل esbuild في الحل فيترك

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 import os from "node:os"
+import { nexusStorageRoot } from "@/lib/nexus/data-root"
 
 function dirSize(dir: string, depth = 0): number {
   if (depth > 6) return 0
@@ -74,7 +75,7 @@ export async function GET() {
         heapUsedMB: Math.round(mem.heapUsed / 1048576),
         heapTotalMB: Math.round(mem.heapTotal / 1048576),
       },
-      storageBytes: dirSize(join(process.cwd(), "data", "nexus-storage")),
+      storageBytes: dirSize(nexusStorageRoot()),
       services: {
         commsBridge: comms,
         remoteBridge: remote,

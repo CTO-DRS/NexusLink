@@ -4,8 +4,10 @@
 import { promises as fs, mkdirSync } from "fs"
 import path from "path"
 import type { FsCategory, FsEntry } from "./types"
+import { nexusStorageRoot } from "./data-root"
 
-export const DATA_ROOT = path.join(process.cwd(), "data", "nexus-storage")
+// G-30: جذر قابل للكتابة (procman يمرر NEXUS_DATA_ROOT — وdev يعود لcwd/data)
+export const DATA_ROOT = nexusStorageRoot()
 
 export const DEVICE_ROOTS: Record<string, string> = {
   "galaxy-s24": path.join(DATA_ROOT, "media"),
