@@ -202,6 +202,10 @@ class _SessionBar extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            // الجولة 4 (عقد §18) — رقاقة القناة الحية: UDP جاهز (RTT حي) /
+            // جارٍ الفتح / فوق socket.io (رجوع TCP الافتراضي)
+            _LiveChip(st: st),
+            const SizedBox(width: 6),
             TextButton.icon(
               onPressed: () => ctl.stopSession(),
               icon: const Icon(Icons.link_off_rounded, size: 14),
@@ -226,6 +230,51 @@ class _SessionBar extends StatelessWidget {
       child: Text(
         'rctl.session.ended'.tr(namedArgs: {'r': reason}),
         style: TextStyle(fontSize: 10.5, color: theme.hintColor),
+      ),
+    );
+  }
+}
+
+/// الجولة 4 (عقد §18) — رقاقة القناة الحية NexusLive:
+/// أخضر = الإدخال الحي فوق UDP (مع RTT الحي) · كهرماني = جارٍ فتح التدفق ·
+/// رمادي = الإدخال فوق socket.io (TCP الافتراضي) — صدق حالة دون تزييف.
+class _LiveChip extends StatelessWidget {
+  final RcUiState st;
+  const _LiveChip({required this.st});
+
+  @override
+  Widget build(BuildContext context) {
+    final (Color bg, Color fg, String label) = st.liveReady
+        ? (
+            const Color(0xFF064E3B),
+            const Color(0xFF6EE7B7),
+            'rctl.live.ready'.tr(namedArgs: {'rtt': '${st.liveRttMs}'}),
+          )
+        : st.liveOpening
+            ? (
+                const Color(0xFF78350F),
+                const Color(0xFFFCD34D),
+                'rctl.live.opening'.tr(),
+              )
+            : (
+                Colors.white.withOpacity(0.12),
+                Colors.white70,
+                'rctl.live.tcp'.tr(),
+              );
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: fg.withOpacity(0.45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(st.liveReady ? Icons.bolt_rounded : Icons.timeline_rounded, size: 11, color: fg),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: fg)),
+        ],
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:sensors_plus/sensors_plus.dart';
 import 'package:socket_io_client/socket_io_client.dart' as sio;
 
 import '../core/protocol.dart';
+import 'live_channel.dart';
 
 /// طور الجسر — مرآة لسلوك media_service.
 enum RcBridgePhase { offline, connecting, online }
@@ -39,6 +40,12 @@ class RcUiState {
   final String? sessionEndReason; // سبب آخر إنهاء (phone-stop/desktop-stop/timeout/disconnected/untrusted/busy)
   final int sessionHeartbeats; // عدد النبضات المرسلة
 
+  // الجولة 4 (عقد §18) — القناة الحية NexusLive (UDP)
+  final bool liveOpening; // طلب فتح أُرسل (بانتظار rc:live-ready)
+  final bool liveReady; // التدفق نشط (pong حي)
+  final int liveRttMs; // EMA لزمن الذهاب والعودة
+  final int liveSent; // حزم أُرسلت فوق UDP
+
   const RcUiState({
     this.phase = RcBridgePhase.offline,
     this.desktopName = '',
@@ -60,6 +67,10 @@ class RcUiState {
     this.sessionActive = false,
     this.sessionEndReason,
     this.sessionHeartbeats = 0,
+    this.liveOpening = false,
+    this.liveReady = false,
+    this.liveRttMs = 0,
+    this.liveSent = 0,
   });
 
   RcUiState copyWith({
@@ -85,6 +96,10 @@ class RcUiState {
     String? sessionEndReason,
     bool clearSessionEnd = false,
     int? sessionHeartbeats,
+    bool? liveOpening,
+    bool? liveReady,
+    int? liveRttMs,
+    int? liveSent,
   }) =>
       RcUiState(
         phase: phase ?? this.phase,
@@ -107,6 +122,10 @@ class RcUiState {
         sessionActive: sessionActive ?? this.sessionActive,
         sessionEndReason: clearSessionEnd ? null : (sessionEndReason ?? this.sessionEndReason),
         sessionHeartbeats: sessionHeartbeats ?? this.sessionHeartbeats,
+        liveOpening: liveOpening ?? this.liveOpening,
+        liveReady: liveReady ?? this.liveReady,
+        liveRttMs: liveRttMs ?? this.liveRttMs,
+        liveSent: liveSent ?? this.liveSent,
       );
 }
 
@@ -122,7 +141,19 @@ class ControllerService {
   /// الجلسة لا تبدأ إلا لجهاز موثوق في سجل الأجهزة.
   final String deviceId;
 
-  ControllerService({required this.deviceName, this.deviceId = ''});
+  ControllerService({required this.deviceName, this.deviceId = ''}) {
+    // الجولة 4 (عقد §18) — القناة الحية: طلب فتح التدفق عبر السوكِت التعاقدي
+    live = LiveChannel(_requestLiveHello);
+    // حالة القناة الحية → حالة الواجهة (على النبض/انتقالات الحالة — بلا إغراق)
+    live.statsStream.listen((ls) {
+      _patch((s) => s.copyWith(
+            liveOpening: ls.phase == LivePhase.opening,
+            liveReady: ls.phase == LivePhase.ready,
+            liveRttMs: ls.rttMs.round(),
+            liveSent: ls.sent,
+          ));
+    });
+  }
 
   sio.Socket? _socket;
   StreamSubscription<GyroscopeEvent>? _gyroSub;
@@ -130,6 +161,41 @@ class ControllerService {
   Timer? _pingTimer;
   Timer? _hbTimer; // نبض جلسة التحكم (FA-input)
   bool _sessionWanted = false; // الشاشة تريد جلسة نشطة (بدء تلقائي عند الاتصال)
+  // الجولة 4 (عقد §18) — القناة الحية: مضيف الكمبيوتر (UDP مباشر) + العميل
+  String? _host;
+  late final LiveChannel live;
+
+  /// هل الإدخال الحي جاهز فوق UDP؟ جلسة نشطة + تدفق مفتاحه صالح
+  bool get _sessionReadyForLive => _cur.sessionActive && live.isActive;
+
+  /// تحويل إجراء pointer النصي إلى قيمة التعاقد (نفس الترتيب)
+  LiveAction _liveAction(String a) => switch (a) {
+        'down' => LiveAction.down,
+        'up' => LiveAction.up,
+        'click' => LiveAction.click,
+        'dblclick' => LiveAction.dblclick,
+        'rclick' => LiveAction.rclick,
+        _ => LiveAction.move,
+      };
+
+  /// طلب فتح/إعادة فتح التدفق الحي (callback القناة — فوق socket.io حصرًا)
+  void _requestLiveHello() {
+    final sk = _socket;
+    if (sk == null || !sk.connected || !_cur.sessionActive) return;
+    sk.emit(RcEvents.liveHello);
+  }
+
+  /// rc:live-ready — المفتاح والمنفذ: فتح القناة الحية نحو مضيف الكمبيوتر
+  void _onLiveReady(dynamic raw) {
+    final m = _map(raw);
+    if (m == null) return;
+    final host = _host;
+    final port = (m['port'] as num?)?.toInt() ?? 0;
+    final key = '${m['key'] ?? ''}';
+    if (host == null || port <= 0 || key.length != 16) return;
+    live.activate(host: host, port: port, keyHex: key);
+    _patch((s) => s.copyWith(liveOpening: true));
+  }
 
   final _state = StreamController<RcUiState>.broadcast();
   RcUiState _cur = const RcUiState();
@@ -175,6 +241,7 @@ class ControllerService {
     disconnect();
     try {
       const bridgePort = NexusPorts.remote;
+      _host = host;
       final url = mode == 'gateway' ? 'http://$host:$port' : 'http://$host:$bridgePort';
       final builder = sio.OptionBuilder()
           .enableReconnection()
@@ -199,6 +266,7 @@ class ControllerService {
         _startAirmouse(false);
         _hbTimer?.cancel();
         _hbTimer = null;
+        live.deactivate(reason: 'انقطاع السوكِت');
       });
 
       bind(RcEvents.hello, _onHello);
@@ -206,6 +274,8 @@ class ControllerService {
       bind(RcEvents.rejected, _onRejected);
       bind(RcEvents.pong, _onPong);
       bind(RcEvents.session, _onSession);
+      // الجولة 4 (عقد §18) — دورة حياة القناة الحية
+      bind(RcEvents.liveReady, _onLiveReady);
 
       socket.connect();
       _socket = socket;
@@ -224,6 +294,7 @@ class ControllerService {
     _hbTimer?.cancel();
     _hbTimer = null;
     _startAirmouse(false);
+    live.deactivate(reason: 'إغلاق الاتصال');
     try {
       _socket?.clearListeners();
       _socket?.disconnect();
@@ -287,6 +358,9 @@ class ControllerService {
     if (active) {
       _hbTimer?.cancel();
       _hbTimer = Timer.periodic(const Duration(seconds: 2), (_) => _heartbeat());
+      // الجولة 4 (عقد §18) — الجلسة نشطة: افتح التدفق الحي تلقائيًا (الإدخال
+      // الحي ينتقل فوق UDP فور جاهزية rc:live-ready)
+      Future<void>.delayed(const Duration(milliseconds: 150), _requestLiveHello);
       _patch((s) => s.copyWith(
             sessionActive: true,
             clearSessionEnd: true,
@@ -297,6 +371,8 @@ class ControllerService {
       _hbTimer?.cancel();
       _hbTimer = null;
       _sessionWanted = false;
+      // الجولة 4 (عقد §18) — القناة الحية ترث عمر الجلسة
+      live.deactivate(reason: 'انتهت الجلسة');
       final reason = '${m['reason'] ?? 'phone-stop'}';
       _patch((s) => s.copyWith(sessionActive: false, sessionEndReason: reason));
     }
@@ -347,7 +423,14 @@ class ControllerService {
   // ------------------------------------------------------------------
 
   /// حركة نسبية للمؤشر (نسبية إلى ارتفاع لوحة اللمس على الشاشة).
+  /// الجولة 4 (عقد §18) — عند نشاط القناة الحية تمر فوق UDP (حزمة mouse
+  /// نسبية flags bit0 — دلالة السحب الذاتية التصحيح عبر bit0 الأزرار) —
+  /// هدف الكمون: ماوس هوائي <30ms (لا TCP للإدخال الحي).
   void move(double dx, double dy, {String source = 'touchpad', bool drag = false}) {
+    if (_sessionReadyForLive && (source == 'touchpad' || source == 'airmouse')) {
+      live.sendMouseRel(dx, dy, leftDown: drag);
+      return;
+    }
     final sk = _socket;
     if (sk == null || !sk.connected) return;
     if (dx == 0 && dy == 0) return;
@@ -380,7 +463,13 @@ class ControllerService {
   /// FA-media (عقد §15) — لمس على الشاشة المعروضة: مؤشر مطلق بإحداثيات
   /// مُطبّعة (0..1) + إجراء (move|down|up|click|dblclick|rclick).
   /// الجسر ينقّيها ويحقن __src، والكمبيوتر يحوّلها إلى بكسل مطلق خلال جلسة.
+  /// الجولة 4 (عقد §18) — عند نشاط القناة الحية يمرر فوق UDP حصرًا (نفس
+  /// الإجراءات — حزمة touch ≡ rc:pointer تعاقديًا) وإلا socket.io كما كان.
   void sendPointer(double nx, double ny, {String action = 'move'}) {
+    if (_sessionReadyForLive) {
+      live.sendTouch(nx, ny, action: _liveAction(action));
+      return;
+    }
     final sk = _socket;
     if (sk == null || !sk.connected) return;
     sk.emit(RcEvents.pointer, {
@@ -388,6 +477,14 @@ class ControllerService {
       'ny': ny.clamp(0.0, 1.0),
       'action': action,
     });
+  }
+
+  /// الجولة 4 (عقد §18) — قلم حي فوق UDP (لوحة الرسم): ضغط وميل كاملان
+  void sendPen(double nx, double ny, double pressure,
+      {int tiltX = 0, int tiltY = 0, required PenPhase phase, int buttons = 0}) {
+    if (_sessionReadyForLive) {
+      live.sendPen(nx, ny, pressure, tiltX: tiltX, tiltY: tiltY, phase: phase, buttons: buttons);
+    }
   }
 
   void key(String ch) {

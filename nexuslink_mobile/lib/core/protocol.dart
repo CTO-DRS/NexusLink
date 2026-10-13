@@ -8,6 +8,8 @@ class NexusPorts {
   static const int guard = 3006; // الحماية: منارة القرب + أوامر الجهاز
   static const int prod = 3007; // الإنتاجية: الحافظة الموحدة/التسليم
   static const int sec = 3009; // قناة E2E المشفرة
+  static const int liveUdp = 3010; // الجولة 4 — NexusLive: قناة الإدخال الحي (UDP)
+  static const int liveSink = 3011; // حوض Rust على loopback حصرًا (داخلي بالكمبيوتر)
   static const int gateway = 81; // بوابة Caddy: ?XTransformPort=<port>
 }
 
@@ -129,6 +131,13 @@ class RcEvents {
   // استقبال: {active: true, controller: {deviceId, name}, at} |
   //          {active: false, reason: "phone-stop"|"desktop-stop"|"timeout"|"disconnected", at}
   static const String session = 'rc:session';
+
+  // الجولة 4 (عقد §18) — القناة الحية NexusLive (UDP):
+  // إرسال: rc:live-hello (هاتف موثوق + جلسة نشطة) — رد: rc:live-ready
+  // {port, key (16-hex), mtu, proto} — إحصاء دوري: rc:live-stats
+  static const String liveHello = 'rc:live-hello';
+  static const String liveReady = 'rc:live-ready';
+  static const String liveStats = 'rc:live-stats';
 
   // استقبال
   static const String desktopClipboard = 'desktop:clipboard'; // {text, at?}
