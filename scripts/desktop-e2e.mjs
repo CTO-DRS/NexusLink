@@ -901,6 +901,88 @@ try {
       contract.includes("## 16.") && contract.includes("PBKDF2-HMAC-SHA256") && contract.includes("tauri-plugin-updater")
       && contract.includes("native-") && contract.includes("DesktopSetting") && contract.includes("idle_decision"))
   }
+
+  // ==========================================================================
+  // الجولة 3 — الإصدار النهائي (عقد §17): مصفوفة الحزم + Portable + توحيد الإصدار + docs
+  // ==========================================================================
+  {
+    const fsp = (await import("node:fs")).default
+    const rd = (p) => { try { return fsp.readFileSync(pathMod.join(ROOT, p), "utf8") } catch { return "" } }
+
+    // (أ) release.yml — بناء حقيقي لا echo + مصفوفة الصيغ المطلوبة
+    const rel = rd(".github/workflows/release.yml")
+    check("§17: release.yml — أمر بناء Tauri حقيقي (لا echo) بوصفة standalone+resources+sidecar",
+      rel.includes("@tauri-apps/cli@^2 build") && !rel.includes('echo "tauri build')
+      && rel.includes("build-resources.sh") && rel.includes("v20.18.1"))
+    check("§17: release.yml — مصفوفة الصيغ: win(nsis msi) · linux(appimage deb) · mac(dmg)",
+      rel.includes('bundles: "nsis msi"') && rel.includes('bundles: "appimage deb"') && rel.includes('bundles: "dmg"'))
+    check("§17: release.yml — خطوة Portable ZIP (تجميع بنفس تخطيط NSIS + bsdtar + README)",
+      rel.includes("Assemble Windows portable ZIP") && rel.includes("NexusLink_${VERSION}_x64-portable.zip")
+      && rel.includes("PORTABLE-README.txt") && rel.includes("/c/Windows/System32/tar.exe -a -cf"))
+    check("§17: release.yml — توقيع updater شرطي + latest.json على الوسوم + SHA256SUMS",
+      rel.includes("TAURI_SIGNING_PRIVATE_KEY") && rel.includes('createUpdaterArtifacts":false')
+      && rel.includes("Generate latest.json") && rel.includes("SHA256SUMS"))
+    check("§17: release.yml — dispatch = artifacts فقط (إرفاق يدوي opt-in) والوسم = إرفاق تلقائي",
+      rel.includes("attach_to_release") && rel.includes("startsWith(github.ref, 'refs/tags/v')"))
+    check("§17: release.yml — env لينكس المجرّبة (APPIMAGE_EXTRACT_AND_RUN + CMAKE_POLICY_VERSION_MINIMUM=3.5)",
+      rel.includes("APPIMAGE_EXTRACT_AND_RUN") && rel.includes("CMAKE_POLICY_VERSION_MINIMUM"))
+
+    // (ب) tauri.conf — الصيغ الخمسة
+    const conf3 = JSON.parse(rd("apps/desktop/src-tauri/tauri.conf.json"))
+    const targets = conf3?.bundle?.targets ?? []
+    check("§17: tauri.conf targets الخمسة (deb nsis msi appimage dmg) + إصدار 1.0.0",
+      ["deb", "nsis", "msi", "appimage", "dmg"].every((t) => targets.includes(t)) && conf3?.version === "1.0.0",
+      targets.join(","))
+
+    // (ج) الإصلاح الحرج: resolve_resources يفحص تخطيط الحزم المدمج بالبادئة أولًا
+    const procman = rd("apps/desktop/src-tauri/src/procman.rs")
+    check("§17: procman resolve_resources — <rd>/resources/server/server.js أولًا (الحزم المثبتة) ثم المسطّح ثم exe_dir ثم التطوير",
+      procman.includes('rd.join("resources/server/server.js")') && procman.includes('rd.join("server/server.js")')
+      && procman.includes('dir.join("resources/server/server.js")')
+      && procman.indexOf('rd.join("resources/server/server.js")') < procman.indexOf('rd.join("server/server.js")'))
+
+    // (د) PORTABLE-README — صفّر خطوات + WebView2 موثق
+    const preadme = rd("apps/desktop/PORTABLE-README.txt")
+    check("§17: PORTABLE-README.txt — فك وشغّل + متطلب WebView2 + بلا Registry",
+      preadme.includes("NexusLink.exe") && preadme.includes("WebView2") && preadme.includes("Registry"))
+
+    // (هـ) BUILD.md — دليل كل منصة + توقيع ماك + مفاتيح المحدّث + قواعد الإصدار
+    const build = rd("BUILD.md")
+    check("§17: BUILD.md — NSIS+MSI+Portable وAppImage+deb وDMG بأوامر حقيقية",
+      build.includes('--bundles "nsis msi"') && build.includes('--bundles "appimage deb"')
+      && build.includes('--bundles "dmg"') && build.includes("x64-portable.zip"))
+    check("§17: BUILD.md — توقيع ماك (Developer ID + codesign + notarytool) + مفاتيح updater",
+      build.includes("Developer ID Application") && build.includes("notarytool") && build.includes("stapler")
+      && build.includes("TAURI_SIGNING_PRIVATE_KEY"))
+    check("§17: BUILD.md — جدول توحيد الإصدار بالملفات الأربعة + قاعدة عدم استبدال أصول منشورة",
+      build.includes("pubspec.yaml") && build.includes("package.json") && build.includes("لا تُستبدل"))
+
+    // (و) README — سطح المكتب = المركز، الهاتف وكيل
+    const readme = rd("README.md")
+    check("§17: README §0 — المركز يعمل فور الإقلاع + جدول حزم Releases + QR + portable",
+      readme.includes("سطح المكتب = المركز") && readme.includes("x64-setup.exe")
+      && readme.includes("x64-portable.zip") && readme.includes("AppImage") && readme.includes("QR"))
+
+    // (ز) قائمة التحقق النهائية
+    const checklist = rd("docs/e2e-checklist.md")
+    check("§17: e2e-checklist — اختبار التثبيت النظيف + أقسام كل الميزات مع عمود نتيجة",
+      checklist.includes("التثبيت النظيف") && checklist.includes("x64-setup.exe")
+      && checklist.includes("التحكم اللمسي") && checklist.includes("الوسائط الأصلية")
+      && checklist.includes("صلابة الإصدار") && checklist.includes("☐"))
+
+    // (ح) توحيد الإصدار — الملفات الأربعة 1.0.0
+    const pkgJson = JSON.parse(rd("package.json"))
+    const cargoVer = (rd("apps/desktop/src-tauri/Cargo.toml").match(/^version\s*=\s*"([^"]+)"/m) ?? [])[1]
+    const pubspecVer = (rd("nexuslink_mobile/pubspec.yaml").match(/^version:\s*([^\s+]+)/m) ?? [])[1]
+    check("§17: توحيد الإصدار 1.0.0 — tauri.conf + Cargo.toml + pubspec + package.json",
+      conf3?.version === "1.0.0" && cargoVer === "1.0.0" && pubspecVer === "1.0.0" && pkgJson?.version === "1.0.0",
+      `tauri=${conf3?.version} cargo=${cargoVer} pubspec=${pubspecVer} pkg=${pkgJson?.version}`)
+
+    // (ط) العقد §17 موثق
+    check("العقد: §17 موثق (مصفوفة الحزم + تخطيط الموارد بالبادئة + resolve_resources + latest.json + dispatch opt-in)",
+      contract.includes("## 17.") && contract.includes("resolve_resources") && contract.includes("x64-portable.zip")
+      && contract.includes("attach_to_release") && contract.includes("/usr/lib/NexusLink"))
+  }
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {

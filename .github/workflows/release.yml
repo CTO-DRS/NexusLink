@@ -1,12 +1,34 @@
 name: Release — NexusLink (5 platforms)
 
+# الجولة 3 — الإصدار النهائي:
+#   Windows : NSIS + MSI + Portable ZIP (بلا تثبيت)
+#   macOS   : DMG (+ أصل updater .app.tar.gz موقّع)
+#   Linux   : AppImage + deb
+#   Android : APK موقّع + AAB
+#   iOS     : IPA (بلا توقيع — يتطلب حساب Apple)
+# الإرفاق بالـ Release تلقائي على وسوم v*؛ وعند workflow_dispatch البناء
+# يُنتج artifacts فقط ما لم تُفعَّل مدخل attach_to_release صراحةً
+# (حماية: لا تُستبدل أصول v1.0.0 الموقعة في latest.json بالخطأ).
+
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      attach_to_release:
+        description: "أرفق الأصول بالـ Release المحدد (افتراضيًا artifacts فقط)"
+        type: boolean
+        default: false
+      release_tag:
+        description: "وسم الإصدار عند الإرفاق اليدوي"
+        type: string
+        default: "v1.0.0"
 
 permissions:
   contents: write
+
+env:
+  VERSION: "1.0.0" # رقم إصدار موحّد لكل المنصات (مقفول — لا يُغيَّر هنا)
 
 jobs:
   test:
@@ -30,34 +52,190 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
-            targets: "nsis msi"
-          - os: macos-latest
-            targets: "dmg"
           - os: ubuntu-latest
-            targets: "appimage deb rpm"
+            os-name: linux
+            bundles: "appimage deb"
+            node-dist: "linux-x64"
+            node-triple: "x86_64-unknown-linux-gnu"
+          - os: windows-latest
+            os-name: windows
+            bundles: "nsis msi"
+            node-dist: "win-x64"
+            node-triple: "x86_64-pc-windows-msvc"
+          - os: macos-latest
+            os-name: macos
+            bundles: "dmg"
+            node-dist: "darwin-arm64"
+            node-triple: "aarch64-apple-darwin"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+
+      # bash على المنصات الثلاث (الدرس: لا تعتمد على shell الافتراضي لكل نظام)
+      - name: Generate Prisma client
+        shell: bash
+        run: bunx prisma generate
+
+      - name: Build Next standalone
+        shell: bash
+        run: |
+          bunx next build
+          cp -r .next/static .next/standalone/.next/
+          cp -r public .next/standalone/
+
+      - name: Assemble desktop resources (server + comms + gateway)
+        shell: bash
+        run: bash apps/desktop/build-resources.sh
+
+      - name: Download Node sidecar (v20.18.1)
+        shell: bash
+        run: |
+          NODE_VERSION=v20.18.1
+          mkdir -p apps/desktop/src-tauri/binaries
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            curl -fL -o node-pkg.zip "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-${{ matrix.node-dist }}.zip"
+            powershell.exe -NoProfile -Command "Expand-Archive -Force node-pkg.zip ."
+            cp "node-${NODE_VERSION}-${{ matrix.node-dist }}/node.exe" "apps/desktop/src-tauri/binaries/node-${{ matrix.node-triple }}.exe"
+          else
+            curl -fL -o node-pkg.tar.xz "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-${{ matrix.node-dist }}.tar.xz"
+            tar -xJf node-pkg.tar.xz
+            cp "node-${NODE_VERSION}-${{ matrix.node-dist }}/bin/node" "apps/desktop/src-tauri/binaries/node-${{ matrix.node-triple }}"
+          fi
+          ls -la apps/desktop/src-tauri/binaries/
+
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install Linux deps (webkit2gtk)
-        if: matrix.os == 'ubuntu-latest'
+
+      - name: Install Linux deps (webkit2gtk + enigo xkbcommon)
+        if: matrix.os-name == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - run: bun install --frozen-lockfile
-      - name: "Build desktop app (Tauri bundles: ${{ matrix.targets }})"
-        run: echo "tauri build --bundles ${{ matrix.targets }}"
-      - name: Sign artifacts (minisign Ed25519)
-        env:
-          MINISIGN_KEY: ${{ secrets.MINISIGN_KEY }}
-        run: echo "minisign -Sm dist/* — verification key shipped inside the app"
-      - uses: actions/upload-artifact@v4
+          # cmake + g++: بناء openh264/audiopus_sys (libopus) المضمنين (FA-media §15)
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxkbcommon-dev cmake g++
+
+      - uses: Swatinem/rust-cache@v2
         with:
-          name: desktop-${{ matrix.os }}
-          path: dist/**
-          if-no-files-found: ignore
+          workspaces: apps/desktop/src-tauri
+
+      - name: Detect updater signing key
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "UPDATER_SIGN=true" >> "$GITHUB_ENV"
+          else
+            echo "UPDATER_SIGN=false" >> "$GITHUB_ENV"
+            echo "⚠️ لا مفتاح توقيع updater — سيُبنى بلا updater artifacts"
+          fi
+
+      - name: Build Tauri bundles (${{ matrix.bundles }})
+        shell: bash
+        working-directory: apps/desktop
+        env:
+          # linuxdeploy AppImage لا يعمل بلا FUSE على المُشغّل — استخراج ذاتي بدل التحميل
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          # CMake 4 الجديد أزال توافق <3.5 — libopus المضمن في audiopus_sys قديم
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if [ "$UPDATER_SIGN" = "true" ]; then
+            CONFIG='{"bundle":{"externalBin":["binaries/node"]}}'
+          else
+            # بلا مفتاح: عطّل updater artifacts وإلا فشل البناء (pubkey بلا مفتاح خاص)
+            CONFIG='{"bundle":{"externalBin":["binaries/node"],"createUpdaterArtifacts":false}}'
+          fi
+          bunx @tauri-apps/cli@^2 build \
+            --bundles ${{ matrix.bundles }} \
+            --config "$CONFIG"
+
+      # نسخة Portable لويندوز: نفس تخطيط NSIS تمامًا (exe + node.exe + resources/)
+      # resolve_resources (procman.rs) يفحص هذا التخطيط أولًا — صفّر خطوات يدوية.
+      - name: Assemble Windows portable ZIP
+        if: matrix.os-name == 'windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=apps/desktop/src-tauri/target/release
+          STAGE="apps/desktop/src-tauri/target/portable/NexusLink-Portable-${VERSION}"
+          mkdir -p "$STAGE/resources"
+          # التنفيذي الرئيسي (cargo اسمه nexuslink-desktop، Tauri ينتج NexusLink)
+          if [ -f "$OUT/NexusLink.exe" ]; then
+            cp "$OUT/NexusLink.exe" "$STAGE/NexusLink.exe"
+          elif [ -f "$OUT/nexuslink-desktop.exe" ]; then
+            cp "$OUT/nexuslink-desktop.exe" "$STAGE/NexusLink.exe"
+          else
+            echo "الخطأ: التنفيذي الرئيسي غير موجود"; ls -la "$OUT"; exit 1
+          fi
+          # sidecar node → node.exe (resolve_node يبحث exe_dir/node.exe)
+          NODE_BIN=$(ls "$OUT"/node-*.exe 2>/dev/null | head -1 || true)
+          [ -n "$NODE_BIN" ] || { echo "الخطأ: sidecar node غير موجود"; ls -la "$OUT"; exit 1; }
+          cp "$NODE_BIN" "$STAGE/node.exe"
+          # الموارد بنفس تخطيط NSIS (بادئة resources/ محفوظة)
+          for r in server comms gateway; do
+            cp -r "apps/desktop/src-tauri/resources/$r" "$STAGE/resources/$r"
+          done
+          cp apps/desktop/PORTABLE-README.txt "$STAGE/README.txt"
+          # bsdtar النظامي يدعم zip بالامتداد ويتعامل مع المسارات الطويلة أفضل من Compress-Archive
+          /c/Windows/System32/tar.exe -a -cf \
+            "apps/desktop/src-tauri/target/portable/NexusLink_${VERSION}_x64-portable.zip" \
+            -C "$(dirname "$STAGE")" "$(basename "$STAGE")"
+          ls -la apps/desktop/src-tauri/target/portable/
+
+      - name: Upload bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os-name }}
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/**/*.AppImage
+            apps/desktop/src-tauri/target/release/bundle/**/*.deb
+            apps/desktop/src-tauri/target/release/bundle/**/*.exe
+            apps/desktop/src-tauri/target/release/bundle/**/*.msi
+            apps/desktop/src-tauri/target/release/bundle/**/*.dmg
+            apps/desktop/src-tauri/target/release/bundle/**/*.app.tar.gz
+            apps/desktop/src-tauri/target/portable/*.zip
+          if-no-files-found: error
+
+      - name: Upload updater signatures
+        if: env.UPDATER_SIGN == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os-name }}-sigs
+          path: apps/desktop/src-tauri/target/release/bundle/**/*.sig
+          if-no-files-found: error
+
+      # على وسوم v*: إرفاق تلقائي بالإصدار
+      - name: Attach bundles to release (tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            apps/desktop/src-tauri/target/release/bundle/**/*.AppImage
+            apps/desktop/src-tauri/target/release/bundle/**/*.deb
+            apps/desktop/src-tauri/target/release/bundle/**/*.exe
+            apps/desktop/src-tauri/target/release/bundle/**/*.msi
+            apps/desktop/src-tauri/target/release/bundle/**/*.dmg
+            apps/desktop/src-tauri/target/release/bundle/**/*.app.tar.gz
+            apps/desktop/src-tauri/target/release/bundle/**/*.sig
+            apps/desktop/src-tauri/target/portable/*.zip
+
+      # على dispatch: إرفاق اختياري صريح (محمي افتراضيًا — لا يستبدل أصول موقعة)
+      - name: Attach bundles to release (manual dispatch, opt-in)
+        if: inputs.attach_to_release == true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          files: |
+            apps/desktop/src-tauri/target/release/bundle/**/*.AppImage
+            apps/desktop/src-tauri/target/release/bundle/**/*.deb
+            apps/desktop/src-tauri/target/release/bundle/**/*.exe
+            apps/desktop/src-tauri/target/release/bundle/**/*.msi
+            apps/desktop/src-tauri/target/release/bundle/**/*.dmg
+            apps/desktop/src-tauri/target/release/bundle/**/*.app.tar.gz
+            apps/desktop/src-tauri/target/release/bundle/**/*.sig
+            apps/desktop/src-tauri/target/portable/*.zip
 
   android:
     needs: test
@@ -111,6 +289,11 @@ jobs:
         with:
           name: android-aab
           path: nexuslink_mobile/build/app/outputs/bundle/release/app-release.aab
+      - name: Attach APK to release (tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: nexuslink_mobile/NexusLink-*-release.apk
 
   ios:
     needs: test
@@ -127,13 +310,59 @@ jobs:
           path: dist/**
           if-no-files-found: ignore
 
+  # تجميع نهائي على الوسوم فقط: checksums + latest.json الموقّعة للمحدِّث
   release:
     needs: [desktop, android, ios]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { merge-multiple: true, path: dist }
+      - name: Generate latest.json (signed updater manifest)
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          python3 - <<'PY'
+          import glob, json, os
+          from datetime import datetime, timezone
+
+          tag = os.environ["GITHUB_REF_NAME"]            # v1.0.0
+          version = tag.lstrip("v")
+          base = f"https://github.com/CTO-DRS/NexusLink/releases/download/{tag}"
+          # أصول updater: توقيعات مولدة أثناء البناء (TAURI_SIGNING_PRIVATE_KEY)
+          picks = {
+              "windows-x86_64": "dist/NexusLink_*_x64-setup.exe.sig",
+              "linux-x86_64": "dist/*.AppImage.sig",
+              "darwin-aarch64": "dist/*.app.tar.gz.sig",
+          }
+          platforms = {}
+          for plat, pattern in picks.items():
+              files = sorted(glob.glob(pattern))
+              if not files:
+                  continue
+              sig_path = files[0]
+              asset = sig_path[: -len(".sig")]
+              if not os.path.exists(asset):
+                  continue
+              with open(sig_path, encoding="utf-8") as f:
+                  platforms[plat] = {
+                      "signature": f.read().strip(),
+                      "url": f"{base}/{os.path.basename(asset)}",
+                  }
+          latest = {
+              "version": version,
+              "pub_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "notes": f"NexusLink {version} — الإصدار الثابت لكل المنصات.",
+              "platforms": platforms,
+          }
+          with open("dist/latest.json", "w", encoding="utf-8") as f:
+              json.dump(latest, f, ensure_ascii=False, indent=2)
+          print("latest.json:", list(platforms), "→", version)
+          if not platforms:
+              raise SystemExit("لا توقيعات updater في dist — فشل")
+          PY
       - name: Generate SHA256 checksums
         run: cd dist && sha256sum * > SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2

@@ -600,3 +600,37 @@ Work Log:
 Stage Summary:
 - طبقة الوسائط الأصلية مغلقة أعلى مستوى ممكن: تنفيذيًا 38/38 (WebRTC loopback حقيقي)، تعاقديًا E2E 90/90، وبناء فعلي 3/3 منصات + Release كامل — والبِنيات الأربعة الحية على Release v1.0.0 تشمل كل ميزات A-F.
 - المهمات الست (A desktop-native، B clipboard، C power، D input، E files، F media) كلها ملتزمة ومدفوعة وخضراء CI.
+
+---
+Task ID: FA-harden (backfill توثيقي)
+Agent: main (Super Z)
+Task: صلّب الإصدار 6 بنود — التوثيق الرسمي للعمل المنفذ في commitين تلقائيين (c3b887c + 6375f53) وُجدا في الشجرة المحلية دون إدخال worklog
+
+Work Log:
+- اكتشاف أثناء الجولة 3: الشجرة المحلية تسبق origin بـ commitين رسالتهما UUID يحملان كامل التقوية: lock.rs (PIN عبر PBKDF2-SHA256 150k + Windows Hello/BCrypt + Touch ID/objc2 + قفل خمول) + updater.rs (فحص موقّع minisign) + audit.rs/harden_core.rs (طابور تدقيق native-* حصري بلا حجب) + idle.rs (قرار خمول) + diag.rs (فحص منافذ + قياس حقيقي + تصدير) + settings.rs (مزامنة DesktopSetting — نفس SQLite عبر /api/desktop/settings) + splash/lock.html + hardening-verify 47/47 + E2E موسّع §16.
+- أصول الحالة: أسرار CI مضبوطة (TAURI_SIGNING_PRIVATE_KEY + PASSWORD — 03:48) وlatest.json موقعة مرفوعة على Release v1.0.0 (03:50 — بعد الأصول ⇒ تواقيعها مطابقة للأصول الحية).
+- ملاحظة حالة: مفتاح التوقيع الخاص المحلي (~/.tauri) فُقد بإعادة ضبط الحاوية — الأسرار في GitHub محفوظة؛ قاعدة «لا استبدال أصول موقعة» صارت إلزامية حتى وجود مسار إعادة توقيع CI فقط.
+- إصلاح عرضي ضمن التوثيق: استعادة src/app/api/fs/upload/route.ts (حذف غير مبرر في شجرة العمل — لا أثر له في أي commit ولا worklog).
+
+Stage Summary:
+- التقوية الست كاملة منفذة ومدفوعة ضمن الجولة 3 (الأخضر الإجمالي أدناه) — §16 من العقد مرجعها الموثق.
+
+---
+Task ID: R3
+Agent: main (Super Z)
+Task: الإصدار النهائي للجولة 3 — حزم المنصات الثلاث (NSIS+MSI+Portable / DMG / AppImage+deb) + release.yml حقيقي + BUILD/README/checklist + توحيد الإصدار + اختبار نجاح التثبيت النظيف
+
+Work Log:
+- **عيب كامن حرج 1 (resolve_resources)**: تتبع مصادر tauri-bundler (debian.rs::copy_resource_files → usr/lib/<productName> + settings.rs::copy_resources → path.join(resource.target()) + tauri-utils/resources.rs اختباراته الرسمية target = resource_relpath بالبادئة الكاملة) + tauri-codegen (PackageInfo.name = productName) + platform.rs (resource_dir: win=exe_dir · linux=../lib/<name> · mac=../Resources) ⇒ الحزم تضع الموارد في `<resource_dir>/resources/server/...` بينما procman يفحص `<resource_dir>/server/server.js` فقط ⇒ **الخادم المضمّن لا يبدأ في أي حزمة مثبتة** — كان سيُفشل اختبار النجاح (تثبيت نظيف → يعمل). الإصلاح: سلسلة فحص رباعية (مدمج بالبادئة → مسطّح توافق → exe_dir portable → تطوير) موثقة عقدًا §17.ب.
+- **عيب كامن حرج 2 (comms مكسور داخل الحزم)**: E2E التقط فشل mDNS إعلان — الجذر بلا workspaces ⇒ bun install الجذر لا يثبت تبعيات mini-services/comms-service ⇒ esbuild يترك `import("bonjour-service")` خارجيًا (تحذير مخفي بـ --log-level=error) ⇒ **كل الحزم المنشورة حتى الآن تحمل comms.cjs بمسار mDNS ميت**. الإصلاح: حرس تبعيات في build-resources.sh (G-27) + إعادة تجميع (0 imports خارجية) — والاتجاه أعلاه يعني أن استبدال أصول NSIS/deb/DMG بأصول الجولة الخضراء الجديدة ضروري (مسبوقة سابقًا في FA-media — نفس النمط).
+- release.yml من هيكل echo إلى خط إصدار كامل: test 3 OS → desktop matrix (win "nsis msi" / linux "appimage deb" / mac "dmg") بالوصفة المجرّبة حرفيًا (standalone + build-resources + sidecar v20.18.1 + APPIMAGE_EXTRACT_AND_RUN + CMAKE_POLICY_VERSION_MINIMUM=3.5 + rust-cache) + خطوة Portable ZIP (تخطيط NSIS المطابق لقراءة resolve_resources + bsdtar للمسارات الطويلة) + توقيع updater شرطي بالسر (غيابه ⇒ createUpdaterArtifacts:false بالحقن — البقاء أخضر) + release job (وسم ⇒ إرفاق تلقائي + latest.json موقعة من .sig البناء + SHA256SUMS + Draft؛ dispatch ⇒ artifacts فقط وإرفاق opt-in بحماية الأصول الموقعة).
+- Portable: apps/desktop/PORTABLE-README.txt (فك وشغّل · WebView2 المتطلب الوحيد · بلا Registry · بيانات في %APPDATA%).
+- Docs: BUILD.md كامل (خطوات كل منصة بأوامر CI الحرفية + توقيع ماك Developer ID/codesign/notarytool/stapler + مفاتيح updater + جدول التشغيل dispatch/وسم + قاعدة الأصول) — README §0 «سطح المكتب = المركز، الهاتف = وكيل» (جدول الحزم الأربع + صفر خطوات + QR) — docs/e2e-checklist.md (11 قسمًا × عمود نتيجة، تمييز صادق ✅آليًا/🖐يدوي).
+- توحيد الإصدار (بند 7): package.json الجذر 0.2.1 → 1.0.0 (بلا مستهلكين للقديمة) — الأربعة 1.0.0 مثبتة بفحص E2E تعاقدي.
+- E2E §17 (12 فحصًا جديدًا): release.yml حقيقي لا echo + المصفوفة + portable + latest.json + dispatch opt-in + env المجرّبة — targets الخمسة — resolve_resources بالترتيب الصحيح — PORTABLE-README — BUILD (حزم + توقيع ماك + توحيد) — README §0 — checklist — الأربعة 1.0.0 — §17 موثق.
+- بيئة الحاوية المستعادة: @next/swc-linux-x64-gnu غائب (musl فقط) — تثبيت يدوي من registry دون تعديل package.json؛ build-resources يعيد standalone كاملًا (556MB).
+- التحقق المحلي النهائي: **E2E 121/121** (من 90) + lint أخضر + db seed استُعيد بعد E2E (لا بيانات اختبار في الحزمة).
+
+Stage Summary:
+- خط الإصدار ينتج الصيغ الست من CI مباشرة، والتطبيق المثبت يعمل فعلًا (الخادم المضمّن + mDNS) — اختبار النجاح الميداني موثق خطوة-خطوة في docs/e2e-checklist.md §1.
+- التزام صارم: v1.0.0 في الملفات الأربعة والوسم والأصول الحية — الاستبدال القادم (بعد الأخضر) يستهدف إصلاح comms/M مDNS داخل الأصول نفسها بإصدار 1.0.0 كما هو.

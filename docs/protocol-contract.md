@@ -731,3 +731,31 @@ interface TransferJob {
 - **بروتوكول اختبار النجاح (يدوي على أجهزة حقيقية — الحاوية بلا GUI/بطارية)**: 1) ضبط PIN ثم القفل من الشريط والفتح بالرمز ثم بالبصمة 2) ضبط قفل خمول 1 دقيقة وترك الجهاز ⇒ قفل تلقائي 3) خمول 24 ساعة ⇒ استنزاف بطارية <3% وذاكرة مستقرة (طابور التدقيق وسحب السياسات بلا نشاط شبكة خارج محلي) 4) تغيير إعداد من متصفح الويب ⇒ ظهوره في التطبيق خلال ≤10ث والعكس.
 
 **قيود موثقة بصدق**: البصمة على لينكس غير مدعومة (PIN فقط) — Wayland بلا كشف خمول (ميزتا الخمول/التوفير تتعطلان بأمان) — الإصدار مقفول 1.0.0 فلا تنفيذ فعلي للتحديث (المسار مكتمل وموقع) — استنزاف البطارية 24 ساعة لا يمكن قياسه في حاوية بلا GUI (بروتوكول يدوي موثق أعلاه) — التدقيق يتطلب السيرفر المضمّن حيًا (الطابور يمتص الانقطاع حتى 200 حدث ثم يسقط الأقدم بصدق).
+
+## 17. التغليف والإصدار النهائي (الجولة 3 — مصدر: .github/workflows/release.yml + tauri.conf.json + procman.rs::resolve_resources + BUILD.md)
+
+**مبدأ الإصدار**: رقم إصدار موحّد **1.0.0** مقفول عبر الأربعة (tauri.conf.json / Cargo.toml / pubspec.yaml / package.json الجذر) — أي اختلاف = فشل تعاقدي. أصول إصدار منشور **لا تُستبدل** (تواقيع latest.json مبنية على محتواها)؛ الإصدار الجديد = وسم v* جديد فقط.
+
+### 17.أ مصفوفة الحزم (job desktop — matrix ثلاث منصات)
+- **Windows**: `NexusLink_<v>_x64-setup.exe` (NSIS — webviewInstallMode downloadBootstrapper: يثبّت WebView2 تلقائيًا إن غاب) + `NexusLink_<v>_x64_en-US.msi` (WiX) + **`NexusLink_<v>_x64-portable.zip`** (بلا تثبيت).
+- **macOS**: `NexusLink_<v>_aarch64.dmg` (+ أصل updater `.app.tar.gz` عند وجود مفتاح التوقيع). غير موقّع افتراضيًا — دليل Developer ID + Notarization في BUILD.md §3.
+- **Linux**: `*.AppImage` + `NexusLink_<v>_amd64.deb`.
+
+### 17.ب تخطيط الحزمة المدمجة (مصدر الحقيقة: tauri-bundler debian.rs + settings.rs::copy_resources + tauri-utils resources.rs اختباراته الرسمية)
+- الموارد تُنسخ **بالمسار النسبي الكامل من src-tauri محفوظًا**: `<resource_dir>/resources/server/...` (+ comms/ + gateway/) — البادئة `resources/` جزء من الهدف.
+- `<resource_dir>`: ويندوز = مجلد التنفيذي · لينكس = `/usr/lib/NexusLink` (اسم productName من tauri-codegen) · ماك = `Contents/Resources`.
+- **resolve_resources (procman.rs)** يفحص بالترتيب: `<rd>/resources/server/server.js` (المدمج) → `<rd>/server/server.js` (مسطّح — توافق) → `<exe_dir>/resources/server/server.js` (portable) → `CARGO_MANIFEST_DIR/resources` (تطوير). قبل الجولة 3 كان الفحص الأول وحده مسطّحًا ⇒ الخادم المضمّن لا يبدأ في أي حزمة مثبتة (عيب كامن أُصلح — جوهر اختبار نجاح التثبيت النظيف).
+- **resolve_node**: `node.exe`/`node` بجوار التنفيذي (الحزم تُسقط اللاحقة الثلاثية) — Portable يعيد تسمية sidecar إلى node.exe يدويًا.
+- **سلامة تجميع comms (G-27)**: تبعيات mini-services/comms-service حصرية في ملفها (الجذر بلا workspaces) — build-resources.sh يضمن تثبيتها قبل esbuild وإلا تُرك `import("bonjour-service")` خارجيًا ⇒ mDNS مكسور صامتًا داخل الحزم (كان CI يبنيه كذلك حتى هذه الجولة). الفحص: لا `await import("<pkg>")` لتبعية خارجية داخل comms.cjs.
+- **Portable ZIP**: نفس تخطيط NSINS حرفيًا (exe + node.exe + resources/) + README.txt (PORTABLE-README.txt) — تُجمَّع بعد البناء بـ bsdtar (`tar -a -cf`) تفاديًا لمشاكل المسارات الطويلة في Compress-Archive.
+
+### 17.ج المحدّث والإرفاق (release.yml)
+- بناء `desktop` matrix: win `--bundles "nsis msi"` / linux `"appimage deb"` / mac `"dmg"` — بوصفة desktop.yml المجرّبة حرفيًا (standalone + build-resources.sh + sidecar v20.18.1 + APPIMAGE_EXTRACT_AND_RUN + CMAKE_POLICY_VERSION_MINIMUM=3.5).
+- `TAURI_SIGNING_PRIVATE_KEY`+`_PASSWORD` سرّان: وجودهما ⇒ updater artifacts (.sig بجوار كل حزمة)؛ غيابهما ⇒ `createUpdaterArtifacts:false` بالحقن (البقاء أخضر بلا توقيع).
+- **الإرفاق**: وسم `v*` ⇒ إرفاق تلقائي + `latest.json` موقعة (windows-x86_64→x64-setup.exe · linux-x86_64→AppImage · darwin-aarch64→.app.tar.gz) + SHA256SUMS + Draft Release. `workflow_dispatch` ⇒ artifacts فقط ما لم تُفعَّل مدخل `attach_to_release` صراحة (حماية أصول v1.0.0 الموقعة).
+- نقطة فحص المحدّث: `releases/latest/download/latest.json` — يجب أن ترد `version = 1.0.0` (أنت على الأحدث).
+
+### 17.د التحقق (الجولة 3)
+- **تعاقديًا (E2E §17)**: release.yml بناء حقيقي بلا echo + مصفوفة الصيغ + خطوة portable + latest.json + dispatch inputs — tauri.conf targets الخمسة — procman resolve_resources بالبادئة — PORTABLE-README — BUILD.md (NSIS/MSI/Portable/AppImage/notarization/مفاتيح) — README §0 (المركز/الوكيل + جدول الحزم) — e2e-checklist (اختبار التثبيت النظيف) — توحيد الإصدار بالملفات الأربعة.
+- **بنائيًا (CI)**: release.yml على 3 منصات ينتج الصيغ الست فعليًا — NSIS/MSI/ZIP وDMG وAppImage+deb.
+- **يدويًا**: اختبار النجاح — تنزيل المثبت على ويندوز نظيف ⇒ تثبيت ⇒ كل شيء يعمل مع الهاتف **بلا أي خطوة يدوية إضافية** (docs/e2e-checklist.md §1).
