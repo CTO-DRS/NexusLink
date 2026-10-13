@@ -352,6 +352,11 @@
       "next": "Next slide",
       "prev": "Previous slide",
       "hint": "Works inside any open slide deck — PageUp/PageDown to flip, F5 to start, Esc to stop"
+    },
+    "live": {
+      "ready": "Live UDP · {rtt}ms",
+      "opening": "Opening live channel…",
+      "tcp": "TCP channel"
     }
   },
   "common": {
