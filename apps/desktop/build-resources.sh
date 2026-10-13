@@ -33,7 +33,7 @@ cp db/custom.db "$RES/server/db/custom.db"
 # الجولة 3 (G-28): متغيرات musl في node_modules غير مستعملة على أي منصة مستهدفة
 # (glibc لينكس / ويندوز / ماك) — وlinuxdeploy يفشل صامتًا على ELF musl
 # («Could not find dependency: libc.musl-x86_64.so.1» — r5 verbose) — حذفها من الحزمة
-find "$RES/server/node_modules" -depth -type d -name "*-musl*" -exec rm -rf {} + 2>/dev/null || true
+find "$RES/server/node_modules" -depth -type d -name "*musl*" -exec rm -rf {} + 2>/dev/null || true
 
 echo "== [2/4] comms-service → $RES/comms/comms.cjs =="
 # الجولة 3 (G-27): تبعيات comms-service حصرية في ملفه (الجذر بلا workspaces —
