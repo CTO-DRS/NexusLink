@@ -70,17 +70,20 @@ cp node-v20.18.1-linux-x64/bin/node apps/desktop/src-tauri/binaries/node-x86_64-
 ```bash
 cd apps/desktop
 
-# لينكس (AppImage + deb) — يلزم: libwebkit2gtk-4.1-dev libappindicator3-dev
+# لينكس (deb + AppImage) — يلزم: libwebkit2gtk-4.1-dev libappindicator3-dev
 #   librsvg2-dev patchelf libxkbcommon-dev cmake g++
-APPIMAGE_EXTRACT_AND_RUN=1 CMAKE_POLICY_VERSION_MINIMUM=3.5 \
-  bunx @tauri-apps/cli@^2 build --bundles "appimage deb" \
+#   NO_STRIP: linuxdeploy يفشل على strip لمكتبات .relr.dyn (tauri#14796)
+NO_STRIP=true APPIMAGE_EXTRACT_AND_RUN=1 CMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  bunx @tauri-apps/cli@^2 build --bundles "deb appimage" \
   --config '{"bundle":{"externalBin":["binaries/node"]}}'
 
-# ويندوز (NSIS + MSI) — PowerShell عادي
+# ويندوز (NSIS + MSI) — PowerShell عادي. ملاحظة: MSI يتطلب ميزة VBScript
+#   مفعّلة (تحقق ICE في light.exe) — على runners 2026:
+#   Add-WindowsCapability -Online -Name VBSCRIPT~~~~0.0.1.0
 bunx @tauri-apps/cli@^2 build --bundles "nsis msi" --config '{"bundle":{"externalBin":["binaries/node"]}}'
 
-# ماك (DMG)
-bunx @tauri-apps/cli@^2 build --bundles "dmg" --config '{"bundle":{"externalBin":["binaries/node"]}}'
+# ماك (DMG + أصل updater) — "app" هو من ينتج .app.tar.gz + .sig (لا dmg وحده)
+bunx @tauri-apps/cli@^2 build --bundles "dmg app" --config '{"bundle":{"externalBin":["binaries/node"]}}'
 ```
 
 > **متغيران إلزاميان على لينكس** (دروس CI موثقة):

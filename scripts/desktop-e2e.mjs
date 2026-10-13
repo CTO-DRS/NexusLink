@@ -914,8 +914,11 @@ try {
     check("§17: release.yml — أمر بناء Tauri حقيقي (لا echo) بوصفة standalone+resources+sidecar",
       rel.includes("@tauri-apps/cli@^2 build") && !rel.includes('echo "tauri build')
       && rel.includes("build-resources.sh") && rel.includes("v20.18.1"))
-    check("§17: release.yml — مصفوفة الصيغ: win(nsis msi) · linux(appimage deb) · mac(dmg)",
-      rel.includes('bundles: "nsis msi"') && rel.includes('bundles: "appimage deb"') && rel.includes('bundles: "dmg"'))
+    check("§17: release.yml — مصفوفة الصيغ: win(nsis msi) · linux(deb appimage) · mac(dmg app)",
+      rel.includes('bundles: "nsis msi"') && rel.includes('bundles: "deb appimage"') && rel.includes('bundles: "dmg app"'))
+    check("§17: release.yml — NO_STRIP (linuxdeploy .relr.dyn) + تفعيل VBScript (WiX ICE على runners 2026)",
+      rel.includes('NO_STRIP: "true"') && rel.includes("Where-Object Name -like 'VBSCRIPT*'")
+      && rel.includes("Add-WindowsCapability"))
     check("§17: release.yml — خطوة Portable ZIP (تجميع بنفس تخطيط NSIS + bsdtar + README)",
       rel.includes("Assemble Windows portable ZIP") && rel.includes("NexusLink_${VERSION}_x64-portable.zip")
       && rel.includes("PORTABLE-README.txt") && rel.includes("/c/Windows/System32/tar.exe -a -cf"))
@@ -949,8 +952,8 @@ try {
     // (هـ) BUILD.md — دليل كل منصة + توقيع ماك + مفاتيح المحدّث + قواعد الإصدار
     const build = rd("BUILD.md")
     check("§17: BUILD.md — NSIS+MSI+Portable وAppImage+deb وDMG بأوامر حقيقية",
-      build.includes('--bundles "nsis msi"') && build.includes('--bundles "appimage deb"')
-      && build.includes('--bundles "dmg"') && build.includes("x64-portable.zip"))
+      build.includes('--bundles "nsis msi"') && build.includes('--bundles "deb appimage"')
+      && build.includes('--bundles "dmg app"') && build.includes("x64-portable.zip"))
     check("§17: BUILD.md — توقيع ماك (Developer ID + codesign + notarytool) + مفاتيح updater",
       build.includes("Developer ID Application") && build.includes("notarytool") && build.includes("stapler")
       && build.includes("TAURI_SIGNING_PRIVATE_KEY"))
