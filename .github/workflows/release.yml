@@ -189,7 +189,14 @@ jobs:
             echo "الخطأ: التنفيذي الرئيسي غير موجود"; ls -la "$OUT"; exit 1
           fi
           # sidecar node → node.exe (resolve_node يبحث exe_dir/node.exe)
-          NODE_BIN=$(ls "$OUT"/node-*.exe 2>/dev/null | head -1 || true)
+          # tauri CLI ينسخ sidecar إلى target/release معيدًا تسميته node.exe مسبقًا
+          # (r8: النمط node-*.exe لم يعد موجودًا) — مع fallback للاسم الثلاثي
+          NODE_BIN=""
+          if [ -f "$OUT/node.exe" ]; then
+            NODE_BIN="$OUT/node.exe"
+          elif ls "$OUT"/node-*.exe >/dev/null 2>&1; then
+            NODE_BIN=$(ls "$OUT"/node-*.exe | head -1)
+          fi
           [ -n "$NODE_BIN" ] || { echo "الخطأ: sidecar node غير موجود"; ls -la "$OUT"; exit 1; }
           cp "$NODE_BIN" "$STAGE/node.exe"
           # الموارد بنفس تخطيط NSIS (بادئة resources/ محفوظة)
