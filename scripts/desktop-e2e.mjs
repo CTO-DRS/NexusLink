@@ -923,7 +923,7 @@ try {
       && rel.includes("Add-WindowsCapability"))
     // G-28 + LGHT0311 (جولة r5 verbose كشفت الاثنين)
     check("§17: G-28 — حذف متغيرات musl من node_modules المضمنة (linuxdeploy يفشل على ELF musl)",
-      brs.includes("-type d -name \"*-musl*\" -exec rm -rf"))
+      brs.includes("-type d -name \"*musl*\" -exec rm -rf"))
     check("§17: وصفا الحزمة ASCII نقيان (LGHT0311: قاعدة MSI code page 1252 لا تشفر العربية)",
       (() => { const b = conf3?.bundle ?? {}; return [b.shortDescription, b.longDescription].every((s) => typeof s === "string" && [...s].every((c) => c.charCodeAt(0) < 128)); })())
     check("§17: release.yml — خطوة Portable ZIP (تجميع بنفس تخطيط NSIS + bsdtar + README)",
