@@ -34,6 +34,8 @@
     "targets": [
       "deb",
       "nsis",
+      "msi",
+      "appimage",
       "dmg"
     ],
     "icon": [

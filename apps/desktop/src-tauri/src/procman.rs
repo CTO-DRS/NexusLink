@@ -112,9 +112,27 @@ fn resolve_node() -> PathBuf {
 }
 
 fn resolve_resources(app: &AppHandle) -> PathBuf {
+    // تخطيط الحزم المدمجة (NSIS/deb/dmg/AppImage): الحزم تحافظ على مسار config
+    // الكامل — «resources/server/...» تحت resource_dir (مصدر الحقيقة: اختبارات
+    // tauri-utils/resources.rs الرسمية target = resource_relpath بالبادئة كاملة).
+    // قبل هذه الجولة كان الفحص rd/server/server.js فقط ⇒ لا يطابق أبدًا ⇒
+    // الخادم المضمّن لا يبدأ على أجهزة المستخدمين (اكتُشف تحضيرًا لاختبار
+    // نجاح الجولة 3: تثبيت نظيف → يعمل بلا خطوات يدوية).
     if let Ok(rd) = app.path().resource_dir() {
+        if rd.join("resources/server/server.js").exists() {
+            return rd.join("resources");
+        }
+        // توافق: تخطيط مسطّح (server بجوار التنفيذي مباشرة — portable قديم)
         if rd.join("server/server.js").exists() {
             return rd;
+        }
+    }
+    // portable (ZIP): الموارد بجوار التنفيذي — نفس تخطيط NSIS تمامًا
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            if dir.join("resources/server/server.js").exists() {
+                return dir.join("resources");
+            }
         }
     }
     // وضع التطوير: الموارد في src-tauri/resources (بعد build-resources.sh)

@@ -31,6 +31,14 @@ mkdir -p "$RES/server/db"
 cp db/custom.db "$RES/server/db/custom.db"
 
 echo "== [2/4] comms-service → $RES/comms/comms.cjs =="
+# الجولة 3 (G-27): تبعيات comms-service حصرية في ملفه (الجذر بلا workspaces —
+# وbun install الجذر لا يثبتها). بلا هذا الحرس يفشل esbuild في الحل فيترك
+# import("bonjour-service") خارجيًا ⇒ mDNS مكسور داخل الحزم الموزعة (فشل صامت
+# وقت البناء — يظهر فقط عند تشغيل الحزمة). CI كان يبنيه مكسورًا حتى هذه الجولة.
+if [ ! -d mini-services/comms-service/node_modules ]; then
+  echo "   تبعيات comms-service غائبة — bun install (lockfile ملتزم)…"
+  (cd mini-services/comms-service && bun install --frozen-lockfile)
+fi
 mkdir -p "$RES/comms"
 bunx esbuild mini-services/comms-service/index.ts --bundle --platform=node --format=cjs \
   --outfile="$RES/comms/comms.cjs" --log-level=error
