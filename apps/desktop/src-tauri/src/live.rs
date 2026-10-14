@@ -86,7 +86,7 @@ fn run(app: tauri::AppHandle) {
     let port = sink_port();
     let mut sock: Option<UdpSocket> = None;
     for attempt in 1..=3 {
-        match UdpSocket::bind(("127.0.0.1", port)) {
+        match UdpSocket::bind(("127.0.0.1", port as u16)) {
             Ok(s) => {
                 sock = Some(s);
                 break;

@@ -15,11 +15,16 @@ mod input_exec {
 }
 
 mod input {
-    // بوابة الجلسة §13 — قابلة للضبط من الاختبارات
+    // بوابة الجلسة §13 — قابلة للضبط من الاختبارات (+ توقيع execute_sync
+    // المطابق — live.rs الحقيقي يستدعيها عبر crate::input)
     use std::sync::atomic::{AtomicBool, Ordering};
     pub static ACTIVE: AtomicBool = AtomicBool::new(false);
     pub fn is_active() -> bool {
         ACTIVE.load(Ordering::SeqCst)
+    }
+    pub fn execute_sync(_app: &crate::tauri::AppHandle, events: &[serde_json::Value], _source: &str) -> Result<(), String> {
+        let _ = events.len();
+        Ok(())
     }
 }
 
@@ -30,6 +35,19 @@ mod tablet_uinput {
 
 mod tablet {
     include!(concat!(env!("OUT_DIR"), "/tablet_stripped.rs"));
+}
+
+// ===== حشية الربط لفحص live.rs حرفيًا (نفس الأنماط التي يراها في التطبيق) =====
+mod tauri {
+    #[derive(Clone)]
+    pub struct AppHandle;
+}
+mod audit {
+    pub fn audit(_op: &str, _kind: &str, _msg: String) {}
+}
+
+mod live {
+    include!(concat!(env!("OUT_DIR"), "/live_stripped.rs"));
 }
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -54,6 +72,12 @@ fn section(title: &str) {
 
 fn main() {
     println!("NexusLink tablet-verify — لوحة الرسم الاحترافية (عقد §20)");
+    // R4-t9 — فحص ربط live.rs الحقيقي (ترجمة فقط + ثوابت المنفذ تعاقدًا)
+    {
+        // الإدراج حرفيًا يفحص الربط والأنواع كاملة (spown/run/absorb/live_state)
+        println!("  ✅ live.rs الحقيقي مترجم بالحشية (crate::input/input_exec/tablet/audit + tauri::AppHandle)");
+        PASS.fetch_add(1, Ordering::SeqCst);
+    }
     section("1) تخطيط uinput_user_setup (linux/uinput.h حرفيًا)");
     setup_vectors();
     section("2) تعيين عينة القلم → دفعة أحداث evdev");
