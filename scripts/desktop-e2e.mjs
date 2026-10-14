@@ -728,7 +728,7 @@ try {
       rbTs.includes("rc:live-hello") && rbTs.includes("rc:live-ready") && rbTs.includes("LIVE_SINK_PORT") && msTs.includes("rc:live-hello") && msTs.includes("rc:live-ready") && msTs.includes("LIVE_SINK_PORT"),
       "bridges")
     check("R4 §18: Rust حوض loopback حصري + نواة صارمة (bind 127.0.0.1 · HEADER_LEN=22 · coalesce)",
-      liveRs.includes('UdpSocket::bind(("127.0.0.1", port))') && coreRs.includes("HEADER_LEN: usize = 22") && coreRs.includes("pub fn coalesce") && liveRs.includes("execute_sync"),
+      liveRs.includes('UdpSocket::bind(("127.0.0.1", port as u16))') && coreRs.includes("HEADER_LEN: usize = 22") && coreRs.includes("pub fn coalesce") && liveRs.includes("execute_sync"),
       "rust")
     check("R4 §18: عميل Flutter (UDP · إعادة اتصال · RTT · رأس 22)",
       liveDart.includes("_headerLen = 22") && liveDart.includes("RawDatagramSocket") && liveDart.includes("_retryBackoffMs") && liveDart.includes("_rttEma"),
