@@ -16,6 +16,10 @@ mod files_menu_core;
 // طابور التدقيق + تنقية السياسة) — تُضمَّن حرفيًا في hardening-verify
 mod harden_core;
 mod input;
+// الجولة 4 مرحلة ② (عقد §20) — منفّذ الإدخال النقي وحدة عليا (يستهلكه
+// input.rs بالاسم التاريخي exec + tablet.rs مباشرة — بلا تضمين مزدوج)
+#[path = "input_exec.rs"]
+pub mod input_exec;
 // FA-harden (عقد §16) — كشف الخمول (بندا 1 و4 من مصدر واحد)
 mod idle;
 // الجولة 4 (عقد §18) — NexusLive: مستقبل UDP للإدخال الحي (loopback حصرًا)
