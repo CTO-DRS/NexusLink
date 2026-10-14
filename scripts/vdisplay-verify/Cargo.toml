@@ -1,0 +1,12 @@
+[package]
+name = "vdisplay-verify"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# R4 مرحلة ① (عقد §19) — نفس تبعيات النواة النقية حصرًا (بلا crates جديدة)
+serde_json = "1"
+
+[[bin]]
+name = "vdisplay-verify"
+path = "src/main.rs"

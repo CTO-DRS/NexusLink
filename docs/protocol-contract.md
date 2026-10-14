@@ -811,3 +811,46 @@ interface TransferJob {
 - **تعاقديًا (E2E §18)**: رفض hello بلا جلسة/ثقة — hello مع جلسة موثوقة → live-ready — ping→pong بنفس seq — تمرير touch إلى حوض loopback (مستمع E2E) — فقد (فجوة seq) → lost — ترتيب معكوس → reorder — تكرار → dup — فاسد → droppedMalformed — مفتاح مجهول → droppedNoKey — عنوان آخر → droppedAddr — نهاية الجلسة تموت التدفق — RTT loopback < 100ms — توثيق §18 + البنية (الجسران + live_core/live.rs/live_channel + الترجمات).
 - **بنائيًا (CI)**: desktop.yml يبني live.rs/main.rs على المنصات الثلاث (الترجمة الفيزيائية للطبقة الأصلية).
 - **قيود صادقة**: ts الهاتف يعتمد جودة مزامنة الإزاحة (انحراف الساعة المفرط يُهمل إحصائيًا) — لا ضمان تسليم (هذه هي الدلالة الحية المقصودة) — Wayland بلا حقن إدخال (نفس حد §13) — الحاوية بلا هاتف حقيقي: بروتوكول الاختبار الميداني موثق في docs/e2e-checklist.md (قسم جديد §2).
+
+## 19. الشاشة الثانية — الهاتف شاشة ممتدة فعلية (الجولة 4 مرحلة ① — مصدر: vdisplay.rs + vdisplay_core.rs + media.rs + media-bridge.ts + desktop-bridge.tsx + media_service.dart + media_screen.dart + installer-hooks.nsh)
+
+«لا بروتوكول موازٍ»: الشاشة الافتراضية شاشة نظام عادية في نظر كل شيء — تُبث عبر مسار §15 حرفيًا (rtc:offer kind=screen)، ويُحقن لمسها عبر مسار §15.ب/§18 حرفيًا (فضاء المؤشر = أصل/أبعاد الهدف الملتقط). الجديد فقط: **إنشاء العرض وإطفاؤه** واختيار الهدف من قائمة الأهداف القائمة.
+
+### 19.أ المنصات — حقيقة من المصادر لا تمنيات
+| المنصة | التنفيذ | الإثبات من المصدر |
+|---|---|---|
+| ويندوز | سائق **Virtual-Display-Driver** (VirtualDrivers — MIT، توقيع SignPath) HWID `Root\MttVDD`، صنف Display | إصدار 25.7.23 `VirtualDisplayDriver-x86.Driver.Only.zip` (mttvdd.cat + MttVDD.dll + MttVDD.inf) — مسار الإعدادات `C:\VirtualDisplayDriver\vdd_settings.xml` مثبت من مصدر السائق (Driver.cpp:94 `confpath`) |
+| التشغيل/الإطفاء | **CCD** (QueryDisplayConfig/SetDisplayConfig) — **بلا صلاحيات مدير** — نفس آلية Win+P | واجهات user32 قياسية؛ بنية 48B لـ DISPLAYCONFIG_MODE_INFO و220B لـ DEVMODEW متحققة من windows-rs 0.58 حرفيًا |
+| الدقة/الاتجاه | ChangeDisplaySettingsExW على جهاز العرض الافتراضي (مستخدم-level) — الأوضاع المتاحة من XML عند التثبيت | سكربتات المجتمع الرسمية (changeres/toggle) + واجهة قياسية |
+| لينكس | xrandr: `cvt → --newmode nxWxH_60 → --addmode <مخرج غير متصل> → --right-of الأساسية` — بلا صلاحيات، جلسة X11 حصرًا | بند المهمة حرفيًا؛ Wayland غير مسند (موثق) |
+| ماك | **غير مسند بصدق**: لا شاشات افتراضية بدون سائق موقّع (قيود توقيع macOS) | البديل العملي الجاهز: «بث نافذة محددة» — أهداف `window:*` قائمة أصلًا في media_targets على ماك (§15) |
+
+### 19.ب تثبيت السائق (NSIS — installer-hooks.nsh) واختياري غير حاجز
+1. **الشهادات**: استخراج من `mttvdd.cat` → `Cert:\LocalMachine\TrustedPublisher` — نفس تدفق `silent-install.ps1` الرسمي للمشروع (تحقق حرفي). 
+2. **الإعدادات**: نسخ `vdd_settings.xml` المعدّ مسبقًا (count=1 + الأوضاع التعاقدية 1080×2400/2400×1080/1080×1920/1920×1080 @60) إلى `C:\VirtualDisplayDriver\`.
+3. **الجهاز**: `nefconc.exe install MttVDD.inf "Root\MttVDD"` (nefarius/nefcon v1.21.0 — MIT — أمر `install` المتوافق مع devcon، نفس أمر سكربت التثبيت الصامت الرسمي). فشل أي خطوة **لا يفشل التثبيت** — الحالة تعود صادقة من التشخيص (vdisplay_status).
+4. **الإزالة**: PREUNINSTALL `nefconc.exe remove "Root\MttVDD"` (الجهاز فقط — الحزمة تبقى في مخزن السائقين، دلالة `remove` الموثقة). إعدادات `C:\VirtualDisplayDriver` تُترك إن كان الطرف الآخر يملكها.
+5. **الأصول**: `apps/desktop/vdd/` (INF/DLL/CAT/nefconc.exe + ترخيصا MIT للطرفين) ضمن bundle.resources → `$INSTDIR\vdd` (نفس دقة resolve_resources §17.ب). Portable ZIP بلا NSIS → لا تثبيت سائق تلقائي (التشخيص يرشد) — موثق.
+- **بعد إعادة تشغيل النظام**: العرض الافتراضي يظهر نشطًا (سلوك السائق المثبت) — NexusLink لا يطفئه تلقائيًا عند الإقلاع (احترام استخدام الطرف الآخر المحتمل)؛ الإطفاء عند انقطاع الهاتف يخص جلساتنا حصرًا (19.د) — والبطاقة/التشخيص يعرضان الحالة.
+
+### 19.ج أحداث socket.io (جسر 3005 — تنقية جديدة)
+| الحدث | الاتجاه | الحمولة (بعد التنقية) |
+|---|---|---|
+| `screen:req` | هاتف→الجميع | **`target` يمر الآن فعليًا** (كان يُسقط في التنقية): `^(screen:\d{1,3}\|screen:all\|screen:virtual\|default)$` |
+| `secondscreen:cmd` | هاتف→الكمبيوتر | `{action: enable\|disable, w? 320..8192, h? 320..8192, fps? ∈ §15, quality? ∈ §15, at}` |
+| `secondscreen:state` | الكمبيوتر→الجميع (دور pc حصرًا — الهاتف لا يصدر حالة) | `{active: bool, target?, w?, h?, error? ≤200, at}` — مصدر الحقيقة للهاتف |
+| `media:phone-offline` | الجسر→الجميع | يصدر عند `disconnect` لدور phone — مشغّل الإطفاء الذكي |
+
+### 19.د دورة الجلسة (الكمبيوتر — desktop-bridge.tsx)
+- `secondscreen:cmd enable {w,h,fps,quality}` → `vdisplay_enable` (ويندوز: CCD تنشيط المسار الخامل + استنساخ وضع مصدر بموضع يمين أقصى حافة نشطة + `change_mode` للدقة/الاتجاه؛ لينكس: xrandr كما 19.أ) → هندسة الشاشة الجديدة → `media_screen_start {target:"screen:N"}` → `rtc:offer` + `screen:state` + `secondscreen:state {active:true, target, w, h}`.
+- **إعادة الظهور قسرًا**: تنشيط مسار CCD خامل يستنسخ وضع المصدر من المسار الأساسي مع `modeInfoIdx` صريحين (مصدر+هدف) — الفشل يعلن نفسه عربيًا (بلا وضع مصدر للاستنساخ/الوضع غير متاح).
+- `secondscreen:cmd disable` أو **`media:phone-offline`** (انقطاع الهاتف) أو إغلاق شاشة العرض في الهاتف وهو هدف افتراضي → `media_screen_stop` + `vdisplay_disable` → إطفاء مسار العرض الافتراضي من التهيئة — **النوافذ تعود للشاشات الباقية سلوك النظام تلقائيًا** (البند 8). الحارس: الإطفاء إن تسببت شاشاتنا فقط (`SESSION` — لا نمس شاشات الطرف الآخر أبدًا) ورفض إذا ستتبقى صفر شاشات.
+- `screen:req {target:"screen:virtual"}` (اختيار من القائمة) → تمكين تلقائي ثم بث — نفس المسار.
+- **عقد الفهرس**: `screen:N` = ترتيب EnumDisplayMonitors على ويندوز — نفس ترتيب windows-capture::Monitor::from_index (تحقق حرفي من مصدر الكرِيت 1.3.6: from_index = enumerate() = EnumDisplayMonitors) ⇒ الالتقاط واللمس والقائمة متطابقة الفهرس. **إصلاح مرفق (§15)**: أصول الشاشات على ويندوز صارت حقيقية من EnumDisplayMonitors (كانت 0,0 للجميع — حد G-38 مرفوع جزئيًا) — أساس خريطة لمس صحيحة للشاشة الافتراضية (أصلها في المركّب).
+- **اللمس**: فضاء المؤشر يضبطه media_screen_start من أبعاد/أصل الهدف (§15.ب حرفيًا) → لمس الهاتف على بث الشاشة الافتراضية = مؤشر مطلق داخلها — عبر NexusLive UDP عند الجلسة النشطة (§18 حرفيًا، `sendTouch` 8B) وإلا socket.io.
+
+### 19.هـ التحقق
+- **تنفيذيًا (scripts/vdisplay-verify — النتيجة الفعلية 49/49)**: يضمّن vdisplay_core.rs حرفيًا — تحقق الأوضاع (حدود/تعاقد/أسماء حتمية) + XML بناء/ترقيع محافظ (بقاء إعدادات الطرف الآخر حرفيًا + idempotent + رفض جذر غريب) + **حزمة السائق المرفقة فعليًا** توافق النواة (count/الأوضاع/60Hz + الأصول الستة + INF بفك UTF-16 يحمل Root\MttVDD وDisplay) + محلل xrandr على ثابتين واقعيين (أربعة مخرجات/أساسية/متصلة ثانية/اختيار المخرج الفارغ/وضعنا محمول) + بناء newmode/addmode/attach/teardown حتمي + cvt Modeline. المحرك التقط ذاتيًا أثناء الكتابة: مطابقة سطر الوضع كانت على السطر كاملًا لا الوسم الأول — أُصلح في النواة قبل الإثبات.
+- **تعاقديًا (E2E §19)**: تمرير target في screen:req + رفض الأشكال الفاسدة — secondscreen:cmd تنقية (enable/disable/w/h/fps/quality + رفض الفاسد) — secondscreen:state من دور pc حصرًا — media:phone-offline عند انقطاع الهاتف — ربط desktop-bridge (enable → vdisplay_enable → media_screen_start → state) — عقد الفهرس في media.rs (EnumDisplayMonitors) — حزمة vdd + installer-hooks (شهادة/nefcon install/remove) — resources — §19 موثق — القاموسان seconds.*.
+- **بنائيًا (CI)**: desktop.yml يبني vdisplay.rs/main.rs/media.rs على المنصات الثلاث — FFI ويندوز (CCD/DEVMODEW/EnumDisplayMonitors) يُترجم فيزيائيًا على runner ويندوز.
+- **قيود صادقة**: اختبار النجاح الميداني (سحب نافذة → تظهر في الهاتف → لمس <100ms محسوسًا) يحتاج ويندوز حقيقيًا بسائق — الحاوية بلا GUI: البروتوكول الميداني موثق في docs/e2e-checklist.md، والقياس الأصلي المتاح هو كمون الإدخال (§18: P95=13ms) + كمون البث (WebRTC RTP محلي مباشر — §15) — مجموعهما يحتمل هدف 100ms بهامش، والإثبات النهائي ميداني. لينكس: مخرج فارغ شرط (سائق dummy/VIRTUAL عند غيابه — موثق في الحالة). ماك: البديل نافذة. التنشيط البارد (مسار خامل بلا modeInfoIdx) يفشل بصدق مع رسالة عربية إن لم يتوفر وضع مصدر للاستنساخ.

@@ -737,6 +737,150 @@ try {
   }
 
   // ================================================================
+  // R4 مرحلة ① (عقد §19) — الشاشة الثانية: الهاتف شاشة ممتدة فعلية
+  // ================================================================
+  console.log("== R4 §19: الشاشة الثانية (secondscreen/vdisplay) ==")
+  {
+    const ssPc = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3005" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+    const ssPhone = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3005" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+    await Promise.all([
+      new Promise((res, rej) => { ssPc.on("connect", res); ssPc.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("ss pc timeout")), 10000) }),
+      new Promise((res, rej) => { ssPhone.on("connect", res); ssPhone.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("ss phone timeout")), 10000) }),
+    ])
+    ssPc.emit("media:role", { role: "pc", name: "E2E-SS-PC" })
+    ssPhone.emit("media:role", { role: "phone", name: "E2E-SS-Phone" })
+    await sleep(400)
+
+    // (أ) screen:req يمرر target فعليًا (الإصلاح: كانت تُسقط في التنقية)
+    const reqT = await new Promise((res) => {
+      ssPc.on("screen:req", (d) => res(d))
+      ssPhone.emit("screen:req", { action: "start", fps: 60, target: "screen:virtual" })
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §19: screen:req target=screen:virtual يصل الكمبيوتر حرفيًا",
+      reqT?.target === "screen:virtual" && reqT?.fps === 60 && reqT?.from === "phone", JSON.stringify(reqT ?? {}).slice(0, 120))
+
+    // (ب) target فاسد يُرفض صامتًا (نمط صارم ^screen:N|all|virtual|default$)
+    let badT = false
+    ssPc.on("screen:req", () => { badT = true })
+    ssPhone.emit("screen:req", { action: "start", target: "screen:1; drop table" })
+    ssPhone.emit("screen:req", { action: "start", target: "window:eviltracker" })
+    await sleep(1200)
+    check("R4 §19: target فاسد (نمط غريب/نافذة عبر screen:req) يُرفض صامتًا", badT === false)
+
+    // (ج) secondscreen:cmd enable صالح يمرر (w/h ضمن الحدود)
+    const ssCmd = await new Promise((res) => {
+      ssPc.on("secondscreen:cmd", (d) => res(d))
+      ssPhone.emit("secondscreen:cmd", { action: "enable", w: 1080, h: 2400, fps: 30, quality: "high" })
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §19: secondscreen:cmd enable يصل الكمبيوتر (1080×2400 @30 high)",
+      ssCmd?.action === "enable" && ssCmd?.w === 1080 && ssCmd?.h === 2400 && ssCmd?.fps === 30 && ssCmd?.quality === "high" && ssCmd?.from === "phone",
+      JSON.stringify(ssCmd ?? {}).slice(0, 130))
+
+    // (د) فاسد: إجراء غريب + w=200 (أصغر من 320) + fps=90 — كله يُرفض صامتًا
+    let badCmd = false
+    ssPc.on("secondscreen:cmd", () => { badCmd = true })
+    ssPhone.emit("secondscreen:cmd", { action: "explode" })
+    ssPhone.emit("secondscreen:cmd", { action: "enable", w: 200, h: 2400 })
+    ssPhone.emit("secondscreen:cmd", { action: "enable", w: 1080, h: 2400, fps: 90 })
+    await sleep(1200)
+    check("R4 §19: secondscreen:cmd فاسد (إجراء/أبعاد/fps) يُرفض صامتًا", badCmd === false)
+
+    // (هـ) secondscreen:state من دور pc تُبث — ومن الهاتف تُرفض (مصدر الحقيقة حصرًا)
+    const ssState = await new Promise((res) => {
+      ssPhone.on("secondscreen:state", (d) => res(d))
+      ssPc.emit("secondscreen:state", { active: true, target: "screen:1", w: 1080, h: 2400 })
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §19: secondscreen:state من pc تصل الهاتف (active/target/w/h)",
+      ssState?.active === true && ssState?.target === "screen:1" && ssState?.w === 1080 && ssState?.h === 2400,
+      JSON.stringify(ssState ?? {}).slice(0, 120))
+    let phoneStateLeak = false
+    ssPc.on("secondscreen:state", () => { phoneStateLeak = true })
+    ssPhone.emit("secondscreen:state", { active: true, target: "screen:9" })
+    await sleep(1200)
+    check("R4 §19: secondscreen:state من دور phone يُرفض (لا انتحال حالة)", phoneStateLeak === false)
+
+    // (و) الإطفاء الذكي (البند 8): انقطاع الهاتف → media:phone-offline للكمبيوتر
+    const offline = await new Promise((res) => {
+      ssPc.on("media:phone-offline", (d) => res(d))
+      ssPhone.disconnect()
+      setTimeout(() => res(null), 9000)
+    })
+    check("R4 §19: انقطاع الهاتف يبث media:phone-offline (مشغّل إطفاء الشاشة الافتراضية)",
+      offline != null && typeof offline.at === "number", JSON.stringify(offline ?? {}))
+    ssPc.disconnect()
+
+    // (ز) ربط سطح المكتب (webview) — مسار التمكين/الإطفاء كاملًا
+    const dbTs = await fsMod.readFile("src/components/nexus/desktop-bridge.tsx", "utf8").catch(() => "")
+    check("R4 §19: desktop-bridge يربط الدورة كاملة (vdisplay_enable → media_screen_start → state / disable + phone-offline)",
+      dbTs.includes('"vdisplay_enable"') && dbTs.includes('"vdisplay_disable"') && dbTs.includes("secondscreen:cmd") && dbTs.includes("secondscreen:state") && dbTs.includes("media:phone-offline") && dbTs.includes("screen:virtual"),
+      "desktop-bridge.tsx")
+
+    // (ح) طبقة Rust — CCD ويندوز + xrandr لينكس + حد ماك الصادق + عقد الفهرس
+    const vdRs = await fsMod.readFile("apps/desktop/src-tauri/src/vdisplay.rs", "utf8").catch(() => "")
+    const vdcRs = await fsMod.readFile("apps/desktop/src-tauri/src/vdisplay_core.rs", "utf8").catch(() => "")
+    const mediaRs = await fsMod.readFile("apps/desktop/src-tauri/src/media.rs", "utf8").catch(() => "")
+    check("R4 §19: Rust CCD ويندوز (QueryDisplayConfig/SetDisplayConfig بلا مدير) + change_mode",
+      vdRs.includes("QueryDisplayConfig") && vdRs.includes("SetDisplayConfig") && vdRs.includes("ChangeDisplaySettingsExW") && vdRs.includes("SDC_USE_SUPPLIED_DISPLAY_CONFIG"),
+      "vdisplay.rs")
+    check("R4 §19: Rust لينكس xrandr (newmode/addmode/right-of) + ماك حد صادق",
+      vdcRs.includes("--newmode") && vdcRs.includes("--addmode") && vdcRs.includes("--right-of") && vdRs.includes("قيود توقيع macOS") && vdRs.includes("--query"),
+      "vdisplay_core.rs + vdisplay.rs")
+    check("R4 §19: عقد الفهرس — أصول ويندوز الحقيقية من EnumDisplayMonitors (نفس ترتيب windows-capture)",
+      mediaRs.includes("crate::vdisplay::list_monitors_ex") && mediaRs.includes("EnumDisplayMonitors") && vdRs.includes("نفس ترتيب windows-capture"),
+      "media.rs origins fix")
+    check("R4 §19: النواة النقية (validate/patch/xrandr/cvt) + جلسة «ما فعلناه نحن»",
+      vdcRs.includes("pub fn patch_settings_xml") && vdcRs.includes("pub fn pick_disconnected_output") && vdRs.includes("static SESSION") && vdRs.includes("session_active"),
+      "vdisplay_core.rs")
+
+    // (ط) المثبت — شهادة من الكتالوج + nefcon install/remove + موارد
+    const hooks = await fsMod.readFile("apps/desktop/src-tauri/installer-hooks.nsh", "utf8").catch(() => "")
+    const conf = await fsMod.readFile("apps/desktop/src-tauri/tauri.conf.json", "utf8").catch(() => "")
+    check("R4 §19: NSIS hooks (شهادات من mttvdd.cat → TrustedPublisher + nefconc install Root\MttVDD + remove عند الإزالة + غير حاجز)",
+      hooks.includes("mttvdd.cat") && hooks.includes("TrustedPublisher") && hooks.includes("nefconc.exe") && hooks.includes("install") && hooks.includes("remove") && hooks.includes("Root\\MttVDD"),
+      "installer-hooks.nsh")
+    check("R4 §19: bundle.resources يحمل vdd (resolve_resources §17.ب → $INSTDIR\\vdd)",
+      conf.includes('"vdd"'), "tauri.conf.json")
+    for (const f of ["apps/desktop/vdd/MttVDD.inf", "apps/desktop/vdd/MttVDD.dll", "apps/desktop/vdd/mttvdd.cat", "apps/desktop/vdd/nefconc.exe", "apps/desktop/vdd/vdd_settings.xml", "apps/desktop/vdd/LICENSE-VirtualDisplayDriver"]) {
+      const ok = await fsMod.readFile(f).then(() => true).catch(() => false)
+      check(`R4 §19: أصل السائق مرفق: ${pathMod.basename(f)}`, ok, "حزمة §19")
+    }
+    const vddXml = await fsMod.readFile("apps/desktop/vdd/vdd_settings.xml", "utf8").catch(() => "")
+    check("R4 §19: XML المرفق يحمل الأوضاع التعاقدية (1080×2400 + 2400×1080 @60)",
+      vddXml.includes("<width>1080</width>") && vddXml.includes("<height>2400</height>") && vddXml.includes("<width>2400</width>") && vddXml.includes("<height>1080</height>") && vddXml.includes("<count>1</count>"),
+      "vdd_settings.xml")
+
+    // (ي) محرك التحقق التنفيذي + العقد + القاموسان
+    const verifyRs = await fsMod.readFile("scripts/vdisplay-verify/src/main.rs", "utf8").catch(() => "")
+    check("R4 §19: محرك vdisplay-verify يضمّن vdisplay_core.rs حرفيًا (نمط live-verify)",
+      verifyRs.includes("vdisplay_core.rs") && verifyRs.includes("check("),
+      "scripts/vdisplay-verify")
+    check("R4 §19: العقد موثق (منصات/تثبيت/أحداث/دورة/تحقق)",
+      contract.includes("## 19. الشاشة الثانية") && contract.includes("Root\\MttVDD") && contract.includes("secondscreen:cmd") && contract.includes("media:phone-offline") && contract.includes("QueryDisplayConfig"),
+      "contract §19")
+    const arDict2 = await fsMod.readFile("nexuslink_mobile/assets/translations/ar.json", "utf8").catch(() => "")
+    const enDict2 = await fsMod.readFile("nexuslink_mobile/assets/translations/en.json", "utf8").catch(() => "")
+    check("R4 §19: ترجمات seconds.* في القاموسين (ar/en)",
+      arDict2.includes('"seconds"') && arDict2.includes("شاشة ثانية فعلية") && enDict2.includes('"seconds"') && enDict2.includes("second screen"),
+      "i18n")
+    // (ك) خدمة Flutter: secondScreenCmd + target في requestScreen + إطفاء عند الإغلاق
+    const msDart = await fsMod.readFile("nexuslink_mobile/lib/data/media_service.dart", "utf8").catch(() => "")
+    const pcsDart = await fsMod.readFile("nexuslink_mobile/lib/presentation/pc_screen_screen.dart", "utf8").catch(() => "")
+    const mediaDart2 = await fsMod.readFile("nexuslink_mobile/lib/presentation/media_screen.dart", "utf8").catch(() => "")
+    check("R4 §19: Flutter خدمة (secondScreenCmd + secondscreen:state مصدر الحقيقة + target في requestScreen)",
+      msDart.includes("secondScreenCmd") && msDart.includes("secondscreen:state") && msDart.includes("target"),
+      "media_service.dart")
+    check("R4 §19: Flutter شاشة العرض تمرر الهدف وتطفئ الافتراضية عند الإغلاق (البند 8)",
+      pcsDart.includes("_target") && pcsDart.includes("screen:virtual") === false && pcsDart.includes("secondScreenCmd('disable')"),
+      "pc_screen_screen.dart")
+    check("R4 §19: بطاقة الشاشة الثانية + ورقة الإعدادات (دقة/اتجاه/fps/جودة — البند 7)",
+      mediaDart2.includes("seconds.card") && mediaDart2.includes("_SsSettingsSheet") && mediaDart2.includes("1080×2400") && mediaDart2.includes("2400×1080"),
+      "media_screen.dart")
+  }
+
+  // ================================================================
   // FA-files (عقد §14) — دمج الملفات في نظام التشغيل
   // ================================================================
   console.log("== ] FA-files: OS file integration ==")
