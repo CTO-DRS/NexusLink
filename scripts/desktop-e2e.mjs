@@ -1014,9 +1014,11 @@ try {
     check("R4 §20: العقد موثق (منصات بإثبات المصدر/بروتوكول الأداة/أحداث/فرشاة/تحقق)",
       contract.includes("## 20. لوحة الرسم الاحترافية") && contract.includes("vigem-client 0.1.4") && contract.includes("flags bits1-2") && contract.includes("rc:tablet:cmd") && contract.includes("INPUT_PROP_DIRECT"),
       "contract §20")
-    check("R4 §20: الجسر ينقّي الأوامر ويبوب الجلسة + state من دور pc حصرًا",
-      rbTs2.includes('rc:tablet:cmd') && rbTs2.includes('"untrusted", ev: "rc:tablet:cmd"') && rbTs2.includes("desktopSocks.has(socket.id)"),
-      "remote-bridge.ts")
+    const mirrorTs = await fsMod.readFile("mini-services/remote-service/index.ts", "utf8").catch(() => "")
+    check("R4 §20: الجسران متطابقان (تنقية cmd + بوابة الجلسة + state من دور pc حصرًا)",
+      rbTs2.includes('rc:tablet:cmd') && rbTs2.includes('reason: "untrusted"') && rbTs2.includes("desktopSocks.has(socket.id)")
+        && mirrorTs.includes('rc:tablet:cmd') && mirrorTs.includes("reason: 'untrusted'") && mirrorTs.includes("desktopSocks.has(socket.id)"),
+      "remote-bridge + remote-service mirror")
     check("R4 §20: الويبفيو يربط الأوامر بأوامر Tauri ويبث الحالة",
       dbTsx.includes("rc:tablet:cmd") && dbTsx.includes('tablet_config_set') && dbTsx.includes('rc:tablet:state'),
       "desktop-bridge.tsx")
