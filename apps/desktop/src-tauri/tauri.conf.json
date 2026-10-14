@@ -50,7 +50,8 @@
     "resources": [
       "resources/server",
       "resources/comms",
-      "resources/gateway"
+      "resources/gateway",
+      "vdd"
     ],
     "macOS": {
       "infoPlist": "Info.plist"

@@ -1,0 +1,49 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- ======================================================================
+     NexusLink preset للسائق VirtualDrivers/Virtual-Display-Driver (MIT)
+     كُتب عند تثبيت NexusLink (installer-hooks.nsh) — الأوضاع التعاقدية
+     للشاشة الثانية (عقد §19): عمودي 1080×2400 وأفقي 2400×1080 @60Hz
+     + HD. مسار القراءة مثبت في مصدر السائق: C:\VirtualDisplayDriver\
+     ====================================================================== -->
+<vdd_settings>
+    <monitors>
+        <count>1</count>
+    </monitors>
+
+    <gpu>
+        <friendlyname>default</friendlyname>
+    </gpu>
+
+    <global>
+        <g_refresh_rate>60</g_refresh_rate>
+    </global>
+
+    <resolutions>
+        <resolution>
+            <width>1080</width>
+            <height>2400</height>
+            <refresh_rate>60</refresh_rate>
+        </resolution>
+        <resolution>
+            <width>2400</width>
+            <height>1080</height>
+            <refresh_rate>60</refresh_rate>
+        </resolution>
+        <resolution>
+            <width>1080</width>
+            <height>1920</height>
+            <refresh_rate>60</refresh_rate>
+        </resolution>
+        <resolution>
+            <width>1920</width>
+            <height>1080</height>
+            <refresh_rate>60</refresh_rate>
+        </resolution>
+    </resolutions>
+
+    <logging>
+        <SendLogsThroughPipe>false</SendLogsThroughPipe>
+        <logging>false</logging>
+        <debuglogging>false</debuglogging>
+    </logging>
+</vdd_settings>
