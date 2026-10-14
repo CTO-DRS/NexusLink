@@ -138,6 +138,9 @@ class ControllerController extends Notifier<RcUiState> {
   /// وتنتهي بإغلاقها، مع نبض 2ث يحييها على الجسر.
   void startSession() => _svc?.startControlSession();
 
+  /// الجولة 4 مرحلة ② (عقد §20) — أوامر لوحة الرسم (get/set إعدادات الفرشاة)
+  void tabletCmd(Map<String, dynamic> payload) => _svc?.tabletCmd(payload);
+
   void stopSession() => _svc?.stopControlSession();
 
   void media(String action, {double? value}) => _svc?.media(action, value: value);
