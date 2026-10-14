@@ -87,6 +87,63 @@ class _MediaScreenState extends ConsumerState<MediaScreen> {
         ),
         const SizedBox(height: 12),
 
+        // ============ الشاشة الثانية (R4 ① — عقد §19): الهاتف شاشة ممتدة ============
+        _Card(
+          title: 'seconds.card'.tr(),
+          icon: Icons.smartphone_rounded,
+          trailing: _SsChip(active: st.ssActive),
+          children: [
+            Text(
+              'seconds.card_desc'.tr(),
+              style: const TextStyle(fontSize: 12, height: 1.6),
+            ),
+            const SizedBox(height: 8),
+            if (st.ssError != null && st.ssError!.isNotEmpty) ...[
+              Text(
+                st.ssError!,
+                style: TextStyle(fontSize: 11, color: theme.colorScheme.error, height: 1.5),
+              ),
+              const SizedBox(height: 6),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: st.ssActive
+                        ? null
+                        : () {
+                            // افتراضي: 1080×2400 عمودي — التفاصيل في ورقة الإعدادات
+                            showModalBottomSheet<void>(
+                              context: context,
+                              builder: (_) => _SsSettingsSheet(state: st),
+                            );
+                          },
+                    icon: const Icon(Icons.picture_in_picture_alt_rounded),
+                    label: Text('seconds.enable'.tr()),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: st.ssActive ? () => ctl.secondScreenCmd('disable') : null,
+                  icon: const Icon(Icons.stop_rounded),
+                  label: Text('seconds.disable'.tr()),
+                ),
+              ],
+            ),
+            if (st.ssActive)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'seconds.active_desc'.tr(namedArgs: {
+                    'res': st.ssW > 0 ? '${st.ssW}×${st.ssH}' : '—',
+                  }),
+                  style: const TextStyle(fontSize: 11, height: 1.5),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
         // ================= كويب كام =================
         _Card(
           title: 'media.cam.title'.tr(),
@@ -540,6 +597,129 @@ class _SensorReadout extends StatelessWidget {
             );
           }),
         ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// R4 مرحلة ① (عقد §19) — الشاشة الثانية: رقاقة الحالة + ورقة الإعدادات
+// ============================================================================
+class _SsChip extends StatelessWidget {
+  final bool active;
+  const _SsChip({required this.active});
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      visualDensity: VisualDensity.compact,
+      avatar: Icon(
+        Icons.circle,
+        size: 8,
+        color: active ? const Color(0xFF10B981) : Colors.grey,
+      ),
+      label: Text(
+        active ? 'seconds.chip_on'.tr() : 'seconds.chip_off'.tr(),
+        style: const TextStyle(fontSize: 10),
+      ),
+    );
+  }
+}
+
+/// ورقة إعدادات الشاشة الثانية — الدقة/الاتجاه + معدل الإطارات + الجودة
+/// (البند 7) — القوائم البيضاء نفسها التعاقدية (§15: fps 15..60، quality ×4)
+class _SsSettingsSheet extends ConsumerStatefulWidget {
+  final MediaUiState state;
+  const _SsSettingsSheet({required this.state});
+
+  @override
+  ConsumerState<_SsSettingsSheet> createState() => _SsSettingsSheetState();
+}
+
+class _SsSettingsSheetState extends ConsumerState<_SsSettingsSheet> {
+  // أوضاع التعاقد (§19): عمودي هاتفي / أفقي هاتفي / HD — أبعاد دقيقة
+  static const List<(String, int, int)> _modes = [
+    ('1080×2400', 1080, 2400), // عمودي — أبعاد الهاتف
+    ('2400×1080', 2400, 1080), // أفقي — أبعاد الهاتف
+    ('1080×1920', 1080, 1920), // عمودي شائع
+    ('1920×1080', 1920, 1080), // HD
+  ];
+  int _modeIdx = 0;
+  int _fps = 30;
+  String _quality = 'high';
+
+  @override
+  void initState() {
+    super.initState();
+    // نبدأ من معدل الكمبيوتر المعروف (أو 30) — الجودة الافتراضية high
+    if (widget.state.screenFps > 0) _fps = widget.state.screenFps;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('seconds.settings_title'.tr(), style: theme.textTheme.titleMedium),
+            const SizedBox(height: 12),
+            Text('seconds.resolution'.tr(), style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (var i = 0; i < _modes.length; i++)
+                  ChoiceChip(
+                    label: Text(_modes[i].$1, style: const TextStyle(fontSize: 11)),
+                    selected: _modeIdx == i,
+                    onSelected: (_) => setState(() => _modeIdx = i),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text('pcscreen.quality'.tr(), style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final f in const [15, 24, 30, 45, 60])
+                  ChoiceChip(
+                    label: Text('$f fps', style: const TextStyle(fontSize: 11)),
+                    selected: _fps == f,
+                    onSelected: (_) => setState(() => _fps = f),
+                  ),
+                for (final q in const ['low', 'medium', 'high', 'ultra'])
+                  ChoiceChip(
+                    label: Text(q, style: const TextStyle(fontSize: 11)),
+                    selected: _quality == q,
+                    onSelected: (_) => setState(() => _quality = q),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () {
+                final (_, w, h) = _modes[_modeIdx];
+                Navigator.of(context).pop();
+                // تمكين + بث تلقائي — الحالة من secondscreen:state (مصدر الحقيقة)
+                final ctl = ref.read(mediaControllerProvider.notifier);
+                ctl.secondScreenCmd('enable', w: w, h: h, fps: _fps, quality: _quality);
+              },
+              icon: const Icon(Icons.picture_in_picture_alt_rounded),
+              label: Text('seconds.enable_start'.tr()),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'seconds.hint_mac'.tr(),
+              style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurfaceVariant, height: 1.5),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

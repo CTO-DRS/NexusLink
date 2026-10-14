@@ -58,6 +58,13 @@ class MediaUiState {
   final int screenH;
   final int screenFps;
 
+  // R4 ① (عقد §19) — الشاشة الثانية: حالة الكمبيوتر الصادقة
+  final bool ssActive;
+  final String ssTarget; // "screen:N" — هدف البث الجاري
+  final int ssW;
+  final int ssH;
+  final String? ssError;
+
   const MediaUiState({
     this.bridgeOnline = false,
     this.cam = const MediaKindState(),
@@ -86,6 +93,11 @@ class MediaUiState {
     this.screenW = 0,
     this.screenH = 0,
     this.screenFps = 30,
+    this.ssActive = false,
+    this.ssTarget = '',
+    this.ssW = 0,
+    this.ssH = 0,
+    this.ssError,
   });
 
   bool get anyStreamOn =>
@@ -127,6 +139,12 @@ class MediaUiState {
     int? screenW,
     int? screenH,
     int? screenFps,
+    bool? ssActive,
+    String? ssTarget,
+    int? ssW,
+    int? ssH,
+    String? ssError,
+    bool clearSsError = false,
   }) =>
       MediaUiState(
         bridgeOnline: bridgeOnline ?? this.bridgeOnline,
@@ -156,6 +174,11 @@ class MediaUiState {
         screenW: screenW ?? this.screenW,
         screenH: screenH ?? this.screenH,
         screenFps: screenFps ?? this.screenFps,
+        ssActive: ssActive ?? this.ssActive,
+        ssTarget: ssTarget ?? this.ssTarget,
+        ssW: ssW ?? this.ssW,
+        ssH: ssH ?? this.ssH,
+        ssError: clearSsError ? null : (ssError ?? this.ssError),
       );
 }
 
@@ -278,6 +301,7 @@ class MediaService {
       bind(MediaEvents.rtcIce, _onRemoteIce);
       bind(MediaEvents.rtcOffer, _onScreenOffer); // FA-media: عرض شاشة الكمبيوتر (§15)
       bind(MediaEvents.screenState, _onScreenState);
+      bind(MediaEvents.secondScreenState, _onSsState); // R4 ① (§19)
       bind(MediaEvents.camCmd, _onCamCmd);
       bind(MediaEvents.camShutter, (d) {
         final m = _map(d);
@@ -588,11 +612,44 @@ class MediaService {
   }
 
   /// طلب بدء عرض شاشة الكمبيوتر (عقد §15 — screen:req على 3005)
-  void requestScreen({int? fps, String? quality}) {
+  /// R4 ①: target اختياري — "screen:N" لشاشة بعينها أو "screen:virtual"
+  /// للشاشة الافتراضية (تمكين تلقائي على الكمبيوتر ثم بثها).
+  void requestScreen({int? fps, String? quality, String? target}) {
     final data = <String, dynamic>{'action': 'start'};
     if (fps != null) data['fps'] = fps;
     if (quality != null) data['quality'] = quality;
+    if (target != null && target.isNotEmpty) data['target'] = target;
     _emit(MediaEvents.screenReq, data);
+  }
+
+  /// R4 ① (عقد §19) — الشاشة الثانية: تمكين/إطفاء على الكمبيوتر
+  /// (الكمبيوتر يفعّل العرض الافتراضي ويبدأ بثه تلقائيًا ويرد secondscreen:state)
+  void secondScreenCmd(String action, {int? w, int? h, int? fps, String? quality}) {
+    final data = <String, dynamic>{'action': action};
+    if (w != null) data['w'] = w;
+    if (h != null) data['h'] = h;
+    if (fps != null) data['fps'] = fps;
+    if (quality != null) data['quality'] = quality;
+    _emit(MediaEvents.secondScreenCmd, data);
+  }
+
+  /// حالة الشاشة الثانية من الكمبيوتر — مصدر الحقيقة الوحيد (عقد §19)
+  void _onSsState(dynamic raw) {
+    final m = _map(raw);
+    if (m == null) return;
+    final active = m['active'] == true;
+    final target = '${m['target'] ?? ''}';
+    final w = (m['w'] as num?)?.toInt() ?? 0;
+    final h = (m['h'] as num?)?.toInt() ?? 0;
+    final err = m['error'] as String?;
+    _patch((s) => s.copyWith(
+          ssActive: active,
+          ssTarget: target,
+          ssW: w,
+          ssH: h,
+          ssError: err,
+          clearSsError: err == null,
+        ));
   }
 
   /// طلب تغيير الجودة أثناء البث

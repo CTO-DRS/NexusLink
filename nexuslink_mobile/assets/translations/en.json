@@ -555,5 +555,18 @@
     "type_hint": "Type here (Arabic/English) — injected on the PC",
     "enter": "Enter",
     "backspace": "Backspace"
+  },
+  "seconds": {
+    "card": "Phone as a real second screen",
+    "card_desc": "Create a virtual display on the computer and stream it live to your phone: drag a window onto the virtual display and interact by touch over the NexusLive live channel (§18) — portrait 1080×2400 or landscape 2400×1080.",
+    "enable": "Enable",
+    "enable_start": "Enable and stream",
+    "disable": "Turn off",
+    "chip_on": "On",
+    "chip_off": "Off",
+    "active_desc": "Virtual display running at {res} — open “Computer screen view” to see it and control by touch. When the phone disconnects it turns off automatically and windows return to the main display.",
+    "settings_title": "Second screen settings",
+    "resolution": "Resolution and orientation",
+    "hint_mac": "Windows: requires the virtual display driver (installed with the app) · Linux: X11 session with a spare output · macOS: no virtual displays (system signing limits) — use the “stream a specific window” fallback instead."
   }
 }

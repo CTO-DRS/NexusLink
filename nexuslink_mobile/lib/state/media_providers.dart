@@ -133,11 +133,15 @@ class MediaController extends Notifier<MediaUiState> {
   }
 
   // FA-media (عقد §15) — عرض شاشة الكمبيوتر: طلب/إيقاف/جودة
-  void requestScreen({int? fps, String? quality}) =>
-      _svc?.requestScreen(fps: fps, quality: quality);
+  void requestScreen({int? fps, String? quality, String? target}) =>
+      _svc?.requestScreen(fps: fps, quality: quality, target: target);
 
   void setScreenQuality({int? fps, String? quality}) =>
       _svc?.setScreenQuality(fps: fps, quality: quality);
+
+  // R4 ① (عقد §19) — الشاشة الثانية: تمكين/إطفاء على الكمبيوتر
+  void secondScreenCmd(String action, {int? w, int? h, int? fps, String? quality}) =>
+      _svc?.secondScreenCmd(action, w: w, h: h, fps: fps, quality: quality);
 
   Future<void> stopScreen() async {
     await _svc?.stopScreen();

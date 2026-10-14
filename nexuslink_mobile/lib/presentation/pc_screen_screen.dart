@@ -28,6 +28,9 @@ class _PcScreenViewState extends ConsumerState<PcScreenView> {
   MediaController? _media;
   int _fps = 30;
   String _quality = 'high';
+  // R4 ① (عقد §19) — هدف البث: نحفظه من secondscreen:state (شاشة افتراضية
+  // نشطة) ليمر مع كل طلبات البث، وإلا نستخدم الهدف الافتراضي (بدون حقل)
+  String _target = '';
 
   @override
   void initState() {
@@ -37,8 +40,18 @@ class _PcScreenViewState extends ConsumerState<PcScreenView> {
     () async {
       await _renderer.initialize();
       if (mounted) setState(() => _rendererReady = true);
+      // R4 ①: فتح العرض من بطاقة الشاشة الثانية النشطة = بث الشاشة الافتراضية
+      final ss = ref.read(mediaControllerProvider).ssActive;
+      _target = ss ? ref.read(mediaControllerProvider).ssTarget : '';
       // طلب البث + جلسة التحكم (اللمس يحتاج جلسة موثوقة — عقد §13/§15)
-      _media!.requestScreen(fps: _fps, quality: _quality);
+      // حارس التعارض: البث قد يكون بدأ بالفعل (مسار التمكين من بطاقة الشاشة
+      // الثانية يبدأ البث تلقائيًا — §19) — الطلب الثاني يفشل على الكمبيوتر
+      // ويمسح الحالة (screen:state on:false يهدم التدفق) — نطلب فقط إن كنا
+      // غير أحياء/غير متصلين، وإلا نكتفي بفتح الجلسة على التدفق الجاري.
+      final ph = ref.read(mediaControllerProvider).screen.phase;
+      if (ph != MediaPhase.live && ph != MediaPhase.connecting) {
+        _media!.requestScreen(fps: _fps, quality: _quality, target: _target.isEmpty ? null : _target);
+      }
       _ctl!.startSession();
     }();
   }
@@ -47,6 +60,12 @@ class _PcScreenViewState extends ConsumerState<PcScreenView> {
   void dispose() {
     _kbdCtrl.dispose();
     _media?.stopScreen();
+    // R4 ① (البند 8): إغلاق العرض وهو الشاشة الافتراضية → إطفاؤها على الكمبيوتر
+    // (النوافذ تعود للشاشات الباقية سلوك النظام — لا نلمس ما لم نفعّله نحن)
+    if (_target.isNotEmpty) {
+      _media?.secondScreenCmd('disable');
+      _target = '';
+    }
     _ctl?.stopSession();
     _renderer.dispose();
     super.dispose();
@@ -66,7 +85,11 @@ class _PcScreenViewState extends ConsumerState<PcScreenView> {
       if (quality != null) _quality = quality;
     });
     await _media!.stopScreen();
-    _media!.requestScreen(fps: _fps, quality: _quality);
+    _media!.requestScreen(
+      fps: _fps,
+      quality: _quality,
+      target: _target.isEmpty ? null : _target,
+    );
   }
 
   // ---------------------------------------------------------------
@@ -245,7 +268,11 @@ class _PcScreenViewState extends ConsumerState<PcScreenView> {
                             const SizedBox(height: 12),
                             FilledButton.icon(
                               onPressed: () {
-                                _media!.requestScreen(fps: _fps, quality: _quality);
+                                _media!.requestScreen(
+                                  fps: _fps,
+                                  quality: _quality,
+                                  target: _target.isEmpty ? null : _target,
+                                );
                               },
                               icon: const Icon(Icons.refresh),
                               label: Text('pcscreen.retry'.tr()),

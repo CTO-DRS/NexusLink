@@ -98,6 +98,11 @@ class MediaEvents {
   static const String screenSet = 'screen:set';
   static const String screenState = 'screen:state';
 
+  // R4 مرحلة ① (عقد §19) — الشاشة الثانية: الهاتف شاشة ممتدة فعلية
+  static const String secondScreenCmd = 'secondscreen:cmd'; // enable|disable {w,h,fps,quality}
+  static const String secondScreenState = 'secondscreen:state'; // {active,target,w,h,error}
+  static const String phoneOffline = 'media:phone-offline'; // انقطاع الهاتف (إطفاء ذكي على الكمبيوتر)
+
   // زمن الاستجابة
   static const String ping = 'media:ping';
   static const String pong = 'media:pong';
