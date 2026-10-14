@@ -319,7 +319,7 @@ mod win {
             flags: 0,
         }; np as usize];
         let mut modes = vec![
-            ModeInfo { mode_type: 0, id: 0, adapter: Luid::default(), data: [0u8; 40] };
+            ModeInfo { mode_type: 0, id: 0, adapter: Luid::default(), data: [0u8; 32] };
             nm as usize
         ];
         let mut topo = 0u32;
