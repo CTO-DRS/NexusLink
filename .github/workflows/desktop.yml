@@ -89,10 +89,19 @@ jobs:
           # CMake 4 الجديد أزال توافق <3.5 — libopus المضمن في audiopus_sys قديم
           # (العمل الموثق: -DCMAKE_POLICY_VERSION_MINIMUM=3.5 — نفس فعل cmake crate)
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+          # R4-t10 — نفس نمط release.yml: المفتاح متاح → توقيع updater؛ غيابه
+          # → تعطيل createUpdaterArtifacts (pubkey بلا مفتاح خاص = فشل بناء)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            CONFIG='{"bundle":{"externalBin":["binaries/node"]}}'
+          else
+            CONFIG='{"bundle":{"externalBin":["binaries/node"],"createUpdaterArtifacts":false}}'
+          fi
           bunx @tauri-apps/cli@^2 build \
             --bundles ${{ matrix.bundles }} \
-            --config '{"bundle":{"externalBin":["binaries/node"]}}'
+            --config "$CONFIG"
 
       - name: Upload bundles
         uses: actions/upload-artifact@v4

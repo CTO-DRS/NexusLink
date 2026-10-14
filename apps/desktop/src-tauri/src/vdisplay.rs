@@ -137,8 +137,8 @@ mod win {
             modes: *mut ModeInfo,
             flags: u32,
         ) -> i32;
-        pub fn DisplayConfigGetDeviceInfo(req: *mut core::ffi::c_void) -> i32;
-        pub fn ChangeDisplaySettingsExW(dev: *const u16, dm: *const DevModeW, hwnd: *mut core::ffi::c_void, flags: u32, param: *mut core::ffi::c_void) -> i32;
+        pub fn DisplayConfigGetDeviceInfo(req: *mut std::ffi::c_void) -> i32;
+        pub fn ChangeDisplaySettingsExW(dev: *const u16, dm: *const DevModeW, hwnd: *mut std::ffi::c_void, flags: u32, param: *mut std::ffi::c_void) -> i32;
         pub fn EnumDisplaySettingsW(dev: *const u16, mode: u32, dm: *mut DevModeW) -> i32;
     }
 
@@ -234,7 +234,7 @@ mod win {
     }
     #[link(name = "user32")]
     extern "system" {
-        fn EnumDisplayMonitors(hdc: *mut core::ffi::c_void, clip: *mut core::ffi::c_void, cb: Option<extern "system" fn(isize, isize, *mut RectRaw, isize) -> i32>, data: isize) -> i32;
+        fn EnumDisplayMonitors(hdc: *mut std::ffi::c_void, clip: *mut std::ffi::c_void, cb: Option<extern "system" fn(isize, isize, *mut RectRaw, isize) -> i32>, data: isize) -> i32;
         fn GetMonitorInfoW(hmon: isize, info: *mut MonitorInfoExW) -> i32;
     }
     #[repr(C)]
@@ -346,7 +346,7 @@ mod win {
             view_gdi_device_name: [0; 32],
             view_gdi_device_path: [0; 128],
         };
-        let r = unsafe { DisplayConfigGetDeviceInfo(&mut req as *mut SourceNameReq as *mut core::ffi::c_void) };
+        let r = unsafe { DisplayConfigGetDeviceInfo(&mut req as *mut SourceNameReq as *mut std::ffi::c_void) };
         if r != 0 {
             return String::new();
         }
@@ -366,7 +366,7 @@ mod win {
             monitor_friendly_name: [0; 32],
             monitor_device_path: [0; 128],
         };
-        let r = unsafe { DisplayConfigGetDeviceInfo(&mut req as *mut TargetNameReq as *mut core::ffi::c_void) };
+        let r = unsafe { DisplayConfigGetDeviceInfo(&mut req as *mut TargetNameReq as *mut std::ffi::c_void) };
         if r != 0 {
             return String::new();
         }
