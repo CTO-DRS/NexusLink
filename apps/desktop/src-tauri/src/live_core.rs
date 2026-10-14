@@ -7,7 +7,8 @@
 //
 // تخطيط الحزمة (big-endian حصراً — عقد §18):
 //   رأس 20B: [0..2) magic 0x4E58 ("NX") · [2] version=1 · [3] type ·
-//            [4] flags (bit0=نسبي لحزمة mouse) · [5] محجوز ·
+//            [4] flags (bit0=نسبي لحزمة mouse · bits1-2=الأداة لحزمة pen — §20) ·
+//            [5] محجوز ·
 //            [6..10) seq u32be · [10..14) ts u32be (ms epoch مقتطعة) ·
 //            [14..22) key 8B (مفتاح الجلسة)
 //   pen   12B: nx·ny u16be (0..65535) · pressure u16be · tiltX·tiltY i8 ·
@@ -49,6 +50,21 @@ pub const PEN_HOVER: u8 = 0;
 pub const PEN_DOWN: u8 = 1;
 pub const PEN_MOVE: u8 = 2;
 pub const PEN_UP: u8 = 3;
+
+/// أداة القلم (flags bits1-2 لحزمة pen — الجولة 4 مرحلة ② عقد §20)
+/// 0=قلم · 1=ممحاة (طرف مقلوب) · 2=إصبع (راحة اليد عند إيقاف الرفض) · 3 محجوز → يفك قلمًا
+pub const TOOL_PEN: u8 = 0;
+pub const TOOL_ERASER: u8 = 1;
+pub const TOOL_FINGER: u8 = 2;
+
+/// اسم الأداة التعاقدي (JSON الحدث — مستهلكه محرك الفرشاة في input_exec)
+pub fn tool_name(tool: u8) -> &'static str {
+    match tool {
+        TOOL_ERASER => "eraser",
+        TOOL_FINGER => "finger",
+        _ => "pen", // 0 و3 (محجوز) — قلم
+    }
+}
 
 /// إجراءات mouse/touch — بنفس ترتيب POINTER_ACTIONS في input_exec (§15)
 pub const ACT_MOVE: u8 = 0;
@@ -105,8 +121,8 @@ impl Header {
 /// حمولة حدث مفكوكة (قيم مُطبّعة جاهزة للاستهلاك)
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Payload {
-    /// قلم: إحداثيات 0..1 + ضغط 0..1 + ميل ±60° مقصوص + طور + أزرار
-    Pen { nx: f64, ny: f64, pressure: f64, tilt_x: i8, tilt_y: i8, phase: u8, buttons: u8 },
+    /// قلم: إحداثيات 0..1 + ضغط 0..1 + ميل ±60° مقصوص + طور + أزرار + أداة (§20)
+    Pen { nx: f64, ny: f64, pressure: f64, tilt_x: i8, tilt_y: i8, phase: u8, buttons: u8, tool: u8 },
     /// ماوس: مطلق (0..1) أو نسبي (±500 بكسل) + إجراء + عجلة (نقرات)
     Mouse { a: f64, b: f64, phase: u8, buttons: u8, wheel: i16 },
     /// جيروسكوب/تسارع خام — بلا حدث حقن في هذه المرحلة (إحصاء فقط)
@@ -179,6 +195,7 @@ pub fn parse(buf: &[u8]) -> Result<(Header, Payload), ParseError> {
                 tilt_y: buf[29] as i8,
                 phase: buf[30].min(PEN_UP),
                 buttons: buf[31],
+                tool: (flags >> 1) & 0b11, // §20 — أداة القلم من flags bits1-2
             }
         }
         TYPE_MOUSE => {
@@ -242,14 +259,16 @@ pub fn encode(ptype: u8, flags: u8, seq: u32, ts: u32, key: &[u8; 8], payload: &
     out
 }
 
-/// ترميز حزمة pen كاملة (12B حمولة)
+/// ترميز حزمة pen كاملة (12B حمولة) — tool: أداة القلم (§20 — flags bits1-2).
+/// أداة خارج التعاقد (>2) تُطبع إلى قلم عند الترميز (والفك يتسامح كذلك).
 #[allow(clippy::too_many_arguments)]
-pub fn encode_pen(seq: u32, ts: u32, key: &[u8; 8], nx: f64, ny: f64, pressure: f64, tilt_x: i8, tilt_y: i8, phase: u8, buttons: u8) -> Vec<u8> {
+pub fn encode_pen(seq: u32, ts: u32, key: &[u8; 8], nx: f64, ny: f64, pressure: f64, tilt_x: i8, tilt_y: i8, phase: u8, buttons: u8, tool: u8) -> Vec<u8> {
     let nx = (nx.clamp(0.0, 1.0) * 65535.0).round() as u16;
     let ny = (ny.clamp(0.0, 1.0) * 65535.0).round() as u16;
     let pr = (pressure.clamp(0.0, 1.0) * 65535.0).round() as u16;
     let p = [&nx.to_be_bytes()[..], &ny.to_be_bytes()[..], &pr.to_be_bytes()[..], &[tilt_x as u8, tilt_y as u8, phase.min(PEN_UP), buttons][..]].concat();
-    encode(TYPE_PEN, 0, seq, ts, key, &p)
+    let flags = if tool > TOOL_FINGER { TOOL_PEN } else { tool } << 1;
+    encode(TYPE_PEN, flags, seq, ts, key, &p)
 }
 
 /// ترميز حزمة mouse — relative=true يعني a/b إزاحات i16
@@ -329,15 +348,16 @@ pub fn seq_update(last: u32, seq: u32) -> SeqUpdate {
 pub fn payload_to_event(p: &Payload) -> Option<Value> {
     match *p {
         Payload::Ping | Payload::Pong | Payload::Gyro { .. } => None,
-        Payload::Pen { nx, ny, pressure, phase, .. } => {
-            // القلم يمر عبر المؤشر المطلق القائم — pressure محمولة في الحدث
-            // (مستهلكها: مهمة لوحة الرسم — تطبّق الضغط عبر المسار الأصلي لكل منصة)
+        Payload::Pen { nx, ny, pressure, phase, tool, .. } => {
+            // القلم يمر عبر المؤشر المطلق القائم — pressure وtool محمولان في الحدث
+            // (مستهلكهما: مهمة لوحة الرسم §20 — الضغط→الفرشاة عبر المسار الأصلي
+            // لكل منصة، والأداة تحدد مستهلك الضغط: قلم حصرًا)
             let action = match phase {
                 PEN_DOWN => "down",
                 PEN_UP => "up",
                 _ => "move", // hover وmove كلاهما حركة
             };
-            Some(json!({"kind": "pointer", "nx": nx, "ny": ny, "action": action, "pressure": pressure, "source": "pen-live"}))
+            Some(json!({"kind": "pointer", "nx": nx, "ny": ny, "action": action, "pressure": pressure, "tool": tool_name(tool), "source": "pen-live"}))
         }
         Payload::Touch { nx, ny, action, .. } => {
             let a = POINTER_ACTIONS.get(action as usize).copied().unwrap_or("move");

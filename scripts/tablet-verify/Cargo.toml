@@ -1,0 +1,17 @@
+[package]
+name = "tablet-verify"
+version = "0.1.0"
+edition = "2021"
+
+# الجولة 4 مرحلة ② (عقد §20) — محرك تحقق لوحة الرسم.
+# يُضمِّن حرفيًا: input_exec.rs (محرك الفرشاة) + tablet.rs (بلا #[tauri::command]
+# — يجريده build.rs) + tablet_uinput.rs (تخطيط uinput النقي). نفس تبعيات النواة:
+# enigo (input_exec) + serde_json + libc (tablet_uinput) — بلا crates جديدة.
+[dependencies]
+serde_json = "1"
+enigo = { version = "0.2.1", default-features = false, features = ["x11rb"] }
+libc = "0.2"
+
+[[bin]]
+name = "tablet-verify"
+path = "src/main.rs"

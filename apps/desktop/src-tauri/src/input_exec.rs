@@ -127,21 +127,34 @@ fn apply_pointer(enigo: &mut Enigo, ev: &serde_json::Value) -> Result<String, St
     if !pointer_action_ok(action) {
         return Err(format!("إجراء مؤشر غير معروف: {action}"));
     }
+    // الجولة 4 مرحلة ② (عقد §20) — لوحة الرسم: الضغط والأداة محمولان في حدث
+    // pen-live (من live_core)؛ بقية المسارات (rc:pointer/touch-live) بلا ضغط.
+    let pressure = ev.get("pressure").and_then(|x| x.as_f64());
+    let tool = ev.get("tool").and_then(|x| x.as_str()).unwrap_or("");
     let (w, h, ox, oy) = pointer_space();
     let (x, y) = pointer_map(nx, ny, w, h, ox, oy);
     enigo
         .move_mouse(x, y, Coordinate::Abs)
         .map_err(|e| format!("تحريك المؤشر المطلق فشل: {e}"))?;
     match action {
-        "move" => Ok("مؤشر مطلق".into()),
-        "down" => enigo
-            .button(Button::Left, Direction::Press)
-            .map(|_| "ضغط".to_string())
-            .map_err(|e| format!("ضغط فشل: {e}")),
-        "up" => enigo
-            .button(Button::Left, Direction::Release)
-            .map(|_| "رفع".to_string())
-            .map_err(|e| format!("رفع فشل: {e}")),
+        "move" => {
+            brush_tick(enigo, pressure, tool)?;
+            Ok("مؤشر مطلق".into())
+        }
+        "down" => {
+            brush_begin();
+            enigo
+                .button(Button::Left, Direction::Press)
+                .map(|_| "ضغط".to_string())
+                .map_err(|e| format!("ضغط فشل: {e}"))
+        }
+        "up" => {
+            brush_end();
+            enigo
+                .button(Button::Left, Direction::Release)
+                .map(|_| "رفع".to_string())
+                .map_err(|e| format!("رفع فشل: {e}"))
+        }
         "click" => {
             enigo.button(Button::Left, Direction::Click).map_err(|e| format!("نقر فشل: {e}"))?;
             Ok("نقر على الموضع".into())
@@ -157,6 +170,175 @@ fn apply_pointer(enigo: &mut Enigo, ev: &serde_json::Value) -> Result<String, St
             Ok("نقر أيمن على الموضع".into())
         }
         _ => Ok("مؤشر مطلق".into()),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// الجولة 4 مرحلة ② (عقد §20) — لوحة الرسم الاحترافية: الضغط → سماكة الفرشاة.
+// «وضع الماوس المطلق» يعمل مع أي برنامج رسم (Krita/Photoshop/IbisPaint):
+// القلم يحرك مؤشر النظام بموضع مطلق، والضغط يضبط السماكة عبر تقنية متوافقة
+// قابلة للتعيين — مفاتيح الفرشاة (Krita/Photoshop: [ و]) أو عجلة التمرير
+// مع معدّل اختياري. الحساب الرياضي مفصول عن الحقن (نقي — يُختبَر في محركي
+// enigo-verify/live-verify)، والضغط مستهلك للقلم/الممحاة حصرًا (ضغط الإصبع
+// بلا معنى فيض على أكثر الأجهزة — موثق §20).
+// ---------------------------------------------------------------------------
+
+/// وضع تقنية الضغط→الفرشاة
+pub const BRUSH_OFF: u8 = 0;
+pub const BRUSH_KEYS: u8 = 1;
+pub const BRUSH_SCROLL: u8 = 2;
+
+/// المعدّل الاختياري لوضع العجلة
+pub const MOD_NONE: u8 = 0;
+pub const MOD_CTRL: u8 = 1;
+pub const MOD_ALT: u8 = 2;
+pub const MOD_SHIFT: u8 = 3;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BrushCfg {
+    pub mode: u8,
+    pub dec_ch: char, // مفتاح تصغير الفرشاة
+    pub inc_ch: char, // مفتاح تكبير الفرشاة
+    pub levels: u32,  // مستويات التكميم 2..=64
+    pub modifier: u8, // وضع العجلة فقط
+}
+
+impl Default for BrushCfg {
+    fn default() -> Self {
+        // Krita/Photoshop: [ يصغّر و] يكبّر — 24 مستوى بخطوة ملموسة بلا إغراق
+        BrushCfg { mode: BRUSH_KEYS, dec_ch: '[', inc_ch: ']', levels: 24, modifier: MOD_NONE }
+    }
+}
+
+static BRUSH_CFG: std::sync::Mutex<Option<BrushCfg>> = std::sync::Mutex::new(None);
+
+/// ضبط إعداد الفرشاة (من أمر Tauri tablet_config_set — المدقق هناك؛ هنا ثقة)
+pub fn set_brush_cfg(cfg: BrushCfg) {
+    if let Ok(mut g) = BRUSH_CFG.lock() {
+        *g = Some(cfg);
+    }
+}
+
+pub fn brush_cfg() -> BrushCfg {
+    BRUSH_CFG.lock().ok().and_then(|g| *g).unwrap_or_default()
+}
+
+/// حساب جزيئي نقي: ضغط 0..1 → مستوى مكمم 0..levels-1
+pub fn brush_level(pressure: f64, levels: u32) -> u32 {
+    let lv = levels.max(2);
+    let p = if pressure.is_finite() { pressure.clamp(0.0, 1.0) } else { 0.0 };
+    ((p * lv as f64).floor() as u32).min(lv - 1)
+}
+
+/// حساب جزيئي نقي: فرق المستويين → (عدد الخطوات، اتجاهها) — سقف 4 لكل عينة
+pub fn brush_steps(last: u32, cur: u32) -> (i32, bool) {
+    let d = cur as i64 - last as i64;
+    (d.unsigned_abs().min(4) as i32, d >= 0)
+}
+
+struct BrushState {
+    active: bool,
+    last_level: Option<u32>,
+    last_inject: Option<std::time::Instant>,
+}
+
+fn brush_state() -> &'static std::sync::Mutex<BrushState> {
+    static S: std::sync::OnceLock<std::sync::Mutex<BrushState>> = std::sync::OnceLock::new();
+    S.get_or_init(|| std::sync::Mutex::new(BrushState { active: false, last_level: None, last_inject: None }))
+}
+
+/// بداية ضربة القلم (down) — أول عينة تُرسي المستوى المرجعي بلا حقن
+pub fn brush_begin() {
+    if let Ok(mut s) = brush_state().lock() {
+        s.active = true;
+        s.last_level = None;
+    }
+}
+
+/// نهاية ضربة القلم (up)
+pub fn brush_end() {
+    if let Ok(mut s) = brush_state().lock() {
+        s.active = false;
+    }
+}
+
+/// تصفير الحالة عند نهاية الجلسة (بلا أثر معلق للمستخدم التالي)
+pub fn brush_reset() {
+    brush_end();
+}
+
+/// سقف إيقاع الحقن: ≤33 مفتاح/ث — إغراق التطبيق الرسمي بمفاتيح السماكة ممنوع
+const BRUSH_MIN_INJECT_MS: u128 = 30;
+
+/// نبضة الفرشاة على كل عينة حركة أثناء الضربة — حقن تغيّر المستوى المكمم فقط
+fn brush_tick(enigo: &mut Enigo, pressure: Option<f64>, tool: &str) -> Result<(), String> {
+    let cfg = brush_cfg();
+    if cfg.mode == BRUSH_OFF || tool == "finger" {
+        return Ok(());
+    }
+    let p = match pressure {
+        Some(v) => v,
+        None => return Ok(()),
+    };
+    let mut s = brush_state().lock().map_err(|_| "قفل حالة الفرشاة".to_string())?;
+    if !s.active {
+        return Ok(()); // hover لا يغيّر السماكة
+    }
+    let level = brush_level(p, cfg.levels);
+    let Some(last) = s.last_level else {
+        s.last_level = Some(level);
+        return Ok(());
+    };
+    if last == level {
+        return Ok(());
+    }
+    let now = std::time::Instant::now();
+    if let Some(t) = s.last_inject {
+        if now.duration_since(t).as_millis() < BRUSH_MIN_INJECT_MS {
+            // الإيقاع ممتلئ: لا نحدّث last_level — العينة التالية تعيد المحاولة
+            // بأحدث مستوى (دلالة latest-wins نفسها — لا خطوة مفقودة نهائيًا)
+            return Ok(());
+        }
+    }
+    let (steps, up) = brush_steps(last, level);
+    let r = brush_inject(enigo, &cfg, steps, up);
+    if r.is_ok() {
+        s.last_level = Some(level);
+        s.last_inject = Some(now);
+    }
+    r
+}
+
+fn brush_inject(enigo: &mut Enigo, cfg: &BrushCfg, steps: i32, up: bool) -> Result<(), String> {
+    match cfg.mode {
+        BRUSH_KEYS => {
+            let ch = if up { cfg.inc_ch } else { cfg.dec_ch };
+            for _ in 0..steps {
+                enigo.key(Key::Unicode(ch), Direction::Click).map_err(|e| format!("مفتاح الفرشاة فشل: {e}"))?;
+            }
+            Ok(())
+        }
+        BRUSH_SCROLL => {
+            let m = match cfg.modifier {
+                MOD_CTRL => Some(Key::Control),
+                MOD_ALT => Some(Key::Alt),
+                MOD_SHIFT => Some(Key::Shift),
+                _ => None,
+            };
+            if let Some(k) = m {
+                enigo.key(k, Direction::Press).map_err(|e| format!("معدّل الفرشاة فشل: {e}"))?;
+            }
+            let r = enigo
+                .scroll(if up { steps } else { -steps }, Axis::Vertical)
+                .map_err(|e| format!("عجلة الفرشاة فشلت: {e}"));
+            if let Some(k) = m {
+                let r2 = enigo.key(k, Direction::Release).map_err(|e| format!("تحرير معدّل الفرشاة فشل: {e}"));
+                r?;
+                return r2;
+            }
+            r
+        }
+        _ => Ok(()),
     }
 }
 
