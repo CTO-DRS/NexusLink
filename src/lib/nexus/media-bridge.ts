@@ -53,6 +53,13 @@ function sanitizeScreenEvent(data: Record<string, unknown> | undefined) {
     if (typeof data.quality !== "string" || !SCREEN_QUALITIES.has(data.quality)) return null
     out.quality = data.quality
   }
+  // R4 مرحلة ① (عقد §19) — اختيار هدف البث يمر الآن فعليًا (كان يُسقط في
+  // التنقية فلا يصل سطح المكتب): screen:N | screen:all | screen:virtual | default
+  if (data.target !== undefined) {
+    const t = String(data.target)
+    if (!/^(screen:\d{1,3}|screen:all|screen:virtual|default)$/.test(t)) return null
+    out.target = t
+  }
   // حقول الحالة الصادرة من الكمبيوتر (screen:state) تمر كما هي بعد التحقق النوعي
   if (data.on !== undefined) out.on = data.on === true
   if (data.w !== undefined) {
@@ -64,6 +71,63 @@ function sanitizeScreenEvent(data: Record<string, unknown> | undefined) {
     if (Number.isFinite(h) && h > 0 && h <= 8192) out.h = h
   }
   if (typeof data.name === "string" && data.name.length <= 80) out.name = data.name
+  if (typeof data.error === "string" && data.error.length <= 200) out.error = data.error
+  return out
+}
+
+// ---------------------------------------------------------------------------
+// R4 مرحلة ① (عقد §19) — الشاشة الثانية: الهاتف شاشة ممتدة فعلية.
+// secondscreen:cmd  هاتف→جسر→كمبيوتر: enable/disable (w,h اختيارية للدقة/
+//                   الاتجاه — تُطبق في vdisplay_enable على السائق/xrandr).
+// secondscreen:state كمبيوتر→الجميع: active/target/w/h/error — حالة صادقة.
+// media:phone-offline عند انقطاع الهاتف — الكمبيوتر يطفئ الشاشة الافتراضية
+//                   ويعيد النوافذ تلقائيًا (سلوك النظام عند إزالة عرض) — البند 8.
+// ---------------------------------------------------------------------------
+
+/** تنقية أمر الشاشة الثانية — الحمولة الآمنة أو null للرفض. */
+function sanitizeSecondScreenCmd(data: Record<string, unknown> | undefined) {
+  if (!data || typeof data !== "object") return null
+  const action = String(data.action ?? "")
+  if (action !== "enable" && action !== "disable") return null
+  const out: Record<string, unknown> = { action, at: Date.now() }
+  if (data.w !== undefined) {
+    const w = Math.round(Number(data.w))
+    if (!Number.isFinite(w) || w < 320 || w > 8192) return null
+    out.w = w
+  }
+  if (data.h !== undefined) {
+    const h = Math.round(Number(data.h))
+    if (!Number.isFinite(h) || h < 320 || h > 8192) return null
+    out.h = h
+  }
+  if (data.fps !== undefined) {
+    const fps = Math.round(Number(data.fps))
+    if (!SCREEN_FPS.has(fps)) return null
+    out.fps = fps
+  }
+  if (data.quality !== undefined) {
+    if (typeof data.quality !== "string" || !SCREEN_QUALITIES.has(data.quality)) return null
+    out.quality = data.quality
+  }
+  return out
+}
+
+/** تنقية حالة الشاشة الثانية الصادرة من الكمبيوتر. */
+function sanitizeSecondScreenState(data: Record<string, unknown> | undefined) {
+  if (!data || typeof data !== "object") return null
+  const out: Record<string, unknown> = { at: Date.now() }
+  out.active = data.active === true
+  if (typeof data.target === "string" && /^(screen:\d{1,3}|screen:all)$/.test(data.target)) {
+    out.target = data.target
+  }
+  if (data.w !== undefined) {
+    const w = Math.round(Number(data.w))
+    if (Number.isFinite(w) && w > 0 && w <= 8192) out.w = w
+  }
+  if (data.h !== undefined) {
+    const h = Math.round(Number(data.h))
+    if (Number.isFinite(h) && h > 0 && h <= 8192) out.h = h
+  }
   if (typeof data.error === "string" && data.error.length <= 200) out.error = data.error
   return out
 }
@@ -240,6 +304,26 @@ export function ensureMediaBridge() {
           io2.emit(ev, { ...out, from: socket.data.role ?? "unknown" })
         })
       }
+
+      // ==== R4 ①: الشاشة الثانية (عقد §19) — أوامر الهاتف وحالة الكمبيوتر ====
+      socket.on("secondscreen:cmd", (data: Record<string, unknown>) => {
+        const out = sanitizeSecondScreenCmd(data)
+        if (!out) return
+        io2.emit("secondscreen:cmd", { ...out, from: socket.data.role ?? "unknown" })
+      })
+      socket.on("secondscreen:state", (data: Record<string, unknown>) => {
+        // الحالة من الكمبيوتر (دور pc) حصرًا — الهاتف لا يصدر حالة
+        if (socket.data.role !== "pc") return
+        const out = sanitizeSecondScreenState(data)
+        if (!out) return
+        io2.emit("secondscreen:state", out)
+      })
+
+      // ==== R4 ① (البند 8): انقطاع الهاتف — الكمبيوتر يطفئ الشاشة الافتراضية ====
+      socket.on("disconnect", () => {
+        if (socket.data.role !== "phone") return
+        io2.emit("media:phone-offline", { at: Date.now() })
+      })
 
       // ==== بث الوسائط: أوامر من مرسل (هاتف) إلى مستقبل (TV/كمبيوتر) ====
       socket.on("cast:cmd", (data: Record<string, unknown>) => {

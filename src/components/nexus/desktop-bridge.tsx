@@ -373,7 +373,47 @@ export function DesktopBridge() {
     })()
 
     // ---- عرض الشاشة: الهاتف يطلب → نبدأ أصليًا → نعرض/نجيب ----
+    // R4 ① (عقد §19) — حالة الشاشة الثانية المحلية: «نحن من فعّلها» فقط
+    // يُطفئها انقطاع الهاتف (لا نمس شاشات الطرف الآخر أبدًا)
+    let ssActive = false
+    const emitSsState = (active: boolean, extra?: Record<string, unknown>) => {
+      mediaSock.emit("secondscreen:state", { active, ...extra })
+    }
+    const ssStartStream = (targetId: string, fps?: number, quality?: string) => {
+      void tauriInvoke<{ offer: { type: string; sdp: string }; w: number; h: number; fps: number; quality: string }>(
+        "media_screen_start",
+        { fps: fps ?? null, quality: quality ?? null, target: targetId },
+      )
+        .then((r) => {
+          ssActive = true
+          mediaSock.emit("rtc:offer", { kind: "screen", sdp: r.offer })
+          mediaSock.emit("screen:state", { action: "state", on: true, w: r.w, h: r.h, fps: r.fps, quality: r.quality, name: "NEXUS-PC" })
+          emitSsState(true, { target: targetId, w: r.w, h: r.h })
+        })
+        .catch((e) => {
+          console.warn("[desktop-bridge] ss screen_start:", e)
+          // السائق يعمل والشاشة قائمة حتى لو فشل البث — الحالة صادقة بالخطأ
+          emitSsState(ssActive, { error: String(e).slice(0, 200) })
+        })
+    }
+    const ssStopAll = () => {
+      void tauriInvoke("media_screen_stop").catch(() => null)
+      void tauriInvoke("vdisplay_disable")
+        .then(() => emitSsState(false))
+        .catch((e) => emitSsState(false, { error: String(e).slice(0, 200) }))
+      ssActive = false
+    }
     const onScreenReq = (d: { fps?: number; quality?: string; target?: string }) => {
+      // R4 ①: اختيار «الشاشة الافتراضية» من قائمة الأهداف — تمكين تلقائي ثم بث
+      if (d?.target === "screen:virtual") {
+        void tauriInvoke<{ ok: boolean; targetId: string }>("vdisplay_enable", { w: null, h: null })
+          .then((r) => ssStartStream(r.targetId, d?.fps, d?.quality))
+          .catch((e) => {
+            mediaSock.emit("screen:state", { action: "state", on: false, error: String(e).slice(0, 160) })
+            emitSsState(false, { error: String(e).slice(0, 200) })
+          })
+        return
+      }
       void tauriInvoke<{ offer: { type: string; sdp: string }; w: number; h: number; fps: number; quality: string }>(
         "media_screen_start",
         { fps: d?.fps ?? null, quality: d?.quality ?? null, target: d?.target ?? null },
@@ -394,6 +434,30 @@ export function DesktopBridge() {
     mediaSock.on("screen:set", (d: { fps?: number; quality?: string }) => {
       void tauriInvoke("media_screen_set", { fps: d?.fps ?? null, quality: d?.quality ?? null }).catch(() => null)
     })
+
+    // ---- R4 ① (عقد §19): أوامر الشاشة الثانية من الهاتف ----
+    const onSsCmd = (d: { action?: string; w?: number; h?: number; fps?: number; quality?: string; from?: string }) => {
+      if (d?.from === "pc") return // صدى — نستجيب لأوامر الهاتف حصرًا
+      if (d?.action === "enable") {
+        void tauriInvoke<{ ok: boolean; targetId: string; w: number; h: number }>(
+          "vdisplay_enable",
+          { w: d?.w ?? null, h: d?.h ?? null },
+        )
+          .then((r) => ssStartStream(r.targetId, d?.fps, d?.quality))
+          .catch((e) => emitSsState(false, { error: String(e).slice(0, 200) }))
+      } else if (d?.action === "disable") {
+        ssStopAll()
+      }
+    }
+    mediaSock.on("secondscreen:cmd", onSsCmd)
+
+    // ---- R4 ① (البند 8): انقطاع الهاتف → إطفاء الشاشة الافتراضية ----
+    // (إزالة العرض تعيد النوافذ للشاشات الباقية سلوك النظام تلقائيًا)
+    const onPhoneOffline = () => {
+      if (!ssActive) return
+      ssStopAll()
+    }
+    mediaSock.on("media:phone-offline", onPhoneOffline)
 
     // ---- إجابات/مرشحات الشاشة من الهاتف ----
     const onRtc = (d: Record<string, unknown>, ev: string) => {
@@ -465,6 +529,8 @@ export function DesktopBridge() {
       guardSock.off("pc:lock", onPcLock)
       guardSock.disconnect()
       mediaSock.off("screen:req", onScreenReq)
+      mediaSock.off("secondscreen:cmd", onSsCmd)
+      mediaSock.off("media:phone-offline", onPhoneOffline)
       mediaSock.off("rtc:answer", offRtcAnswer)
       mediaSock.off("rtc:ice", offRtcIce)
       mediaSock.off("rtc:offer", offRtcOffer)
