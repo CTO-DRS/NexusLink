@@ -843,11 +843,11 @@ try {
       "installer-hooks.nsh")
     check("R4 §19: bundle.resources يحمل vdd (resolve_resources §17.ب → $INSTDIR\\vdd)",
       conf.includes('"vdd"'), "tauri.conf.json")
-    for (const f of ["apps/desktop/vdd/MttVDD.inf", "apps/desktop/vdd/MttVDD.dll", "apps/desktop/vdd/mttvdd.cat", "apps/desktop/vdd/nefconc.exe", "apps/desktop/vdd/vdd_settings.xml", "apps/desktop/vdd/LICENSE-VirtualDisplayDriver"]) {
+    for (const f of ["apps/desktop/src-tauri/vdd/MttVDD.inf", "apps/desktop/src-tauri/vdd/MttVDD.dll", "apps/desktop/src-tauri/vdd/mttvdd.cat", "apps/desktop/src-tauri/vdd/nefconc.exe", "apps/desktop/src-tauri/vdd/vdd_settings.xml", "apps/desktop/src-tauri/vdd/LICENSE-VirtualDisplayDriver"]) {
       const ok = await fsMod.readFile(f).then(() => true).catch(() => false)
       check(`R4 §19: أصل السائق مرفق: ${pathMod.basename(f)}`, ok, "حزمة §19")
     }
-    const vddXml = await fsMod.readFile("apps/desktop/vdd/vdd_settings.xml", "utf8").catch(() => "")
+    const vddXml = await fsMod.readFile("apps/desktop/src-tauri/vdd/vdd_settings.xml", "utf8").catch(() => "")
     check("R4 §19: XML المرفق يحمل الأوضاع التعاقدية (1080×2400 + 2400×1080 @60)",
       vddXml.includes("<width>1080</width>") && vddXml.includes("<height>2400</height>") && vddXml.includes("<width>2400</width>") && vddXml.includes("<height>1080</height>") && vddXml.includes("<count>1</count>"),
       "vdd_settings.xml")
