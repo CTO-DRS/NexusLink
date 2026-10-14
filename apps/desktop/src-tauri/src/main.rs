@@ -33,6 +33,9 @@ mod sync_core;
 mod tray;
 // FA-harden (عقد §16) — المحدّث الموقّع + سجل الإصدارات (بند 2)
 mod updater;
+// الجولة 4 مرحلة ① (عقد §19) — الشاشة الثانية: النواة النقية + طبقة المنصات
+mod vdisplay;
+mod vdisplay_core;
 
 use tauri::{Manager, RunEvent, WindowEvent};
 
@@ -164,7 +167,10 @@ fn main() {
             media::media_ice,
             media::media_kind_stop,
             media::media_status,
-            live::live_state
+            live::live_state,
+            vdisplay::vdisplay_status,
+            vdisplay::vdisplay_enable,
+            vdisplay::vdisplay_disable,
         ])
         .on_window_event(|window, event| match event {
             // إغلاق → إخفاء إلى الـ Tray (قابل للتعطيل من قائمة الـ Tray)

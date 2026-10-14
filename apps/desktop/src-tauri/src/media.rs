@@ -350,7 +350,7 @@ where
 }
 
 #[cfg(target_os = "linux")]
-fn list_targets() -> Result<Vec<TargetInfo>, String> {
+pub(crate) fn list_targets() -> Result<Vec<TargetInfo>, String> {
     use x11rb::connection::Connection;
     use x11rb::protocol::randr;
     use x11rb::protocol::xproto::ConnectionExt;
@@ -425,7 +425,7 @@ fn list_targets() -> Result<Vec<TargetInfo>, String> {
 }
 
 #[cfg(target_os = "macos")]
-fn list_targets() -> Result<Vec<TargetInfo>, String> {
+pub(crate) fn list_targets() -> Result<Vec<TargetInfo>, String> {
     // scap: شاشات + نوافذ (Windows.Graphics.Capture / ScreenCaptureKit)
     let mut out = Vec::new();
     for t in scap::get_all_targets() {
@@ -461,22 +461,31 @@ fn list_targets() -> Result<Vec<TargetInfo>, String> {
 }
 
 #[cfg(windows)]
-fn list_targets() -> Result<Vec<TargetInfo>, String> {
-    use windows_capture::monitor::Monitor;
+pub(crate) fn list_targets() -> Result<Vec<TargetInfo>, String> {
     let mut out: Vec<TargetInfo> = Vec::new();
-    // الشاشات — Monitor::from_index (ترقيم 1-based) — نفس الترتيب في حلقة الالتقاط
-    let mut i = 1usize;
-    while let Ok(m) = Monitor::from_index(i) {
-        let (w, h) = (m.width().unwrap_or(0), m.height().unwrap_or(0));
+    // تعداد EnumDisplayMonitors — نفس ترتيب windows-capture::Monitor::from_index
+    // (كلاهما يجتاز القائمة نفسها — تحقق حرفي من مصدر الكرِيت 1.3.6 monitor.rs)
+    // ⇒ فهرس screen:N يطابق حلقة الالتقاط حرفيًا، مع **أصول حقيقية** في سطح
+    // المكتب المركّب (إصلاح حد §15: كانت 0,0 للجميع) — أساس خريطة لمس الشاشة
+    // الافتراضية (R4 مرحلة ① — §19: اللمس = مطلق داخل الشاشة الافتراضية).
+    for m in crate::vdisplay::list_monitors_ex() {
+        let virtual_now =
+            crate::vdisplay::current_session_device().as_deref() == Some(m.device.as_str());
+        let title = if virtual_now {
+            format!("الشاشة الافتراضية {} ({}×{})", m.index, m.w, m.h)
+        } else if m.primary {
+            format!("الشاشة الرئيسية {}", m.index)
+        } else {
+            format!("الشاشة {} ({}×{})", m.index, m.w, m.h)
+        };
         out.push(TargetInfo {
-            id: format!("screen:{}", i - 1),
+            id: format!("screen:{}", m.index),
             kind: "screen",
-            title: format!("الشاشة {}", i - 1),
-            origin: (0, 0), // حد موثق §15: الأصل للشاشة الأساسية
-            w,
-            h,
+            title,
+            origin: (m.ox, m.oy),
+            w: m.w,
+            h: m.h,
         });
-        i += 1;
     }
     if out.iter().all(|t| t.id != "screen:all") {
         out.push(TargetInfo {
