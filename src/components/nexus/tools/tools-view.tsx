@@ -283,6 +283,31 @@ function DiagnosticsTab() {
         const r = await tauriInvoke<{ idleSecs: number | null; idleMode: boolean; locked: boolean }>("diag_idle_state")
         push("native-idle", t("كشف الخمول الأصلي"), r?.idleSecs !== null && r?.idleSecs !== undefined ? "pass" : "na", r?.idleSecs != null ? `${r.idleSecs}s · ${r.idleMode ? t("وضع التوفير مفعّل") : t("نشط")} · ${r.locked ? t("مقفول") : t("غير مقفول")}` : t("المنصة بلا كشف خمول (Wayland)"))
       } catch { push("native-idle", t("كشف الخمول الأصلي"), "na", "—") }
+      // R4 ① (عقد §19) — الشاشة الثانية: حالة السائق/المنصة بصدق
+      try {
+        const r = await tauriInvoke<{
+          platform: string; supported: boolean; note?: string;
+          driverInstalled?: boolean; driverEnabled?: boolean; settingsFile?: boolean; modesReady?: boolean; virtualActive?: boolean;
+          x11?: boolean; wayland?: boolean; xrandr?: boolean; hasCandidateOutput?: boolean;
+          session?: { targetId: string; w: number; h: number } | null;
+        }>("vdisplay_status")
+        let det = ""
+        let st: "pass" | "warn" | "fail" | "na" = "na"
+        if (r?.platform === "windows") {
+          det = r.driverInstalled
+            ? `${t("السائق مثبت")} · ${r.driverEnabled ? t("ممكّن") : t("معطّل")} · ${r.modesReady ? t("الأوضاع جاهزة") : t("أوضاع NexusLink غير مكتوبة")} · ${r.virtualActive ? t("الشاشة الافتراضية نشطة") : t("غير نشطة")}`
+            : (r.note ?? t("غير مثبت"))
+          st = r.driverInstalled ? (r.virtualActive || !r.modesReady ? "warn" : "pass") : "warn"
+        } else if (r?.platform === "linux") {
+          det = `${r.x11 ? "X11" : r.wayland ? "Wayland" : t("بلا جلسة عرض")} · xrandr:${r.xrandr ? "✓" : "✗"} · ${r.hasCandidateOutput ? t("مخرج فارغ متاح") : t("لا مخرج فارغ")} ${r.note ?? ""}`
+          st = r.supported ? "pass" : "warn"
+        } else {
+          det = r?.note ?? t("غير مسند — بديل «بث نافذة محددة» جاهز من شاشة الكمبيوتر")
+          st = "na"
+        }
+        if (r?.session) det += ` · ${t("جلسة NexusLink")}: ${r.session.targetId} (${r.session.w}×${r.session.h})`
+        push("vdisplay", t("الشاشة الثانية (سائق العرض الافتراضي)"), st, det)
+      } catch { push("vdisplay", t("الشاشة الثانية (سائق العرض الافتراضي)"), "na", "—") }
     }
 
     // 3) browser heap
