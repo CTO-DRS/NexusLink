@@ -1043,6 +1043,11 @@ try {
     check("R4 §20: محركا التحقق يضمّنان الملفات حرفيًا (أداة + فرشاة + uinput نقي)",
       lvRs.includes("fn tablet_vectors") && tvRs.includes("tablet_uinput.rs") && tvRs.includes("map_vectors"),
       "live-verify + tablet-verify")
+    const mainRs2 = await fsMod.readFile("apps/desktop/src-tauri/src/main.rs", "utf8").catch(() => "")
+    const inputRs2 = await fsMod.readFile("apps/desktop/src-tauri/src/input.rs", "utf8").catch(() => "")
+    check("R4 §20: ربط الوحدة — input_exec عليا واحدة (main) وإعادة تصدير exec (input) — بلا تضمين مزدوج/statics منشقة",
+      mainRs2.includes('#[path = "input_exec.rs"]') && mainRs2.includes("pub mod input_exec") && inputRs2.includes("pub use crate::input_exec as exec"),
+      "main.rs + input.rs wiring")
     check("R4 §20: الفحص الميداني موثق (e2e-checklist §14 — Krita قلم حقيقي)",
       checklist14.includes("## 14. الجولة 4 مرحلة ②") && checklist14.includes("Krita"),
       "e2e-checklist §14")

@@ -24,8 +24,9 @@ use std::sync::mpsc;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-#[path = "input_exec.rs"]
-pub mod exec;
+// الجولة 4 مرحلة ② — الوحدة عليا في main.rs (crate::input_exec) وتُعاد
+// هنا بالاسم التاريخي exec — ترجمة واحدة وstatics واحدة (بلا نسخة موازية)
+pub use crate::input_exec as exec;
 
 use enigo::{Enigo, Settings};
 
