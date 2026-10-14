@@ -253,6 +253,30 @@ export function DesktopBridge() {
     }
     rcSock.on("rc:session", onRcSession)
 
+    // ------------------------------------------------------------------
+    // الجولة 4 مرحلة ② (عقد §20) — لوحة الرسم: أوامر الهاتف (جلسة موثوقة
+    // حصرًا — الجسر ينقّي) → أوامر Tauri ثم بث rc:tablet:state (مصدر الحقيقة)
+    // ------------------------------------------------------------------
+    rcSock.on("rc:tablet:cmd", (d: Record<string, unknown>) => {
+      if (String(d?.__src ?? "") !== "controller") return
+      const cmd = String(d?.cmd ?? "")
+      if (cmd === "get") {
+        void tauriInvoke<Record<string, unknown>>("tablet_config")
+          .then((st) => rcSock.emit("rc:tablet:state", st))
+          .catch((e) => console.warn("[desktop-bridge] tablet_config:", e))
+        return
+      }
+      if (cmd === "set") {
+        const args: Record<string, unknown> = {}
+        for (const k of ["mode", "pressure", "decKey", "incKey", "levels", "modifier"]) {
+          if (d[k] !== undefined) args[k] = d[k]
+        }
+        void tauriInvoke<Record<string, unknown>>("tablet_config_set", args)
+          .then((st) => rcSock.emit("rc:tablet:state", st))
+          .catch((e) => console.warn("[desktop-bridge] tablet_config_set:", e))
+      }
+    })
+
     // أحداث الطبقة الأصلية: إنهاء من الشريط/watchdog + أخطاء الحقن (إرشاد ماك)
     type Unlisten = () => void
     let unlisteners: Unlisten[] = []

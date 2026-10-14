@@ -482,6 +482,53 @@ export function ensureRemoteBridge() {
         socket.emit("rc:live-stats", liveStatsSnapshot())
       })
 
+      // -----------------------------------------------------------------
+      // الجولة 4 مرحلة ② (عقد §20) — تحكم لوحة الرسم: rc:tablet:cmd من هاتف
+      // موثوق خلال جلسة نشطة حصرًا (نفس بوابة live-hello) → الكمبيوتر ينفّذ
+      // ويبث rc:tablet:state من دوره حصرًا. التنقية هنا (§20.ج): الحقول
+      // المرسلة حصرًا والفاسد يُرفض كله — لا جزئيات.
+      // -----------------------------------------------------------------
+      socket.on("rc:tablet:cmd", (data: Record<string, unknown>) => {
+        const trust = controllerTrust.get(socket.id)
+        if (!trust || !session.active || session.socketId !== socket.id) {
+          socket.emit("rc:rejected", { reason: "untrusted", ev: "rc:tablet:cmd" })
+          return
+        }
+        const cmd = String(data?.cmd ?? "")
+        if (cmd !== "get" && cmd !== "set") return
+        const payload: Record<string, unknown> = { cmd }
+        if (cmd === "set") {
+          const mode = data.mode
+          if (mode !== undefined && mode !== "mouse" && mode !== "tablet") return
+          if (mode !== undefined) payload.mode = mode
+          const pressure = data.pressure
+          if (pressure !== undefined && !["off", "keys", "scroll"].includes(String(pressure))) return
+          if (pressure !== undefined) payload.pressure = pressure
+          for (const k of ["decKey", "incKey"] as const) {
+            const v = data[k]
+            if (v === undefined) continue
+            const s = String(v)
+            if (s.length !== 1 || s.charCodeAt(0) < 33 || s.charCodeAt(0) > 126) return
+            payload[k] = s
+          }
+          if (data.levels !== undefined) {
+            const n = Number(data.levels)
+            if (!Number.isInteger(n) || n < 2 || n > 64) return
+            payload.levels = n
+          }
+          const modifier = data.modifier
+          if (modifier !== undefined && !["none", "ctrl", "alt", "shift"].includes(String(modifier))) return
+          if (modifier !== undefined) payload.modifier = modifier
+        }
+        io2.emit("rc:tablet:cmd", { ...payload, __src: "controller" })
+      })
+
+      socket.on("rc:tablet:state", (data: Record<string, unknown>) => {
+        // من دور الكمبيوتر حصرًا — الهاتف لا يصدر حالة (نمط secondscreen:state §19)
+        if (!desktopSocks.has(socket.id)) return
+        io2.emit("rc:tablet:state", data)
+      })
+
       for (const ev of RC_INPUT) {
         socket.on(ev, (data: Record<string, unknown>) => {
           if (!gateInput(socket, ev)) return
