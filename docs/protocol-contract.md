@@ -830,7 +830,7 @@ interface TransferJob {
 2. **الإعدادات**: نسخ `vdd_settings.xml` المعدّ مسبقًا (count=1 + الأوضاع التعاقدية 1080×2400/2400×1080/1080×1920/1920×1080 @60) إلى `C:\VirtualDisplayDriver\`.
 3. **الجهاز**: `nefconc.exe install MttVDD.inf "Root\MttVDD"` (nefarius/nefcon v1.21.0 — MIT — أمر `install` المتوافق مع devcon، نفس أمر سكربت التثبيت الصامت الرسمي). فشل أي خطوة **لا يفشل التثبيت** — الحالة تعود صادقة من التشخيص (vdisplay_status).
 4. **الإزالة**: PREUNINSTALL `nefconc.exe remove "Root\MttVDD"` (الجهاز فقط — الحزمة تبقى في مخزن السائقين، دلالة `remove` الموثقة). إعدادات `C:\VirtualDisplayDriver` تُترك إن كان الطرف الآخر يملكها.
-5. **الأصول**: `apps/desktop/vdd/` (INF/DLL/CAT/nefconc.exe + ترخيصا MIT للطرفين) ضمن bundle.resources → `$INSTDIR\vdd` (نفس دقة resolve_resources §17.ب). Portable ZIP بلا NSIS → لا تثبيت سائق تلقائي (التشخيص يرشد) — موثق.
+5. **الأصول**: `apps/desktop/src-tauri/vdd/` (INF/DLL/CAT/nefconc.exe + ترخيصا MIT للطرفين) ضمن bundle.resources → `$INSTDIR\vdd` (نفس دقة resolve_resources §17.ب). Portable ZIP بلا NSIS → لا تثبيت سائق تلقائي (التشخيص يرشد) — موثق.
 - **بعد إعادة تشغيل النظام**: العرض الافتراضي يظهر نشطًا (سلوك السائق المثبت) — NexusLink لا يطفئه تلقائيًا عند الإقلاع (احترام استخدام الطرف الآخر المحتمل)؛ الإطفاء عند انقطاع الهاتف يخص جلساتنا حصرًا (19.د) — والبطاقة/التشخيص يعرضان الحالة.
 
 ### 19.ج أحداث socket.io (جسر 3005 — تنقية جديدة)

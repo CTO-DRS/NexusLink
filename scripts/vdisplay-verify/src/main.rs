@@ -4,7 +4,7 @@
 // ترقيع vdd_settings.xml، محلل xrandr وباني الأوامر) — مصدر واحد للمنطق مع
 // التطبيق (نمط live-verify المعتمد)، ثم يجري:
 //   1) تحقق الأوضاع (حدود + تعاقد)  2) XML: بناء/ترقيع محافظ/رفض غريب/فحص
-//   3) حزمة السائق المرفقة فعليًا (apps/desktop/vdd) توافق النواة
+//   3) حزمة السائق المرفقة فعليًا (apps/desktop/src-tauri/vdd) توافق النواة
 //   4) xrandr: محلل --query على ثابتين واقعيين + اختيار المخرج + بناء الأوامر
 //   5) cvt: تحليل Modeline  6) أسماء الأوضاع حتمية (بناء/تفكيك متطابقان)
 // طبقة المنصات (vdisplay.rs — CCD/xrandr الحية) تُترجم فيزيائيًا على المنصات
@@ -73,8 +73,8 @@ fn main() {
     check("الترقيع idempotent (بلا تكرار)", p2.matches("<width>1080</width>").count() == 1, "مرة واحدة");
 
     // ---- 4) حزمة السائق المرفقة فعليًا ----
-    section("4) حزمة apps/desktop/vdd توافق النواة");
-    let bundled = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../apps/desktop/vdd/vdd_settings.xml"));
+    section("4) حزمة apps/desktop/src-tauri/vdd توافق النواة");
+    let bundled = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../apps/desktop/src-tauri/vdd/vdd_settings.xml"));
     match bundled {
         Ok(t) => {
             check("الملف المرفوع: count = 1", core::read_monitor_count(&t) == Some(1), "سياسة §19");
@@ -87,11 +87,11 @@ fn main() {
         Err(e) => check("قراءة حزمة السائق", false, format!("{e}")),
     }
     for f in ["MttVDD.inf", "MttVDD.dll", "mttvdd.cat", "nefconc.exe", "LICENSE-VirtualDisplayDriver", "LICENSE-nefcon"] {
-        let p = format!("{}/../../apps/desktop/vdd/{}", env!("CARGO_MANIFEST_DIR"), f);
+        let p = format!("{}/../../apps/desktop/src-tauri/vdd/{}", env!("CARGO_MANIFEST_DIR"), f);
         let ok = std::path::Path::new(&p).exists();
         check(&format!("أصل مطلوب موجود: {f}"), ok, "حزمة §19 كاملة");
     }
-    let inf_raw = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../apps/desktop/vdd/MttVDD.inf")).unwrap_or_default();
+    let inf_raw = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../apps/desktop/src-tauri/vdd/MttVDD.inf")).unwrap_or_default();
     // بعض حزم السائق تُشفر INF بـ UTF-16LE (BOM 0xFF 0xFE) — نفك بذكاء
     let inf = if inf_raw.starts_with(&[0xFF, 0xFE]) {
         let u16s: Vec<u16> = inf_raw[2..].chunks(2).map(|c| u16::from_le_bytes([c[0], *c.get(1).unwrap_or(&0)])).collect();
