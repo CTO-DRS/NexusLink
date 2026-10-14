@@ -79,6 +79,11 @@ class LiveChannel {
 
   // أطوار القلم وإجراءات المؤشر (قيم التعاقد)
   static const int _penHover = 0, _penDown = 1, _penMove = 2, _penUp = 3;
+
+  /// أداة القلم (الجولة 4 مرحلة ② عقد §20 — flags bits1-2 لحزمة pen)
+  static const int penToolPen = 0;
+  static const int penToolEraser = 1;
+  static const int penToolFinger = 2;
   static const int _actMove = 0,
       _actDown = 1,
       _actUp = 2,
@@ -315,8 +320,10 @@ class LiveChannel {
   // --------------------------------------------------------------------------
 
   /// قلم: إحداثيات 0..1 + ضغط 0..1 + ميل ±60 + طور + أزرار (bit0=زر خلفي)
+  /// + أداة (§20: 0=قلم 1=ممحاة 2=إصبع — flags bits1-2؛ خارجها يطبع قلمًا
+  /// توافقًا مع ترميز live_core)
   void sendPen(double nx, double ny, double pressure,
-      {int tiltX = 0, int tiltY = 0, required PenPhase phase, int buttons = 0}) {
+      {int tiltX = 0, int tiltY = 0, required PenPhase phase, int buttons = 0, int tool = penToolPen}) {
     // حمولة 10B: nx2+ny2+pressure2+tilt1+tilt1+phase1+buttons1 (عقد §18)
     final p = Uint8List(10);
     final bd = ByteData.sublistView(p);
@@ -332,7 +339,8 @@ class LiveChannel {
       PenPhase.up => _penUp,
     };
     p[9] = buttons & 0xFF;
-    _sendRaw(_encode(_typePen, 0, _nextSeq(), _syncedTs(), _key, p));
+    final t = tool > penToolFinger ? penToolPen : tool;
+    _sendRaw(_encode(_typePen, t << 1, _nextSeq(), _syncedTs(), _key, p));
   }
 
   /// ماوس نسبي (ماوس هوائي/لوحة لمس): إزاحة ±500 بكسل + أزرار bit0=أيسر مضغوط

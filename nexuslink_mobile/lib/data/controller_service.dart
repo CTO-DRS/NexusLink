@@ -46,6 +46,9 @@ class RcUiState {
   final int liveRttMs; // EMA لزمن الذهاب والعودة
   final int liveSent; // حزم أُرسلت فوق UDP
 
+  // الجولة 4 مرحلة ② (عقد §20) — لوحة الرسم: حالة الكمبيوتر (rc:tablet:state)
+  final Map<String, dynamic>? tabletState;
+
   const RcUiState({
     this.phase = RcBridgePhase.offline,
     this.desktopName = '',
@@ -68,6 +71,7 @@ class RcUiState {
     this.sessionEndReason,
     this.sessionHeartbeats = 0,
     this.liveOpening = false,
+    this.tabletState,
     this.liveReady = false,
     this.liveRttMs = 0,
     this.liveSent = 0,
@@ -97,6 +101,7 @@ class RcUiState {
     bool clearSessionEnd = false,
     int? sessionHeartbeats,
     bool? liveOpening,
+    Map<String, dynamic>? tabletState,
     bool? liveReady,
     int? liveRttMs,
     int? liveSent,
@@ -123,6 +128,7 @@ class RcUiState {
         sessionEndReason: clearSessionEnd ? null : (sessionEndReason ?? this.sessionEndReason),
         sessionHeartbeats: sessionHeartbeats ?? this.sessionHeartbeats,
         liveOpening: liveOpening ?? this.liveOpening,
+        tabletState: tabletState ?? this.tabletState,
         liveReady: liveReady ?? this.liveReady,
         liveRttMs: liveRttMs ?? this.liveRttMs,
         liveSent: liveSent ?? this.liveSent,
@@ -195,6 +201,20 @@ class ControllerService {
     if (host == null || port <= 0 || key.length != 16) return;
     live.activate(host: host, port: port, keyHex: key);
     _patch((s) => s.copyWith(liveOpening: true));
+  }
+
+  /// rc:tablet:state — مصدر الحقيقة للوضع والفرشاة (من دور pc حصرًا — الجسر ينقّي)
+  void _onTabletState(dynamic raw) {
+    final m = _map(raw);
+    if (m == null) return;
+    _patch((s) => s.copyWith(tabletState: m));
+  }
+
+  /// rc:tablet:cmd — get/set إعدادات اللوحة (الجسر يبوّبها بالجلسة §20.ج)
+  void tabletCmd(Map<String, dynamic> payload) {
+    final sk = _socket;
+    if (sk == null || !sk.connected) return;
+    sk.emit(RcEvents.tabletCmd, payload);
   }
 
   final _state = StreamController<RcUiState>.broadcast();
@@ -276,6 +296,8 @@ class ControllerService {
       bind(RcEvents.session, _onSession);
       // الجولة 4 (عقد §18) — دورة حياة القناة الحية
       bind(RcEvents.liveReady, _onLiveReady);
+      // الجولة 4 مرحلة ② (عقد §20) — حالة لوحة الرسم من الكمبيوتر
+      bind(RcEvents.tabletState, _onTabletState);
 
       socket.connect();
       _socket = socket;
@@ -480,10 +502,11 @@ class ControllerService {
   }
 
   /// الجولة 4 (عقد §18) — قلم حي فوق UDP (لوحة الرسم): ضغط وميل كاملان
+  /// الجولة 4 مرحلة ② (عقد §20) — + أداة (قلم/ممحاة/إصبع — flags bits1-2)
   void sendPen(double nx, double ny, double pressure,
-      {int tiltX = 0, int tiltY = 0, required PenPhase phase, int buttons = 0}) {
+      {int tiltX = 0, int tiltY = 0, required PenPhase phase, int buttons = 0, int tool = LiveChannel.penToolPen}) {
     if (_sessionReadyForLive) {
-      live.sendPen(nx, ny, pressure, tiltX: tiltX, tiltY: tiltY, phase: phase, buttons: buttons);
+      live.sendPen(nx, ny, pressure, tiltX: tiltX, tiltY: tiltY, phase: phase, buttons: buttons, tool: tool);
     }
   }
 

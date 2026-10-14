@@ -144,6 +144,12 @@ class RcEvents {
   static const String liveReady = 'rc:live-ready';
   static const String liveStats = 'rc:live-stats';
 
+  // الجولة 4 مرحلة ② (عقد §20) — لوحة الرسم:
+  // إرسال: rc:tablet:cmd {cmd: get|set, mode?, pressure?, decKey?, incKey?, levels?, modifier?}
+  // استقبال: rc:tablet:state {mode, available, note, brush{...}, stats} — من دور pc حصرًا
+  static const String tabletCmd = 'rc:tablet:cmd';
+  static const String tabletState = 'rc:tablet:state';
+
   // استقبال
   static const String desktopClipboard = 'desktop:clipboard'; // {text, at?}
   static const String desktopState = 'desktop:state';

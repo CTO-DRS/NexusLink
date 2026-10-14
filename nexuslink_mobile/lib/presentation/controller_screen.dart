@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/controller_service.dart';
+import 'tablet_screen.dart';
 import '../state/controller_providers.dart';
 import '../state/transfer_providers.dart';
 
@@ -1034,6 +1035,24 @@ class _HandTab extends StatelessWidget {
             const SizedBox(height: 8),
             Text('rctl.hand.explain'.tr(),
                 style: TextStyle(fontSize: 10.5, color: Theme.of(context).hintColor)),
+          ],
+        ),
+        // الجولة 4 مرحلة ② (عقد §20) — لوحة الرسم الاحترافية
+        _Card(
+          title: 'tablet.entry'.tr(),
+          icon: Icons.draw_rounded,
+          children: [
+            Text('tablet.entryDesc'.tr(),
+                style: TextStyle(fontSize: 10.5, color: Theme.of(context).hintColor)),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const TabletScreen()),
+              ),
+              icon: const Icon(Icons.draw_rounded, size: 16),
+              label: Text('tablet.open'.tr(), style: const TextStyle(fontSize: 12)),
+            ),
           ],
         ),
       ],
