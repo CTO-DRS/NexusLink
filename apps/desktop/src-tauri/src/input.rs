@@ -89,7 +89,12 @@ fn exec_channel(app: &tauri::AppHandle) -> mpsc::Sender<InputMsg> {
                             exec_events(en, &events, &app);
                             let _ = done.send(()); // اكتمل الحقن الفعلي — المستدعي يقيس المدة
                         }
-                        InputMsg::ResetDrag => exec::reset_drag(en),
+                        InputMsg::ResetDrag => {
+                            exec::reset_drag(en);
+                            // §20 — تصفير حالة الفرشاة/اللوحة مع نهاية الجلسة
+                            exec::brush_reset();
+                            crate::tablet::session_ended();
+                        }
                     }
                 }
             });

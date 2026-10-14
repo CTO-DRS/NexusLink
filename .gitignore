@@ -83,3 +83,4 @@ tool-results/
 yarn-debug.log*
 yarn-error.log*
 scripts/live-verify/target/
+scripts/tablet-verify/target/

@@ -204,6 +204,14 @@ fn absorb(app: &tauri::AppHandle, buf: &[u8], batch: &mut Vec<Value>, ts_newest:
             GYRO_COUNT.fetch_add(1, Ordering::Relaxed);
             return;
         }
+        // الجولة 4 مرحلة ② (عقد §20) — وضع اللوحة الافتراضية (لينكس uinput):
+        // القلم يستهلك هنا حصرًا خلال جلسة نشطة (بوابة §13 فحصها المستهلك
+        // حتمًا أيضًا) — خارج الوضع/المنصة يمر لمسار الماوس المطلق كالمعتاد.
+        core::Payload::Pen { nx, ny, pressure, tilt_x, tilt_y, phase, buttons, tool } => {
+            if crate::tablet::consume_pen(nx, ny, pressure, tilt_x, tilt_y, phase, buttons, tool) {
+                return;
+            }
+        }
         _ => {}
     }
     let events = core::packet_to_events(&h, &p);

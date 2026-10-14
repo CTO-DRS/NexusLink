@@ -30,6 +30,10 @@ mod settings;
 mod shortcuts;
 mod sync;
 mod sync_core;
+// الجولة 4 مرحلة ② (عقد §20) — لوحة الرسم: أوضاع القلم + اللوحة الافتراضية
+mod tablet;
+#[cfg(target_os = "linux")]
+mod tablet_uinput;
 mod tray;
 // FA-harden (عقد §16) — المحدّث الموقّع + سجل الإصدارات (بند 2)
 mod updater;
@@ -171,6 +175,8 @@ fn main() {
             vdisplay::vdisplay_status,
             vdisplay::vdisplay_enable,
             vdisplay::vdisplay_disable,
+            tablet::tablet_config,
+            tablet::tablet_config_set,
         ])
         .on_window_event(|window, event| match event {
             // إغلاق → إخفاء إلى الـ Tray (قابل للتعطيل من قائمة الـ Tray)

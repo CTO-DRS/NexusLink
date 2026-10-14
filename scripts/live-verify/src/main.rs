@@ -55,6 +55,8 @@ fn main() {
     event_mapping();
     section("3.ب) الدمج الحي (latest-wins)");
     coalesce_vectors();
+    section("3.ج) الجولة 4 مرحلة ② — أداة القلم + محرك الفرشاة (عقد §20)");
+    tablet_vectors();
     section("4) UDP loopback حقيقي + حقن enigo فعلي (Xvfb)");
     udp_loopback_injection();
     let p = PASS.load(Ordering::SeqCst);
@@ -71,16 +73,16 @@ fn main() {
 // ---------------------------------------------------------------------------
 fn protocol_vectors() {
     // pen: ترميز→فك دورة كاملة
-    let pkt = core::encode_pen(7, 12345, &KEY, 0.25, 0.75, 0.6, -30, 45, core::PEN_DOWN, 1);
+    let pkt = core::encode_pen(7, 12345, &KEY, 0.25, 0.75, 0.6, -30, 45, core::PEN_DOWN, 1, core::TOOL_PEN);
     check("pen: الطول التعاقدي 32 بايت (22 رأس + 10)", pkt.len() == 32, format!("len={}", pkt.len()));
     let (h, p) = core::parse(&pkt).expect("pen parse");
     check("pen: الرأس (type/seq/ts/key)", h.ptype == core::TYPE_PEN && h.seq == 7 && h.ts == 12345 && h.key == KEY, format!("{h:?}"));
     match p {
-        core::Payload::Pen { nx, ny, pressure, tilt_x, tilt_y, phase, buttons } => {
-            check("pen: الحقول (nx/ny/pressure/tilt/phase/buttons)",
+        core::Payload::Pen { nx, ny, pressure, tilt_x, tilt_y, phase, buttons, tool } => {
+            check("pen: الحقول (nx/ny/pressure/tilt/phase/buttons/tool)",
                 (nx - 0.25).abs() < 1e-4 && (ny - 0.75).abs() < 1e-4 && (pressure - 0.6).abs() < 1e-4
-                    && tilt_x == -30 && tilt_y == 45 && phase == core::PEN_DOWN && buttons == 1,
-                format!("pen={nx},{ny},{pressure},{tilt_x},{tilt_y},{phase},{buttons}"));
+                    && tilt_x == -30 && tilt_y == 45 && phase == core::PEN_DOWN && buttons == 1 && tool == core::TOOL_PEN,
+                format!("pen={nx},{ny},{pressure},{tilt_x},{tilt_y},{phase},{buttons},{tool}"));
         }
         other => check("pen: نوع الحمولة", false, format!("{other:?}")),
     }
@@ -179,14 +181,14 @@ fn seq_vectors() {
 // ---------------------------------------------------------------------------
 fn event_mapping() {
     // pen hover/move → pointer move + الضغط محمول
-    let pkt = core::encode_pen(1, 1, &KEY, 0.3, 0.4, 0.85, 0, 0, core::PEN_MOVE, 0);
+    let pkt = core::encode_pen(1, 1, &KEY, 0.3, 0.4, 0.85, 0, 0, core::PEN_MOVE, 0, core::TOOL_PEN);
     let (h, p) = core::parse(&pkt).unwrap();
     let evs = core::packet_to_events(&h, &p);
     check("pen move → حدث pointer واحد", evs.len() == 1 && evs[0]["kind"] == "pointer", format!("{}", evs.len()));
     check("pen: الضغط محمول في الحدث (0.85 ± تكميم)", (evs[0]["pressure"].as_f64().unwrap_or(0.0) - 0.85).abs() < 1e-4, format!("{}", evs[0]));
     check("pen: action=move للطور الحركي", evs[0]["action"] == "move", format!("{}", evs[0]["action"]));
 
-    let pkt = core::encode_pen(2, 1, &KEY, 0.3, 0.4, 0.9, 0, 0, core::PEN_DOWN, 0);
+    let pkt = core::encode_pen(2, 1, &KEY, 0.3, 0.4, 0.9, 0, 0, core::PEN_DOWN, 0, core::TOOL_PEN);
     let (h, p) = core::parse(&pkt).unwrap();
     let evs = core::packet_to_events(&h, &p);
     check("pen down → action=down (لوحة الرسم تحاكي الضغط)", evs[0]["action"] == "down", format!("{}", evs[0]));
@@ -258,6 +260,68 @@ fn coalesce_vectors() {
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// 3.ج) الجولة 4 مرحلة ② (عقد §20) — أداة القلم في flags bits1-2 + الفرشاة
+// ---------------------------------------------------------------------------
+fn tablet_vectors() {
+    // الأداة في الرأس: ممحاة/إصبع/محجوز
+    let pkt = core::encode_pen(9, 1, &KEY, 0.5, 0.5, 0.7, 0, 0, core::PEN_DOWN, 0, core::TOOL_ERASER);
+    let (_, p) = core::parse(&pkt).unwrap();
+    check("pen eraser: فك الأداة من flags bits1-2", matches!(p, core::Payload::Pen { tool: core::TOOL_ERASER, .. }), format!("{p:?}"));
+    let evs = core::packet_to_events(&core::Header { ptype: core::TYPE_PEN, flags: (core::TOOL_ERASER << 1), seq: 9, ts: 1, key: KEY }, &p);
+    check("pen eraser: الأداة في الحدث", evs[0]["tool"] == "eraser", format!("{}", evs[0]));
+
+    let pkt = core::encode_pen(10, 1, &KEY, 0.5, 0.5, 0.4, 0, 0, core::PEN_MOVE, 0, core::TOOL_FINGER);
+    let (_, p) = core::parse(&pkt).unwrap();
+    let evs = core::packet_to_events(&core::Header { ptype: core::TYPE_PEN, flags: (core::TOOL_FINGER << 1), seq: 10, ts: 1, key: KEY }, &p);
+    check("pen finger: الأداة في الحدث", evs[0]["tool"] == "finger", format!("{}", evs[0]));
+
+    // flags الأخرى سليمة: القلم الافتراضي flags=0 — والماوس النسبي bit0 لم يمس
+    let pkt = core::encode_pen(11, 1, &KEY, 0.5, 0.5, 0.4, 0, 0, core::PEN_MOVE, 0, core::TOOL_PEN);
+    check("pen: flags=0 للأداة الافتراضية", pkt[4] == 0, format!("flags={}", pkt[4]));
+    let pkt = core::encode_mouse(12, 1, &KEY, true, 3.0, -3.0, core::ACT_MOVE, 0, 0);
+    check("mouse نسبية: flags bit0 كما كان (§18)", pkt[4] & 0x01 == 1, format!("flags={}", pkt[4]));
+
+    // أداة محجوزة (3) → تُطبع قلمًا عند الترميز والفك يتسامح (توافق أمامي)
+    let pkt = core::encode_pen(13, 1, &KEY, 0.5, 0.5, 0.4, 0, 0, core::PEN_MOVE, 0, 3);
+    check("pen: أداة محجوزة تُرمز قلمًا (flags=0)", pkt[4] == 0, format!("flags={}", pkt[4]));
+    let (_, p) = core::parse(&pkt).unwrap();
+    let evs = core::packet_to_events(&core::Header { ptype: core::TYPE_PEN, flags: (3 << 1), seq: 13, ts: 1, key: KEY }, &p);
+    check("pen: فك أداة محجوزة من شبكة → قلم", evs[0]["tool"] == "pen", format!("{}", evs[0]));
+
+    // الفرشاة — الحساب النقي (exec = input_exec الحقيقي)
+    check("brush_level: 0.5×24 = 12", exec::brush_level(0.5, 24) == 12, format!("{}", exec::brush_level(0.5, 24)));
+    check("brush_level: الحواف 0 و1", exec::brush_level(0.0, 24) == 0 && exec::brush_level(1.0, 24) == 23, "");
+    check("brush_level: غير المنتهي → 0", exec::brush_level(f64::NAN, 24) == 0, "");
+    check("brush_level: levels<2 تعامل كـ2 (سقف مستوى 1)", exec::brush_level(0.9, 0) <= 1 && exec::brush_level(1.0, 1) <= 1, format!("{}/{}", exec::brush_level(0.9, 0), exec::brush_level(1.0, 1)));
+    let (steps, up) = exec::brush_steps(3, 8);
+    check("brush_steps: صعود بخطوات مقصوصة 4", steps == 4 && up, format!("{steps}/{up}"));
+    let (steps, up) = exec::brush_steps(10, 2);
+    check("brush_steps: هبوط −8 → 4 خطوات لأسفل", steps == 4 && !up, format!("{steps}/{up}"));
+    let (steps, _) = exec::brush_steps(5, 5);
+    check("brush_steps: لا فرق → صفر", steps == 0, "");
+
+    // دخان الحقن: ضربة كاملة بقيم ضغط متدرجة — كلها Ok على Xvfb (XTEST)
+    exec::set_brush_cfg(exec::BrushCfg { mode: exec::BRUSH_KEYS, dec_ch: '[', inc_ch: ']', levels: 8, modifier: exec::MOD_NONE });
+    let mut pen = match enigo::Enigo::new(&enigo::Settings::default()) {
+        Ok(e) => e,
+        Err(e) => {
+            check("brush دخان: تهيئة enigo", false, format!("{e}"));
+            exec::set_brush_cfg(exec::BrushCfg::default());
+            return;
+        }
+    };
+    let stroke: Vec<Result<String, String>> = vec![
+        exec::apply_event(&mut pen, &serde_json::json!({"kind":"pointer","nx":0.5,"ny":0.5,"action":"down","pressure":0.2,"tool":"pen","source":"pen-live"})),
+        exec::apply_event(&mut pen, &serde_json::json!({"kind":"pointer","nx":0.52,"ny":0.5,"action":"move","pressure":0.4,"tool":"pen","source":"pen-live"})),
+        exec::apply_event(&mut pen, &serde_json::json!({"kind":"pointer","nx":0.54,"ny":0.5,"action":"move","pressure":0.9,"tool":"pen","source":"pen-live"})),
+        exec::apply_event(&mut pen, &serde_json::json!({"kind":"pointer","nx":0.56,"ny":0.5,"action":"move","pressure":0.1,"tool":"finger","source":"pen-live"})),
+        exec::apply_event(&mut pen, &serde_json::json!({"kind":"pointer","nx":0.5,"ny":0.5,"action":"up","source":"pen-live"})),
+    ];
+    check("brush دخان: ضربة كاملة بلا أخطاء", stroke.iter().all(|r| r.is_ok()), format!("{:?}", stroke.iter().filter(|r| r.is_err()).collect::<Vec<_>>()));
+    exec::set_brush_cfg(exec::BrushCfg::default());
+}
+
 // 4) UDP loopback حقيقي + حقن enigo فعلي — هدف <20ms إلزامًا
 //    نفس مسار live.rs حرفيًا: أول حزمة حاجزة → تفريغ غير حاجز (≤16) →
 //    دمج حي (latest-wins) → حقن الدفعة متزامنًا → قياس كمون أحدث حزمة
@@ -297,7 +361,7 @@ fn udp_loopback_injection() {
         for i in 0..N {
             let ts = now32();
             let pkt = match i % 4 {
-                0 => core::encode_pen(seq, ts, &KEY, (i % 100) as f64 / 100.0, 0.5, 0.5 + (i % 50) as f64 / 100.0, 0, 0, if i % 8 == 0 { core::PEN_DOWN } else { core::PEN_MOVE }, 0),
+                0 => core::encode_pen(seq, ts, &KEY, (i % 100) as f64 / 100.0, 0.5, 0.5 + (i % 50) as f64 / 100.0, 0, 0, if i % 8 == 0 { core::PEN_DOWN } else { core::PEN_MOVE }, 0, core::TOOL_PEN),
                 1 => core::encode_touch(seq, ts, &KEY, (i % 100) as f64 / 100.0, 0.4, core::ACT_CLICK, 0),
                 2 => core::encode_mouse(seq, ts, &KEY, true, ((i % 40) as isize - 20) as f64, ((i % 30) as isize - 15) as f64, core::ACT_MOVE, (i % 2) as u8, 0),
                 _ => core::encode_mouse(seq, ts, &KEY, false, (i % 100) as f64 / 100.0, 0.6, core::ACT_MOVE, 0, 0),
@@ -404,7 +468,7 @@ fn udp_loopback_injection() {
     let mut single: Vec<u64> = Vec::with_capacity(20);
     for _ in 0..20 {
         let ts = now32();
-        let pkt = core::encode_pen(0xF1, ts, &KEY, 0.5, 0.5, 0.7, 0, 0, core::PEN_DOWN, 0);
+        let pkt = core::encode_pen(0xF1, ts, &KEY, 0.5, 0.5, 0.7, 0, 0, core::PEN_DOWN, 0, core::TOOL_PEN);
         peer.send(&pkt).unwrap();
         let _ = sink.set_read_timeout(Some(Duration::from_millis(500)));
         let mut got = 0u64;

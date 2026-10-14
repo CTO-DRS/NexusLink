@@ -73,6 +73,10 @@ tauri-plugin-updater = "2"
 # + screensaver (FA-harden — كشف الخمول XScreenSaver)
 [target.'cfg(target_os = "linux")'.dependencies]
 x11rb = { version = "0.13", features = ["randr", "screensaver"] }
+# الجولة 4 مرحلة ② (عقد §20) — اللوحة الافتراضية: ioctls و/dev/uinput
+# (أساس النواة الرسمي — بلا سائق خارجي). libc موجودة أصلاً في شجرة الحل
+# (enigo/x11rb/notify) — تفعيل استخدام مباشر موثق.
+libc = "0.2"
 
 # الالتقاط: ماك فقط عبر scap (ScreenCaptureKit — Options/Target/FrameType من
 # مصدر v0.0.8 المنشورة حرفيًا). لينكس لا يلمسها إطلاقًا.
