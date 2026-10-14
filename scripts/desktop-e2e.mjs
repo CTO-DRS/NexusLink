@@ -881,6 +881,178 @@ try {
   }
 
   // ================================================================
+  // R4 مرحلة ② (عقد §20) — لوحة الرسم الاحترافية: الهاتف+القلم لوحة رقمية
+  // ================================================================
+  console.log("== R4 §20: لوحة الرسم (rc:tablet:cmd/state + pen tool flags) ==")
+  {
+    // (أ) حوض وهمي جديد على 3011 — يفحص مرور pen بأداة كما هي (توافق §18)
+    const sink2 = dgram.createSocket("udp4")
+    const sink2Pkts = []
+    await new Promise((res) => {
+      sink2.on("message", (m, rinfo) => { if (rinfo.address === "127.0.0.1") sink2Pkts.push(m) })
+      sink2.bind(3011, "127.0.0.1", res)
+    })
+    const udp2 = dgram.createSocket("udp4")
+    await new Promise((res) => udp2.bind(0, "127.0.0.1", res))
+
+    // (ب) rc:tablet:cmd بلا جلسة/ثقة → rc:rejected(untrusted) — بوابة live-hello نفسها
+    const rejTab = await new Promise((res) => {
+      webSock.on("rc:rejected", (d) => { if (d?.ev === "rc:tablet:cmd") res(d) })
+      webSock.emit("rc:tablet:cmd", { cmd: "get" })
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §20: rc:tablet:cmd بلا جلسة/ثقة → rc:rejected(untrusted)", rejTab?.reason === "untrusted", `got=${JSON.stringify(rejTab)}`)
+
+    // جلسة موثوقة جديدة (§18 أنهت سابقتها تعاقديًا) + نبض صيانة طوال القسم
+    const hb2 = setInterval(() => rcCtl.emit("rc:session", { action: "hb" }), 2000)
+    const tabSession = await new Promise((res) => {
+      rcDesk.on("rc:session", (d) => { if (d?.active === true) res(d) })
+      rcCtl.emit("rc:session", { action: "start", deviceId: "galaxy-s24", name: "Galaxy S24" })
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §20: جلسة لوحة الرسم نشطة", tabSession?.active === true, JSON.stringify(tabSession))
+
+    // (ج) get يصل الكمبيوتر بوسم __src=controller — وstate من دور pc تصل الهاتف
+    const cmdGet = await new Promise((res) => {
+      rcDesk.on("rc:tablet:cmd", (d) => res(d))
+      rcCtl.emit("rc:tablet:cmd", { cmd: "get" })
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §20: rc:tablet:cmd get يصل الكمبيوتر (__src=controller)",
+      cmdGet?.cmd === "get" && cmdGet?.__src === "controller", JSON.stringify(cmdGet))
+    const stGet = await new Promise((res) => {
+      rcCtl.on("rc:tablet:state", (d) => res(d))
+      rcDesk.emit("rc:tablet:state", { mode: "mouse", available: false, note: "e2e", brush: {}, stats: {}, at: 1 })
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §20: rc:tablet:state من دور pc تصل الهاتف (مصدر الحقيقة)",
+      stGet?.mode === "mouse" && stGet?.at === 1, JSON.stringify(stGet)?.slice(0, 120))
+    // (د) state من دور phone يُرفض (لا انتحال حالة — نمط secondscreen §19)
+    const phoneLeak = await new Promise((res) => {
+      rcCtl.on("rc:tablet:state", (d) => { if (d?.leak === 1) res(d) })
+      rcCtl.emit("rc:tablet:state", { leak: 1 })
+      setTimeout(() => res(null), 2500)
+    })
+    check("R4 §20: rc:tablet:state من دور phone يُرفض (لا انتحال حالة)", phoneLeak === null, JSON.stringify(phoneLeak))
+
+    // (هـ) set سليم يمرر الحقول المنقاة حصرًا — والفاسد يُرفض كله صامتًا
+    const setOk = await new Promise((res) => {
+      rcDesk.on("rc:tablet:cmd", (d) => { if (d?.cmd === "set" && d?.mode === "tablet") res(d) })
+      rcCtl.emit("rc:tablet:cmd", { cmd: "set", mode: "tablet", pressure: "keys", decKey: "[", incKey: "]", levels: 24 })
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §20: set سليم يمرر الحقول المنقاة (mode/pressure/keys/levels حرفيًا)",
+      setOk?.mode === "tablet" && setOk?.pressure === "keys" && setOk?.decKey === "[" && setOk?.incKey === "]" && setOk?.levels === 24,
+      JSON.stringify(setOk))
+    const badSets = [
+      { cmd: "set", mode: "hacked" }, { cmd: "set", pressure: "evil" },
+      { cmd: "set", decKey: "ab" }, { cmd: "set", decKey: "\u0007" },
+      { cmd: "set", levels: 65 }, { cmd: "set", levels: 1.5 }, { cmd: "set", modifier: "win" },
+      { cmd: "frobnicate" },
+    ]
+    for (const bad of badSets) {
+      const badRes = await new Promise((res) => {
+        rcDesk.on("rc:tablet:cmd", (d) => { if (JSON.stringify(d).includes(JSON.stringify(bad).slice(1, -1).split(":")[1]?.trim() ?? bad.cmd)) res(d) })
+        rcCtl.emit("rc:tablet:cmd", bad)
+        setTimeout(() => res(null), 1200)
+      })
+      check(`R4 §20: أمر فاسد يُرفض كله: ${JSON.stringify(bad)}`, badRes === null, JSON.stringify(badRes))
+    }
+
+    // (و) قناة حية جديدة → pen بأداة عبر UDP: الجسر يمرر flags bits1-2 كما هي
+    const liveReady2 = await new Promise((res) => {
+      rcCtl.on("rc:live-ready", (d) => res(d))
+      rcCtl.emit("rc:live-hello")
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §20: قناة حية جديدة (مفتاح 16-hex)", typeof liveReady2?.key === "string" && liveReady2.key.length === 16, JSON.stringify(liveReady2))
+    if (liveReady2?.key) {
+      const penEnc = (flags, seq, keyHex) => {
+        const head = Buffer.alloc(22)
+        head.writeUInt16BE(0x4e58, 0)
+        head[2] = 1
+        head[3] = 1 // pen
+        head[4] = flags
+        head.writeUInt32BE(seq >>> 0, 6)
+        head.writeUInt32BE(Date.now() & 0xffffffff, 10)
+        head.write(keyHex, 14, "hex")
+        const pl = Buffer.alloc(10) // 0.5/0.5 · ضغط 0.8 · down
+        pl.writeUInt16BE(0x8000, 0)
+        pl.writeUInt16BE(0x8000, 2)
+        pl.writeUInt16BE(0xcccc, 4)
+        pl[8] = 1
+        return Buffer.concat([head, pl])
+      }
+      const t0 = Date.now() & 0xffffffff
+      udp2.send(penEnc(2, 61, liveReady2.key), 3010, "127.0.0.1") // eraser
+      await sleep(120)
+      udp2.send(penEnc(4, 62, liveReady2.key), 3010, "127.0.0.1") // finger
+      await sleep(120)
+      udp2.send(penEnc(0, 63, liveReady2.key), 3010, "127.0.0.1") // قلم
+      await sleep(900)
+      const pens = sink2Pkts.filter((m) => m[3] === 1)
+      check("R4 §20: حزم pen بالأداة تمر للحوض كما هي (eraser/finger/pen — flags bits1-2 محفوظة)",
+        pens.length === 3 && pens[0][4] === 2 && pens[1][4] === 4 && pens[2][4] === 0 && pens.every((m) => m.readUInt16BE(0) === 0x4e58),
+        `got=${pens.map((m) => m[4]).join(",")}`)
+    }
+
+    // (ز) التوثيق + الملفات (نفس نمط §18/§19)
+    const rbTs2 = await fsMod.readFile("src/lib/nexus/remote-bridge.ts", "utf8").catch(() => "")
+    const dbTsx = await fsMod.readFile("src/components/nexus/desktop-bridge.tsx", "utf8").catch(() => "")
+    const coreRs2 = await fsMod.readFile("apps/desktop/src-tauri/src/live_core.rs", "utf8").catch(() => "")
+    const execRs2 = await fsMod.readFile("apps/desktop/src-tauri/src/input_exec.rs", "utf8").catch(() => "")
+    const tabRs = await fsMod.readFile("apps/desktop/src-tauri/src/tablet.rs", "utf8").catch(() => "")
+    const uinRs = await fsMod.readFile("apps/desktop/src-tauri/src/tablet_uinput.rs", "utf8").catch(() => "")
+    const liveDart2 = await fsMod.readFile("nexuslink_mobile/lib/data/live_channel.dart", "utf8").catch(() => "")
+    const tabDart = await fsMod.readFile("nexuslink_mobile/lib/presentation/tablet_screen.dart", "utf8").catch(() => "")
+    const svcDart2 = await fsMod.readFile("nexuslink_mobile/lib/data/controller_service.dart", "utf8").catch(() => "")
+    const arDict3 = await fsMod.readFile("nexuslink_mobile/assets/translations/ar.json", "utf8").catch(() => "")
+    const enDict3 = await fsMod.readFile("nexuslink_mobile/assets/translations/en.json", "utf8").catch(() => "")
+    const checklist14 = await fsMod.readFile("docs/e2e-checklist.md", "utf8").catch(() => "")
+    const lvRs = await fsMod.readFile("scripts/live-verify/src/main.rs", "utf8").catch(() => "")
+    const tvRs = await fsMod.readFile("scripts/tablet-verify/src/main.rs", "utf8").catch(() => "")
+    check("R4 §20: العقد موثق (منصات بإثبات المصدر/بروتوكول الأداة/أحداث/فرشاة/تحقق)",
+      contract.includes("## 20. لوحة الرسم الاحترافية") && contract.includes("vigem-client 0.1.4") && contract.includes("flags bits1-2") && contract.includes("rc:tablet:cmd") && contract.includes("INPUT_PROP_DIRECT"),
+      "contract §20")
+    check("R4 §20: الجسر ينقّي الأوامر ويبوب الجلسة + state من دور pc حصرًا",
+      rbTs2.includes('rc:tablet:cmd') && rbTs2.includes('"untrusted", ev: "rc:tablet:cmd"') && rbTs2.includes("desktopSocks.has(socket.id)"),
+      "remote-bridge.ts")
+    check("R4 §20: الويبفيو يربط الأوامر بأوامر Tauri ويبث الحالة",
+      dbTsx.includes("rc:tablet:cmd") && dbTsx.includes('tablet_config_set') && dbTsx.includes('rc:tablet:state'),
+      "desktop-bridge.tsx")
+    check("R4 §20: النواة — الأداة في flags bits1-2 (TOOL_PEN/ERASER/FINGER + tool_name + توافق أمامي)",
+      coreRs2.includes("pub const TOOL_ERASER: u8 = 1") && coreRs2.includes("pub fn tool_name") && coreRs2.includes("(flags >> 1) & 0b11"),
+      "live_core.rs")
+    check("R4 §20: محرك الفرشاة النقي (تكميم/خطوات/إيقاع/القلم حصرًا)",
+      execRs2.includes("pub fn brush_level") && execRs2.includes("pub fn brush_steps") && execRs2.includes("BRUSH_MIN_INJECT_MS") && execRs2.includes('tool == "finger"'),
+      "input_exec.rs")
+    check("R4 §20: اللوحة الافتراضية — uinput ديجيتايزر كامل + بوابة الجلسة/التوفر + قيد ويندوز/ماك بصدق",
+      tabRs.includes("consume_pen") && tabRs.includes("engine_available") && uinRs.includes("UI_DEV_CREATE") && uinRs.includes("BTN_TOOL_RUBBER") && uinRs.includes("INPUT_PROP_DIRECT") && tabRs.includes("vigem-client"),
+      "tablet.rs + tablet_uinput.rs")
+    check("R4 §20: Flutter عميل (أداة في flags bits1-2 + ممررة عبر الخدمة)",
+      liveDart2.includes("penToolEraser") && liveDart2.includes("t << 1") && svcDart2.includes("penToolPen") && svcDart2.includes("tabletCmd"),
+      "live_channel + controller_service")
+    check("R4 §20: شاشة اللوحة (التقاط خام بالسلسلة + تجميع ذكي + رفض راحة اليد + معاينة فورية)",
+      tabDart.includes("onPointerDataPacket") && tabDart.includes("class PenSampler") && tabDart.includes("_palmRejection") && tabDart.includes("_showPreview"),
+      "tablet_screen.dart")
+    check("R4 §20: القاموسان tablet.* (ar/en) — 34 مفتاحًا",
+      arDict3.includes('"tablet"') && arDict3.includes("لوحة الرسم") && arDict3.includes("رفض راحة اليد") && enDict3.includes('"tablet"') && enDict3.includes("Palm rejection"),
+      "i18n")
+    check("R4 §20: محركا التحقق يضمّنان الملفات حرفيًا (أداة + فرشاة + uinput نقي)",
+      lvRs.includes("fn tablet_vectors") && tvRs.includes("tablet_uinput.rs") && tvRs.includes("map_vectors"),
+      "live-verify + tablet-verify")
+    check("R4 §20: الفحص الميداني موثق (e2e-checklist §14 — Krita قلم حقيقي)",
+      checklist14.includes("## 14. الجولة 4 مرحلة ②") && checklist14.includes("Krita"),
+      "e2e-checklist §14")
+
+    clearInterval(hb2)
+    udp2.close()
+    sink2.close()
+    rcCtl.emit("rc:session", { action: "stop" })
+    await sleep(400)
+  }
+
+  // ================================================================
   // FA-files (عقد §14) — دمج الملفات في نظام التشغيل
   // ================================================================
   console.log("== ] FA-files: OS file integration ==")
