@@ -1,0 +1,17 @@
+[package]
+name = "gyro-verify"
+version = "0.1.0"
+edition = "2021"
+
+# الجولة 4 مرحلة ③ (عقد §21) — محرك تحقق التحكم المتقدم.
+# يُضمِّن حرفيًا: gyro_core.rs (النواة النقية) + input_exec.rs (apply_key
+# بضغط/إفلات الجيمباد) + live_core.rs (ترميز gyro flags) + gyro.rs بعد
+# تجريد #[tauri::command] (build.rs) — المستهلك الزمني كاملًا ضد حشيات
+# input/tauri. نفس تبعيات النواة: enigo + serde_json — بلا crates جديدة.
+[dependencies]
+serde_json = "1"
+enigo = { version = "0.2.1", default-features = false, features = ["x11rb"] }
+
+[[bin]]
+name = "gyro-verify"
+path = "src/main.rs"

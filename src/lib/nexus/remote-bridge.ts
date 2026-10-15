@@ -529,6 +529,63 @@ export function ensureRemoteBridge() {
         io2.emit("rc:tablet:state", data)
       })
 
+      // -----------------------------------------------------------------
+      // الجولة 4 مرحلة ③ (عقد §21) — التحكم المتقدم (جيمباد الحساسات /
+      // الماوس الهوائي المعاير / عارض العروض): rc:gyro:cmd من هاتف موثوق
+      // خلال جلسة نشطة حصرًا (بوابة live-hello نفسها — نمط tablet §20.ج).
+      // التنقية هنا: الحقول المرسلة حصرًا والفاسد يُرفض كله — لا جزئيات.
+      // -----------------------------------------------------------------
+      socket.on("rc:gyro:cmd", (data: Record<string, unknown>) => {
+        const trust = controllerTrust.get(socket.id)
+        if (!trust || !session.active || session.socketId !== socket.id) {
+          socket.emit("rc:rejected", { reason: "untrusted", ev: "rc:gyro:cmd" })
+          return
+        }
+        const cmd = String(data?.cmd ?? "")
+        if (cmd !== "get" && cmd !== "set") return
+        const payload: Record<string, unknown> = { cmd }
+        if (cmd === "set") {
+          const mode = data.mode
+          if (mode !== undefined && !["off", "gamepad", "airmouse", "presenter"].includes(String(mode))) return
+          if (mode !== undefined) payload.mode = mode
+          const template = data.template
+          if (template !== undefined && !["platformer", "racing", "fighting", "custom"].includes(String(template))) return
+          if (template !== undefined) payload.template = template
+          for (const [k, lo, hi] of [
+            ["deadzoneDeg", 5, 45], ["sens", 0.5, 5], ["shakeDegS", 3, 30], ["tiltDeg", 10, 60],
+          ] as const) {
+            const v = data[k]
+            if (v === undefined) continue
+            const n = Number(v)
+            if (!Number.isFinite(n) || n < lo || n > hi) return
+            payload[k] = n
+          }
+          const laser = data.laser
+          if (laser !== undefined && typeof laser !== "boolean") return
+          if (laser !== undefined) payload.laser = laser
+          const calibrate = data.calibrate
+          if (calibrate !== undefined && typeof calibrate !== "boolean") return
+          if (calibrate !== undefined) payload.calibrate = calibrate
+          const NAMED_GYRO_KEYS = ["up", "down", "left", "right", "space", "enter", "esc", "tab", "shift", "ctrl", "pageup", "pagedown", "home", "end", "f5", "f11"]
+          for (const k of ["keyA", "keyB", "keyX", "keyY", "keyL", "keyR"] as const) {
+            const v = data[k]
+            if (v === undefined) continue
+            const s = String(v)
+            // المسافة مفتاح ألعاب صالح (قفز/فرامل) — المحرف المرئي 33..126 أو مسافة واحدة
+            const okSingle = s.length === 1 && (s === " " || (s.charCodeAt(0) >= 33 && s.charCodeAt(0) <= 126))
+            if (!okSingle && !NAMED_GYRO_KEYS.includes(s.trim().toLowerCase())) return
+            payload[k] = s
+          }
+        }
+        io2.emit("rc:gyro:cmd", { ...payload, __src: "controller" })
+      })
+
+      socket.on("rc:gyro:state", (data: Record<string, unknown>) => {
+        // من دور الكمبيوتر حصرًا — الهاتف لا يصدر حالة (نمط tablet:state §20)
+        if (!desktopSocks.has(socket.id)) return
+        io2.emit("rc:gyro:state", data)
+      })
+
       for (const ev of RC_INPUT) {
         socket.on(ev, (data: Record<string, unknown>) => {
           if (!gateInput(socket, ev)) return

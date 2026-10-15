@@ -199,9 +199,19 @@ fn absorb(app: &tauri::AppHandle, buf: &[u8], batch: &mut Vec<Value>, ts_newest:
     match p {
         // ping يرد عليه الجسر مباشرة — لا يصل هنا إلا انحرافًا: تجاهل صامت
         core::Payload::Ping | core::Payload::Pong => return,
-        // الجيروسكوب: بلا هدف حقن في هذه المرحلة — إحصاء فقط (مستهلكه مهمة الجيمباد)
-        core::Payload::Gyro { .. } => {
-            GYRO_COUNT.fetch_add(1, Ordering::Relaxed);
+        // الجيروسكوب: بلا وضع نشط → إحصاء فقط (كما كانت §18). الوضع النشط
+        // (عقد §21) يستهلكه gyro::consume_gyro — يترجمه لأحداث قياسية (key/move/
+        // presenter) عبر المسار القائم حصرًا — بلا مسار حقن موازٍ.
+        core::Payload::Gyro { ax, ay, az, gx, gy, gz } => {
+            let gyro_evs = crate::gyro::consume_gyro(h.flags, ax, ay, az, gx, gy, gz);
+            if gyro_evs.is_empty() {
+                GYRO_COUNT.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
+            if h.ts > *ts_newest {
+                *ts_newest = h.ts;
+            }
+            batch.extend(gyro_evs);
             return;
         }
         // الجولة 4 مرحلة ② (عقد §20) — وضع اللوحة الافتراضية (لينكس uinput):

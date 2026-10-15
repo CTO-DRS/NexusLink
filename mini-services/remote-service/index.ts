@@ -481,6 +481,63 @@ io.on('connection', (socket) => {
     io.emit('rc:tablet:state', data)
   })
 
+  // ---------------------------------------------------------------------------
+  // الجولة 4 مرحلة ③ (عقد §21) — التحكم المتقدم (مرآة الجسر المدمج حرفيًا):
+  // rc:gyro:cmd من هاتف موثوق خلال جلسة نشطة حصرًا — نفس تنقية §21.ج
+  // (الفاسد يُرفض كله) — وrc:gyro:state من دور الكمبيوتر حصرًا.
+  // ---------------------------------------------------------------------------
+  socket.on('rc:gyro:cmd', (data: Record<string, unknown>) => {
+    const trust = controllerTrust.get(socket.id)
+    if (!trust || !session.active || session.socketId !== socket.id) {
+      socket.emit('rc:rejected', { reason: 'untrusted', ev: 'rc:gyro:cmd' })
+      rcLog('رفض أوامر التحكم المتقدم: يتطلب جلسة تحكم نشطة من هاتف موثوق', 'info')
+      return
+    }
+    const cmd = String(data?.cmd ?? '')
+    if (cmd !== 'get' && cmd !== 'set') return
+    const payload: Record<string, unknown> = { cmd }
+    if (cmd === 'set') {
+      const mode = data.mode
+      if (mode !== undefined && !['off', 'gamepad', 'airmouse', 'presenter'].includes(String(mode))) return
+      if (mode !== undefined) payload.mode = mode
+      const template = data.template
+      if (template !== undefined && !['platformer', 'racing', 'fighting', 'custom'].includes(String(template))) return
+      if (template !== undefined) payload.template = template
+      for (const [k, lo, hi] of [
+        ['deadzoneDeg', 5, 45], ['sens', 0.5, 5], ['shakeDegS', 3, 30], ['tiltDeg', 10, 60],
+      ] as const) {
+        const v = data[k]
+        if (v === undefined) continue
+        const n = Number(v)
+        if (!Number.isFinite(n) || n < lo || n > hi) return
+        payload[k] = n
+      }
+      const laser = data.laser
+      if (laser !== undefined && typeof laser !== 'boolean') return
+      if (laser !== undefined) payload.laser = laser
+      const calibrate = data.calibrate
+      if (calibrate !== undefined && typeof calibrate !== 'boolean') return
+      if (calibrate !== undefined) payload.calibrate = calibrate
+      const NAMED_GYRO_KEYS = ['up', 'down', 'left', 'right', 'space', 'enter', 'esc', 'tab', 'shift', 'ctrl', 'pageup', 'pagedown', 'home', 'end', 'f5', 'f11']
+      for (const k of ['keyA', 'keyB', 'keyX', 'keyY', 'keyL', 'keyR'] as const) {
+        const v = data[k]
+        if (v === undefined) continue
+        const sv = String(v)
+        // المسافة مفتاح ألعاب صالح (قفز/فرامل) — المحرف المرئي 33..126 أو مسافة واحدة
+        const okSingle = sv.length === 1 && (sv === ' ' || (sv.charCodeAt(0) >= 33 && sv.charCodeAt(0) <= 126))
+        if (!okSingle && !NAMED_GYRO_KEYS.includes(sv.trim().toLowerCase())) return
+        payload[k] = sv
+      }
+    }
+    io.emit('rc:gyro:cmd', { ...payload, __src: 'controller' })
+  })
+
+  socket.on('rc:gyro:state', (data: Record<string, unknown>) => {
+    // من دور الكمبيوتر حصرًا — الهاتف لا يصدر حالة (نمط §20)
+    if (!desktopSocks.has(socket.id)) return
+    io.emit('rc:gyro:state', data)
+  })
+
   // ==== نقل أحداث الإدخال مع بوابة الطاقة ====
   for (const ev of RC_INPUT) {
     socket.on(ev, (data: Record<string, unknown>) => {

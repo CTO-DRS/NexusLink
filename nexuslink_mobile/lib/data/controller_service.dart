@@ -49,6 +49,9 @@ class RcUiState {
   // الجولة 4 مرحلة ② (عقد §20) — لوحة الرسم: حالة الكمبيوتر (rc:tablet:state)
   final Map<String, dynamic>? tabletState;
 
+  // الجولة 4 مرحلة ③ (عقد §21) — التحكم المتقدم: حالة الكمبيوتر (rc:gyro:state)
+  final Map<String, dynamic>? gyroState;
+
   const RcUiState({
     this.phase = RcBridgePhase.offline,
     this.desktopName = '',
@@ -72,6 +75,7 @@ class RcUiState {
     this.sessionHeartbeats = 0,
     this.liveOpening = false,
     this.tabletState,
+    this.gyroState,
     this.liveReady = false,
     this.liveRttMs = 0,
     this.liveSent = 0,
@@ -102,6 +106,7 @@ class RcUiState {
     int? sessionHeartbeats,
     bool? liveOpening,
     Map<String, dynamic>? tabletState,
+    Map<String, dynamic>? gyroState,
     bool? liveReady,
     int? liveRttMs,
     int? liveSent,
@@ -129,6 +134,7 @@ class RcUiState {
         sessionHeartbeats: sessionHeartbeats ?? this.sessionHeartbeats,
         liveOpening: liveOpening ?? this.liveOpening,
         tabletState: tabletState ?? this.tabletState,
+        gyroState: gyroState ?? this.gyroState,
         liveReady: liveReady ?? this.liveReady,
         liveRttMs: liveRttMs ?? this.liveRttMs,
         liveSent: liveSent ?? this.liveSent,
@@ -217,6 +223,41 @@ class ControllerService {
     sk.emit(RcEvents.tabletCmd, payload);
   }
 
+  // -------------------------------------------------------------------
+  // الجولة 4 مرحلة ③ (عقد §21) — التحكم المتقدم: جيمباد الحساسات/الماوس
+  // الهوائي المعاير/عارض العروض — الحالة من الكمبيوتر، والبث 100Hz فوق
+  // UDP (حزمة gyro §18/§21) نشط حصرًا (وضع مفعل + جلسة + قناة حية).
+  // -------------------------------------------------------------------
+
+  /// rc:gyro:state — مصدر الحقيقة للوضع والخريطة (من دور pc حصرًا)
+  void _onGyroState(dynamic raw) {
+    final m = _map(raw);
+    if (m == null) return;
+    _patch((s) => s.copyWith(gyroState: m));
+  }
+
+  /// rc:gyro:cmd — get/set إعدادات التحكم المتقدم (الجسر يبوّبها بالجلسة §21.ج)
+  void gyroCmd(Map<String, dynamic> payload) {
+    final sk = _socket;
+    if (sk == null || !sk.connected) return;
+    sk.emit(RcEvents.gyroCmd, payload);
+  }
+
+  /// عينة حساسات خام فوق UDP — الوضع النشط حصرًا (المستهلك gyro.rs على
+  /// الكمبيوتر). passFlags أزرار الجيمباد/الإمساك (تعاقد §21.ب).
+  void sendGyroRaw(List<double> accel, List<double> gyro, {int flags = 0}) {
+    if (!_sessionReadyForLive) return;
+    live.sendGyro(accel, gyro, flags: flags);
+  }
+
+  /// تركيبة مفاتيح (مؤشر الليزر للعرض: Ctrl+L عبر rc:key القائم — عقد §21.ج)
+  void keyCombo(String ch, List<String> modifiers) {
+    final sk = _socket;
+    if (sk == null || !sk.connected) return;
+    if (ch.length != 1) return;
+    sk.emit(RcEvents.key, {'ch': ch, 'modifiers': modifiers});
+  }
+
   final _state = StreamController<RcUiState>.broadcast();
   RcUiState _cur = const RcUiState();
   RcUiState get state => _cur;
@@ -298,6 +339,8 @@ class ControllerService {
       bind(RcEvents.liveReady, _onLiveReady);
       // الجولة 4 مرحلة ② (عقد §20) — حالة لوحة الرسم من الكمبيوتر
       bind(RcEvents.tabletState, _onTabletState);
+      // الجولة 4 مرحلة ③ (عقد §21) — حالة التحكم المتقدم من الكمبيوتر
+      bind(RcEvents.gyroState, _onGyroState);
 
       socket.connect();
       _socket = socket;

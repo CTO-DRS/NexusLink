@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/controller_service.dart';
 import 'tablet_screen.dart';
+import 'gyro_screen.dart';
 import '../state/controller_providers.dart';
 import '../state/transfer_providers.dart';
 
@@ -1052,6 +1053,25 @@ class _HandTab extends StatelessWidget {
               ),
               icon: const Icon(Icons.draw_rounded, size: 16),
               label: Text('tablet.open'.tr(), style: const TextStyle(fontSize: 12)),
+            ),
+          ],
+        ),
+        // الجولة 4 مرحلة ③ (عقد §21) — ثلاثية التحكم المتقدم (جيمباد الحساسات
+        // + الماوس الهوائي المعاير + عارض العروض بالمؤقت)
+        _Card(
+          title: 'gyro.entry'.tr(),
+          icon: Icons.sports_esports_rounded,
+          children: [
+            Text('gyro.entryDesc'.tr(),
+                style: TextStyle(fontSize: 10.5, color: Theme.of(context).hintColor)),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const GyroScreen()),
+              ),
+              icon: const Icon(Icons.sports_esports_rounded, size: 16),
+              label: Text('gyro.open'.tr(), style: const TextStyle(fontSize: 12)),
             ),
           ],
         ),

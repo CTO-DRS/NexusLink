@@ -141,6 +141,16 @@ class ControllerController extends Notifier<RcUiState> {
   /// الجولة 4 مرحلة ② (عقد §20) — أوامر لوحة الرسم (get/set إعدادات الفرشاة)
   void tabletCmd(Map<String, dynamic> payload) => _svc?.tabletCmd(payload);
 
+  /// الجولة 4 مرحلة ③ (عقد §21) — أوامر التحكم المتقدم (get/set الأوضاع والإعدادات)
+  void gyroCmd(Map<String, dynamic> payload) => _svc?.gyroCmd(payload);
+
+  /// الجولة 4 مرحلة ③ (عقد §21) — عينة حساسات خام فوق UDP (الوضع النشط حصرًا)
+  void sendGyroRaw(List<double> accel, List<double> gyro, {int flags = 0}) =>
+      _svc?.sendGyroRaw(accel, gyro, flags: flags);
+
+  /// الجولة 4 مرحلة ③ (عقد §21) — تركيبة مفاتيح (الليزر Ctrl+L عبر rc:key)
+  void keyCombo(String ch, List<String> modifiers) => _svc?.keyCombo(ch, modifiers);
+
   void stopSession() => _svc?.stopControlSession();
 
   void media(String action, {double? value}) => _svc?.media(action, value: value);

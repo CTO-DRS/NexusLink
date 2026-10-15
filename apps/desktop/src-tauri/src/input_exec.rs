@@ -480,6 +480,15 @@ fn apply_key(enigo: &mut Enigo, ev: &serde_json::Value) -> Result<String, String
         })
         .unwrap_or_default();
 
+    // الجولة 4 مرحلة ③ (عقد §21) — state اختياري للجيمباد: "press"/"release"
+    // (ضغط مستمر حقيقي تنفذه الألعاب — النقر السريع قد يُفقد بين إطارات
+    // الاستطلاع) — الغياب = click كما كان (توافق أمامي كامل مع §13).
+    let hold = match ev.get("state").and_then(|x| x.as_str()) {
+        Some("press") => Some(Direction::Press),
+        Some("release") => Some(Direction::Release),
+        _ => None,
+    };
+
     let special = ev.get("special").and_then(|x| x.as_str()).map(|s| s.to_string());
     let named = ev.get("key").and_then(|x| x.as_str()).map(|s| s.to_string());
     let ch = ev.get("ch").and_then(|x| x.as_str()).map(|s| s.to_string());
@@ -491,7 +500,11 @@ fn apply_key(enigo: &mut Enigo, ev: &serde_json::Value) -> Result<String, String
             // المسمّى له الأولوية إن كان معروفًا وإلا يُجرّب كنص (حرف واحد)
             match special_key(&s) {
                 Some(k) => {
-                    enigo.key(k, Direction::Click).map_err(|e| format!("المفتاح {s} فشل: {e}"))?;
+                    let r = match hold {
+                        Some(dir) => enigo.key(k, dir).map_err(|e| format!("المفتاح {s} فشل: {e}")),
+                        None => enigo.key(k, Direction::Click).map_err(|e| format!("المفتاح {s} فشل: {e}")),
+                    };
+                    r?;
                     return Ok(format!("مفتاح: {s}"));
                 }
                 None if s.chars().count() == 1 => { /* حرف مفرد — يمر لمسار النص */ }
@@ -505,6 +518,16 @@ fn apply_key(enigo: &mut Enigo, ev: &serde_json::Value) -> Result<String, String
             if text.contains('\0') {
                 return Err("النص يحوي بايت صفري".into());
             }
+            // ضغط/إفلات الجيمباد (§21): محرف واحد عبر Key::Unicode (ضغط حقيقي
+            // قابل للاستمرار — النص اليونيكودي للحقن الكامل يبقى مسار click)
+            if let (Some(dir), Some(c)) = (hold, text.chars().next()) {
+                if text.chars().count() == 1 {
+                    enigo
+                        .key(Key::Unicode(c), dir)
+                        .map_err(|e| format!("مفتاح الجيمباد فشل: {e}"))?;
+                    return Ok(format!("مفتاح جيمباد: {c}"));
+                }
+            }
             // حقن يونيكودي كامل — عربي/إيموجي/أي حرف مستقلًا عن تخطيط الكيبورد
             enigo.text(&text).map_err(|e| format!("حقن النص فشل: {e}"))?;
             return Ok(format!("نص: {} حرف", text.chars().count()));
@@ -512,6 +535,7 @@ fn apply_key(enigo: &mut Enigo, ev: &serde_json::Value) -> Result<String, String
         Err("حدث مفتاح بلا محتوى".into())
     })();
     // تحرير المعدّلات دائمًا حتى عند فشل المفتاح (لا تعليق Ctrl على المستخدم)
+    // — أحداث الجيمباد (§21) بلا معدّلات أصلًا فالتحرير لا عملية فيه (no-op)
     press_mods(enigo, &mods, Direction::Release)?;
     res
 }

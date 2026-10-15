@@ -150,6 +150,14 @@ class RcEvents {
   static const String tabletCmd = 'rc:tablet:cmd';
   static const String tabletState = 'rc:tablet:state';
 
+  // الجولة 4 مرحلة ③ (عقد §21) — التحكم المتقدم (جيمباد الحساسات/الماوس
+  // الهوائي المعاير/عارض العروض):
+  // إرسال: rc:gyro:cmd {cmd: get|set, mode?, template?, deadzoneDeg?, sens?,
+  //                     shakeDegS?, tiltDeg?, laser?, calibrate?, keyA?..keyR?}
+  // استقبال: rc:gyro:state {mode, template, map{...}, stats, calibrated} — من دور pc حصرًا
+  static const String gyroCmd = 'rc:gyro:cmd';
+  static const String gyroState = 'rc:gyro:state';
+
   // استقبال
   static const String desktopClipboard = 'desktop:clipboard'; // {text, at?}
   static const String desktopState = 'desktop:state';

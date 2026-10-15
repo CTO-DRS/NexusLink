@@ -22,6 +22,10 @@ mod input;
 pub mod input_exec;
 // FA-harden (عقد §16) — كشف الخمول (بندا 1 و4 من مصدر واحد)
 mod idle;
+// الجولة 4 مرحلة ③ (عقد §21) — التحكم المتقدم: جيمباد الحساسات/الماوس
+// الهوائي المعاير/عارض العروض — النواة النقية + المستهلك على القناة الحية
+mod gyro;
+mod gyro_core;
 // الجولة 4 (عقد §18) — NexusLive: مستقبل UDP للإدخال الحي (loopback حصرًا)
 mod live;
 // FA-harden (عقد §16) — قفل التطبيق: PIN + Windows Hello / Touch ID (بند 1)
@@ -181,6 +185,8 @@ fn main() {
             vdisplay::vdisplay_disable,
             tablet::tablet_config,
             tablet::tablet_config_set,
+            gyro::gyro_config,
+            gyro::gyro_config_set,
         ])
         .on_window_event(|window, event| match event {
             // إغلاق → إخفاء إلى الـ Tray (قابل للتعطيل من قائمة الـ Tray)
