@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server"
 
-// FA-harden (عقد §16 بند 2) — الإصدار + سجل الإصدارات الحقيقي.
+// /api/version — الإصدار + سجل الإصدارات الحقيقي (عقد §16 بند 2 + §23).
 // ============================================================
-// الإصدار مقفول 1.0.0 (المطلوب الصارم: لا تغيير رقم الإصدار مهما فعلنا —
-// tauri.conf.json/Cargo.toml/pubspec كلها 1.0.0، والقيمة السابقة 2.4.1 هنا
-// كانت بيانات واجهة قديمة لا إصدارًا فعليًا).
+// الإصدار موحّد 1.1.0 عبر كل المنصات (tauri.conf.json/Cargo.toml/pubspec/package.json
+// — الجولة 4 اكتملت فوق 1.0.0 ووسم v1.1.0 هو الإصدار القادم).
 // سجل الإصدارات = GitHub Releases للمستودع العام (كاش 10 دقائق) — بلا
 // مفاتيح API، وفشل الجلب (أوفلاين/معدل) يعيد قائمة من الإصدار المحلي وحده.
-const CURRENT = "1.0.0"
+const CURRENT = "1.1.0"
 const RELEASES_API = "https://api.github.com/repos/CTO-DRS/NexusLink/releases?per_page=12"
 
 type HistoryEntry = { version: string; tag: string; date: string; items: string[] }
@@ -19,6 +18,19 @@ function localHistory(): HistoryEntry[] {
   return [
     {
       version: CURRENT,
+      tag: "v1.1.0",
+      date: "2026-10-15",
+      items: [
+        "قناة NexusLive الحية فوق UDP — إدخال حي P95=13ms قلمًا وP50=8ms بثًا 60Hz",
+        "الهاتف شاشة ثانية فعلية (سائق موقّع على ويندوز + xrandr على لينكس)",
+        "لوحة رسم احترافية: التقاط 240Hz + ضغط→فرشاة + لوحة uinput أصلية على لينكس",
+        "ثلاثية التحكم المتقدم: جيمباد حساسات 100Hz + ماوس هوائي معاير + عارض عروض",
+        "«NexusLink Camera» بلا خطوات يدوية + ميكروفون افتراضي + مشغل النظام + هاتف→TV (/tv)",
+        "ملاحظات إصدار عربية/إنجليزية + مسار ترقية موقّع 1.0.0→1.1.0 يحفظ كل الإعدادات",
+      ],
+    },
+    {
+      version: "1.0.0",
       tag: "v1.0.0",
       date: "2026-10-12",
       items: [
@@ -39,7 +51,7 @@ async function fetchHistory(): Promise<HistoryEntry[]> {
     const r = await fetch(RELEASES_API, {
       signal: ctrl.signal,
       cache: "no-store",
-      headers: { "User-Agent": "NexusLink-Server/1.0.0", Accept: "application/vnd.github+json" },
+      headers: { "User-Agent": "NexusLink-Server/1.1.0", Accept: "application/vnd.github+json" },
     })
     clearTimeout(timer)
     if (!r.ok) throw new Error(`HTTP ${r.status}`)

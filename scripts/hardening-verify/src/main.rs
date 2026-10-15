@@ -9,7 +9,7 @@
 //   4) طابور التدقيق: FIFO + إسقاط الأقدم عند 200 + القائمة البيضاء + بتر 400
 //   5) تنقية سياسة المخزن المشترك = مرآة desktop-hardening.ts (صالح/فاسد/فارغ)
 //   6) ملفات الإصدار: tauri.conf.json (updater + pubkey + createUpdaterArtifacts
-//      + الإصدار 1.0.0 مقفول) + lock.html موجود + مفاتيح التوقيع في place
+//      + الإصدار موحّد 1.1.0) + lock.html موجود + مفاتيح التوقيع في place
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod core {
@@ -122,7 +122,7 @@ fn main() {
     let conf_text = std::fs::read_to_string(&conf_path).unwrap_or_default();
     let conf: serde_json::Value = serde_json::from_str(&conf_text).unwrap_or(serde_json::json!({}));
     check("tauri.conf.json صالح JSON", conf.is_object(), "فشل قراءة/تحليل".to_string());
-    check("الإصدار مقفول 1.0.0", conf["version"] == "1.0.0", conf["version"].to_string());
+    check("الإصدار موحّد 1.1.0", conf["version"] == "1.1.0", conf["version"].to_string());
     check("plugins.updater.endpoints موجودة", conf["plugins"]["updater"]["endpoints"].as_array().map(|a| !a.is_empty()).unwrap_or(false), "غائبة".to_string());
     let endpoints = conf["plugins"]["updater"]["endpoints"].as_array();
     check("نقطة latest.json على GitHub Releases", endpoints.map(|a| a.iter().any(|e| e.as_str().unwrap_or("").ends_with("/latest/download/latest.json"))).unwrap_or(false), "غائبة".to_string());
