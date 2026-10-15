@@ -84,3 +84,7 @@ yarn-debug.log*
 yarn-error.log*
 scripts/live-verify/target/
 scripts/tablet-verify/target/
+scripts/live-verify/target/
+scripts/tablet-verify/target/
+scripts/gyro-verify/target/
+scripts/hardening-verify/target/
