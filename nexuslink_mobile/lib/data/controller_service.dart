@@ -279,14 +279,14 @@ class ControllerService {
     if (!_state.isClosed) _state.add(_cur);
   }
 
-  static Map<Object?, Object?>? _map(dynamic data) {
+  static Map<String, dynamic>? _map(dynamic data) {
     if (data is List) {
       for (final item in data) {
-        if (item is Map && item.isNotEmpty) return item.cast<Object?, Object?>();
+        if (item is Map && item.isNotEmpty) return Map<String, dynamic>.from(item);
       }
       return null;
     }
-    if (data is Map) return data.cast<Object?, Object?>();
+    if (data is Map) return Map<String, dynamic>.from(data);
     return null;
   }
 

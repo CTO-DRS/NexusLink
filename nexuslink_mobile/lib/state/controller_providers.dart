@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/controller_service.dart';
+import '../data/live_channel.dart';
 import '../domain/wol_service.dart';
 import 'providers.dart';
 
@@ -140,6 +141,11 @@ class ControllerController extends Notifier<RcUiState> {
 
   /// الجولة 4 مرحلة ② (عقد §20) — أوامر لوحة الرسم (get/set إعدادات الفرشاة)
   void tabletCmd(Map<String, dynamic> payload) => _svc?.tabletCmd(payload);
+
+  /// الجولة 4 مرحلة ② (عقد §20) — قلم حي فوق UDP (ضغط/ميل/أداة) خلال الجلسة النشطة
+  void sendPen(double nx, double ny, double pressure,
+          {int tiltX = 0, int tiltY = 0, required PenPhase phase, int buttons = 0, int tool = LiveChannel.penToolPen}) =>
+      _svc?.sendPen(nx, ny, pressure, tiltX: tiltX, tiltY: tiltY, phase: phase, buttons: buttons, tool: tool);
 
   /// الجولة 4 مرحلة ③ (عقد §21) — أوامر التحكم المتقدم (get/set الأوضاع والإعدادات)
   void gyroCmd(Map<String, dynamic> payload) => _svc?.gyroCmd(payload);

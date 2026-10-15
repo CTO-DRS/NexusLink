@@ -1747,7 +1747,7 @@ fn vcam_driver_status_uncached() -> Value {
     let obs = platform != "linux" && obs_installed();
     core::vcam_driver_status_v2(
         platform,
-        akvcam.map(|p| p.to_string()),
+        akvcam.map(|p| p.display().to_string()),
         akvcam_version,
         akvcam_api,
         camera_names,
@@ -1770,7 +1770,7 @@ fn akvcam_manager_resolved() -> Option<std::path::PathBuf> {
         {
             let text = String::from_utf8_lossy(&out.stdout);
             if let Some(dir) = core::parse_reg_install_path(&text) {
-                let p = std::path::PathBuf::from(dir).join("x64").join("AkVCamManager.exe");
+                let p = std::path::PathBuf::from(dir.clone()).join("x64").join("AkVCamManager.exe");
                 if p.exists() {
                     return Some(p);
                 }
@@ -2324,7 +2324,7 @@ fn akvcam_writer(manager: String, device: String) {
                         let _ = c.wait();
                     }
                     stdin = None;
-                    let mut c = match Command::new(manager)
+                    let mut c = match Command::new(&manager)
                         .args(core::akvcam_stream_args(&device, w, h, 30))
                         .stdin(Stdio::piped())
                         .stdout(Stdio::null())
