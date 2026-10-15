@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -264,7 +265,7 @@ class _TabletScreenState extends ConsumerState<TabletScreen> {
 
   Future<void> _openBrushSheet(BuildContext context, Map<String, dynamic> ts) async {
     final brush = (ts['brush'] as Map?)?.cast<String, dynamic>() ?? const {};
-    final ctl = ref.read(controllerServiceProvider);
+    final ctl = ref.read(controllerControllerProvider.notifier);
     String pressure = '${brush['pressure'] ?? 'keys'}';
     final decCtrl = TextEditingController(text: '${brush['decKey'] ?? '['}');
     final incCtrl = TextEditingController(text: '${brush['incKey'] ?? ']'}');
@@ -318,9 +319,9 @@ class _TabletScreenState extends ConsumerState<TabletScreen> {
                   decoration: InputDecoration(labelText: 'tablet.modifier'.tr(), border: const OutlineInputBorder()),
                   items: [
                     DropdownMenuItem(value: 'none', child: Text('tablet.modNone'.tr())),
-                    DropdownMenuItem(value: 'ctrl', child: Text('Ctrl')),
-                    DropdownMenuItem(value: 'alt', child: Text('Alt')),
-                    DropdownMenuItem(value: 'shift', child: Text('Shift')),
+                    const DropdownMenuItem(value: 'ctrl', child: Text('Ctrl')),
+                    const DropdownMenuItem(value: 'alt', child: Text('Alt')),
+                    const DropdownMenuItem(value: 'shift', child: Text('Shift')),
                   ],
                   onChanged: (v) => setSheet(() => modifier = v ?? modifier),
                 ),
@@ -366,7 +367,6 @@ class _TabletScreenState extends ConsumerState<TabletScreen> {
     final ts = st.tabletState ?? const {};
     final mode = '${ts['mode'] ?? 'mouse'}';
     final available = ts['available'] == true;
-    final brush = (ts['brush'] as Map?)?.cast<String, dynamic>() ?? const {};
     final ready = st.sessionActive && st.liveReady;
 
     return Scaffold(

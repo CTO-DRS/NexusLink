@@ -84,12 +84,7 @@ class LiveChannel {
   static const int penToolPen = 0;
   static const int penToolEraser = 1;
   static const int penToolFinger = 2;
-  static const int _actMove = 0,
-      _actDown = 1,
-      _actUp = 2,
-      _actClick = 3,
-      _actDblclick = 4,
-      _actRclick = 5;
+  static const int _actMove = 0; // إجراءات المؤشر 0..5 = LiveAction.index (move/down/up/click/dblclick/rclick)
 
   // ضبط التوقيت
   static const Duration _pingEvery = Duration(milliseconds: 500);
@@ -116,7 +111,6 @@ class LiveChannel {
   int _sendErrors = 0;
   int _reconnects = 0;
   int _lastPongAt = 0;
-  LivePhase _phase = LivePhase.idle;
   String? _lastError;
 
   final StreamController<LiveStats> _stats = StreamController<LiveStats>.broadcast();
@@ -172,7 +166,6 @@ class LiveChannel {
     _sock = null;
     _key = const [];
     _pings.clear();
-    _phase = silent ? LivePhase.idle : LivePhase.idle;
     if (!silent) {
       _patch((s) => LiveStats(
             sent: _sent,

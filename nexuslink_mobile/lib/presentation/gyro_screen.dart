@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
-import '../data/controller_service.dart';
 import '../data/live_channel.dart';
 import '../state/controller_providers.dart';
 
@@ -454,7 +453,7 @@ class _GyroScreenState extends ConsumerState<GyroScreen> {
                   onPressed: () => ref.read(controllerControllerProvider.notifier).gyroCmd({'cmd': 'set', 'template': 'platformer'}),
                 ),
                 ActionChip(
-                  avatar: const Icon(Icons.sports_racing, size: 16),
+                  avatar: const Icon(Icons.sports_motorsports, size: 16),
                   label: Text('gyro.tplRacing'.tr(), style: const TextStyle(fontSize: 11)),
                   onPressed: () => ref.read(controllerControllerProvider.notifier).gyroCmd({'cmd': 'set', 'template': 'racing'}),
                 ),
