@@ -8,7 +8,7 @@ import urllib.request
 
 TOKEN = os.environ["GH_TOKEN"]
 API = "https://api.github.com/repos/CTO-DRS/NexusLink"
-RUNS = {"release": 38818886866, "desktop": 38818886899}
+RUNS = {"release": int(os.environ.get("RUN_ID_RELEASE", "38821566506"))}
 POLL_SEC = int(sys.argv[1]) if len(sys.argv) > 1 else 120
 MAX_MIN = int(sys.argv[2]) if len(sys.argv) > 2 else 8
 
