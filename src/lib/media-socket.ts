@@ -69,6 +69,15 @@ export function castCmd(payload: Record<string, unknown>) {
   getMediaSocket().emit("cast:cmd", payload)
 }
 
+/**
+ * §22 — حالة البث الحالية إلى كل المستقبلات (صفحة /tv على شاشة التلفاز
+ * مثلًا): الوسائط + الوجهة + التشغيل/الصوت — المستقبل يبني تيار /api/preview
+ * من device/path. إصدار واحد صغير لكل تغيّر (بلا تكرار زمني).
+ */
+export function castState(payload: Record<string, unknown>) {
+  getMediaSocket().emit("cast:state", payload)
+}
+
 export function slideshowCmd(payload: Record<string, unknown>) {
   getMediaSocket().emit("slideshow:cmd", payload)
 }

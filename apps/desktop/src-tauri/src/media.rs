@@ -1526,21 +1526,378 @@ pub fn media_vcam_status() -> Value {
     vcam_driver_status_fresh()
 }
 
-fn vcam_driver_status_fresh() -> Value {
+// ---------------------------------------------------------------------------
+// المرحلة 0-وسائط (عقد §22) — تثبيت حزمة الكاميرا + مشغل النظام + إعدادات الصوت
+// ---------------------------------------------------------------------------
+
+/// SHA256 المتوقع لمثبّت akvirtualcamera المرفق (9.3.1 الرسمي) — التحقق قبل
+/// التشغيل (نمط SHA256SUMS في vdd). قيمة محسوبة من الملف المُلتزم بالمستودع.
+pub const VCAM_INSTALLER_SHA256: &str = "6a17c098d05bf380834ede5b1ad275762ebb216f667b73abc24ee9ba5ef459de";
+
+/// التحقق من بصمة المثبّت عبر certutil (أداة ويندوز معيارية) — بلا كرِيت جديد.
+#[cfg(windows)]
+fn installer_sha256_matches(path: &std::path::Path) -> bool {
+    let out = match std::process::Command::new("certutil")
+        .args(["-hashfile"])
+        .arg(path)
+        .arg("SHA256")
+        .output()
+    {
+        Ok(o) => o,
+        Err(_) => return false,
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    // certutil يطبع البصمة في السطر الثاني (hex متصل)
+    for line in text.lines().skip(1) {
+        let hex: String = line.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+        if hex.len() == 64 {
+            return hex.eq_ignore_ascii_case(VCAM_INSTALLER_SHA256);
+        }
+    }
+    false
+}
+
+#[cfg(not(windows))]
+fn installer_sha256_matches(_p: &std::path::Path) -> bool {
+    false
+}
+
+/// مسار مثبّت الكاميرا المرفق — تخطيط الموارد المدمجة (نمط resolve_resources):
+/// NSIS/portable → بجانب التنفيذي، التطوير → src-tauri/vcam.
+fn vcam_installer_path() -> Option<std::path::PathBuf> {
+    const NAME: &str = "akvirtualcamera-windows-9.3.1.exe";
+    if let Some(app) = app_handle() {
+        use tauri::Manager;
+        if let Ok(rd) = app.path().resource_dir() {
+            let p = rd.join("vcam").join(NAME);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let p = dir.join("vcam").join(NAME);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+    let dev = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("vcam").join(NAME);
+    dev.exists().then_some(dev)
+}
+
+/// ضمانة §22 المشتركة: إن لم تكن كاميرا «NexusLink Camera» مسجلة أنشئها
+/// (idempotent — لا يلمس أجهزة المستخدم الأخرى). تستعملها البداية والتثبيت.
+#[cfg(not(target_os = "linux"))]
+fn provision_camera_now() {
+    let Some(manager) = akvcam_manager_resolved() else { return };
+    let (ids, descriptions) = akvcam_devices_described(&manager);
+    if let Some(plan) = core::ensure_camera_plan(&ids, &descriptions) {
+        println!("[media] توفير كاميرا «{}» ({} أوامر)", core::NEXUS_CAMERA_NAME, plan.len());
+        if let Err(e) = run_camera_plan(&manager, &plan) {
+            println!("[media] التوفير تأجل — {e}");
+        }
+    }
+}
+
+/// تثبيت حزمة الكاميرا الافتراضية (ويندوز): مثبّت akvirtualcamera الرسمي
+/// المرفق (GPL — الترخيص والمصدر في vcam/) بصمت `/S` عبر Start-Process -Verb
+/// RunAs (موجة UAC واحدة)، ثم إنشاء «NexusLink Camera» إن لم تكن موجودة.
+/// ماك: إرشاد صادق فقط (قيود التوقيع §3 من round4-audit). لينكس: غير مطلوب.
+#[tauri::command]
+pub async fn media_vcam_install() -> Result<Value, String> {
     let platform = std::env::consts::OS;
-    // كشف فعلي: AkVCamManager (ويندوز/ماك) — أول مسار موجود
+    if platform == "linux" {
+        return Err("لينكس يستخدم v4l2loopback من مستودعات النظام — لا حزمة مرفقة (راجع الإرشاد)".into());
+    }
+    let installer = vcam_installer_path()
+        .ok_or("حزمة الكاميرا المرفقة غائبة من هذا التوزيع — نزّل akvirtualcamera من github.com/webcamoid/akvirtualcamera/releases")?;
+    if platform == "windows" {
+        if !installer_sha256_matches(&installer) {
+            return Err("بصمة مثبّت الكاميرا لا تطابق SHA256SUMS — رفض تشغيله (سلامة الحزمة)".into());
+        }
+        // Start-Process -Verb RunAs → موجة UAC واحدة؛ /S = صامت (NSIS معياري)
+        let ps = format!(
+            "Start-Process -FilePath '{}' -ArgumentList '/S' -Wait",
+            installer.to_string_lossy().replace('\'', "''")
+        );
+        let out = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps])
+            .output()
+            .map_err(|e| format!("تشغيل المثبّت: {e}"))?;
+        if !out.status.success() {
+            let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            if err.is_empty() {
+                return Err("المثبّت لم يكتمل (أُلغيت موجة الإذن؟) — أعد المحاولة".into());
+            }
+            return Err(format!("المثبّت فشل: {err}"));
+        }
+    } else {
+        // ماك: pkg الرسمي — نفتحه (المستخدم يكمل المعاينة يدويًا — توقيع CMIO)
+        #[cfg(target_os = "macos")]
+        {
+            let _ = std::process::Command::new("open").arg(&installer).spawn();
+        }
+        let _ = &installer;
+    }
+    // إعادة الكشف + إنشاء الكاميرا فورًا (بلا انتظار أول vcam-start)
+    let status = vcam_driver_status_fresh();
+    #[cfg(not(target_os = "linux"))]
+    {
+        provision_camera_now();
+    }
+    Ok(json!({ "ok": true, "status": status }))
+}
+
+/// فتح البث الحالي في مشغل سطح المكتب الافتراضي (عقد §22 — «stream مؤقت»):
+/// نكتب ملف m3u معياريًا يشير إلى تيار HTTP Range القائم (/api/preview) ونفتحه
+/// بالمعالج النظامي — مشغلات سطح المكتب (VLC/WMP/mpv) تشغّل تيار m3u بلا نسخ.
+#[tauri::command]
+pub fn media_open_player(url: String, name: Option<String>) -> Result<Value, String> {
+    // تنقية: http(s) حصرًا + طول معقول + بلا أسطر (m3u سطرًا لكل عنوان)
+    let u = url.trim();
+    if !(u.starts_with("http://127.0.0.1:") || u.starts_with("http://localhost:") || u.starts_with("http://+")
+        || (u.starts_with("http://") && !u[7..].starts_with(['/', '\\'])))
+    {
+        return Err("URL غير مدعوم — يُقبل http فقط (تيار /api/preview المحلي)".into());
+    }
+    if u.len() > 2048 || u.contains(['\r', '\n', '<', '>', '"']) {
+        return Err("URL فاسد (طول/محارف غير آمنة)".into());
+    }
+    let nm = name.unwrap_or_else(|| "NexusLink Cast".into());
+    let m3u = core::nexuslink_cast_m3u(&nm, u);
+    let path = std::env::temp_dir().join(core::cast_m3u_file_name());
+    std::fs::write(&path, m3u).map_err(|e| format!("كتابة قائمة التشغيل: {e}"))?;
+    let path_str = path.to_string_lossy().to_string();
+    let res = if cfg!(windows) {
+        std::process::Command::new("cmd").args(["/C", "start", "", &path_str]).spawn()
+    } else if cfg!(target_os = "macos") {
+        std::process::Command::new("open").arg(&path_str).spawn()
+    } else {
+        std::process::Command::new("xdg-open").arg(&path_str).spawn()
+    };
+    match res {
+        Ok(_) => Ok(json!({ "ok": true, "file": path_str })),
+        Err(e) => Err(format!("فتح المشغل: {e} — إن لم يبدأ التشغيل اربط امتداد .m3u بمشغل وسائط")),
+    }
+}
+
+/// فتح إعدادات صوت النظام (اختيار جهاز الإدخال الافتراضي للميكروفون)
+#[tauri::command]
+pub fn media_open_sound_settings() -> Result<Value, String> {
+    let res = if cfg!(windows) {
+        // ms-settings:sound — عنوان معياري في ويندوز 10/11
+        std::process::Command::new("cmd").args(["/C", "start", "ms-settings:sound"]).spawn()
+    } else if cfg!(target_os = "macos") {
+        // لوحة الصوت المعيارية في النظام
+        std::process::Command::new("open")
+            .arg("/System/Library/PreferencePanes/Sound.prefPane")
+            .spawn()
+    } else {
+        // لينكس: أفضل مجهود — pavucontrol إن وُجد
+        std::process::Command::new("sh")
+            .args(["-c", "command -v pavucontrol >/dev/null && exec pavucontrol"])
+            .spawn()
+    };
+    match res {
+        Ok(_) => Ok(json!({ "ok": true })),
+        Err(_) => Err("لم أستطع فتح إعدادات الصوت — افتحها يدويًا من النظام واختر «NexusLink Mic» أو «CABLE Output»".into()),
+    }
+}
+
+fn vcam_driver_status_fresh() -> Value {
+    // كاش 2ث — الفحص يشغّل عدة عمليات (reg/-v/system-api/devices) والواجهة
+    // تستعلم كل 5-6ث من بطاقتين؛ بلا كاش يصير عاصفة عمليات على ويندوز
+    static CACHE: Mutex<Option<(Instant, Value)>> = Mutex::new(None);
+    {
+        let c = CACHE.lock().unwrap();
+        if let Some((at, v)) = c.as_ref() {
+            if at.elapsed() < Duration::from_secs(2) {
+                return v.clone();
+            }
+        }
+    }
+    let fresh = vcam_driver_status_uncached();
+    *CACHE.lock().unwrap() = Some((Instant::now(), fresh.clone()));
+    fresh
+}
+
+fn vcam_driver_status_uncached() -> Value {
+    let platform = std::env::consts::OS;
+    // كشف فعلي: AkVCamManager (ويندوز/ماك) — السجل أولًا (installPath موثق من
+    // مصدر المثبّت installscript.nsi) ثم المسارات المعروفة — §22
     let akvcam = if platform == "linux" {
         None
     } else {
-        core::akvcam_manager_paths().into_iter().find(|p| std::path::Path::new(p).exists())
+        akvcam_manager_resolved()
+    };
+    // نسخة + واجهة + أجهزة الكاميرا (كلها من الأداة نفسها — بلا اختراع)
+    let (akvcam_version, akvcam_api, camera_names) = match &akvcam {
+        Some(m) => (run_manager_version(m), run_manager_api(m), camera_names_fresh(m)),
+        None => (None, None, None),
     };
     let loopback = if platform == "linux" { count_loopback_devices() } else { 0 };
+    let loopback_version = if platform == "linux" && loopback > 0 { loopback_version() } else { None };
     let audio_out = if platform == "linux" {
         None
     } else {
         audio_output_device_name()
     };
-    core::vcam_driver_status(platform, akvcam.map(|p| p.to_string()), loopback, audio_out)
+    let obs = platform != "linux" && obs_installed();
+    core::vcam_driver_status_v2(
+        platform,
+        akvcam.map(|p| p.to_string()),
+        akvcam_version,
+        akvcam_api,
+        camera_names,
+        loopback,
+        loopback_version,
+        audio_out,
+        obs,
+    )
+}
+
+/// مسار AkVCamManager الفعلي: السجل (installPath — موثق installscript.nsi)
+/// ثم المسارات المعروفة. يعيد الأول الموجود فعلًا على القرص.
+#[cfg(any(windows, target_os = "macos"))]
+fn akvcam_manager_resolved() -> Option<std::path::PathBuf> {
+    // 1) السجل — مصدر الحقيقة للمثبّت الرسمي (ويندوز فقط)
+    if cfg!(windows) {
+        if let Ok(out) = std::process::Command::new("reg")
+            .args(["query", r"HKLM\SOFTWARE\Webcamoid\VirtualCamera", "/v", "installPath"])
+            .output()
+        {
+            let text = String::from_utf8_lossy(&out.stdout);
+            if let Some(dir) = core::parse_reg_install_path(&text) {
+                let p = std::path::PathBuf::from(dir).join("x64").join("AkVCamManager.exe");
+                if p.exists() {
+                    return Some(p);
+                }
+                let p = std::path::PathBuf::from(dir).join("AkVCamManager.exe");
+                if p.exists() {
+                    return Some(p);
+                }
+            }
+        }
+    }
+    // 2) المسارات المعروفة (ماك + قِدَم)
+    core::akvcam_manager_paths()
+        .into_iter()
+        .map(std::path::PathBuf::from)
+        .find(|p| p.exists())
+}
+
+#[cfg(target_os = "linux")]
+fn akvcam_manager_resolved() -> Option<std::path::PathBuf> {
+    None
+}
+
+/// `AkVCamManager -v` → نسخة (cmdparser.cpp يطبع COMMONS_VERSION)
+#[cfg(any(windows, target_os = "macos"))]
+fn run_manager_version(manager: &std::path::Path) -> Option<String> {
+    let out = std::process::Command::new(manager).arg("-v").output().ok()?;
+    core::parse_akvcam_version(&String::from_utf8_lossy(&out.stdout))
+        .or_else(|| core::parse_akvcam_version(&String::from_utf8_lossy(&out.stderr)))
+}
+
+#[cfg(target_os = "linux")]
+fn run_manager_version(_m: &std::path::Path) -> Option<String> {
+    None
+}
+
+/// `AkVCamManager system-api` → DirectShow / MediaFoundation / CoreMediaIO
+#[cfg(any(windows, target_os = "macos"))]
+fn run_manager_api(manager: &std::path::Path) -> Option<String> {
+    let out = std::process::Command::new(manager).arg("system-api").output().ok()?;
+    let l = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if l.is_empty() { None } else { Some(l.chars().take(32).collect()) }
+}
+
+#[cfg(target_os = "linux")]
+fn run_manager_api(_m: &std::path::Path) -> Option<String> {
+    None
+}
+
+/// أجهزة akvirtualcamera بالأوصاف — `devices -p` (معرف/سطر) ثم `description ID`
+/// لكل معرف (cmdparser.cpp: showDevices parseable + showDeviceDescription).
+#[cfg(not(target_os = "linux"))]
+fn akvcam_devices_described(
+    manager: &std::path::Path,
+) -> (Vec<String>, Vec<(String, String)>) {
+    use std::process::Command;
+    let ids = Command::new(manager)
+        .args(["devices", "-p"])
+        .output()
+        .map(|o| core::parse_akvcam_devices(&String::from_utf8_lossy(&o.stdout)))
+        .unwrap_or_default();
+    let mut descriptions = Vec::new();
+    for id in ids.iter().take(8) {
+        let d = Command::new(manager)
+            .args(["description", id])
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+        descriptions.push((id.clone(), d));
+    }
+    (ids, descriptions)
+}
+
+/// أسماء الكاميرات للحالة (الوصف يغلب المعرف إن وُجد) — بلا لينكس
+#[cfg(not(target_os = "linux"))]
+fn camera_names_fresh(manager: &std::path::Path) -> Option<Vec<String>> {
+    Some(
+        akvcam_devices_described(manager)
+            .1
+            .into_iter()
+            .map(|(id, d)| if d.is_empty() { id } else { d })
+            .collect(),
+    )
+}
+
+#[cfg(target_os = "linux")]
+fn camera_names_fresh(_m: &std::path::Path) -> Option<Vec<String>> {
+    None
+}
+
+/// نسخة v4l2loopback من modinfo (لينكس — معلومات الوحدة المعيارية)
+#[cfg(target_os = "linux")]
+fn loopback_version() -> Option<String> {
+    let out = std::process::Command::new("modinfo").args(["-F", "version", "v4l2loopback"]).output().ok()?;
+    let l = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if l.is_empty() { None } else { Some(l.chars().take(24).collect()) }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn loopback_version() -> Option<String> {
+    None
+}
+
+/// كشف OBS المثبّت (بديل الكاميرا الافتراضي) — مسارات obs64.exe المعروفة.
+/// CLSID كاميرا OBS يُحقن وقت بناء OBS (virtualcam-guid.h.in) — لا يصلح
+/// علامة ثابتة، فالوجود هنا يكفي للتوجيه (§22).
+#[cfg(any(windows, target_os = "macos"))]
+fn obs_installed() -> bool {
+    let candidates: &[&str] = if cfg!(windows) {
+        &[
+            r"C:\Program Files\obs-studio\bin\64bit\obs64.exe",
+            r"C:\Program Files (x86)\obs-studio\bin\64bit\obs64.exe",
+        ]
+    } else {
+        &["/Applications/OBS.app/Contents/MacOS/OBS"]
+    };
+    candidates.iter().any(|c| std::path::Path::new(c).exists())
+}
+
+#[cfg(target_os = "linux")]
+fn obs_installed() -> bool {
+    // لينكس: OBS عبر الحزم — الفحص عبر which (القناع الصادق يكفي هنا)
+    std::process::Command::new("sh")
+        .args(["-c", "command -v obs"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 /// عدّ أجهزة v4l2loopback من /sys/class/video4linux (لينكس فقط)
@@ -1875,25 +2232,67 @@ fn v4l2_writer(dev_path: String) {
 
 #[cfg(not(target_os = "linux"))]
 fn spawn_akvcam_sink(_status: &Value) -> Result<(), String> {
-    use std::process::{Command, Stdio};
-    let manager = core::akvcam_manager_paths()
-        .into_iter()
-        .find(|p| std::path::Path::new(p).exists())
-        .ok_or("AkVCamManager غير موجود — ثبّت akvirtualcamera (راجع الإرشاد)")?;
-    let out = Command::new(&manager)
-        .arg("devices")
-        .output()
-        .map_err(|e| format!("AkVCamManager devices: {e}"))?;
-    let list = String::from_utf8_lossy(&out.stdout);
-    let device = core::parse_akvcam_devices(&list)
-        .first()
-        .cloned()
+    let manager = akvcam_manager_resolved()
+        .ok_or("AkVCamManager غير موجود — ثبّت akvirtualcamera (أو «تثبيت حزمة الكاميرا» من لوحة الأدوات)")?;
+    // ضمانة §22: إن لم تسجل كاميرا «NexusLink Camera» ننشئها تلقائيًا —
+    // «NexusLink Camera» تظهر في Zoom/Meet بلا أي خطوة يدوية (idempotent:
+    // نتحقق من الأوصاف أولًا ولا نلمس أجهزة المستخدم الأخرى — لا load المدمر).
+    provision_camera_now();
+    let (ids, descriptions) = akvcam_devices_described(&manager);
+    let device = descriptions
+        .iter()
+        .find(|(_, d)| d.eq_ignore_ascii_case(core::NEXUS_CAMERA_NAME))
+        .map(|(id, _)| id.clone())
+        .or_else(|| ids.first().cloned())
         .ok_or("لا كاميرا افتراضية مسجلة — أنشئ جهازًا عبر AkVCamManager add-device (راجع الإرشاد)")?;
     std::thread::Builder::new()
         .name("vcam-akvcam".into())
-        .spawn(move || akvcam_writer(manager, device))
+        .spawn(move || akvcam_writer(manager.to_string_lossy().to_string(), device))
         .map_err(|e| format!("خيط الكاميرا: {e}"))?;
     Ok(())
+}
+
+/// تنفيذ خطة ensure_camera_plan (أوامر argv مهيكلة) — add-device -p يرد
+/// المعرف الجديد (cmdparser.cpp: parseable → AkPrintOut(deviceId)) ونستبدل
+/// @NEW@ به في أوامر add-format التالية.
+#[cfg(not(target_os = "linux"))]
+fn run_camera_plan(manager: &std::path::Path, plan: &[Vec<String>]) -> Result<String, String> {
+    use std::process::Command;
+    let mut new_id = String::new();
+    for argv in plan {
+        if argv.is_empty() {
+            continue;
+        }
+        let args: Vec<String> = argv[1..]
+            .iter()
+            .map(|a| a.replace("@NEW@", &new_id))
+            .collect();
+        let mut c = Command::new(manager);
+        c.arg(&argv[0]);
+        if argv[0] == "add-device" {
+            c.arg("-p"); // المعرف يطبع وحده — نلتقطه للصيغ التالية
+        }
+        for a in &args {
+            c.arg(a); // الوصف يمر وسيطًا واحدًا (add-device يقرأ args[1] حصرًا)
+        }
+        let out = c.output().map_err(|e| format!("{}: {e}", argv[0]))?;
+        let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !out.status.success() {
+            return Err(format!("{} فشل: {}", argv[0], String::from_utf8_lossy(&out.stderr).trim()));
+        }
+        if argv[0] == "add-device" {
+            // parseable: السطر الأخير هو المعرف
+            new_id = text.lines().last().unwrap_or("").trim().to_string();
+            if new_id.is_empty() {
+                return Err("add-device لم يرد معرفًا".into());
+            }
+            println!("[media] أُنشئت كاميرا {new_id} «{}»", core::NEXUS_CAMERA_NAME);
+        }
+    }
+    if new_id.is_empty() {
+        return Err("خطة التوفير لم تُنتج جهازًا".into());
+    }
+    Ok(new_id)
 }
 
 #[cfg(target_os = "linux")]
@@ -1903,7 +2302,7 @@ fn spawn_akvcam_sink(_status: &Value) -> Result<(), String> {
 
 /// مستهلك قناة YUYV → عملية AkVCamManager stream — يعيد التشغيل عند تغيّر الأبعاد
 #[cfg(not(target_os = "linux"))]
-fn akvcam_writer(manager: &'static str, device: String) {
+fn akvcam_writer(manager: String, device: String) {
     use std::io::Write;
     use std::process::{Child, Command, Stdio};
     let mut rx = match vcam_take_rx() {

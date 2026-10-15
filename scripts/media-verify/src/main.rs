@@ -107,6 +107,9 @@ fn test_core() {
     let st2 = core::vcam_driver_status("win32", None, 0, None);
     okif("درايفر ويندوز ناقص → إرشاد", st2["video"]["guide"].is_object() && st2["audio"]["guide"].is_object());
 
+    // §22 — توفير الكاميرا الافتراضية وكشفها (المرحلة 0-وسائط)
+    test_camera_provisioning();
+
     // SDP/ICE
     use serde_json::json;
     okif("parse sdp صالح", core::parse_sdp_obj(&json!({"type": "answer", "sdp": "v=0\r\n"})).is_ok());
@@ -128,6 +131,101 @@ fn test_pointer() {
     let ev = serde_json::json!({"kind": "pointer", "nx": 0.5, "ny": 0.5, "action": "rclick"});
     check_ok("pointer action فاسد مرفوض", if !exec::pointer_action_ok("fart") { Ok(()) } else { Err("bad".into()) });
     let _ = ev; // الإجراء الفعلي يحتاج X11 — يغطيه enigo-verify بنفس النمط (XTEST يرى الموضع)
+}
+
+// ---------------------------------------------------------------------------
+// §22 — المرحلة 0-وسائط: توفير كاميرا NexusLink وكشف الدوايفور ومشغل النظام
+// (كل الحقائق مُتحقق منها من مصدر akvirtualcamera 9.3.1 الحرفي — العقد §22)
+// ---------------------------------------------------------------------------
+
+fn test_camera_provisioning() {
+    println!("== §22 كاميرا NexusLink (توفير/كشف/مثبّت/m3u) ==");
+
+    // 1) خطة التوفير — idempotent: وصفنا موجود → لا شيء
+    let ids = vec!["NexusLinkCam".to_string()];
+    let descs = vec![("NexusLinkCam".to_string(), "NexusLink Camera".to_string())];
+    okif("خطة التوفير: كاميرتنا قائمة → None", core::ensure_camera_plan(&ids, &descs).is_none());
+    // جهاز آخر للمستخدم موجود بلا كاميرتنا → خطة إضافة (لا مسّ لأجهزته — لا load)
+    let descs2 = vec![("UserCam".to_string(), "My Own Cam".to_string())];
+    match core::ensure_camera_plan(&["UserCam".to_string()], &descs2) {
+        Some(plan) => {
+            okif("خطة التوفير: add-device أولًا", plan[0][0] == "add-device" && plan[0][1] == "NexusLink Camera");
+            okif("خطة التوفير: الوصف وسيط واحد (add-device يقرأ args[1] حصرًا)", plan[0].len() == 2);
+            okif("خطة التوفير: 5 أوامر (إضافة + 3 صيغ + تحديث)", plan.len() == 5);
+            okif("خطة التوفير: الصيغ YUY2 بمعرف @NEW@", plan[1][0] == "add-format" && plan[1][1] == "@NEW@" && plan[1][2] == "YUY2" && plan[1][4] == "720");
+            okif("خطة التوفير: تحديث أخيرًا", plan[4][0] == "update");
+        }
+        None => check("خطة التوفير موجودة", false, "كان يجب إعادة خطة".into()),
+    }
+    // مطابقة الوصف متسامحة للحالات الحدية
+    let descs3 = vec![("X".to_string(), "  nexuslink camera  ".to_string())];
+    okif("خطة التوفير: مطابقة الوصف بلا حساسية حالة/فراغ", core::ensure_camera_plan(&["X".to_string()], &descs3).is_none());
+    // القوائم الفارغة → خطة (تثبيت نظيف)
+    okif("خطة التوفير: لا أجهزة → خطة", core::ensure_camera_plan(&[], &[]).is_some());
+
+    // 2) كشف مسار المثبّت من السجل (installPath — installscript.nsi يكتبه)
+    let reg = "HKEY_LOCAL_MACHINE\\SOFTWARE\\Webcamoid\\VirtualCamera\r\n    installPath    REG_SZ    C:\\Program Files\\AkVirtualCamera\r\n";
+    okif("reg installPath يُفك", core::parse_reg_install_path(reg).as_deref() == Some(r"C:\Program Files\AkVirtualCamera"));
+    okif("reg installPath حالة مختلفة", core::parse_reg_install_path("INSTALLPATH   REG_SZ   D:\\AkVCam").as_deref() == Some("D:\\AkVCam"));
+    okif("reg بلا المفتاح → None", core::parse_reg_install_path("foo    REG_SZ    bar").is_none());
+    okif("reg خرج فاضي → None", core::parse_reg_install_path("").is_none());
+    okif("reg قيمة فاضية → None", core::parse_reg_install_path("installPath    REG_SZ    ").is_none());
+
+    // 3) مسارات AkVCamManager — التخطيط الرسمي الجديد أولًا (x64 تحت AkVirtualCamera)
+    let paths = core::akvcam_manager_paths();
+    okif("مسارات المدير: التخطيط الرسمي أولًا", paths[0].contains("AkVirtualCamera") && paths[0].contains("x64"));
+    okif("مسارات المدير: المسارات القديمة محفوظة", paths.iter().any(|p| p.contains("Program Files\\AkVCam")) && paths.iter().any(|p| p.starts_with("/usr/local/bin")));
+
+    // 4) النسخة من `-v` (COMMONS_VERSION — cmdparser.cpp)
+    okif("نسخة سليمة", core::parse_akvcam_version("9.3.1\n").as_deref() == Some("9.3.1"));
+    okif("نسخة ببادئة v", core::parse_akvcam_version("v10.0.2").as_deref() == Some("10.0.2"));
+    okif("نسخة فاسدة (حرف)", core::parse_akvcam_version("unknown").is_none());
+    okif("نسخة فاسدة (طول)", core::parse_akvcam_version("1234567890123456789012345678").is_none());
+    okif("نسخة فاضية", core::parse_akvcam_version("   \n").is_none());
+
+    // 5) ملاحظة OBS كبديل (CLSID يُحقن وقت بناء OBS — لا كشف ثابت، توثيق صادق)
+    let obs_on = core::obs_fallback_status(true);
+    okif("OBS موجود → ملاحظة توجيه", obs_on["installed"].as_bool() == Some(true) && obs_on["note"].as_str().map(|s| s.contains("Start Virtual Camera")).unwrap_or(false));
+    let obs_off = core::obs_fallback_status(false);
+    okif("OBS غائب → بلا ملاحظة", obs_off["installed"].as_bool() == Some(false) && obs_off["note"].as_str() == Some(""));
+
+    // 6) m3u مشغل النظام («stream مؤقت» — بلا نسخ بايتات)
+    let m3u = core::nexuslink_cast_m3u("فيلم الهاتف.mp4", "http://127.0.0.1:3000/api/preview?device=galaxy-s24&path=%2FMovies%2Fa.mp4");
+    okif("m3u: ترويسة معيارية", m3u.starts_with("#EXTM3U\n"));
+    okif("m3u: الاسم في EXTINF", m3u.contains("#EXTINF:-1,فيلم الهاتف.mp4"));
+    okif("m3u: الرابط سطر مستقل", m3u.contains("\nhttp://127.0.0.1:3000/api/preview?device=galaxy-s24&path=%2FMovies%2Fa.mp4\n"));
+    let m3u_evil = core::nexuslink_cast_m3u("شر\r\nEXTINFhack", "http://x/y");
+    okif("m3u: تعقيم أسطر الاسم (3 أسطر حصرًا + بلا CR)", m3u_evil.lines().count() == 3 && !m3u_evil.contains('\r'));
+    okif("m3u: اسم الملف ثابت", core::cast_m3u_file_name() == "nexuslink-cast.m3u");
+
+    // 7) الحالة الموسعة v2 — كل الحقول الصادقة حاضرة وحقول v1 محفوظة
+    let sv = core::vcam_driver_status_v2(
+        "win32",
+        Some(r"C:\Program Files\AkVirtualCamera\x64\AkVCamManager.exe".into()),
+        Some("9.3.1".into()),
+        Some("DirectShow".into()),
+        Some(vec!["NexusLink Camera".into()]),
+        0,
+        None,
+        Some("CABLE Input (VB-Audio Virtual Cable)".into()),
+        true,
+    );
+    okif("v2: نسخة الأداة صادقة", sv["video"]["version"].as_str() == Some("9.3.1"));
+    okif("v2: الواجهة (DirectShow)", sv["video"]["api"].as_str() == Some("DirectShow"));
+    okif("v2: أجهزة الكاميرا بأسمائها", sv["video"]["devices"][0].as_str() == Some("NexusLink Camera"));
+    okif("v2: OBS مكتشف", sv["video"]["obs"]["installed"].as_bool() == Some(true));
+    okif("v2: حقول v1 محفوظة (driver/ok/guide)", sv["video"]["driver"].as_str() == Some("akvirtualcamera") && sv["video"]["ok"].as_bool() == Some(true));
+    okif("v2: الصوت VB-CABLE مكتشف", sv["audio"]["driver"].as_str() == Some("VB-CABLE") && sv["audio"]["ok"].as_bool() == Some(true));
+    okif("v2: غير لينكس → loopback null", core::vcam_driver_status_v2("win32", None, None, None, None, 0, None, None, false)["loopback"].is_null());
+    okif("v2: لينكس بلا loopback → devices=0", core::vcam_driver_status_v2("linux", None, None, None, None, 0, None, None, false)["loopback"]["devices"].as_i64() == Some(0));
+    let sl = core::vcam_driver_status_v2("linux", None, None, None, None, 2, Some("0.3.2".into()), None, false);
+    okif("v2: لينكس loopback بعددها ونسختها", sl["loopback"]["devices"].as_i64() == Some(2) && sl["loopback"]["version"].as_str() == Some("0.3.2"));
+    okif("v2: ماك ناقص → إرشاد صادق", core::vcam_driver_status_v2("macos", None, None, None, None, 0, None, None, false)["video"]["guide"]["steps"].as_array().map(|a| a.len() >= 3).unwrap_or(false));
+
+    // 8) ثوابت التعاقد
+    okif("اسم الكاميرا التعاقدي", core::NEXUS_CAMERA_NAME == "NexusLink Camera");
+    okif("صيغ الكاميرا: 3 صيغ YUY2", core::NEXUS_CAMERA_FORMATS.len() == 3 && core::NEXUS_CAMERA_FORMATS.iter().all(|f| f.0 == "YUY2"));
+    okif("الصيغة الافتراضية 720p30", core::NEXUS_CAMERA_FORMATS[0] == ("YUY2", 1280, 720, 30));
 }
 
 // ---------------------------------------------------------------------------
