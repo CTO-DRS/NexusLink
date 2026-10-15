@@ -46,6 +46,17 @@ mod audit {
     pub fn audit(_op: &str, _kind: &str, _msg: String) {}
 }
 
+// §21 — حشية gyro (live.rs يستدعي consume_gyro — عينات هذا المحرك لا تمر
+// عبرها؛ المستهلك الكامل يتحقق منه gyro-verify حرفيًا)
+mod gyro {
+    pub fn consume_gyro(_flags: u8, _ax: i16, _ay: i16, _az: i16, _gx: i16, _gy: i16, _gz: i16) -> Vec<serde_json::Value> {
+        Vec::new()
+    }
+    pub fn session_ended() -> Vec<serde_json::Value> {
+        Vec::new()
+    }
+}
+
 mod live {
     include!(concat!(env!("OUT_DIR"), "/live_stripped.rs"));
 }

@@ -7,7 +7,8 @@
 //
 // تخطيط الحزمة (big-endian حصراً — عقد §18):
 //   رأس 20B: [0..2) magic 0x4E58 ("NX") · [2] version=1 · [3] type ·
-//            [4] flags (bit0=نسبي لحزمة mouse · bits1-2=الأداة لحزمة pen — §20) ·
+//            [4] flags (bit0=نسبي لحزمة mouse · bits1-2=الأداة لحزمة pen — §20 ·
+//            bits0-5 أزرار الجيمباد + bit6 الإمساك لحزمة gyro — §21) ·
 //            [5] محجوز ·
 //            [6..10) seq u32be · [10..14) ts u32be (ms epoch مقتطعة) ·
 //            [14..22) key 8B (مفتاح الجلسة)
@@ -16,14 +17,16 @@
 //   mouse 10B: nx|dx · ny|dy u16be (نسبي: i16be ±500 بكسل — flags bit0=1) ·
 //              phase u8 (0=move 1=down 2=up 3=click 4=dblclick 5=rclick) ·
 //              buttons u8 · wheel i16be
-//   gyro  12B: ax·ay·az i16be (milli-g) · gx·gy·gz i16be (milli-dps)
+//   gyro  12B: ax·ay·az i16be (milli-g) · gx·gy·gz i16be (milli-rad/s —
+//            rad/s × 1000 كما تنتجها sensors_plus؛ مدى ±32.7 rad/s)
 //   touch  8B: nx·ny u16be · action u8 (إجراءات pointer الستة) · id u8 · pad u16
 //   ping   0B  (يرد الجسر pong: type=0x7E بنفس seq وts=زمن الجسر)
 //
 // التحويل للتنفيذ (بلا مسار حقن موازٍ — القاعدة الذهبية):
 //   pen → kind=pointer (المطبع القائم §15) + pressure محمولة للمهام القادمة
 //   touch/mouse-مطلق → kind=pointer · mouse-نسبي → kind=move (§13 drag حافة)
-//   wheel≠0 → kind=scroll · gyro → بلا حدث (إحصاء فقط — مستهلكه مهمة الجيمباد)
+//   wheel≠0 → kind=scroll · gyro → بلا وضع نشط: إحصاء فقط؛ وضع نشط (§21):
+//   gyro.rs يترجمه لأحداث قياسية (key/move/presenter) في نفس الدفعة
 use serde_json::{json, Value};
 
 /// إيقاع الحزمة — magic «NX»
@@ -294,11 +297,18 @@ pub fn encode_touch(seq: u32, ts: u32, key: &[u8; 8], nx: f64, ny: f64, action: 
     encode(TYPE_TOUCH, 0, seq, ts, key, &p)
 }
 
-/// ترميز حزمة gyro (12B حمولة)
+/// ترميز حزمة gyro (12B حمولة) — flags التعاقد §21.ب: bits0-5 أزرار
+/// A·B·X·Y·L·R · bit6 الإمساك · bit7 محجوز (0 قبل §21 — توافق أمامي كامل)
 #[allow(clippy::too_many_arguments)]
 pub fn encode_gyro(seq: u32, ts: u32, key: &[u8; 8], ax: i16, ay: i16, az: i16, gx: i16, gy: i16, gz: i16) -> Vec<u8> {
+    encode_gyro_flags(seq, ts, key, 0, ax, ay, az, gx, gy, gz)
+}
+
+/// ترميز gyro بأزرار/إمساك (§21.ب — flags منقّاة على البايت)
+#[allow(clippy::too_many_arguments)]
+pub fn encode_gyro_flags(seq: u32, ts: u32, key: &[u8; 8], flags: u8, ax: i16, ay: i16, az: i16, gx: i16, gy: i16, gz: i16) -> Vec<u8> {
     let p = [ax.to_be_bytes(), ay.to_be_bytes(), az.to_be_bytes(), gx.to_be_bytes(), gy.to_be_bytes(), gz.to_be_bytes()].concat();
-    encode(TYPE_GYRO, 0, seq, ts, key, &p)
+    encode(TYPE_GYRO, flags & 0xFF, seq, ts, key, &p)
 }
 
 /// ترميز ping (بلا حمولة)

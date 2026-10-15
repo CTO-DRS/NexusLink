@@ -1060,6 +1060,199 @@ try {
   }
 
   // ================================================================
+  // R4 مرحلة ③ (عقد §21) — ثلاثية التحكم المتقدم: جيمباد الحساسات
+  // (خرائط مفاتيح + قوالب + عصا تقليب) · ماوس هوائي معاير · عارض عروض
+  // ================================================================
+  console.log("== R4 §21: التحكم المتقدم (rc:gyro:cmd/state + gyro flags) ==")
+  {
+    // (أ) حوض وهمي جديد على 3011 — يفحص مرور gyro بأزراره كما هي (توافق §18)
+    const sink3 = dgram.createSocket("udp4")
+    const sink3Pkts = []
+    await new Promise((res) => {
+      sink3.on("message", (m, rinfo) => { if (rinfo.address === "127.0.0.1") sink3Pkts.push(m) })
+      sink3.bind(3011, "127.0.0.1", res)
+    })
+    const udp3 = dgram.createSocket("udp4")
+    await new Promise((res) => udp3.bind(0, "127.0.0.1", res))
+
+    // (ب) rc:gyro:cmd بلا جلسة/ثقة → rc:rejected(untrusted) — بوابة live-hello نفسها
+    const rejGyro = await new Promise((res) => {
+      webSock.on("rc:rejected", (d) => { if (d?.ev === "rc:gyro:cmd") res(d) })
+      webSock.emit("rc:gyro:cmd", { cmd: "get" })
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §21: rc:gyro:cmd بلا جلسة/ثقة → rc:rejected(untrusted)", rejGyro?.reason === "untrusted", `got=${JSON.stringify(rejGyro)}`)
+
+    // جلسة موثوقة جديدة + نبض صيانة طوال القسم
+    const hb3 = setInterval(() => rcCtl.emit("rc:session", { action: "hb" }), 2000)
+    const gyroSession = await new Promise((res) => {
+      rcDesk.on("rc:session", (d) => { if (d?.active === true) res(d) })
+      rcCtl.emit("rc:session", { action: "start", deviceId: "galaxy-s24", name: "Galaxy S24" })
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §21: جلسة التحكم المتقدم نشطة", gyroSession?.active === true, JSON.stringify(gyroSession))
+
+    // (ج) get يصل الكمبيوتر بوسم __src=controller — وstate من دور pc تصل الهاتف
+    const gyroGet = await new Promise((res) => {
+      rcDesk.on("rc:gyro:cmd", (d) => res(d))
+      rcCtl.emit("rc:gyro:cmd", { cmd: "get" })
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §21: rc:gyro:cmd get يصل الكمبيوتر (__src=controller)",
+      gyroGet?.cmd === "get" && gyroGet?.__src === "controller", JSON.stringify(gyroGet))
+    const gyroStateOk = await new Promise((res) => {
+      rcCtl.on("rc:gyro:state", (d) => res(d))
+      rcDesk.emit("rc:gyro:state", { mode: "off", template: "platformer", map: {}, stats: {}, calibrated: false, at: 2 })
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §21: rc:gyro:state من دور pc تصل الهاتف (مصدر الحقيقة)",
+      gyroStateOk?.mode === "off" && gyroStateOk?.at === 2, JSON.stringify(gyroStateOk)?.slice(0, 120))
+    const gyroLeak = await new Promise((res) => {
+      rcCtl.on("rc:gyro:state", (d) => { if (d?.leak === 2) res(d) })
+      rcCtl.emit("rc:gyro:state", { leak: 2 })
+      setTimeout(() => res(null), 2500)
+    })
+    check("R4 §21: rc:gyro:state من دور phone يُرفض (لا انتحال حالة)", gyroLeak === null, JSON.stringify(gyroLeak))
+
+    // (د) set سليم يمرر الحقول المنقاة حصرًا — والفاسد يُرفض كله صامتًا
+    const gyroSetOk = await new Promise((res) => {
+      rcDesk.on("rc:gyro:cmd", (d) => { if (d?.cmd === "set" && d?.mode === "gamepad") res(d) })
+      rcCtl.emit("rc:gyro:cmd", { cmd: "set", mode: "gamepad", template: "racing", deadzoneDeg: 22, sens: 2.5, keyA: " ", keyB: "l", tiltDeg: 30, laser: true, calibrate: true })
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §21: set سليم يمرر الحقول المنقاة (mode/template/deadzone/sens/keys/tilt/laser/calibrate حرفيًا)",
+      gyroSetOk?.mode === "gamepad" && gyroSetOk?.template === "racing" && gyroSetOk?.deadzoneDeg === 22 && gyroSetOk?.sens === 2.5
+        && gyroSetOk?.keyA === " " && gyroSetOk?.keyB === "l" && gyroSetOk?.tiltDeg === 30 && gyroSetOk?.laser === true && gyroSetOk?.calibrate === true,
+      JSON.stringify(gyroSetOk))
+    const badGyro = [
+      { cmd: "set", mode: "hacked" }, { cmd: "set", template: "evil" },
+      { cmd: "set", deadzoneDeg: 90 }, { cmd: "set", sens: 9 },
+      { cmd: "set", keyA: "ab" }, { cmd: "set", keyA: "\u0007" }, { cmd: "set", keyB: "capslock" },
+      { cmd: "set", tiltDeg: 70 }, { cmd: "set", laser: 3 }, { cmd: "frobnicate" },
+    ]
+    for (const bad of badGyro) {
+      const badRes = await new Promise((res) => {
+        rcDesk.on("rc:gyro:cmd", (d) => { if (JSON.stringify(d).includes(JSON.stringify(bad).slice(1, -1).split(":")[1]?.trim() ?? bad.cmd)) res(d) })
+        rcCtl.emit("rc:gyro:cmd", bad)
+        setTimeout(() => res(null), 1200)
+      })
+      check(`R4 §21: أمر فاسد يُرفض كله: ${JSON.stringify(bad)}`, badRes === null, JSON.stringify(badRes))
+    }
+
+    // (هـ) قناة حية جديدة → gyro بأزرار عبر UDP: الجسر يمرر flags كما هي
+    const liveReady3 = await new Promise((res) => {
+      rcCtl.on("rc:live-ready", (d) => res(d))
+      rcCtl.emit("rc:live-hello")
+      setTimeout(() => res(null), 6000)
+    })
+    check("R4 §21: قناة حية جديدة (مفتاح 16-hex)", typeof liveReady3?.key === "string" && liveReady3.key.length === 16, JSON.stringify(liveReady3))
+    if (liveReady3?.key) {
+      const gyroEnc = (flags, seq, keyHex) => {
+        const head = Buffer.alloc(22)
+        head.writeUInt16BE(0x4e58, 0)
+        head[2] = 1
+        head[3] = 3 // gyro
+        head[4] = flags
+        head.writeUInt32BE(seq >>> 0, 6)
+        head.writeUInt32BE(Date.now() & 0xffffffff, 10)
+        head.write(keyHex, 14, "hex")
+        const pl = Buffer.alloc(12)
+        pl.writeInt16BE(0, 0) // ax
+        pl.writeInt16BE(500, 2) // ay (إمالة ~30°)
+        pl.writeInt16BE(-866, 4) // az
+        pl.writeInt16BE(0, 6) // gx
+        pl.writeInt16BE(0, 8) // gy
+        pl.writeInt16BE(1000, 10) // gz
+        return Buffer.concat([head, pl])
+      }
+      udp3.send(gyroEnc(0b0100_0011, 71, liveReady3.key), 3010, "127.0.0.1") // A+B+إمساك
+      await sleep(120)
+      udp3.send(gyroEnc(0b0100_0100, 72, liveReady3.key), 3010, "127.0.0.1") // X+إمساك
+      await sleep(120)
+      udp3.send(gyroEnc(0, 73, liveReady3.key), 3010, "127.0.0.1") // بلا أزرار
+      await sleep(900)
+      const gyros = sink3Pkts.filter((m) => m[3] === 3)
+      check("R4 §21: حزم gyro بأزرارها تمر للحوض كما هي (bits0-5 + bit6 الإمساك محفوظة)",
+        gyros.length === 3 && gyros[0][4] === 0b0100_0011 && gyros[1][4] === 0b0100_0100 && gyros[2][4] === 0 && gyros.every((m) => m.readUInt16BE(0) === 0x4e58),
+        `got=${gyros.map((m) => m[4]).join(",")}`)
+    }
+
+    // (و) التوثيق + الملفات (نفس نمط §18/§19/§20)
+    const rbTs3 = await fsMod.readFile("src/lib/nexus/remote-bridge.ts", "utf8").catch(() => "")
+    const dbTsx3 = await fsMod.readFile("src/components/nexus/desktop-bridge.tsx", "utf8").catch(() => "")
+    const coreRs3 = await fsMod.readFile("apps/desktop/src-tauri/src/live_core.rs", "utf8").catch(() => "")
+    const execRs3 = await fsMod.readFile("apps/desktop/src-tauri/src/input_exec.rs", "utf8").catch(() => "")
+    const gyroRs3 = await fsMod.readFile("apps/desktop/src-tauri/src/gyro.rs", "utf8").catch(() => "")
+    const gyroCoreRs3 = await fsMod.readFile("apps/desktop/src-tauri/src/gyro_core.rs", "utf8").catch(() => "")
+    const liveRs3 = await fsMod.readFile("apps/desktop/src-tauri/src/live.rs", "utf8").catch(() => "")
+    const mainRs3 = await fsMod.readFile("apps/desktop/src-tauri/src/main.rs", "utf8").catch(() => "")
+    const inputRs3 = await fsMod.readFile("apps/desktop/src-tauri/src/input.rs", "utf8").catch(() => "")
+    const liveDart3 = await fsMod.readFile("nexuslink_mobile/lib/data/live_channel.dart", "utf8").catch(() => "")
+    const svcDart3 = await fsMod.readFile("nexuslink_mobile/lib/data/controller_service.dart", "utf8").catch(() => "")
+    const gyroDart3 = await fsMod.readFile("nexuslink_mobile/lib/presentation/gyro_screen.dart", "utf8").catch(() => "")
+    const provDart3 = await fsMod.readFile("nexuslink_mobile/lib/state/controller_providers.dart", "utf8").catch(() => "")
+    const ctlDart3 = await fsMod.readFile("nexuslink_mobile/lib/presentation/controller_screen.dart", "utf8").catch(() => "")
+    const protoDart3 = await fsMod.readFile("nexuslink_mobile/lib/core/protocol.dart", "utf8").catch(() => "")
+    const arDict4 = await fsMod.readFile("nexuslink_mobile/assets/translations/ar.json", "utf8").catch(() => "")
+    const enDict4 = await fsMod.readFile("nexuslink_mobile/assets/translations/en.json", "utf8").catch(() => "")
+    const checklist15 = await fsMod.readFile("docs/e2e-checklist.md", "utf8").catch(() => "")
+    const gvRs = await fsMod.readFile("scripts/gyro-verify/src/main.rs", "utf8").catch(() => "")
+    const gvBuild = await fsMod.readFile("scripts/gyro-verify/build.rs", "utf8").catch(() => "")
+    check("R4 §21: العقد موثق (أزرار flags/قوالب/عصا/صفير/إيماءة/أحداث/تحقق)",
+      contract.includes("## 21. التحكم المتقدم") && contract.includes("bits0-5") && contract.includes("FLAG_GRAB") && contract.includes("rc:gyro:cmd") && contract.includes("milli-rad/s"),
+      "contract §21")
+    const mirrorTs3 = await fsMod.readFile("mini-services/remote-service/index.ts", "utf8").catch(() => "")
+    check("R4 §21: الجسران متطابقان (تنقية cmd + بوابة الجلسة + state من دور pc حصرًا)",
+      rbTs3.includes('rc:gyro:cmd') && rbTs3.includes('reason: "untrusted"') && rbTs3.includes("desktopSocks.has(socket.id)")
+        && mirrorTs3.includes('rc:gyro:cmd') && mirrorTs3.includes("reason: 'untrusted'") && mirrorTs3.includes("desktopSocks.has(socket.id)"),
+      "remote-bridge + remote-service mirror")
+    check("R4 §21: الويبفيو يربط أوامر gyro بأوامر Tauri ويبث الحالة",
+      dbTsx3.includes("rc:gyro:cmd") && dbTsx3.includes('gyro_config_set') && dbTsx3.includes('rc:gyro:state'),
+      "desktop-bridge.tsx")
+    check("R4 §21: النواة النقية — أزرار flags + خرائط/قوالب + عصا موقّعة + صفير/فلتر + إيماءة",
+      gyroCoreRs3.includes("pub const FLAG_GRAB: u8") && gyroCoreRs3.includes("pub fn axis_step") && gyroCoreRs3.includes("pub fn calibrate_zero")
+        && gyroCoreRs3.includes("pub fn air_filter") && gyroCoreRs3.includes("pub fn tilt_gesture") && gyroCoreRs3.includes("TPL_FIGHTING"),
+      "gyro_core.rs")
+    check("R4 §21: المستهلك — بوابة الوضع/الجلسة + حواف الحالة الكاملة + تفكيك حتمي",
+      gyroRs3.includes("pub fn consume_gyro") && gyroRs3.includes("crate::input::is_active") && gyroRs3.includes("release_all_events") && gyroRs3.includes("desktop-local"),
+      "gyro.rs")
+    check("R4 §21: live.rs يوجه gyro للمستهلك (بلا مسار حقن موازٍ — نفس الدفعة)",
+      liveRs3.includes("crate::gyro::consume_gyro(h.flags") && liveRs3.includes("batch.extend(gyro_evs)"),
+      "live.rs")
+    check("R4 §21: apply_key بضغط/إفلات الجيمباد (state press/release — توافق §13)",
+      execRs3.includes('Some("press") => Some(Direction::Press)') && execRs3.includes("Key::Unicode(c), dir"),
+      "input_exec.rs")
+    check("R4 §21: نهاية الجلسة تفكك المفاتيح (input.rs ResetDrag → gyro::session_ended)",
+      inputRs3.includes("crate::gyro::session_ended()") && mainRs3.includes("mod gyro") && mainRs3.includes("gyro::gyro_config_set"),
+      "input.rs + main.rs")
+    check("R4 §21: Flutter عميل (أزرار flags + إمساك + بث 100Hz نشط حصرًا)",
+      liveDart3.includes("gyroGrab = 0x40") && liveDart3.includes("flags & 0xFF") && svcDart3.includes("sendGyroRaw") && svcDart3.includes("!_sessionReadyForLive") && svcDart3.includes("gyroCmd"),
+      "live_channel + controller_service")
+    check("R4 §21: شاشة التحكم المتقدم (ثلاثة أوضاع + معايرة + إمساك + مؤقت باهتزاز)",
+      gyroDart3.includes("kModeGamepad") && gyroDart3.includes("kModeAirmouse") && gyroDart3.includes("kModePresenter")
+        && gyroDart3.includes("calibrate") && gyroDart3.includes("HapticFeedback") && gyroDart3.includes("GyroStream"),
+      "gyro_screen.dart")
+    check("R4 §21: المقدمون وبطاقة الدخول والأحداث التعاقدية",
+      provDart3.includes("gyroCmd") && provDart3.includes("sendGyroRaw") && ctlDart3.includes("gyro.entry") && protoDart3.includes("rc:gyro:state"),
+      "providers + controller_screen + protocol")
+    check("R4 §21: القاموسان gyro.* (ar/en)",
+      arDict4.includes('"gyro"') && arDict4.includes("عصا التقليب") && arDict4.includes("نقطة الصفير") && enDict4.includes('"gyro"') && enDict4.includes("zero point"),
+      "i18n")
+    check("R4 §21: محرك التحقق يضمّن النواة والمستهلك حرفيًا (تجريد #[tauri::command])",
+      gvRs.includes("gyro_core.rs") && gvRs.includes("input_exec.rs") && gvRs.includes("gyro_stripped.rs") && gvBuild.includes("#[tauri::command"),
+      "gyro-verify")
+    check("R4 §21: الفحص الميداني موثق (e2e-checklist §15 — جيمباد/ماوس/عرض حقيقي)",
+      checklist15.includes("## 15. الجولة 4 مرحلة ③") && checklist15.includes("PowerPoint"),
+      "e2e-checklist §15")
+
+    clearInterval(hb3)
+    udp3.close()
+    sink3.close()
+    rcCtl.emit("rc:session", { action: "stop" })
+    await sleep(400)
+  }
+
+  // ================================================================
   // FA-files (عقد §14) — دمج الملفات في نظام التشغيل
   // ================================================================
   console.log("== ] FA-files: OS file integration ==")

@@ -95,6 +95,10 @@ fn exec_channel(app: &tauri::AppHandle) -> mpsc::Sender<InputMsg> {
                             // §20 — تصفير حالة الفرشاة/اللوحة مع نهاية الجلسة
                             exec::brush_reset();
                             crate::tablet::session_ended();
+                            // §21 — تفكيك مفاتيح الجيمباد المعلقة (لا مفتاح عالق)
+                            for ev in crate::gyro::session_ended() {
+                                let _ = exec::apply_event(en, &ev);
+                            }
                         }
                     }
                 }

@@ -277,6 +277,31 @@ export function DesktopBridge() {
       }
     })
 
+    // ------------------------------------------------------------------
+    // الجولة 4 مرحلة ③ (عقد §21) — التحكم المتقدم: أوامر الهاتف (جلسة
+    // موثوقة حصرًا — الجسر ينقّي) → أوامر Tauri ثم بث rc:gyro:state
+    // (مصدر الحقيقة — نمط tablet §20.ج حرفيًا)
+    // ------------------------------------------------------------------
+    rcSock.on("rc:gyro:cmd", (d: Record<string, unknown>) => {
+      if (String(d?.__src ?? "") !== "controller") return
+      const cmd = String(d?.cmd ?? "")
+      if (cmd === "get") {
+        void tauriInvoke<Record<string, unknown>>("gyro_config")
+          .then((st) => rcSock.emit("rc:gyro:state", st))
+          .catch((e) => console.warn("[desktop-bridge] gyro_config:", e))
+        return
+      }
+      if (cmd === "set") {
+        const args: Record<string, unknown> = {}
+        for (const k of ["mode", "template", "deadzoneDeg", "sens", "shakeDegS", "tiltDeg", "laser", "calibrate", "keyA", "keyB", "keyX", "keyY", "keyL", "keyR"]) {
+          if (d[k] !== undefined) args[k] = d[k]
+        }
+        void tauriInvoke<Record<string, unknown>>("gyro_config_set", args)
+          .then((st) => rcSock.emit("rc:gyro:state", st))
+          .catch((e) => console.warn("[desktop-bridge] gyro_config_set:", e))
+      }
+    })
+
     // أحداث الطبقة الأصلية: إنهاء من الشريط/watchdog + أخطاء الحقن (إرشاد ماك)
     type Unlisten = () => void
     let unlisteners: Unlisten[] = []

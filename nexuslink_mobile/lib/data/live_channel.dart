@@ -22,7 +22,7 @@ import 'dart:typed_data';
 ///   للماوس) · محجوز u8 · seq u32 · ts u32 (ms epoch مقتطعة) · key 8B
 ///   pen 12B: nx·ny u16 · pressure u16 · tiltX·tiltY i8 · phase u8 · buttons u8
 ///   mouse 10B: nx|dx · ny|dy (مطلق u16 / نسبي i16 ±500) · phase u8 · buttons u8 · wheel i16
-///   gyro 12B: ax·ay·az·gx·gy·gz i16 (milli-g / milli-dps)
+///   gyro 12B: ax·ay·az·gx·gy·gz i16 (milli-g / milli-rad/s — rad/s × 1000)
 ///   touch 8B: nx·ny u16 · action u8 · pointerId u8 · pad u16
 ///   ping 0B (يرد الجسر pong type=0x7E بنفس seq وts=زمن الجسر)
 
@@ -371,8 +371,19 @@ class LiveChannel {
     _sendRaw(_encode(_typeMouse, 0x00, _nextSeq(), _syncedTs(), _key, p));
   }
 
-  /// جيروسكوب/تسارع خام: تسارع milli-g + دوران milli-dps (مستهلكه مهمة الجيمباد)
-  void sendGyro(List<double> accel, List<double> gyro) {
+  /// جيروسكوب/تسارع خام: تسارع milli-g + دوران milli-dps + flags التعاقد
+  /// (§21.ب): bits0-5 أزرار الجيمباد A·B·X·Y·L·R · bit6 الإمساك (بوابة
+  /// حركة الماوس الهوائي/الليزر) — الحالة الكاملة كل عينة (دلالة حية ذاتية
+  /// التصحيح ضد فقد الحزم، نفس عقد §18). الوضع النشط فقط (مستهلكه gyro.rs).
+  static const int gyroBtnA = 0x01,
+      gyroBtnB = 0x02,
+      gyroBtnX = 0x04,
+      gyroBtnY = 0x08,
+      gyroBtnL = 0x10,
+      gyroBtnR = 0x20,
+      gyroGrab = 0x40;
+
+  void sendGyro(List<double> accel, List<double> gyro, {int flags = 0}) {
     if (accel.length < 3 || gyro.length < 3) return;
     final p = Uint8List(12);
     final bd = ByteData.sublistView(p);
@@ -380,7 +391,7 @@ class LiveChannel {
       bd.setInt16(i * 2, (accel[i] * 1000).round().clamp(-32768, 32767), Endian.big);
       bd.setInt16(6 + i * 2, (gyro[i] * 1000).round().clamp(-32768, 32767), Endian.big);
     }
-    _sendRaw(_encode(_typeGyro, 0, _nextSeq(), _syncedTs(), _key, p));
+    _sendRaw(_encode(_typeGyro, flags & 0xFF, _nextSeq(), _syncedTs(), _key, p));
   }
 
   /// لمس على الشاشة المعروضة: إحداثيات 0..1 + إجراء (نفس ptr الستة)
