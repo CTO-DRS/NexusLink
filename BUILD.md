@@ -3,14 +3,14 @@
 كل ما تحتاجه لبناء حزم المنصات الخمس محليًا أو عبر CI — نفس الخطوات التي ينفذها
 `.github/workflows/release.yml` حرفيًا (وصفة مجرّبة أخضر 3/3).
 
-**رقم الإصدار موحّد ومقفول: `1.0.0`** — يُصرَّح به في 4 ملفات يجب أن تبقى متطابقة:
+**رقم الإصدار موحّد وموحّد: `1.1.0`** — يُصرَّح به في 4 ملفات يجب أن تبقى متطابقة:
 
 | الملف | الحقل | القيمة |
 |---|---|---|
-| `apps/desktop/src-tauri/tauri.conf.json` | `version` | 1.0.0 |
-| `apps/desktop/src-tauri/Cargo.toml` | `package.version` | 1.0.0 |
-| `nexuslink_mobile/pubspec.yaml` | `version` | 1.0.0+1 |
-| `package.json` (الجذر) | `version` | 1.0.0 |
+| `apps/desktop/src-tauri/tauri.conf.json` | `version` | 1.1.0 |
+| `apps/desktop/src-tauri/Cargo.toml` | `package.version` | 1.1.0 |
+| `nexuslink_mobile/pubspec.yaml` | `version` | 1.1.0+2 |
+| `package.json` (الجذر) | `version` | 1.1.0 |
 
 > قاعدة صارمة: أي تغيير مستقبلي للإصدار يتم في الملفات الأربعة معًا وبإنشاء وسم
 > `v*` جديد — لا تُعدّل أصول إصدار منشور أبدًا (تواقيع `latest.json` تُبنى على
@@ -91,7 +91,7 @@ bunx @tauri-apps/cli@^2 build --bundles "dmg app" --config '{"bundle":{"external
 > `CMAKE_POLICY_VERSION_MINIMUM=3.5` — CMake 4 أزال توافق <3.5 وlibopus المضمن قديم.
 
 النواتج في `apps/desktop/src-tauri/target/release/bundle/`:
-`nsis/NexusLink_1.0.0_x64-setup.exe` · `msi/NexusLink_1.0.0_x64_en-US.msi` ·
+`nsis/NexusLink_1.1.0_x64-setup.exe` · `msi/NexusLink_1.1.0_x64_en-US.msi` ·
 `appimage/*.AppImage` · `deb/*.deb` · `dmg/*.dmg`.
 
 ### نسخة Portable ZIP (ويندوز)
@@ -100,7 +100,7 @@ bunx @tauri-apps/cli@^2 build --bundles "dmg app" --config '{"bundle":{"external
 `procman::resolve_resources` أولًا):
 
 ```
-NexusLink-Portable-1.0.0/
+NexusLink-Portable-1.1.0/
 ├── NexusLink.exe        ← target/release (أو nexuslink-desktop.exe مُعاد تسميته)
 ├── node.exe             ← sidecar node-x86_64-pc-windows-msvc.exe مُعاد تسميته
 ├── resources/
@@ -110,7 +110,7 @@ NexusLink-Portable-1.0.0/
 └── README.txt           ← apps/desktop/PORTABLE-README.txt
 ```
 
-ضغط: `/c/Windows/System32/tar.exe -a -cf NexusLink_1.0.0_x64-portable.zip NexusLink-Portable-1.0.0`
+ضغط: `/c/Windows/System32/tar.exe -a -cf NexusLink_1.1.0_x64-portable.zip NexusLink-Portable-1.1.0`
 (bsdtar يتجاوز مشاكل المسارات الطويلة في Compress-Archive مع node_modules).
 
 ### متغيرات بيئة التوقيع للمحدّث (updater)
@@ -182,13 +182,13 @@ codesign --deep --force --options runtime \
   --sign "Developer ID Application: …" NexusLink.app
 
 # Notarization عبر notarytool ثم staple:
-xcrun notarytool submit NexusLink_1.0.0_aarch64.dmg \
+xcrun notarytool submit NexusLink_1.1.0_aarch64.dmg \
   --key ~/AuthKey.p8 --key-id KEYID --issuer ISSUERID --wait
-xcrun stapler staple NexusLink_1.0.0_aarch64.dmg
+xcrun stapler staple NexusLink_1.1.0_aarch64.dmg
 
 # تحقق نهائي:
 spctl -a -vv -t install NexusLink.app
-stapler validate NexusLink_1.0.0_aarch64.dmg
+stapler validate NexusLink_1.1.0_aarch64.dmg
 ```
 
 > حدود صادقة: بلا حساب مدفوع يبقى Gatekeeper يحذر — موثق في §15 من العقد.

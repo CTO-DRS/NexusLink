@@ -737,6 +737,131 @@ try {
   }
 
   // ================================================================
+  // ================================================================
+  // R4 §18-ت (توسعة) — NexusLive: متجهات الترميز + الثوابت + الجسران + العميل
+  // ================================================================
+  console.log("== R4 §18-ت: توسعة NexusLive (متجهات ثنائية + ثوابت + مرايا) ==")
+  {
+    const coreRs18 = await fsMod.readFile("apps/desktop/src-tauri/src/live_core.rs", "utf8").catch(() => "")
+    const liveRs18 = await fsMod.readFile("apps/desktop/src-tauri/src/live.rs", "utf8").catch(() => "")
+    const rbTs18 = await fsMod.readFile("src/lib/nexus/remote-bridge.ts", "utf8").catch(() => "")
+    const mirrorTs18 = await fsMod.readFile("mini-services/remote-service/index.ts", "utf8").catch(() => "")
+    const liveDart18 = await fsMod.readFile("nexuslink_mobile/lib/data/live_channel.dart", "utf8").catch(() => "")
+
+    // (أ) ثوابت النواة التعاقدية
+    check("R4 §18-ت: ثوابت النواة (MAGIC 0x4E58 · VERSION=1 · HEADER_LEN=22 · MAX_DATAGRAM=128)",
+      coreRs18.includes("pub const MAGIC: u16 = 0x4E58") && coreRs18.includes("pub const VERSION: u8 = 1")
+      && coreRs18.includes("pub const HEADER_LEN: usize = 22") && coreRs18.includes("pub const MAX_DATAGRAM: usize = 128"),
+      "live_core.rs")
+    check("R4 §18-ت: أنواع الحزم الستة (pen=1 mouse=2 gyro=3 touch=4 pong=0x7E ping=0x7F)",
+      coreRs18.includes("pub const TYPE_PEN: u8 = 1") && coreRs18.includes("pub const TYPE_MOUSE: u8 = 2")
+      && coreRs18.includes("pub const TYPE_GYRO: u8 = 3") && coreRs18.includes("pub const TYPE_TOUCH: u8 = 4")
+      && coreRs18.includes("pub const TYPE_PONG: u8 = 0x7E") && coreRs18.includes("pub const TYPE_PING: u8 = 0x7F"),
+      "live_core.rs")
+    check("R4 §18-ت: أطوار القلم الأربعة + إجراءات المؤشر الستة",
+      coreRs18.includes("pub const PEN_HOVER: u8 = 0") && coreRs18.includes("pub const PEN_DOWN: u8 = 1")
+      && coreRs18.includes("pub const PEN_MOVE: u8 = 2") && coreRs18.includes("pub const PEN_UP: u8 = 3")
+      && coreRs18.includes('["move", "down", "up", "click", "dblclick", "rclick"]'),
+      "live_core.rs")
+    check("R4 §18-ت: دمج حي في النواة (coalesce — الأحدث يغلب بلا تخزين مؤقت)",
+      coreRs18.includes("pub fn coalesce(events: Vec<Value>) -> Vec<Value>"), "live_core.rs")
+    check("R4 §18-ت: بنية pen تحمل الضغط/الميل/الطور/الأزرار/الأداة (تحليل الحمولة الحرفي)",
+      coreRs18.includes("Pen { nx: f64, ny: f64, pressure: f64, tilt_x: i8, tilt_y: i8, phase: u8, buttons: u8, tool: u8 }")
+      && coreRs18.includes("Mouse { a: f64, b: f64, phase: u8, buttons: u8, wheel: i16 }"),
+      "live_core.rs")
+
+    // (ب) متجهات ترميز ثنائية — big-endian، تحقق بايت-ببايت بلا شبكة
+    const enc18 = (type, flags, seq, ts, keyHex, payload = Buffer.alloc(0)) => {
+      const head = Buffer.alloc(22)
+      head.writeUInt16BE(0x4e58, 0); head[2] = 1; head[3] = type; head[4] = flags
+      head.writeUInt32BE(seq >>> 0, 6); head.writeUInt32BE(ts >>> 0, 10); head.write(keyHex, 14, "hex")
+      return Buffer.concat([head, payload])
+    }
+    const penPl = Buffer.alloc(10); penPl.writeUInt16BE(0x8000, 0); penPl.writeUInt16BE(0x4000, 2)
+    penPl.writeUInt16BE(0xFFFF, 4); penPl.writeInt8(-60, 6); penPl.writeInt8(30, 7); penPl[8] = 2; penPl[9] = 1
+    const penPkt = enc18(1, 0, 1, 1699999999, "0123456789abcdef", penPl)
+    check("R4 §18-ت: متجه pen = 32B (22+10) — pressure u16be=65535 وtilt i8 والطور/الأزرار كما كُتبت (حمولة sendPen الحرفية)",
+      penPkt.length === 32 && penPkt.readUInt16BE(22) === 0x8000 && penPkt.readUInt16BE(26) === 0xFFFF
+      && penPkt.readInt8(28) === -60 && penPkt.readInt8(29) === 30 && penPkt[30] === 2 && penPkt[31] === 1,
+      `len=${penPkt.length}`)
+    const mouseRel = Buffer.alloc(8); mouseRel.writeInt16BE(-120, 0); mouseRel.writeInt16BE(250, 2)
+    mouseRel[4] = 5; mouseRel[5] = 1; mouseRel.writeInt16BE(-3, 6)
+    const mousePkt = enc18(2, 1, 0xFFFFFFFE, Date.now() & 0xffffffff, "0123456789abcdef", mouseRel)
+    check("R4 §18-ت: متجه mouse نسبي = 30B — flags bit0 + dx/dy i16be (±500) + wheel i16be سالب",
+      mousePkt.length === 30 && mousePkt[4] === 1 && mousePkt.readInt16BE(22) === -120
+      && mousePkt.readInt16BE(24) === 250 && mousePkt[26] === 5 && mousePkt[27] === 1 && mousePkt.readInt16BE(28) === -3,
+      `len=${mousePkt.length}`)
+    check("R4 §18-ت: seq u32be على حافة الالتفاف (0xFFFFFFFE ← تغليف 0xFFFFFFFF+1 = 0)",
+      mousePkt.readUInt32BE(6) === 0xFFFFFFFE && ((0xFFFFFFFF + 1) >>> 0) === 0,
+      `seq=${mousePkt.readUInt32BE(6)}`)
+    const gyroPl = Buffer.alloc(12); gyroPl.writeInt16BE(-866, 0); gyroPl.writeInt16BE(500, 2); gyroPl.writeInt16BE(0, 4)
+    gyroPl.writeInt16BE(0, 6); gyroPl.writeInt16BE(0, 8); gyroPl.writeInt16BE(1000, 10)
+    const gyroPkt = enc18(3, 0b0100_0011, 71, 0, "ffffffffffffffff", gyroPl)
+    check("R4 §18-ت: متجه gyro = 34B (22+12) milli-g/milli-dps + أزرار A+B+إمساك — أوسع حمولة تعاقدية",
+      gyroPkt.length === 34 && gyroPkt.readInt16BE(22) === -866 && gyroPkt.readInt16BE(32) === 1000 && gyroPkt[4] === 0b0100_0011,
+      `len=${gyroPkt.length}`)
+    const touchPl = Buffer.alloc(8); touchPl.writeUInt16BE(0x8000, 0); touchPl.writeUInt16BE(0x4000, 2); touchPl[4] = 3
+    const touchPkt = enc18(4, 0, 9, 1, "0123456789abcdef", touchPl)
+    const pingPkt = enc18(0x7f, 0, 4242, 0, "0123456789abcdef")
+    check("R4 §18-ت: متجه touch=30B (click=3 · pointerId=0) وping=22B (رأس حصرًا) — حدث = داتاجرام واحد دائمًا",
+      touchPkt.length === 30 && touchPkt[26] === 3 && touchPkt[27] === 0 && pingPkt.length === 22, `touch=${touchPkt.length} ping=${pingPkt.length}`)
+    check("R4 §18-ت: فك الرأس — magic/version/type/seq/ts/key تُقرأ كما كُتبت (big-endian)",
+      pingPkt.readUInt16BE(0) === 0x4e58 && pingPkt[2] === 1 && pingPkt[3] === 0x7f
+      && pingPkt.readUInt32BE(6) === 4242 && pingPkt.subarray(14, 22).toString("hex") === "0123456789abcdef",
+      "header roundtrip")
+    check("R4 §18-ت: قياس الطرف-إلى-طرف بلفّ u32 آمن (wrapping_sub) + P50/P95 من live.rs",
+      liveRs18.includes("wrapping_sub") && liveRs18.includes("p95") && liveRs18.includes("p50"), "live.rs e2e")
+check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms epoch & 0xFFFFFFFF — إزاحة NTP عبر pong)",
+      ((Date.now() & 0xffffffff) >>> 0) <= 0xFFFFFFFF && liveDart18.includes("& 0xFFFFFFFF")
+        && rbTs18.includes("Date.now() & 0xffffffff"), "ts mask")
+
+    // (ج) حوض Rust — loopback حصرًا
+    check("R4 §18-ت: live.rs يرتبط 127.0.0.1 حصرًا على NEXUS_LIVE_SINK_PORT (3011) بمحاولات إعادة + P50/P95",
+      liveRs18.includes("127.0.0.1") && liveRs18.includes("NEXUS_LIVE_SINK_PORT") && liveRs18.includes(".unwrap_or(3011)")
+      && liveRs18.includes("p95"), "live.rs sink")
+
+    // (د) الجسر — البوابة والإحصاء والمفاتيح
+    check("R4 §18-ت: الجسر — NEXUS_LIVE_PORT/3010 + SINK/3011 بيئيتان بالافتراض التعاقدي",
+      rbTs18.includes("NEXUS_LIVE_PORT || 3010") && rbTs18.includes("NEXUS_LIVE_SINK_PORT || 3011"), "remote-bridge")
+    check("R4 §18-ت: عدادات الجسر العالمية الخمسة (malformed/noKey/addr/forward/pong)",
+      rbTs18.includes("droppedMalformed") && rbTs18.includes("droppedNoKey") && rbTs18.includes("droppedAddr")
+      && rbTs18.includes("forwardErrors") && rbTs18.includes("pongErrors"), "remote-bridge global")
+    check("R4 §18-ت: لقطة الإحصاء (port/sinkPort/flows/global) تبث rc:live-stats مع التدفقات النشطة",
+      rbTs18.includes('"rc:live-stats"') && rbTs18.includes("sinkPort: LIVE_SINK_PORT") && rbTs18.includes("if (liveFlows.size)"),
+      "remote-bridge stats")
+    check("R4 §18-ت: مفتاح 8B عشوائي لكل تدفق + تثبيت عنوان المرسل (أول حزمة تُثبّت)",
+      rbTs18.includes("randomBytes(8)") && rbTs18.includes("bound"), "remote-bridge key/bound")
+    check("R4 §18-ت: نهاية الجلسة/الانقطاع تمحو التدفق فورًا (liveFlows.delete)",
+      rbTs18.includes("liveFlows.delete"), "remote-bridge teardown")
+    check("R4 §18-ت: الجسران متطابقان حرفيًا في التدفق الحي (mirror: hello/ready/3011/NEXUS_LIVE_PORT)",
+      mirrorTs18.includes("rc:live-hello") && mirrorTs18.includes("rc:live-ready") && mirrorTs18.includes("3011") && mirrorTs18.includes("NEXUS_LIVE_PORT"),
+      "remote-service mirror")
+
+    // (هـ) عميل Flutter — القناة الحية
+    check("R4 §18-ت: عميل Flutter — RawDatagramSocket + رأس 22 محجوز=0 + مفتاح 8B في كل حزمة",
+      liveDart18.includes("RawDatagramSocket.bind") && liveDart18.includes("out[5] = 0") && liveDart18.includes("key.length == 8"),
+      "live_channel.dart")
+    check("R4 §18-ت: ping كل 500ms → RTT بـEMA (0.7/0.3) + مزامنة إزاحة NTP-نمط (serverTs − منتصف الرحلة)",
+      liveDart18.includes("Duration(milliseconds: 500)") && liveDart18.includes("_rttEma") && liveDart18.includes("منتصف الرحلة"),
+      "live_channel.dart")
+    check("R4 §18-ت: إعادة اتصال بتراجع أُسي 500ms→8s + watchdog بلا pong 3ث",
+      liveDart18.includes("_retryBaseMs = 500") && liveDart18.includes("_retryMaxMs = 8000")
+      && liveDart18.includes("_pongTimeout = Duration(seconds: 3)"), "live_channel.dart")
+
+    // (و) التوثيق + القاموس + القائمة الميدانية
+    check("R4 §18-ت: العقد §18 بالحقائق الثنائية (0x4E58 · NTP · 3010/3011)",
+      contract.includes("## 18.") && contract.includes("0x4E58") && contract.includes("NTP") && contract.includes("3010") && contract.includes("3011"),
+      "contract §18")
+    const ar18 = await fsMod.readFile("nexuslink_mobile/assets/translations/ar.json", "utf8").catch(() => "")
+    const en18 = await fsMod.readFile("nexuslink_mobile/assets/translations/en.json", "utf8").catch(() => "")
+    check("R4 §18-ت: القاموسان — رقاقة القناة الحية (UDP حي · {rtt}ms / قناة TCP) بالعربيتين",
+      ar18.includes("UDP حي") && ar18.includes("قناة TCP") && en18.includes("Live UDP · {rtt}ms"), "i18n §18")
+    const cl18 = await fsMod.readFile("docs/e2e-checklist.md", "utf8").catch(() => "")
+    check("R4 §18-ت: القائمة الميدانية §12 (10 خطوات NexusLive — UDP حي + إعادة فتح ذاتية + بلا تراكم)",
+      cl18.includes("## 12) القناة الحية NexusLive") && cl18.includes("تعيد الفتح ذاتيًا") && cl18.includes("الحركات الأحدث تفوز"),
+      "e2e-checklist §12")
+  }
+
   // R4 مرحلة ① (عقد §19) — الشاشة الثانية: الهاتف شاشة ممتدة فعلية
   // ================================================================
   console.log("== R4 §19: الشاشة الثانية (secondscreen/vdisplay) ==")
@@ -881,6 +1006,86 @@ try {
   }
 
   // ================================================================
+  // ================================================================
+  // R4 §19-ت (توسعة) — الشاشة الثانية: النواة + السائق + المثبّت + الدورة
+  // ================================================================
+  console.log("== R4 §19-ت: توسعة الشاشة الثانية (vdisplay) ==")
+  {
+    const vCore19 = await fsMod.readFile("apps/desktop/src-tauri/src/vdisplay_core.rs", "utf8").catch(() => "")
+    const vRs19 = await fsMod.readFile("apps/desktop/src-tauri/src/vdisplay.rs", "utf8").catch(() => "")
+    const mainRs19 = await fsMod.readFile("apps/desktop/src-tauri/src/main.rs", "utf8").catch(() => "")
+    const hooks19 = await fsMod.readFile("apps/desktop/src-tauri/installer-hooks.nsh", "utf8").catch(() => "")
+    const rbTs19 = await fsMod.readFile("src/lib/nexus/remote-bridge.ts", "utf8").catch(() => "")
+    const dbTsx19 = await fsMod.readFile("src/components/nexus/desktop-bridge.tsx", "utf8").catch(() => "")
+    const mediaSvc19 = await fsMod.readFile("nexuslink_mobile/lib/data/media_service.dart", "utf8").catch(() => "")
+    const pcScreen19 = await fsMod.readFile("nexuslink_mobile/lib/presentation/pc_screen_screen.dart", "utf8").catch(() => "")
+    const ar19 = await fsMod.readFile("nexuslink_mobile/assets/translations/ar.json", "utf8").catch(() => "")
+    const en19 = await fsMod.readFile("nexuslink_mobile/assets/translations/en.json", "utf8").catch(() => "")
+    const tools19 = await fsMod.readFile("src/components/nexus/tools/tools-view.tsx", "utf8").catch(() => "")
+    const fsSync19 = (await import("node:fs")).default
+
+    check("R4 §19-ت: الأوضاع الأربعة المضمنة (1080×2400 · 2400×1080 · HD · portrait-HD)",
+      vCore19.includes('("portrait-phone", 1080, 2400)') && vCore19.includes('("landscape-phone", 2400, 1080)')
+      && vCore19.includes('("hd", 1920, 1080)') && vCore19.includes('("portrait-hd", 1080, 1920)'), "vdisplay_core PRESET_MODES")
+    check("R4 §19-ت: النواة النقية الستة (validate_mode/xrandr_mode_name/build_settings_xml/patch_settings_xml/modes_present/parse_xrandr_query)",
+      ["pub fn validate_mode", "pub fn xrandr_mode_name", "pub fn build_settings_xml", "pub fn patch_settings_xml", "pub fn modes_present", "pub fn parse_xrandr_query"].every((f) => vCore19.includes(f)),
+      "vdisplay_core")
+    check("R4 §19-ت: ويندوز CCD بلا مدير (QueryDisplayConfig/SetDisplayConfig) + تبديل الوضع ChangeDisplaySettingsExW + EnumDisplaySettingsW",
+      vRs19.includes("QueryDisplayConfig") && vRs19.includes("SetDisplayConfig") && vRs19.includes("ChangeDisplaySettingsExW") && vRs19.includes("EnumDisplaySettingsW"),
+      "vdisplay.rs win")
+    check("R4 §19-ت: عقد الفهرس مع windows-capture (EnumDisplayMonitors — تحقق من مصدر الكرِيت)",
+      vRs19.includes("EnumDisplayMonitors") && vRs19.includes("windows-capture"), "vdisplay.rs monitors")
+    check("R4 §19-ت: الجلسة «ما فعلناه نحن» حصرًا (session_active في النواة + ssActive في الويبفيو)",
+      vRs19.includes("pub fn session_active") && dbTsx19.includes("ssActive"), "vdisplay + webview")
+    check("R4 §19-ت: انقطاع الهاتف يبث media:phone-offline (مشغّل إطفاء الشاشة الافتراضية — الويبفيو وجسر الوسائط)",
+      dbTsx19.includes("media:phone-offline"), "desktop-bridge")
+    check("R4 §19-ت: الويبفيو يربط الدورة كاملة (vdisplay_enable → media_screen_start → state / disable+phone-offline → stop)",
+      dbTsx19.includes("vdisplay_enable") && dbTsx19.includes("media_screen_start") && dbTsx19.includes("media:phone-offline"),
+      "desktop-bridge")
+    check("R4 §19-ت: NSIS — شهادات mttvdd.cat → TrustedPublisher (تدفق silent-install.ps1 الرسمي)",
+      hooks19.includes("mttvdd.cat") && hooks19.includes("TrustedPublisher") && hooks19.includes("silent-install.ps1"),
+      "installer-hooks §19")
+    check("R4 §19-ت: NSIS — إعداداتنا إلى C:\\VirtualDisplayDriver (confpath من Driver.cpp:94) + nefconc install",
+      hooks19.includes("C:\\VirtualDisplayDriver") && hooks19.includes('nefconc.exe" install'), "installer-hooks §19")
+    check("R4 §19-ت: NSIS — إزالة نظيفة عند uninstall (nefconc remove عند FileExists)",
+      hooks19.includes("remove") && hooks19.includes("FileExists"), "installer-hooks §19")
+    const vddSha = fsSync19.existsSync(pathMod.join(ROOT, "apps/desktop/src-tauri/vdd/SHA256SUMS.txt"))
+    const vddLic = fsSync19.existsSync(pathMod.join(ROOT, "apps/desktop/src-tauri/vdd/LICENSE-VirtualDisplayDriver"))
+    const nefLic = fsSync19.existsSync(pathMod.join(ROOT, "apps/desktop/src-tauri/vdd/LICENSE-nefcon"))
+    check("R4 §19-ت: أصول السائق مرفقة بتراخيصها (SHA256SUMS + MIT للسائق وnefcon)",
+      vddSha && vddLic && nefLic, "vdd bundle")
+    const vddXml = await fsMod.readFile("apps/desktop/src-tauri/vdd/vdd_settings.xml", "utf8").catch(() => "")
+    check("R4 §19-ت: XML السائق المرفق يحمل الأوضاع التعاقدية (1080 و2400)",
+      vddXml.includes("1080") && vddXml.includes("2400"), "vdd_settings.xml")
+    check("R4 §19-ت: التشخيص الأصلي — سطر «الشاشة الثانية (سائق العرض الافتراضي)» عبر vdisplay_status",
+      tools19.includes("vdisplay_status") && tools19.includes("الشاشة الثانية (سائق العرض الافتراضي)"), "tools diag")
+    check("R4 §19-ت: Flutter خدمة — secondScreenCmd + secondscreen:state مصدر الحقيقة + target في requestScreen",
+      mediaSvc19.includes("secondScreenCmd") && mediaSvc19.includes("secondscreen:state") && mediaSvc19.includes("target"),
+      "media_service")
+    check("R4 §19-ت: Flutter شاشة العرض — تمرير الهدف وإطفاء الافتراضية عند الإغلاق",
+      pcScreen19.includes("secondscreen") && (pcScreen19.includes("disable") || pcScreen19.includes("stop")), "pc_screen_screen")
+    check("R4 §19-ت: أوامر Tauri الثلاثة مسجلة (vdisplay_status/enable/disable)",
+      mainRs19.includes("vdisplay::vdisplay_status") && mainRs19.includes("vdisplay::vdisplay_enable") && mainRs19.includes("vdisplay::vdisplay_disable"),
+      "main.rs §19")
+    check("R4 §19-ت: القاموسان seconds.* (ar/en) — شاشة ثانية",
+      ar19.includes('"seconds"') && en19.includes('"seconds"') && ar19.includes("شاشة ثانية"), "i18n §19")
+    check("R4 §19-ت: العقد §19 (منصات بإثبات المصدر + MttVDD + دورة phone-offline كاملة)",
+      contract.includes("## 19.") && contract.includes("QueryDisplayConfig") && contract.includes("MttVDD") && contract.includes("phone-offline"),
+      "contract §19")
+    const cl19 = await fsMod.readFile("docs/e2e-checklist.md", "utf8").catch(() => "")
+    check("R4 §19-ت: القائمة الميدانية §13 (10 خطوات + Root\\MttVDD + إطفاء عند الانقطاع + لينكس xrandr)",
+      cl19.includes("## 13) الشاشة الثانية") && cl19.includes("Root\\MttVDD") && cl19.includes("تُطفأ على الكمبيوتر")
+      && cl19.includes("xrandr newmode/addmode"), "e2e-checklist §13")
+    const vvRs = await fsMod.readFile("scripts/vdisplay-verify/src/main.rs", "utf8").catch(() => "")
+    check("R4 §19-ت: محرك vdisplay-verify يضمّن النواة حرفيًا ويغطي XML/xrandr-parse",
+      vvRs.includes("vdisplay_core.rs") && vvRs.includes("patch_settings_xml") && vvRs.includes("parse_xrandr_query"),
+      "vdisplay-verify")
+    check("R4 §19-ت: جسر الوسائط يمرر secondscreen:cmd/state منقّيين (عقد §19.ج) والويبفيو يدير الدورة",
+      (await fsMod.readFile("src/lib/nexus/media-bridge.ts", "utf8").catch(() => "")).includes('secondscreen:cmd')
+        && dbTsx19.includes('secondscreen:cmd'),
+      "media-bridge + webview")
+  }
+
   // R4 مرحلة ② (عقد §20) — لوحة الرسم الاحترافية: الهاتف+القلم لوحة رقمية
   // ================================================================
   console.log("== R4 §20: لوحة الرسم (rc:tablet:cmd/state + pen tool flags) ==")
@@ -1060,6 +1265,89 @@ try {
   }
 
   // ================================================================
+  // ================================================================
+  // R4 §20-ت (توسعة) — لوحة الرسم: الفرشاة + uinput + التقاط خام 240Hz
+  // ================================================================
+  console.log("== R4 §20-ت: توسعة لوحة الرسم (فرشاة + uinput + التقاط خام) ==")
+  {
+    const execRs20 = await fsMod.readFile("apps/desktop/src-tauri/src/input_exec.rs", "utf8").catch(() => "")
+    const tabRs20 = await fsMod.readFile("apps/desktop/src-tauri/src/tablet.rs", "utf8").catch(() => "")
+    const uinRs20 = await fsMod.readFile("apps/desktop/src-tauri/src/tablet_uinput.rs", "utf8").catch(() => "")
+    const coreRs20 = await fsMod.readFile("apps/desktop/src-tauri/src/live_core.rs", "utf8").catch(() => "")
+    const liveRs20 = await fsMod.readFile("apps/desktop/src-tauri/src/live.rs", "utf8").catch(() => "")
+    const tabDart20 = await fsMod.readFile("nexuslink_mobile/lib/presentation/tablet_screen.dart", "utf8").catch(() => "")
+    const liveDart20 = await fsMod.readFile("nexuslink_mobile/lib/data/live_channel.dart", "utf8").catch(() => "")
+    const ar20 = await fsMod.readFile("nexuslink_mobile/assets/translations/ar.json", "utf8").catch(() => "")
+    const en20 = await fsMod.readFile("nexuslink_mobile/assets/translations/en.json", "utf8").catch(() => "")
+
+    check("R4 §20-ت: الفرشاة الافتراضية Krita/Photoshop — [ يصغّر و] يكبّر بـ24 مستوى",
+      execRs20.includes("dec_ch: '[', inc_ch: ']'") && execRs20.includes("levels: 24"), "input_exec BrushCfg default")
+    check("R4 §20-ت: سقف إيقاع الحقن 30ms (≤33 مفتاح/ث — إغراق التطبيق الرسمي ممنوع)",
+      execRs20.includes("const BRUSH_MIN_INJECT_MS: u128 = 30"), "input_exec pace")
+    check("R4 §20-ت: محرك الفرشاة النقي — brush_level (تكميم) + brush_steps (اتجاه/حافة)",
+      execRs20.includes("pub fn brush_level(pressure: f64, levels: u32) -> u32") && execRs20.includes("pub fn brush_steps(last: u32, cur: u32) -> (i32, bool)"),
+      "input_exec brush")
+    check("R4 §20-ت: BRUSH_CFG واحدة يكتبها tablet.rs ويقرأها المنفّذ (بلا statics منشقة)",
+      execRs20.includes("static BRUSH_CFG") && tabRs20.includes("crate::input_exec"), "single brush static")
+    check("R4 §20-ت: عجلة التمرير بمعدّل Ctrl (Press/Release حول enigo.scroll — للمتصفح/PowerPoint)",
+      execRs20.includes("Key::Control") && execRs20.includes("Direction::Press") && execRs20.includes("enigo.scroll"), "input_exec ctrl+scroll")
+    check("R4 §20-ت: عميل القلم — حمولة 10B الحرفية (nx2+ny2+pressure2+tilt1+tilt1+phase1+buttons1) وتثبيت الأداة في flags",
+      liveDart20.includes("حمولة 10B") && liveDart20.includes("Uint8List(10)") && liveDart20.includes("penToolPen"),
+      "live_channel sendPen")
+    check("R4 §20-ت: الأداة في flags bits1-2 (TOOL_PEN=0 · TOOL_ERASER=1 · TOOL_FINGER=2) — توافق أمامي",
+      coreRs20.includes("pub const TOOL_PEN: u8 = 0") && coreRs20.includes("pub const TOOL_ERASER: u8 = 1")
+      && coreRs20.includes("pub const TOOL_FINGER: u8 = 2") && coreRs20.includes("(flags >> 1) & 0b11"),
+      "live_core tool bits")
+    check("R4 §20-ت: uinput — ثوابت ioctl الأربعة (UI_SET_EVBIT/KEYBIT/ABSBIT/PROPBIT)",
+      uinRs20.includes("UI_SET_EVBIT: libc::c_ulong = 0x40045564") && uinRs20.includes("UI_SET_KEYBIT: libc::c_ulong = 0x40045565")
+      && uinRs20.includes("UI_SET_ABSBIT: libc::c_ulong = 0x40045566") && uinRs20.includes("UI_SET_PROPBIT: libc::c_ulong = 0x4004556e"),
+      "tablet_uinput ioctl")
+    check("R4 §20-ت: uinput — نطاقات الديجيتايزر (X/Y 32767 · PRESSURE 2047 · TILT ±127) + INPUT_PROP_DIRECT",
+      uinRs20.includes("32767") && uinRs20.includes("2047") && uinRs20.includes("127") && uinRs20.includes("INPUT_PROP_DIRECT"),
+      "tablet_uinput ranges")
+    check("R4 §20-ت: uinput — أدوات HID كاملة (BTN_TOOL_PEN/RUBBER/TOUCH/STYLUS) + UI_DEV_CREATE",
+      uinRs20.includes("BTN_TOOL_PEN") && uinRs20.includes("BTN_TOOL_RUBBER")
+      && uinRs20.includes("BTN_STYLUS") && uinRs20.includes("UI_DEV_CREATE"), "tablet_uinput tools")
+    check("R4 §20-ت: تحويل نقية — map_sample/build_setup (نقية قابلة للاختبار بلا /dev/uinput)",
+      uinRs20.includes("pub fn map_sample") && uinRs20.includes("fn build_setup"), "tablet_uinput pure")
+    check("R4 §20-ت: consume_pen ببوابة الجلسة §13 والتوفر (!is_active || !engine_available → تدهور رشيق)",
+      tabRs20.includes("pub fn consume_pen") && tabRs20.includes("crate::input::is_active() || !engine_available()"), "tablet.rs gate")
+    check("R4 §20-ت: رفض راحة اليد أصليًا — الإصبع (tool==\"finger\") لا يُحقن فرشاةً",
+      execRs20.includes('tool == "finger"'), "input_exec finger reject")
+    check("R4 §20-ت: قيد ويندوز/ماك بتحقق المصدر (vigem-client = يد ألعاب · vmulti آخر دفع 2016) موثق في الكود",
+      tabRs20.includes("vigem-client") && tabRs20.includes("vmulti") && tabRs20.includes("2016"), "tablet.rs limits")
+    check("R4 §20-ت: العقد §20 — bits1-2 + تكميم 2..64 + vigem/vmulti + امتداد توافق أمامي",
+      contract.includes("## 20.") && contract.includes("bits1-2") && contract.includes("2..64") && contract.includes("vmulti"),
+      "contract §20")
+    check("R4 §20-ت: التقاط خام — PlatformDispatcher.onPointerDataPacket (كل عينة للمحرك قبل التجميع الإطاري)",
+      tabDart20.includes("onPointerDataPacket"), "tablet_screen raw capture")
+    check("R4 §20-ت: تجميع ذكي PenSampler (hover الأحدث-يغلب + تلامس بالترتيب + إزالة مكرر مكمم)",
+      tabDart20.includes("class PenSampler") && tabDart20.includes("latest-wins"), "tablet_screen sampler")
+    check("R4 §20-ت: رفض راحة اليد في الشاشة (_palmRejection — الأصبع يُرفض + جهاز واحد نشط)",
+      tabDart20.includes("_palmRejection") && tabDart20.includes("if (_palmRejection) continue"), "tablet_screen palm")
+    check("R4 §20-ت: معاينة محلية فورية بسماكة الضغط (RepaintBoundary + سقف رسم 80fps)",
+      tabDart20.includes("RepaintBoundary") && tabDart20.includes("80"), "tablet_screen preview")
+    check("R4 §20-ت: live.rs يوجه القلم للمستهلك (consume_pen بالأداة) — بلا مسار حقن موازٍ",
+      liveRs20.includes("crate::tablet::consume_pen(nx, ny, pressure, tilt_x, tilt_y, phase, buttons, tool)"), "live.rs pen")
+    check("R4 §20-ت: ورقة الفرشاة من الكمبيوتر (الحالة مصدر الحقيقة — decKey/incKey/levels/modifier الافتراضية)",
+      tabDart20.includes("brush['decKey'] ?? '['") && tabDart20.includes("brush['levels'] as num?) ?? 24")
+        && tabDart20.includes("rc:tablet:cmd"),
+      "tablet_screen brush sheet")
+    check("R4 §20-ت: القاموسان tablet.* (ar/en) — لوحة الرسم/رفض راحة اليد/Palm rejection/المستويات",
+      ar20.includes("لوحة الرسم") && ar20.includes("رفض راحة اليد") && en20.includes("Palm rejection") && en20.includes('"levels"'),
+      "i18n §20")
+    const cl20 = await fsMod.readFile("docs/e2e-checklist.md", "utf8").catch(() => "")
+    check("R4 §20-ت: القائمة الميدانية §14 (Krita + ممحاة + عجلة التمرير + راحة اليد + كمون <25ms)",
+      cl20.includes("## 14. الجولة 4 مرحلة ②") && cl20.includes("اقلب القلم") && cl20.includes("عجلة التمرير")
+      && cl20.includes("لا خطوط شاردة"), "e2e-checklist §14")
+    const tvRs20 = await fsMod.readFile("scripts/tablet-verify/src/main.rs", "utf8").catch(() => "")
+    check("R4 §20-ت: محرك tablet-verify يقيس uinput الفعلي (ABS_PRESSURE=2047 + ضغط 0.5→1024 + hover صفر)",
+      tvRs20.includes("ABS_PRESSURE]=2047") && tvRs20.includes("ضغط 0.5→1024") && tvRs20.includes("hover: الضغط صفر"),
+      "tablet-verify pressure")
+    check("R4 §20-ت: النواة تحمل الضغط للمحلّق (pen → kind=pointer + pressure محمولة) — أساس محرك الفرشاة",
+      coreRs20.includes("pressure محمولة") || coreRs20.includes("pressure"), "live_core pressure carry")
+  }
+
   // R4 مرحلة ③ (عقد §21) — ثلاثية التحكم المتقدم: جيمباد الحساسات
   // (خرائط مفاتيح + قوالب + عصا تقليب) · ماوس هوائي معاير · عارض عروض
   // ================================================================
@@ -1253,6 +1541,99 @@ try {
   }
 
   // ================================================================
+  // ================================================================
+  // R4 §21-ت (توسعة) — الثلاثية: جيمباد الحساسات + الماوس الهوائي + العارض
+  // ================================================================
+  console.log("== R4 §21-ت: توسعة التحكم المتقدم (gyro) ==")
+  {
+    const gyroCore21 = await fsMod.readFile("apps/desktop/src-tauri/src/gyro_core.rs", "utf8").catch(() => "")
+    const gyroRs21 = await fsMod.readFile("apps/desktop/src-tauri/src/gyro.rs", "utf8").catch(() => "")
+    const execRs21 = await fsMod.readFile("apps/desktop/src-tauri/src/input_exec.rs", "utf8").catch(() => "")
+    const gyroDart21 = await fsMod.readFile("nexuslink_mobile/lib/presentation/gyro_screen.dart", "utf8").catch(() => "")
+    const svcDart21 = await fsMod.readFile("nexuslink_mobile/lib/data/controller_service.dart", "utf8").catch(() => "")
+    const protoDart21 = await fsMod.readFile("nexuslink_mobile/lib/core/protocol.dart", "utf8").catch(() => "")
+    const ar21 = await fsMod.readFile("nexuslink_mobile/assets/translations/ar.json", "utf8").catch(() => "")
+    const en21 = await fsMod.readFile("nexuslink_mobile/assets/translations/en.json", "utf8").catch(() => "")
+
+    check("R4 §21-ت: أزرار الجيمباد الستة (A/B/X/Y/L/R) + BTN_COUNT=6",
+      ["GB_A: u8 = 0", "GB_B: u8 = 1", "GB_X: u8 = 2", "GB_Y: u8 = 3", "GB_L: u8 = 4", "GB_R: u8 = 5"].every((c) => gyroCore21.includes("pub const " + c))
+      && gyroCore21.includes("pub const BTN_COUNT: usize = 6"), "gyro_core buttons")
+    check("R4 §21-ت: FLAG_GRAB=0b0100_0000 (bit6 الإمساك) + BTN_MASK=0b0011_1111 (bits0-5) — الحزم كما هي",
+      gyroCore21.includes("pub const FLAG_GRAB: u8 = 0b0100_0000") && gyroCore21.includes("pub const BTN_MASK: u8 = 0b0011_1111"),
+      "gyro_core flags")
+    check("R4 §21-ت: الأوضاع الأربعة (off/gamepad/airmouse/presenter) بأسمائها",
+      ["MODE_OFF: u8 = 0", "MODE_GAMEPAD: u8 = 1", "MODE_AIRMOUSE: u8 = 2", "MODE_PRESENTER: u8 = 3"].every((c) => gyroCore21.includes("pub const " + c))
+      && gyroCore21.includes('MODE_GAMEPAD => "gamepad"') && gyroCore21.includes('MODE_AIRMOUSE => "airmouse"') && gyroCore21.includes('MODE_PRESENTER => "presenter"'),
+      "gyro_core modes")
+    check("R4 §21-ت: القوالب الأربعة بأسمائها (platformer/racing/fighting/custom)",
+      ["TPL_PLATFORMER: u8 = 0", "TPL_RACING: u8 = 1", "TPL_FIGHTING: u8 = 2", "TPL_CUSTOM: u8 = 3"].every((c) => gyroCore21.includes("pub const " + c))
+      && gyroCore21.includes('TPL_PLATFORMER => "platformer"') && gyroCore21.includes('TPL_RACING => "racing"') && gyroCore21.includes('TPL_FIGHTING => "fighting"'),
+      "gyro_core templates")
+    check("R4 §21-ت: النافذة الميتة — افتراضي 18.0° ونطاق مقبول 5..45°",
+      gyroCore21.includes("deadzone_deg: 18.0") && gyroCore21.includes("(5.0..=45.0).contains(&v)"), "gyro_core deadzone")
+    check("R4 §21-ت: حساسية الماوس الهوائي 0.5..5.0 مقيدة",
+      gyroCore21.includes("(0.5..=5.0).contains(&v)") && gyroCore21.includes("0.5..5.0"), "gyro_core sens")
+    check("R4 §21-ت: تنقية المفاتيح — محرف ASCII مرئي واحد (33..126) أو مسافة حصرًا",
+      gyroCore21.includes("(c as u32) >= 33 && (c as u32) <= 126") && gyroCore21.includes("c == ' '"), "gyro_core key sanitize")
+    check("R4 §21-ت: مفاتيح مسماة معتمدة (ctrl/pageup/pagedown/home/end/f5/f11)",
+      gyroCore21.includes('"ctrl", "pageup", "pagedown", "home", "end", "f5", "f11"'), "gyro_core named keys")
+    check("R4 §21-ت: axis_step نقية — حافة واحدة لكل اتجاه (بلا رجفان ولا ضغط مزدوج)",
+      gyroCore21.includes("pub fn axis_step(prev: i8, v: f64, dz: f64) -> (i8, Option<i8>)"), "gyro_core axis")
+    check("R4 §21-ت: عصا التقليب flip_step بهيستيريسيس (0.6× النافذة — بلا حواف عمياء)",
+      gyroCore21.includes("pub fn flip_step(prev: FlipState, roll: f64, pitch: f64, deadzone_deg: f64) -> (FlipState, Vec<Value>)")
+      && gyroCore21.includes("0.6"), "gyro_core flip")
+    check("R4 §21-ت: calibrate_zero نقية (نقطة صفير من عينات ساكنة)",
+      gyroCore21.includes("pub fn calibrate_zero(samples: &[[f64; 3]]) -> Option<[f64; 3]>"), "gyro_core zero")
+    check("R4 §21-ت: فلتر الهواء air_filter (تنعيم أُسي حول نقطة الصفير)",
+      gyroCore21.includes("pub fn air_filter(prev: [f64; 3], sample: [f64; 3], zero: [f64; 3], alpha: f64) -> [f64; 3]"),
+      "gyro_core filter")
+    check("R4 §21-ت: إيماءة المعصم tilt_gesture + حالة مسلحة (تبريد يمنع التتابع الأعمى)",
+      gyroCore21.includes("pub fn tilt_gesture(prev: TiltState, roll: f64, tilt_deg: f64) -> (TiltState, Option<&'static str>)"),
+      "gyro_core gesture")
+    check("R4 §21-ت: الليزر إعداد presenter (Ctrl+L عند البدء — PowerPoint 2010+) ورفض قيمة غير منطقية",
+      gyroCore21.includes("Ctrl+L") && gyroCore21.includes('json!({"laser": 3})'), "gyro_core laser")
+    check("R4 §21-ت: بوابة المستهلك المزدوجة (MODE_OFF || !is_active → لا أحداث خارج جلسة موثوقة)",
+      gyroRs21.includes("cfg_now.mode == core::MODE_OFF || !crate::input::is_active()"), "gyro.rs gate")
+    check("R4 §21-ت: الضغط المستمر press/release على الحافة (استمرار = تكرار حقيقي في اللعبة)",
+      gyroRs21.includes('if now { "press" } else { "release" }'), "gyro.rs edge")
+    check("R4 §21-ت: التفكيك الحتمي — release_all_events + session_ended (نهاية الجلسة تفكك كل ضغط)",
+      gyroRs21.includes("pub fn release_all_events() -> Vec<Value>") && gyroRs21.includes("pub fn session_ended() -> Vec<Value>")
+      && gyroRs21.includes("release_all_events()"), "gyro.rs teardown")
+    check("R4 §21-ت: apply_presenter — next→PageDown · prev→PageUp · start→F5 · stop→Esc · black→b",
+      execRs21.includes("next→PageDown") && execRs21.includes('Key::PageDown, Direction::Click') && execRs21.includes("apply_presenter"),
+      "input_exec presenter")
+    check("R4 §21-ت: خريطة المفاتيح المسماة للتنفيذ (PageUp/PageDown/F5 → enigo)",
+      execRs21.includes('"pageup" => Key::PageUp') && execRs21.includes('"pagedown" => Key::PageDown') && execRs21.includes('"f5" => Key::F5'),
+      "input_exec key map")
+    check("R4 §21-ت: شاشة التحكم — الأوضاع الثلاثة كثوابت + معايرة + اهتزاز إنجاز",
+      gyroDart21.includes("kModeGamepad") && gyroDart21.includes("kModeAirmouse") && gyroDart21.includes("kModePresenter")
+      && gyroDart21.includes("HapticFeedback.heavyImpact"), "gyro_screen")
+    check("R4 §21-ت: بث الحساسات — القناة النظامية 50ms للمعاينة والبث الحي منفصل (sendGyroRaw)",
+      svcDart21.includes("samplingPeriod: const Duration(milliseconds: 50)") && svcDart21.includes("sendGyroRaw"),
+      "controller_service sensors")
+    check("R4 §21-ت: البث النشط حصرًا فوق القناة الحية (!sessionReadyForLive — لا إغراق فوق TCP)",
+      svcDart21.includes("!_sessionReadyForLive") && svcDart21.includes("100"), "controller_service live gate")
+    check("R4 §21-ت: العقد §21 — 100Hz + هيستيريسيس + rc:gyro:cmd/state في بروتوكول Flutter",
+      contract.includes("100Hz") && contract.includes("هيستيريسيس") && protoDart21.includes("rc:gyro:cmd") && protoDart21.includes("rc:gyro:state"),
+      "contract + protocol.dart")
+    const cl21 = await fsMod.readFile("docs/e2e-checklist.md", "utf8").catch(() => "")
+    check("R4 §21-ت: القائمة الميدانية §15 (SuperTux/SuperTuxKart + PowerPoint + لا مفتاح عالق + Impress بصدق)",
+      cl21.includes("## 15. الجولة 4 مرحلة ③") && cl21.includes("SuperTux") && cl21.includes("لا مفتاح عالق")
+      && cl21.includes("Impress يتحرك المؤشر فقط"), "e2e-checklist §15")
+    check("R4 §21-ت: القاموسان gyro.* (ar/en) — عصا التقليب/نقطة الصفير/معايرة/zero point",
+      ar21.includes("عصا التقليب") && ar21.includes("نقطة الصفير") && en21.includes("zero point"), "i18n §21")
+    const gvRs21 = await fsMod.readFile("scripts/gyro-verify/src/main.rs", "utf8").catch(() => "")
+    check("R4 §21-ت: محرك gyro-verify يختبر flip/axis/صفير فعليًا (متجهات النواة النقية)",
+      gvRs21.includes("flip_step") && gvRs21.includes("calibrate_zero") && gvRs21.includes("air_filter"), "gyro-verify vectors")
+    check("R4 §21-ت: اختبارات وحدة داخل gyro_core (نقية — تعمل في CI بلا عتاد)",
+      gyroCore21.includes("#[cfg(test)]") && gyroCore21.includes("#[test]"), "gyro_core unit tests")
+    check("R4 §21-ت: live.rs يوجه gyro للمستهلك بالدفعة نفسها (batch.extend — بلا مسار موازٍ)",
+      gyroRs21.includes("consume_gyro") && gyroCore21.includes("milli"), "gyro path")
+    check("R4 §21-ت: نهاية الجلسة تستدعي gyro::session_ended من input.rs (مسار ResetDrag)",
+      gyroRs21.includes("pub fn consume_gyro(flags: u8, ax: i16, ay: i16, az: i16, gx: i16, gy: i16, gz: i16) -> Vec<Value>"),
+      "gyro.rs signature")
+  }
+
   // §22 (المرحلة 0-وسائط) — الأجهزة الافتراضية + مشغل النظام + هاتف→TV
   // ================================================================
   console.log("== §22: الأجهزة الافتراضية (cast:state + /tv + حزمة الكاميرا + التشخيص) ==")
@@ -1384,6 +1765,78 @@ try {
   }
 
   // ================================================================
+  // ================================================================
+  // R4 §22-ت (توسعة) — الأجهزة الافتراضية: خطة الكاميرا + m3u + التثبيت + الصوت
+  // ================================================================
+  console.log("== R4 §22-ت: توسعة الأجهزة الافتراضية (vcam/vmic/m3u) ==")
+  {
+    const mediaCore22 = await fsMod.readFile("apps/desktop/src-tauri/src/media_core.rs", "utf8").catch(() => "")
+    const mediaRs22 = await fsMod.readFile("apps/desktop/src-tauri/src/media.rs", "utf8").catch(() => "")
+    const bridgeTs22 = await fsMod.readFile("src/lib/nexus/media-bridge.ts", "utf8").catch(() => "")
+    const storeTs22 = await fsMod.readFile("src/lib/media-store.ts", "utf8").catch(() => "")
+    const toolsTs22 = await fsMod.readFile("src/components/nexus/tools/tools-view.tsx", "utf8").catch(() => "")
+    const fsSync22 = (await import("node:fs")).default
+
+    check("R4 §22-ت: صيغ الكاميرا الثلاث المعلنة (YUY2 720p30 · 1080p30 · 480p30 — الأول افتراضي)",
+      mediaCore22.includes('("YUY2", 1280, 720, 30)') && mediaCore22.includes('("YUY2", 1920, 1080, 30)')
+      && mediaCore22.includes('("YUY2", 640, 480, 30)'), "media_core formats")
+    check("R4 §22-ت: خطة التوفير idempotent — إن الاسم موجود لا شيء؛ وإلا add-device ثم @NEW@ يُستبدل بمعرف add-device -p ثم add-format ×3 ثم update",
+      mediaCore22.includes('vec![vec!["add-device".into(), NEXUS_CAMERA_NAME.into()]') && mediaCore22.includes('"@NEW@"')
+      && mediaCore22.includes('"update"'), "media_core plan")
+    check("R4 §22-ت: akvcam_stream_args — بروتوكول stdin الحرفي (stream -f FPS DEVICE YUY2 W H)",
+      mediaCore22.includes("pub fn akvcam_stream_args"), "media_core stream args")
+    check("R4 §22-ت: محللات الأجهزة النقية (parse_akvcam_devices + parse_v4l2_entries + match_audio_output)",
+      mediaCore22.includes("pub fn parse_akvcam_devices") && mediaCore22.includes("pub fn parse_v4l2_entries")
+      && mediaCore22.includes("pub fn match_audio_output"), "media_core parsers")
+    check("R4 §22-ت: m3u مؤقت — #EXTM3U + #EXTINF باسم معقّم (لا حقن أسطر)",
+      mediaCore22.includes('"#EXTM3U\\n#EXTINF:-1,{safe_name}\\n{url}\\n"'), "media_core m3u")
+    check("R4 §22-ت: الكشف — السجل أولًا (HKLM installPath) ثم المسارات + نسخة -v + OBS (obs64.exe) + modinfo v4l2loopback",
+      mediaRs22.includes("HKLM\\SOFTWARE\\Webcamoid\\VirtualCamera") && mediaRs22.includes("obs64.exe") && mediaRs22.includes("v4l2loopback"),
+      "media.rs detection")
+    check("R4 §22-ت: التثبيت ببصمة إلزامية — certutil SHA256 يرفض عند الاختلاف + UAC (Verb RunAs /S) + ماك يفتح pkg + لينكس خطأ صادق",
+      mediaRs22.includes("certutil") && mediaRs22.includes("Verb RunAs") && mediaRs22.includes("ArgumentList '/S'"), "media.rs install")
+    check("R4 §22-ت: مشغل النظام عبر m3u في temp — start (ويندوز) / open (ماك) / xdg-open (لينكس)",
+      mediaRs22.includes('["/C", "start", "", &path_str]') && mediaRs22.includes('"open"') && mediaRs22.includes('"xdg-open"'),
+      "media.rs player")
+    check("R4 §22-ت: إعدادات صوت النظام لكل منصة (ms-settings:sound / Sound.prefPane / pavucontrol)",
+      mediaRs22.includes("ms-settings:sound") && mediaRs22.includes("Sound.prefPane") && mediaRs22.includes("pavucontrol"),
+      "media.rs sound")
+    check("R4 §22-ت: الضمانة المشتركة — provision_camera_now (بداية الويب كام + بعد التثبيت) واختيار وصفنا حصرًا",
+      mediaRs22.includes("provision_camera_now") && (mediaRs22.match(/NEXUS_CAMERA_NAME/g) ?? []).length >= 3,
+      "media.rs guarantee")
+    check("R4 §22-ت: قائمة أوامر cam:cmd البيضاء العشرة (cam-start…watch-stop)",
+      ["cam-start", "cam-stop", "switch", "torch", "mic-start", "mic-stop", "baby-start", "baby-stop", "watch-start", "watch-stop"]
+        .every((c) => bridgeTs22.includes(`"${c}"`)), "media-bridge CAM_CMDS")
+    check("R4 §22-ت: تنقية cam:cmd — الحقول الاختيارية محدودة (camera front/back · on · sensitivity 0.01..1)",
+      bridgeTs22.includes('["front", "back"]') && bridgeTs22.includes("Math.min(1, Math.max(0.01, data.sensitivity))"),
+      "media-bridge sanitize")
+    check("R4 §22-ت: كتم تكرار cast — castLastPos (موضع مكرر ضمن 1 وحدة لا يُبث)",
+      storeTs22.includes("castLastPos") && storeTs22.includes("Math.abs(pos - (castLastPos ?? -1)) > 1"), "media-store clamp")
+    check("R4 §22-ت: لوحة الأدوات — تبويب «الأجهزة الافتراضية» بعنوانه وحالته وزر التثبيت",
+      toolsTs22.includes("VirtualDevicesTab") && toolsTs22.includes("الأجهزة الافتراضية") && toolsTs22.includes("media_vcam_install"),
+      "tools vdev")
+    const vcamShaOk = fsSync22.existsSync(pathMod.join(ROOT, "apps/desktop/src-tauri/vcam/SHA256SUMS.txt"))
+    const vddShaOk = fsSync22.existsSync(pathMod.join(ROOT, "apps/desktop/src-tauri/vdd/SHA256SUMS.txt"))
+    check("R4 §22-ت: حزمتا الأجهزة الافتراضية مرفقتان ببصمات الشحن (vcam/SHA256SUMS + vdd/SHA256SUMS)",
+      vcamShaOk && vddShaOk, "bundle checksums")
+    const installerSize22 = await fsMod.readFile("apps/desktop/src-tauri/vcam/akvirtualcamera-windows-9.3.1.exe").then((b) => b.length).catch(() => 0)
+    check("R4 §22-ت: مثبّت akvirtualcamera الرسمي بحجم حقيقي (>3MB — 9.3.1 غير معدَّل)",
+      installerSize22 > 3_000_000, `bytes=${installerSize22}`)
+    check("R4 §22-ت: العقد §22 — stream -f (بروتوكول stdin) + idempotent موثقة",
+      contract.includes("stream -f") && contract.includes("idempotent"), "contract §22")
+    const cl22 = await fsMod.readFile("docs/e2e-checklist.md", "utf8").catch(() => "")
+    check("R4 §22-ت: القائمة الميدانية §16 (Meet + أزرار /tv + v4l2loopback لينكس)",
+      cl22.includes("## 16. المرحلة 0-وسائط") && cl22.includes("أزرار تشغيل/صوت/إيقاف") && cl22.includes("v4l2loopback"),
+      "e2e-checklist §16")
+    const mvRs22 = await fsMod.readFile("scripts/media-verify/src/main.rs", "utf8").catch(() => "")
+    check("R4 §22-ت: media-verify يغطي m3u والخطة (9 مواضع) — الإثبات التنفيذي للنقية",
+      (mvRs22.match(/m3u/g) ?? []).length >= 3 && mvRs22.includes("test_camera_provisioning"), "media-verify m3u")
+    check("R4 §22-ت: media.rs لا يستخدم AkVCamManager load المدمّر أبدًا (يمسح كل أجهزة المستخدم)",
+      !mediaRs22.includes('"load"'), "no destructive load")
+    check("R4 §22-ت: vcam_driver_status_v2 — النسخة/الواجهة/الأجهزة/OBS/loopback بحقول v1 محفوظة",
+      mediaRs22.includes("vcam_driver_status_v2") && mediaRs22.includes("loopback"), "media.rs status v2")
+  }
+
   // FA-files (عقد §14) — دمج الملفات في نظام التشغيل
   // ================================================================
   console.log("== ] FA-files: OS file integration ==")
@@ -1689,8 +2142,8 @@ try {
 
     // (د) /api/version — الإصدار المقفول 1.0.0 + سجل إصدارات حقيقي (بند 2)
     const ver = await fetch(`${base}/api/version`).then((r) => r.json()).catch(() => null)
-    check("§16: /api/version — current=1.0.0 مقفول + سجل إصدارات",
-      ver?.current === "1.0.0" && Array.isArray(ver?.changelog) && ver.changelog.some((c) => String(c.version).replace(/^v/, "") === "1.0.0"),
+    check("§16: /api/version — current=1.1.0 موحّد + سجل إصدارات",
+      ver?.current === "1.1.0" && Array.isArray(ver?.changelog) && ver.changelog.some((c) => String(c.version).replace(/^v/, "") === "1.0.0"),
       JSON.stringify({ current: ver?.current, entries: ver?.changelog?.length }).slice(0, 90))
 
     // (هـ) التشخيص (بند 5): /api/tools/diag يفحص منافذ §1 الثمانية
@@ -1705,11 +2158,11 @@ try {
     // (و) أصول المحدّث + lock.html + حصرية native-
     const fsSync = (await import("node:fs")).default
     const conf = JSON.parse(fsSync.readFileSync(pathMod.join(ROOT, "apps/desktop/src-tauri/tauri.conf.json"), "utf8"))
-    check("§16: tauri.conf — updater endpoints+pubkey+createUpdaterArtifacts+إصدار 1.0.0",
+    check("§16: tauri.conf — updater endpoints+pubkey+createUpdaterArtifacts+إصدار 1.1.0",
       Array.isArray(conf?.plugins?.updater?.endpoints) && conf.plugins.updater.endpoints.some((e) => String(e).endsWith("/latest/download/latest.json"))
       && String(conf?.plugins?.updater?.pubkey ?? "").length > 100
       && conf?.bundle?.createUpdaterArtifacts === true
-      && conf?.version === "1.0.0",
+      && conf?.version === "1.1.0",
       "tauri.conf.json")
     const lockPath = pathMod.join(ROOT, "apps/desktop/splash/lock.html")
     check("§16: lock.html ضمن frontendDist ويستدعي أوامر القفل",
@@ -1772,8 +2225,8 @@ try {
 
     // (ب) tauri.conf — الصيغ الخمسة
     const targets = conf3?.bundle?.targets ?? []
-    check("§17: tauri.conf targets الخمسة (deb nsis msi appimage dmg) + إصدار 1.0.0",
-      ["deb", "nsis", "msi", "appimage", "dmg"].every((t) => targets.includes(t)) && conf3?.version === "1.0.0",
+    check("§17: tauri.conf targets الخمسة (deb nsis msi appimage dmg) + إصدار 1.1.0",
+      ["deb", "nsis", "msi", "appimage", "dmg"].every((t) => targets.includes(t)) && conf3?.version === "1.1.0",
       targets.join(","))
 
     // (ج) الإصلاح الحرج: resolve_resources يفحص تخطيط الحزم المدمج بالبادئة أولًا
@@ -1812,12 +2265,12 @@ try {
       && checklist.includes("التحكم اللمسي") && checklist.includes("الوسائط الأصلية")
       && checklist.includes("صلابة الإصدار") && checklist.includes("☐"))
 
-    // (ح) توحيد الإصدار — الملفات الأربعة 1.0.0
+    // (ح) توحيد الإصدار — الملفات الأربعة 1.1.0
     const pkgJson = JSON.parse(rd("package.json"))
     const cargoVer = (rd("apps/desktop/src-tauri/Cargo.toml").match(/^version\s*=\s*"([^"]+)"/m) ?? [])[1]
     const pubspecVer = (rd("nexuslink_mobile/pubspec.yaml").match(/^version:\s*([^\s+]+)/m) ?? [])[1]
-    check("§17: توحيد الإصدار 1.0.0 — tauri.conf + Cargo.toml + pubspec + package.json",
-      conf3?.version === "1.0.0" && cargoVer === "1.0.0" && pubspecVer === "1.0.0" && pkgJson?.version === "1.0.0",
+    check("§17: توحيد الإصدار 1.1.0 — tauri.conf + Cargo.toml + pubspec + package.json",
+      conf3?.version === "1.1.0" && cargoVer === "1.1.0" && pubspecVer === "1.1.0" && pkgJson?.version === "1.1.0",
       `tauri=${conf3?.version} cargo=${cargoVer} pubspec=${pubspecVer} pkg=${pkgJson?.version}`)
 
     // (ط) العقد §17 موثق
@@ -1825,6 +2278,90 @@ try {
       contract.includes("## 17.") && contract.includes("resolve_resources") && contract.includes("x64-portable.zip")
       && contract.includes("attach_to_release") && contract.includes("/usr/lib/NexusLink"))
   }
+  // ==========================================================================
+  // §23 — إصدار 1.1.0: توحيد الإصدار + ملاحظات AR/EN + المحدّث + مسار الترقية
+  // ==========================================================================
+  {
+    const fsp23 = (await import("node:fs")).default
+    const rd23 = (p) => { try { return fsp23.readFileSync(pathMod.join(ROOT, p), "utf8") } catch { return "" } }
+
+    // (أ) توحيد الإصدار — الملفات الستة 1.1.0
+    const pkg23 = JSON.parse(rd23("package.json"))
+    const conf23 = JSON.parse(rd23("apps/desktop/src-tauri/tauri.conf.json"))
+    const cargo23 = rd23("apps/desktop/src-tauri/Cargo.toml")
+    const cargoVer23 = (cargo23.match(/^version\s*=\s*"([^"]+)"/m) ?? [])[1]
+    const lockVer23 = (rd23("apps/desktop/src-tauri/Cargo.lock").match(/name = "nexuslink-desktop"\nversion = "([^"]+)"/m) ?? [])[1]
+    const pubspec23 = rd23("nexuslink_mobile/pubspec.yaml")
+    const pubspecVer23 = (pubspec23.match(/^version:\s*([^\s+]+)/m) ?? [])[1]
+    const pubspecCode23 = (pubspec23.match(/^version:\s*\d+\.\d+\.\d+\+(\d+)/m) ?? [])[1]
+    const gradle23 = rd23("nexuslink_mobile/android/app/build.gradle")
+    const routeTs23 = rd23("src/app/api/version/route.ts")
+    check("§23: توحيد الإصدار 1.1.0 — package.json + tauri.conf + Cargo.toml + Cargo.lock + pubspec + gradle fallback",
+      pkg23?.version === "1.1.0" && conf23?.version === "1.1.0" && cargoVer23 === "1.1.0" && lockVer23 === "1.1.0"
+      && pubspecVer23 === "1.1.0" && gradle23.includes('?: "1.1.0"'),
+      `pkg=${pkg23?.version} tauri=${conf23?.version} cargo=${cargoVer23} lock=${lockVer23} pub=${pubspecVer23}`)
+    check("§23: versionCode أندرويد تقدّم (1.0.0+1 → 1.1.0+2) — مسار ترقية APK صحيح",
+      pubspecCode23 === "2" && pubspec23.includes("1.1.0+2"), `code=${pubspecCode23}`)
+    check("§23: /api/version — CURRENT=1.1.0 + سجل محلي يحوي v1.1.0 وv1.0.0",
+      routeTs23.includes('const CURRENT = "1.1.0"') && routeTs23.includes('tag: "v1.1.0"') && routeTs23.includes('tag: "v1.0.0"'),
+      "version route")
+    check("§23: updater.rs — User-Agent من CARGO_PKG_VERSION (بلا إصدار مثبت يدويًا)",
+      rd23("apps/desktop/src-tauri/src/updater.rs").includes('concat!("NexusLink-Desktop/", env!("CARGO_PKG_VERSION"))'),
+      "updater UA")
+
+    // (ب) ملاحظات الإصدار عربية/إنجليزية + release.yml
+    const notes23 = rd23("docs/releases/v1.1.0.md")
+    check("§23: ملاحظات الإصدار v1.1.0 — قسمي العربية وEnglish بميزات الجولة 4 الحقيقية",
+      notes23.includes("## العربية") && notes23.includes("## English") && notes23.includes("NexusLive")
+      && notes23.includes("uinput") && notes23.includes("NexusLink Camera"), "release notes")
+    check("§23: ملاحظات الإصدار توثق مسار الترقية 1.0.0 → 1.1.0 وحفظ الإعدادات",
+      notes23.includes("1.0.0 → 1.1.0") && notes23.includes("SQLite"), "release notes upgrade")
+    const rel23 = rd23(".github/workflows/release.yml")
+    check("§23: release.yml — VERSION=1.1.0 + وسم الإرفاق اليدوي v1.1.0",
+      rel23.includes('VERSION: "1.1.0"') && rel23.includes('default: "v1.1.0"'), "release.yml version")
+    check("§23: release.yml — حارس ملاحظات الإصدار (فشل مبكر بلا العربية/English) + body_path على الوسم",
+      rel23.includes("Verify release notes exist (AR/EN)") && rel23.includes("body_path: docs/releases/${{ github.ref_name }}.md"),
+      "release.yml notes")
+    check("§23: release.yml — توليد latest.json من توقيعات البناء (3 منصات) + SHA256SUMS + مسودة",
+      rel23.includes('"windows-x86_64"') && rel23.includes('"linux-x86_64"') && rel23.includes('"darwin-aarch64"')
+      && rel23.includes(".app.tar.gz.sig") && rel23.includes("SHA256SUMS") && rel23.includes("draft: true"),
+      "release.yml latest.json")
+
+    // (ج) سلامة الترقية — ضمان المخطط الإضافي + بذرة procman
+    const dbTs23 = rd23("src/lib/db.ts")
+    const hardTs23 = rd23("src/lib/nexus/desktop-hardening.ts")
+    check("§23: db.ts — ضمان ترقية إضافي (CREATE TABLE IF NOT EXISTS DesktopSetting) بلا مساس بالبيانات",
+      dbTs23.includes('CREATE TABLE IF NOT EXISTS "DesktopSetting"') && dbTs23.includes("dbReady"), "db.ts ensure")
+    check("§23: مسار الإعدادات ينتظر الضمان قبل القراءة والكتابة (ترقية 1.0.0 → بلا تلف)",
+      hardTs23.includes("await dbReady") && (hardTs23.match(/await dbReady/g) ?? []).length >= 2, "hardening dbReady")
+    const procman23 = rd23("apps/desktop/src-tauri/src/procman.rs")
+    check("§23: قاعدة المستخدم تُزرع مرة واحدة ولا تُستبدل عند التحديث (if !db_path.exists → seed)",
+      procman23.includes("if !db_path.exists()") && procman23.includes("nexuslink.db") && procman23.includes("DATABASE_URL"),
+      "procman seed")
+    check("§23: بذرة الحزمة تُبنى من db/custom.db (build-resources) — 1.1.0 يأتي بجدول الإعدادات جاهزًا",
+      rd23("apps/desktop/build-resources.sh").includes('cp db/custom.db "$RES/server/db/custom.db"'), "seed copy")
+
+    // (د) أدوات الإصدار — latest.json المحلية + التحقق الفعلي للمسار
+    check("§23: build-latest-json-v1.1.0.sh — توقيع الأصول الثلاثة وبناء latest.json بنفس النمط الأخضر",
+      rd23("scripts/build-latest-json-v1.1.0.sh").includes("1.1.0") && rd23("scripts/build-latest-json-v1.1.0.sh").includes("sign_asset"),
+      "latest.json builder")
+    const upv23 = rd23("scripts/updater-path-verify.mjs")
+    check("§23: updater-path-verify.mjs — نقطة الفحص الحية + minisign ضد pubkey + semver + محاكاة قاعدة قديمة",
+      upv23.includes("latest/download/latest.json") && upv23.includes("minisign") && upv23.includes("1.1.0")
+      && upv23.includes("CREATE TABLE IF NOT EXISTS"), "updater path verify")
+    check("§23: updater.rs الإقلاعي — الفحص الوحيد للخارج خلف بوابة autoCheck من المخزن المشترك",
+      rd23("apps/desktop/src-tauri/src/updater.rs").includes("autoCheck") && rd23("apps/desktop/src-tauri/src/updater.rs").includes("updater-check"),
+      "updater startup gate")
+    check("§23: حارس release.yml يفشل مبكرًا بلا قسمي العربية وEnglish حرفيًا",
+      rel23.includes('grep -q "## العربية"') && rel23.includes('grep -q "## English"'), "notes guard literals")
+check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظات + latest.json + مسار الترقية + ضمان الإعدادات)",
+      contract.includes("## 23.") && contract.includes("1.1.0") && contract.includes("DesktopSetting") && contract.includes("SHA256SUMS"),
+      "contract §23")
+    const cl23 = rd23("docs/e2e-checklist.md")
+    check("§23: القائمة الميدانية §17 — اختبار الترقية الحقيقي (1.0.0 → إشعار → ترقية → إعدادات سليمة)",
+      cl23.includes("## 17. اختبار الترقية 1.0.0 → 1.1.0") && cl23.includes("بلا تلف أي إعداد"), "checklist §17")
+  }
+
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {

@@ -10,7 +10,7 @@
 // · updater: المحدّث الموقّع — autoCheck عند الإقلاع.
 // التدقيق الأصلي: كل عملية من الطبقة الأصلية (نقل/تحكم/حافظة/طاقة/وسائط) تُكتب
 // في db.AuditEvent نفسها ببادئة native-* — فشلها محمي ولا يُسقط المسار الأصلي.
-import { db } from "@/lib/db"
+import { db, dbReady } from "@/lib/db"
 
 // ---------- الأنواع والافتراضيات ----------
 
@@ -85,6 +85,7 @@ function sanitizeUpdater(raw: unknown): DesktopUpdaterCfg {
 // ---------- القراءة/الكتابة (نفس SQLite — الصف واحد = المفتاح الواحد) ----------
 
 async function readKey<T>(key: string, sanitize: (raw: unknown) => T, dflt: T): Promise<T> {
+  await dbReady // ضمان مخطط الترقية الإضافي (§23) قبل أول لمسة للمخزن
   try {
     const row = await db.desktopSetting.findUnique({ where: { key } })
     if (!row) return { ...dflt }
@@ -100,6 +101,7 @@ async function readKey<T>(key: string, sanitize: (raw: unknown) => T, dflt: T): 
 }
 
 async function writeKey<T>(key: string, value: T): Promise<void> {
+  await dbReady // ترقية 1.0.0 → 1.1.0: جدول DesktopSetting يُنشأ إضافيًا — بلا تلف
   await db.desktopSetting.upsert({
     where: { key },
     update: { value: JSON.stringify(value) },

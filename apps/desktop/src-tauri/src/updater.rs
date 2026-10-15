@@ -46,8 +46,8 @@ pub fn fetch_history() -> Vec<serde_json::Value> {
         .timeout(Duration::from_secs(8))
         .build()
         .get(RELEASES_API)
-        // GitHub API تشترط User-Agent
-        .set("User-Agent", "NexusLink-Desktop/1.0.0")
+        // GitHub API تشترط User-Agent — الإصدار من وقت الترجمة (توحيد تلقائي)
+        .set("User-Agent", concat!("NexusLink-Desktop/", env!("CARGO_PKG_VERSION")))
         .set("Accept", "application/vnd.github+json")
         .call();
     let list = match resp {

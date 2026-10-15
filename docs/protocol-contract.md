@@ -957,3 +957,61 @@ interface TransferJob {
 - **media-verify 78/78** (كان 38): +40 فحصًا — خطة التوفير (idempotent/وسيط-الوصس-واحد/@NEW@/لا-load) · فك installPath من reg (حالات/فاسد/فاضي) · تخطيط المسارات الرسمي أولًا · النسخة -v (سليمة/بادئة/فاسدة) · OBS (موجود/غائب) · m3u (ترويسة/اسم معقّم/رابط/3 أسطر) · الحالة v2 كاملة (نسخة/واجهة/أجهزة/OBS/v1 محفوظة/loopback لينكس-عن وغيره-null/إرشاد ماك) · ثوابت التعاقد (الاسم/3 صيغ YUY2/افتراضي 720p30). محرك التطبيق الكامل (media.rs) ترجمة CI حصرًا (نمط R4-s2).
 - **E2E §22**: تمرير cast:state عبر الجسر (pc→tv) + صفحة /tv (200 + علامات الاستقبال) + vcam/ في الموارد + hook §22 في installer-hooks.nsh + أوامر §22 الثلاثة في main.rs + media_open_player في cast-tab + تبويب/فحوص الأجهزة الافتراضية + توثيق العقد + القاموس.
 - **اختبار النجاح التعاقدي** (e2e-checklist §16): مكالمة Meet على كمبيوتر بكاميرا حقيقية → «NexusLink Camera» من قائمة Meet مباشرة — الخطوات الميدانية موثقة؛ الحاوية بلا ويندوز/هاتف (نمط §14/§15/§16).
+
+## 23. إصدار 1.1.0 — توحيد الإصدار + ملاحظات AR/EN + المحدّث + مسار الترقية (مصدر: release.yml + docs/releases/v1.1.0.md + src/lib/db.ts + procman.rs + updater.rs)
+
+> الجولة 4 اكتملت فوق 1.0.0 (§18..§22) — هذا القسم عقد إطلاق الإصدار: رقم موحّد،
+> ملاحظات ثنائية اللغة، أصول موقّعة من الخط الأخضر نفسه، ومسار ترقية يحفظ كل إعداد.
+
+### 23.أ توحيد الإصدار — الملفات الستة
+- **1.1.0** في: `package.json` (الجذر) · `apps/desktop/src-tauri/tauri.conf.json` (`version`) ·
+  `apps/desktop/src-tauri/Cargo.toml` (+Cargo.lock للكرِيت نفسه) · `nexuslink_mobile/pubspec.yaml`
+  (`1.1.0+2` — versionCode تقدّم 1→2 لمسار ترقية APK صحيح) ·
+  `nexuslink_mobile/android/app/build.gradle` (fallback `flutterVersionName`).
+- `src/app/api/version/route.ts`: `CURRENT = "1.1.0"` + سجل محلي يحوي v1.1.0 وv1.0.0 (أوفلاين بصدق).
+- `updater.rs`: User-Agent من `concat!("NexusLink-Desktop/", env!("CARGO_PKG_VERSION"))` —
+  بلا إصدار مثبت يدويًا (توحيد وقت الترجمة).
+- `release.yml`: `env.VERSION = "1.1.0"` + وسم الإرفاق اليدوي الافتراضي `v1.1.0`.
+- قاعدة §3 round4-audit (قفل v1.0.0) كانت حصرًا أثناء تطوير الجولة — الإطلاق أمر المستخدم الصريح.
+
+### 23.ب ملاحظات الإصدار — عربية/إنجليزية إلزاميتان لكل وسم
+- **`docs/releases/<tag>.md`** — قسم `## العربية` ثم `## English` (يقرؤه حارس release.yml).
+- **حارس مبكر** في مهمة `release`: وسم بلا ملف ملاحظات أو بلا أحد القسمين = فشل قبل أي رفع.
+- `softprops/action-gh-release` مع `body_path: docs/releases/${{ github.ref_name }}.md` —
+  ملاحظاتنا تُسبق ملاحظات الوسوم المولّدة (`generate_release_notes: true` يبقى للسجل).
+- محتوى v1.1.0 = ميزات §18..§22 الحرفية + هندسة الإصدار + الحدود الصادقة (ماك pkg يدوي،
+  Chromecast غير مدعوم → /tv، Wayland، SmartScreen، iOS) — بلا ميزة غير مشحونة.
+
+### 23.ج latest.json + SHA256SUMS — الخط الأخضر نفسه (بلا تغيير بنيوي)
+- على وسوم `v*`: مهمة `release` تبني `latest.json` من توقيعات البناء (`*.sig`) للمنصات
+  الثلاث (`windows-x86_64` ← x64-setup.exe · `linux-x86_64` ← AppImage · `darwin-aarch64` ← .app.tar.gz)
+  + `SHA256SUMS.txt` (sha256sum *) → **Release مسودة** بأصول كل المنصات (APK/AAB أندرويد منها).
+- **نشر المسودة شرط ظهور التحديث**: نقطة الفحص `releases/latest/download/latest.json` لا تحسم
+  إلا إصدارًا **منشورًا** (المسودات والمسبقات مستبعدة من GitHub) — وُثّق في runbook §23.هـ.
+- مسار توقيع محلي بديل (لأزمات CI): `scripts/build-latest-json-v1.1.0.sh` — نمط v1.0.0
+  (minisign عبر tauri CLI، معرف الإصدار يُكتشف من الوسم عبر API، حذف الأصل فور التوقيع).
+
+### 23.د مسار الترقية 1.0.0 → 1.1.0 — «بلا تلف أي إعداد»
+- **قاعدة المستخدم لا تُمس**: `procman.rs` يزرع `app_config_dir/nexuslink.db` عند أول إقلاع
+  حصرًا (`if !db_path.exists()`) — التحديث يستبدل ملفات التطبيق لا قاعدة المستخدم.
+- **المخطط إضافي حصرًا منذ v1.0.0**: `git diff v1.0.0..HEAD -- prisma/` = إضافة `DesktopSetting`
+  (11 سطرًا) بلا أي حذف/تعديل؛ مخطط drift المحمول (`nexuslink_mobile/lib/data/database/`) ثابت.
+- **ضمان وقت الإقلاع** (`src/lib/db.ts` — `ensureUpgradeSchema`): `CREATE TABLE IF NOT EXISTS
+  "DesktopSetting"` إضافيًا بلا DROP/ALTER — ومسار الإعدادات (`desktop-hardening.ts`) ينتظر
+  `dbReady` قبل أول قراءة/كتابة. قاعدة 1.0.0 الفعلية تعمل بعد الترقية بإعداداتها القديمة سليمة.
+- **قرار الفحص**: `tauri-plugin-updater` يقارن semver — 1.0.0 < 1.1.0 → إشعار «يتوفر تحديث موقّع»
+  من الإعدادات/الإقلاع؛ التساوي → «أنت على الأحدث» (لا حلقة ترقية ولا تخفيض).
+- **التحقق الفعلي**: `scripts/updater-path-verify.mjs` — نقطة الفحص الحية + فك توقيعات latest.json
+  المنشورة ومطابقة keynum مع pubkey tauri.conf + تنزيل أصل حقيقي وتدقيق Ed25519 + SHA256SUMS
+  على البايتات + جرد أصول v1.0.0 + **محاكاة ترقية قاعدة v1.0.0 الحرفية** (من مخطط الوسم بـ
+  `prisma db push` + صف بيانات قديم) ثم إقلاع سيرفر 1.1.0 عليها: الإعدادات تعمل والصف سليم.
+- **الاختبار الميداني** (e2e-checklist §17): تثبيت 1.0.0 → إشعار التحديث → ترقية موقّعة إلى
+  1.1.0 → كل الإعدادات والأجهزة المقترنة والسجلات كما كانت.
+
+### 23.هـ Runbook إطلاق v1.1.0 (بترتيب صارم)
+1. دمج الجولة على main + انتظار desktop.yml الأخضر (3/3 منصات).
+2. `git tag v1.1.0 && git push origin v1.1.0` → release.yml يبني 5 منصات وينشئ **مسودة** Release
+   بأصولها + latest.json الموقعة + SHA256SUMS + ملاحظات docs/releases/v1.1.0.md.
+3. مراجعة المسودة: الأصول الثمانية العشرة + التوقيعات — ثم **Publish** (النشر شرط ظهور التحديث).
+4. التحقق بعد النشر: `releases/latest/download/latest.json` تعيد `1.1.0` (updater-path-verify
+   يفحص هذا تلقائيًا) — مستخدمو 1.0.0 يرون إشعار التحديث عند إقلاعهم التالي.
