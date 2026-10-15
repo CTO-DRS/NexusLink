@@ -51,7 +51,8 @@
       "resources/server",
       "resources/comms",
       "resources/gateway",
-      "vdd"
+      "vdd",
+      "vcam"
     ],
     "macOS": {
       "infoPlist": "Info.plist"

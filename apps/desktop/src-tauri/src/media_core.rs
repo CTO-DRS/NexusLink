@@ -277,18 +277,6 @@ pub fn akvcam_stream_args(device: &str, w: u32, h: u32, fps: u32) -> Vec<String>
     ]
 }
 
-/// مسارات AkVCamManager المعروفة (ويندوز + ماك) — أول موجود يفوز
-pub fn akvcam_manager_paths() -> Vec<&'static str> {
-    vec![
-        r"C:\Program Files\AkVCam\AkVCamManager.exe",
-        r"C:\Program Files\akvirtualcamera\AkVCamManager.exe",
-        r"C:\Program Files (x86)\AkVCam\AkVCamManager.exe",
-        "/usr/local/bin/AkVCamManager",
-        "/Applications/AkVCamManager.app/Contents/MacOS/AkVCamManager",
-        "/usr/bin/AkVCamManager",
-    ]
-}
-
 /// استخراج معرفات الأجهزة من خرج `AkVCamManager devices` (سطر لكل جهاز)
 pub fn parse_akvcam_devices(output: &str) -> Vec<String> {
     output
@@ -336,12 +324,166 @@ pub fn match_audio_capture(devices: &[String]) -> Option<String> {
     None
 }
 
+// ---------------------------------------------------------------------------
+// المرحلة 0-وسائط (عقد §22) — توفير الكاميرا الافتراضية وكشفها
+// كل الحقائق هنا متحقق منها من مصدر akvirtualcamera 9.3.1 الحرفي:
+//   · installscript.nsi: يكتب HKLM\SOFTWARE\Webcamoid\VirtualCamera\installPath
+//   · cmdparser.cpp: devices -p (معرف لكل سطر) · add-device DESCRIPTION ·
+//     add-format DEVICE FORMAT WIDTH HEIGHT FPS · description DEVICE ·
+//     -v (نسخة) · system-api · stream (المستخدم قائمًا)
+//   · preferences.cpp: أجهزة الكاميرات في Cameras\N\description
+// ---------------------------------------------------------------------------
+
+/// اسم كاميرا NexusLink — الاسم نفسه في Zoom/Meet (الهدف التعاقدي §22)
+pub const NEXUS_CAMERA_NAME: &str = "NexusLink Camera";
+
+/// صيغ الكاميرا المعلنة (YUY2 — الأوسع دعمًا للويب كام؛ الأول افتراضي).
+/// متحقق: `add-format DEVICE FORMAT WIDTH HEIGHT FPS` — YUY2 ضمن الصيغ
+/// المدعومة للإخراج (supported-formats) وتطابق مسار stream القائم في media.rs.
+pub const NEXUS_CAMERA_FORMATS: [(&str, u32, u32, u32); 3] = [
+    ("YUY2", 1280, 720, 30),
+    ("YUY2", 1920, 1080, 30),
+    ("YUY2", 640, 480, 30),
+];
+
+/// فك خرج `reg query HKLM\SOFTWARE\Webcamoid\VirtualCamera /v installPath`
+/// (ويندوز) — يرد مسار التثبيت. المصدر: installscript.nsi يكتب installPath.
+pub fn parse_reg_install_path(output: &str) -> Option<String> {
+    for line in output.lines() {
+        let l = line.trim();
+        // RegEdit سطر: "installPath    REG_SZ    C:\Program Files\AkVirtualCamera"
+        if let Some(pos) = l.find("REG_SZ") {
+            let key = l[..pos].trim();
+            if key.eq_ignore_ascii_case("installpath") {
+                let v = l[pos + 6..].trim();
+                if !v.is_empty() {
+                    return Some(v.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// مسارات AkVCamManager المعروفة (ويندوز + ماك) — أول موجود يفوز.
+/// نضيف تخطيط المثبّت الرسمي الموثق: $INSTDIR\<arch>\AkVCamManager.exe
+/// (installscript.nsi: StrCpy $managerPath "$INSTDIR\$arch\AkVCamManager.exe").
+pub fn akvcam_manager_paths() -> Vec<&'static str> {
+    vec![
+        r"C:\Program Files\AkVirtualCamera\x64\AkVCamManager.exe",
+        r"C:\Program Files\AkVCam\AkVCamManager.exe",
+        r"C:\Program Files\akvirtualcamera\AkVCamManager.exe",
+        r"C:\Program Files (x86)\AkVCam\AkVCamManager.exe",
+        "/usr/local/bin/AkVCamManager",
+        "/Applications/AkVCamManager.app/Contents/MacOS/AkVCamManager",
+        "/usr/bin/AkVCamManager",
+    ]
+}
+
+/// نسخة akvirtualcamera من خرج `AkVCamManager -v` — يطبع COMMONS_VERSION
+/// (cmdparser.cpp: containsFlag "-v" → AkPrintOut(COMMONS_VERSION)).
+pub fn parse_akvcam_version(output: &str) -> Option<String> {
+    let l = output.trim().trim_start_matches('v');
+    if l.is_empty() || l.len() > 24 || !l.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+        return None;
+    }
+    Some(l.to_string())
+}
+
+/// خطة توفير كاميرا NexusLink — أوامر argv مهيكلة (لا انقسام مسافات).
+/// قرار Idempotent من المصدر: add-device لا يكرر الوصف تلقائيًا — لذا نفحص
+/// الأوصاف القائمة؛ إن وُجد وصفنا نعيد None (لا شيء يُنفَّذ).
+/// المدخل: (المعرفات من `devices -p`، الوصف لكل معرف من `description ID`).
+/// ملاحظة مصدرية: addDevice يقرأ args[1] حصرًا — الوصف وسيط argv واحد
+/// «NexusLink Camera» (بالمسافة داخل وسيط واحد) — لهذا الأوامر مهيكلة.
+pub fn ensure_camera_plan(
+    ids: &[String],
+    descriptions: &[(String, String)],
+) -> Option<Vec<Vec<String>>> {
+    let ours = descriptions
+        .iter()
+        .any(|(_, d)| d.trim().eq_ignore_ascii_case(NEXUS_CAMERA_NAME));
+    if ours {
+        return None;
+    }
+    // جهاز قائم بلا وصفنا؟ نتركه للمستخدم ولا نمس شيئًا (لا load المدمر) —
+    // ننشئ جهازنا الخاص بجانبه.
+    let mut cmds = vec![vec!["add-device".into(), NEXUS_CAMERA_NAME.into()]];
+    for (f, w, h, fps) in NEXUS_CAMERA_FORMATS {
+        // المعرف يعاد من `add-device -p` وقت التنفيذ — @NEW@ يُستبدل به
+        cmds.push(vec![
+            "add-format".into(), "@NEW@".into(), f.into(),
+            w.to_string(), h.to_string(), fps.to_string(),
+        ]);
+    }
+    cmds.push(vec!["update".into()]);
+    let _ = ids;
+    Some(cmds)
+}
+
+/// ملاحظة OBS كبديل — وجود مجلدات OBS (obs64.exe) يكفي للكشف.
+/// CLSID «OBS Virtual Camera» يُحقن وقت بناء OBS (virtualcam-guid.h.in
+/// VIRTUALCAM_GUID من cmake) — لا يصلح علامة كشف ثابتة؛ نكتشف التثبيت
+/// ونوجه للمسار اليدوي الرسمي (قائمة OBS → Start Virtual Camera).
+pub fn obs_fallback_status(obs_installed: bool) -> Value {
+    json!({
+        "installed": obs_installed,
+        "note": if obs_installed {
+            "OBS مكتشف — بديل مدعوم: في OBS أضف Media Source إلى واجهة NexusLink ثم قائمة أدوات ← Start Virtual Camera (تظهر OBS Virtual Camera في Zoom/Meet)"
+        } else {
+            ""
+        },
+    })
+}
+
+/// محتوى ملف m3u مؤقت لمشغل سطح المكتب الافتراضي (عقد §22 — مشغل النظام).
+/// m3u ملف نصي معياري؛ مشغلات سطح المكتب (VLC/WMP/mpv) تتعامل معه كتيار
+/// HTTP — هذا هو «الstream المؤقت» بلا نسخ أي بايت.
+pub fn nexuslink_cast_m3u(name: &str, url: &str) -> String {
+    // تعقيم الاسم: أسطر m3u لا تقبل سطرًا جديدًا
+    let safe_name = name.replace(['\r', '\n'], " ");
+    format!("#EXTM3U\n#EXTINF:-1,{safe_name}\n{url}\n")
+}
+
+/// اسم ملف m3u المؤقت الثابت (يُعاد كتابته في كل بث — «مؤقت» بمفهومه العملي)
+pub fn cast_m3u_file_name() -> &'static str {
+    "nexuslink-cast.m3u"
+}
+
 /// حالة الدرايفور كاملة — نص عربي صادق + إرشاد التثبيت (يظهر في الواجهة)
+/// v2 (§22): يضيف نسخة/واجهة/أجهزة/OBS ويحافظ على حقول v1 (driver/ok/guide)
+/// لِمَا يعتمدها (settings-view قرأها من media_vcam_start/status).
 pub fn vcam_driver_status(
     platform: &str,
     akvcam_found: Option<String>,
     loopback_devices: usize,
     audio_out: Option<String>,
+) -> Value {
+    vcam_driver_status_v2(
+        platform,
+        akvcam_found,
+        None,
+        None,
+        None,
+        loopback_devices,
+        None,
+        audio_out,
+        false,
+    )
+}
+
+/// النسخة الموسعة — كل مدخل اختياري يظل صادقًا في غيابه (بلا اختراع قيم)
+#[allow(clippy::too_many_arguments)]
+pub fn vcam_driver_status_v2(
+    platform: &str,
+    akvcam_found: Option<String>,
+    akvcam_version: Option<String>,
+    akvcam_api: Option<String>,
+    camera_names: Option<Vec<String>>,
+    loopback_devices: usize,
+    loopback_version: Option<String>,
+    audio_out: Option<String>,
+    obs_installed: bool,
 ) -> Value {
     let (video_driver, video_ok, video_guide) = match platform {
         "linux" => {
@@ -384,11 +526,11 @@ pub fn vcam_driver_status(
                 "none",
                 false,
                 json!({
-                    "title": "مطلوب akvirtualcamera (DirectShow/Media Foundation)",
+                    "title": "كاميرا NexusLink غير مثبتة بعد",
                     "steps": [
-                        "نزّل المثبّت من github.com/webcamoid/akvirtualcamera/releases",
-                        "ثبّته ثم أعد المحاولة — ستصبح «NexusLink Virtual Camera» كاميرا عادية في Zoom/Meet",
-                        "إن كنت تستخدم OBS: يمكنه بديلًا أن يعرض نافذة NexusLink عبر Media Source ثم Start Virtual Camera"
+                        "أعد تثبيت NexusLink (المثبّت يركّب حزمة الكاميرا تلقائيًا ويُسجّل «NexusLink Camera»)",
+                        "أو اضغط «تثبيت حزمة الكاميرا» هنا — سيعمل مثبّت akvirtualcamera الرسمي المرفق (قد يطلب إذن مدير النظام)",
+                        "بديل: إن كان OBS مثبتًا يمكنه عرض كاميرا الهاتف عبر Start Virtual Camera"
                     ],
                 }),
             ),
@@ -422,10 +564,24 @@ pub fn vcam_driver_status(
             }
         },
     };
+    // صادق: لا نعلن نسخة إلا إن قرأناها فعلًا من الأداة (-v)
     json!({
         "platform": platform,
-        "video": { "driver": video_driver, "ok": video_ok, "guide": video_guide },
+        "video": {
+            "driver": video_driver,
+            "ok": video_ok,
+            "guide": video_guide,
+            "version": akvcam_version,
+            "api": akvcam_api,
+            "devices": camera_names.unwrap_or_default(),
+            "obs": obs_fallback_status(obs_installed),
+        },
         "audio": { "driver": audio_driver, "ok": audio_ok, "guide": audio_guide },
+        "loopback": if platform == "linux" {
+            json!({ "devices": loopback_devices, "version": loopback_version })
+        } else {
+            Value::Null
+        },
     })
 }
 

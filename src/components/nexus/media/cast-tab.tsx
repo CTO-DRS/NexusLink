@@ -1,10 +1,12 @@
 "use client"
 // بث الوسائط — تشغيل موسيقى/فيديو من الهاتف إلى الكمبيوتر أو TV
 // بث فعلي عبر HTTP Range (نفس تقنية /api/preview) — بدون نسخ أي بايت
+// + §22: «افتح في مشغل النظام» (m3u مؤقت) + الوضع المدعوم فعليًا للهاتف→TV (/tv)
 import { useEffect, useRef, useState } from "react"
 import {
   Cast, Tv, Monitor, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX,
   Square, Music, Film, HardDriveDownload, Smartphone, ListVideo,
+  MonitorPlay, Info,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -14,6 +16,7 @@ import { fmtSize, fmtDuration } from "@/lib/store"
 import { getReceiver, registerReceiver } from "@/lib/media-engine"
 import { castCmd } from "@/lib/media-socket"
 import { PhoneFrame, TvFrame, PcWindow } from "./media-bits"
+import { isTauri, tauriInvoke } from "@/lib/tauri"
 import { cn } from "@/lib/utils"
 
 export function CastTab() {
@@ -108,6 +111,30 @@ export function CastTab() {
 
   const remote = (action: string, value?: number) => {
     castCmd({ action, value, target })
+  }
+
+  // §22 — «stream مؤقت» في مشغل سطح المكتب الافتراضي: m3u يحمل تيار /api/preview
+  // ويُفتح بالمعالج النظامي (VLC/WMP/mpv) — بلا نسخ بايتات.
+  const [playerMsg, setPlayerMsg] = useState("")
+  const openInSystemPlayer = async () => {
+    if (!cast) return
+    const url = new URL(
+      `/api/preview?device=${cast.media.device}&path=${encodeURIComponent(cast.media.path)}`,
+      window.location.origin,
+    ).href
+    try {
+      await tauriInvoke("media_open_player", { url, name: cast.media.name })
+      setPlayerMsg("")
+    } catch (e) {
+      setPlayerMsg(String(e).slice(0, 180))
+    }
+  }
+
+  const copyTvLink = async () => {
+    try {
+      await navigator.clipboard.writeText(`http://${window.location.hostname}:3000/tv`)
+      setPlayerMsg("")
+    } catch { /* الحافظة مرفوضة — النص معروض للنسخ اليدوي */ }
   }
 
   return (
@@ -263,7 +290,45 @@ export function CastTab() {
                 </div>
               )}
             </div>
+            {/* §22 — «stream مؤقت» في مشغل النظام الافتراضي (م3و مؤقت → VLC/WMP) */}
+            <div className="border-t bg-muted/30 px-3 py-2 flex flex-wrap items-center gap-2">
+              {isTauri() && (
+                <Button
+                  variant="outline" size="sm" className="h-7 rounded-lg text-[10.5px] gap-1.5"
+                  disabled={!cast}
+                  onClick={() => void openInSystemPlayer()}
+                >
+                  <MonitorPlay className="w-3.5 h-3.5" /> افتح في مشغل النظام (stream مؤقت)
+                </Button>
+              )}
+              {playerMsg && <span className="text-[10px] text-red-500" data-no-i18n>{playerMsg}</span>}
+            </div>
           </PcWindow>
+
+          {/* §22 — سلسلة الهاتف→TV: الوضع المدعوم فعليًا (بصدق) */}
+          <div className="rounded-xl border bg-card p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <Info className="w-4 h-4 text-primary" />
+              <p className="text-[12.5px] font-bold">العرض على شاشة كبيرة (هاتف ← TV) — الوضع المدعوم فعليًا</p>
+            </div>
+            <ul className="text-[11px] text-muted-foreground space-y-1 leading-relaxed list-disc ms-4">
+              <li>
+                نافذة «Nexus-TV» أعلاه: معاينة داخل التطبيق تعمل دائمًا.
+              </li>
+              <li>
+                أي شاشة بمتصفح على الشبكة المحلية (تلفاز ذكي/جهاز استقبال): افتح
+                <code className="mx-1 rounded bg-muted px-1.5 py-0.5" data-no-i18n>http://&lt;ip-الكمبيوتر&gt;:3000/tv</code>
+                <button className="mx-1 text-primary underline" onClick={() => void copyTvLink()}>(نسخ)</button>
+                — تصبح مستقبل بث حقيقيًا بنفس التحكم.
+              </li>
+              <li>
+                مشغل سطح المكتب الافتراضي (VLC/Windows Media Player) عبر زر «افتح في مشغل النظام».
+              </li>
+              <li className="text-amber-600 dark:text-amber-400">
+                صادق: بروتوكول Chromecast الأصلي (mDNS) غير مدعوم — مسار /tv هو البديل المكافئ عمليًا.
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
 

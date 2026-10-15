@@ -1253,6 +1253,137 @@ try {
   }
 
   // ================================================================
+  // §22 (المرحلة 0-وسائط) — الأجهزة الافتراضية + مشغل النظام + هاتف→TV
+  // ================================================================
+  console.log("== §22: الأجهزة الافتراضية (cast:state + /tv + حزمة الكاميرا + التشخيص) ==")
+  {
+    const fsSync22 = (await import("node:fs")).default
+    const rd22 = (p) => { try { return fsSync22.readFileSync(pathMod.join(ROOT, p), "utf8") } catch { return "" } }
+    // (أ) cast:state يمر عبر جسر 3005 من دور pc إلى دور tv (بث شفاف)
+    const mSockPc = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3005" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+    const mSockTv = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3005" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+    await Promise.all([
+      new Promise((res, rej) => { mSockPc.on("connect", res); mSockPc.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("m pc timeout")), 10000) }),
+      new Promise((res, rej) => { mSockTv.on("connect", res); mSockTv.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("m tv timeout")), 10000) }),
+    ])
+    mSockPc.emit("media:role", { role: "pc", name: "NEXUS-PC" })
+    mSockTv.emit("media:role", { role: "tv", name: "Nexus-TV" })
+    await sleep(400)
+    const castSt = await new Promise((res) => {
+      mSockTv.on("cast:state", (d) => { if (d?.active === true && d?.media?.path) res(d) })
+      mSockPc.emit("cast:state", {
+        active: true, target: "tv", sender: "Galaxy-S24", playing: true, volume: 90, muted: false,
+        media: { device: "galaxy-s24", path: "/Movies/e2e-cast.mp4", name: "E2E Cast", kind: "video" }, at: Date.now(),
+      })
+      setTimeout(() => res(null), 6000)
+    })
+    check("§22: cast:state من دور pc يصل دور tv (media/target/playing كما هي)",
+      castSt?.media?.device === "galaxy-s24" && castSt?.media?.path === "/Movies/e2e-cast.mp4" && castSt?.target === "tv" && castSt?.playing === true,
+      JSON.stringify(castSt))
+    // cast:cmd يمر عكسيًا (تحكم الكمبيوتر بالمستقبل)
+    const castCmdEcho = await new Promise((res) => {
+      mSockPc.on("cast:cmd", (d) => { if (d?.action === "seek") res(d) })
+      mSockTv.emit("cast:cmd", { action: "seek", value: 12, target: "tv" })
+      setTimeout(() => res(null), 6000)
+    })
+    check("§22: cast:cmd يمر للمستقبل (seek/value/target كما أُرسلت)", castCmdEcho?.value === 12 && castCmdEcho?.target === "tv", JSON.stringify(castCmdEcho))
+    mSockPc.disconnect()
+    mSockTv.disconnect()
+
+    // (ب) صفحة /tv — شاشة الاستقبال المستقلة تُقدَّم فعليًا
+    const tvHtml = await fetch("http://127.0.0.1:3000/tv", { redirect: "manual" }).then((r) => r.text()).catch(() => "")
+    check("§22: GET /tv → 200 وشاشة الاستقبال (النص + الوجهة Nexus-TV)",
+      tvHtml.includes("شاشة الاستقبال") && tvHtml.includes("NexusLink Cast") && tvHtml.includes("Nexus-TV"),
+      `len=${tvHtml.length}`)
+
+    // (ج) حزمة الكاميرا المرفقة — المصدر والترخيص والبصمة (vcam/)
+    const installer = await fsMod.readFile("apps/desktop/src-tauri/vcam/akvirtualcamera-windows-9.3.1.exe").then((b) => b.length).catch(() => 0)
+    check("§22: مثبّت akvirtualcamera الرسمي ملتزم (vcam/ — NSIS 9.3.1 غير معدَّل)", installer > 1_000_000, `bytes=${installer}`)
+    const vcamLicense = rd22("apps/desktop/src-tauri/vcam/LICENSE-akvirtualcamera")
+    const vcamSha = rd22("apps/desktop/src-tauri/vcam/SHA256SUMS.txt")
+    const vcamReadme = rd22("apps/desktop/src-tauri/vcam/README.md")
+    check("§22: GPL-3.0 + SHA256 + provenance مع الحزمة",
+      vcamLicense.includes("GNU GENERAL PUBLIC LICENSE") && vcamSha.includes("6a17c098d05bf380834ede5b1ad275762ebb216f667b73abc24ee9ba5ef459de")
+      && vcamReadme.includes("akvirtualcamera-windows-9.3.1.exe") && vcamReadme.includes("installscript.nsi"),
+      "vcam/ bundle")
+
+    // (د) التثبيت: الموارد + hook NSIS (تثبيت صامت + كاميرا بمعرف ثابت)
+    const conf4 = JSON.parse(rd22("apps/desktop/src-tauri/tauri.conf.json"))
+    check("§22: tauri.conf resources تشمل vcam", (conf4?.bundle?.resources ?? []).includes("vcam"), JSON.stringify(conf4?.bundle?.resources))
+    const hooks = rd22("apps/desktop/src-tauri/installer-hooks.nsh")
+    check("§22: hook التثبيت — /S صامت + غير حاجز داخل RunningX64",
+      hooks.includes("${NEXUS_VCAM_SETUP}\" /S") && hooks.includes("NSIS_HOOK_POSTINSTALL") && hooks.includes("NEXUS_VCAM_SETUP"),
+      "installer-hooks §22")
+    check("§22: hook التوفير — السجل (installPath) ثم add-device -i NexusLinkCam + add-format YUY2 ×3 + update",
+      hooks.includes("SOFTWARE\\Webcamoid\\VirtualCamera") && hooks.includes("add-device -i ${NEXUS_VCAM_ID}")
+      && (hooks.match(/add-format \$\{NEXUS_VCAM_ID\} YUY2/g) ?? []).length === 3 && hooks.includes("update"),
+      "provision §22")
+
+    // (هـ) الطبقة الأصلية — الأوامر الثلاثة + الضمانة idempotent + ثوابت التعاقد
+    const mainRs4 = await fsMod.readFile("apps/desktop/src-tauri/src/main.rs", "utf8").catch(() => "")
+    const mediaRs = await fsMod.readFile("apps/desktop/src-tauri/src/media.rs", "utf8").catch(() => "")
+    const mediaCoreRs = await fsMod.readFile("apps/desktop/src-tauri/src/media_core.rs", "utf8").catch(() => "")
+    check("§22: أوامر Tauri الثلاثة مسجلة (vcam_install + open_player + open_sound_settings)",
+      mainRs4.includes("media::media_vcam_install") && mainRs4.includes("media::media_open_player") && mainRs4.includes("media::media_open_sound_settings"),
+      "main.rs §22")
+    check("§22: media.rs — التوفير المعادلي + تحقق SHA256 (certutil) + m3u + سلالم السلامة",
+      mediaRs.includes("provision_camera_now") && mediaRs.includes("installer_sha256_matches") && mediaRs.includes("VCAM_INSTALLER_SHA256")
+      && mediaRs.includes("nexuslink_cast_m3u") && mediaRs.includes("cast_m3u_file_name"),
+      "media.rs §22")
+    check("§22: media.rs — كشف السجل أولًا (installPath) + نسخة -v + OBS + devices -p",
+      mediaRs.includes("HKLM\\SOFTWARE\\Webcamoid\\VirtualCamera") && mediaRs.includes("parse_reg_install_path")
+      && mediaRs.includes("obs_installed") && mediaRs.includes('["devices", "-p"]'),
+      "media.rs detection")
+    check("§22: media_core.rs — الاسم التعاقدي + الصيغ + خطة argv مهيكلة (الوصف وسيط واحد) + لا load",
+      mediaCoreRs.includes('NEXUS_CAMERA_NAME: &str = "NexusLink Camera"') && mediaCoreRs.includes("NEXUS_CAMERA_FORMATS")
+      && mediaCoreRs.includes("add-device") && mediaCoreRs.includes("Vec<Vec<String>>") && !mediaCoreRs.includes('"load"'),
+      "media_core §22")
+
+    // (و) الويب — زر مشغل النظام + بث الحالة + تبويب/فحوص الأجهزة الافتراضية
+    const castTs = await fsMod.readFile("src/components/nexus/media/cast-tab.tsx", "utf8").catch(() => "")
+    const storeTs = await fsMod.readFile("src/lib/media-store.ts", "utf8").catch(() => "")
+    const toolsTs = await fsMod.readFile("src/components/nexus/tools/tools-view.tsx", "utf8").catch(() => "")
+    const tvPage = await fsMod.readFile("src/app/tv/page.tsx", "utf8").catch(() => "")
+    const bridgeTs = await fsMod.readFile("src/lib/nexus/media-bridge.ts", "utf8").catch(() => "")
+    check("§22: cast-tab — «افتح في مشغل النظام» (media_open_player) + توثيق /tv والحد الصادق",
+      castTs.includes("media_open_player") && castTs.includes("/tv") && castTs.includes("Chromecast"),
+      "cast-tab §22")
+    check("§22: media-store يعلن cast:state (بداية/نهاية/تشغيل/صوت/موضع مقيّد)",
+      storeTs.includes("castState({ active: true") && storeTs.includes("castState({ active: false") && storeTs.includes("castLastPos"),
+      "media-store §22")
+    check("§22: لوحة الأدوات — تبويب vdev + فحصا التشخيص + زر التثبيت + إعدادات الصوت",
+      toolsTs.includes("VirtualDevicesTab") && toolsTs.includes('"vdev"') && toolsTs.includes("media_vcam_install")
+      && toolsTs.includes("media_open_sound_settings") && toolsTs.includes('push("vcam"') && toolsTs.includes('push("vmic"'),
+      "tools §22")
+    check("§22: صفحة /tv — دور tv + بناء تيار /api/preview + استجابة cast:cmd",
+      tvPage.includes('mediaRole("tv"') && tvPage.includes("/api/preview") && tvPage.includes("cast:cmd"),
+      "/tv page")
+    check("§22: جسر 3005 يمرر cast:state/cast:cmd (القناة الشفافة القائمة)",
+      bridgeTs.includes('"cast:state"') && bridgeTs.includes('"cast:cmd"'),
+      "media-bridge §22")
+
+    // (ز) التوثيق + القاموس + محرك التحقق
+    const contract4 = rd22("docs/protocol-contract.md")
+    const checklist16 = rd22("docs/e2e-checklist.md")
+    const enMap = rd22("src/lib/ar-en-map.json")
+    check("§22: العقد موثق (الحزمة/التوفير/السجل/-v/OBS/m3u//tv/التشخيص)",
+      contract4.includes("## 22.") && contract4.includes("NexusLink Camera") && contract4.includes("installPath")
+      && contract4.includes("cast:state") && contract4.includes("Chromecast الأصلي (mDNS/cast protocol) غير مدعوم"),
+      "contract §22")
+    check("§22: e2e-checklist §16 — اختبار Meet الميداني موثق خطوة-خطوة",
+      checklist16.includes("## 16. المرحلة 0-وسائط") && checklist16.includes("NexusLink Camera") && checklist16.includes("Meet"),
+      "checklist §16")
+    check("§22: القاموسان — مفاتيح اللوحة الجديدة مترجمة (ar→en)",
+      enMap.includes("الأجهزة الافتراضية — كاميرا وميكروفون الهاتف") && enMap.includes("تثبيت حزمة الكاميرا")
+      && enMap.includes("Virtual devices — phone camera & microphone") && enMap.includes("افتح في مشغل النظام (stream مؤقت)"),
+      "i18n §22")
+    const mvRs = await fsMod.readFile("scripts/media-verify/src/main.rs", "utf8").catch(() => "")
+    check("§22: media-verify يضمّن media_core حرفيًا ويغطي §22 (خطة/سجل/نسخة/m3u/v2)",
+      mvRs.includes("media_core.rs") && mvRs.includes("test_camera_provisioning") && mvRs.includes("parse_reg_install_path"),
+      "media-verify §22")
+  }
+
+  // ================================================================
   // FA-files (عقد §14) — دمج الملفات في نظام التشغيل
   // ================================================================
   console.log("== ] FA-files: OS file integration ==")

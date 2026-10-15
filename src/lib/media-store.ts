@@ -14,9 +14,14 @@ import {
   releaseMic, retargetSyntheticFacing, setTorch, torchSupported,
   type LoopbackHandle,
 } from "./media-engine"
+import { castState } from "./media-socket"
 
 export type MediaTab = "webcam" | "security" | "baby" | "mic" | "cast" | "gallery"
 export type CamDeviceId = "galaxy-s24" | "redmi-note13" | "pc-office"
+
+// §22 — آخر موضع بُث عبر cast:state (تقييد الإعلان — لا إغراق للمستقبل)
+let castLastPos: number | null = null
+
 
 const idb = (v: number | null) => v
 
@@ -605,12 +610,16 @@ export const useMedia = create<MediaState>((set, get) => ({
         position: 0, duration: 0, volume: 90, muted: false, startedAt: Date.now(),
       },
     })
+    // §22 — إعلان حالة البث للمستقبلات (صفحة /tv على شاشة التلفاز)
+    castState({ active: true, media: { device: item.device, path: item.path, name: item.name, kind: item.kind }, target, sender: "Galaxy-S24", playing: true, volume: 90, muted: false, at: Date.now() })
     get().log(`بث ${item.kind === "video" ? "فيديو" : "موسيقى"} «${item.name}» إلى ${target === "tv" ? "Nexus-TV" : "الكمبيوتر"} — بث مباشر بدون نسخ`, "ok")
     get().pass("cast")
   },
 
   stopCast: () => {
     set({ cast: null })
+    // §22 — إخبار المستقبلات بانتهاء البث
+    castState({ active: false, at: Date.now() })
     get().log("انتهى البث")
   },
 
@@ -623,6 +632,9 @@ export const useMedia = create<MediaState>((set, get) => ({
       else void el.play().catch(() => {})
     }
     set((s) => ({ cast: s.cast ? { ...s.cast, playing: !s.cast.playing } : null }))
+    // §22 — إعلان حالة التشغيل الجديدة
+    const c = get().cast
+    if (c) castState({ active: true, media: { device: c.media.device, path: c.media.path, name: c.media.name, kind: c.media.kind }, target: c.target, playing: c.playing, volume: c.volume, muted: c.muted, at: Date.now() })
     get().log(st.cast.playing ? "إيقاف مؤقت" : "استئناف التشغيل")
   },
 
@@ -632,6 +644,12 @@ export const useMedia = create<MediaState>((set, get) => ({
     const el = registerAndGet(st.cast.target)
     if (el) el.currentTime = pos
     set((s) => ({ cast: s.cast ? { ...s.cast, position: pos } : null }))
+    // §22 — إعلان الموضع (مقيّد — لا إغراق للمستقبل)
+    const c = get().cast
+    if (c && Math.abs(pos - (castLastPos ?? -1)) > 1) {
+      castLastPos = pos
+      castState({ active: true, target: c.target, position: pos, playing: c.playing, at: Date.now() })
+    }
   },
 
   castVolume: (v) => {
@@ -640,6 +658,8 @@ export const useMedia = create<MediaState>((set, get) => ({
     const el = registerAndGet(st.cast.target)
     if (el) { el.volume = v / 100; el.muted = false }
     set((s) => ({ cast: s.cast ? { ...s.cast, volume: v, muted: false } : null }))
+    const c = get().cast
+    if (c) castState({ active: true, target: c.target, volume: c.volume, muted: c.muted, at: Date.now() })
   },
 
   castMute: () => {
@@ -649,6 +669,8 @@ export const useMedia = create<MediaState>((set, get) => ({
     const next = !st.cast.muted
     if (el) el.muted = next
     set((s) => ({ cast: s.cast ? { ...s.cast, muted: next } : null }))
+    const c = get().cast
+    if (c) castState({ active: true, target: c.target, volume: c.volume, muted: c.muted, at: Date.now() })
   },
 
   updateCastPos: (position, duration, playing) =>
