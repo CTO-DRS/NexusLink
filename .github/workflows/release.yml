@@ -367,8 +367,11 @@ jobs:
           import glob, json, os
           from datetime import datetime, timezone
 
-          tag = os.environ["GITHUB_REF_NAME"]            # v1.0.0
-          version = tag.lstrip("v")
+          tag = os.environ["GITHUB_REF_NAME"]            # v1.0.0 | v1.1.0-fix1
+          # الإصدار من البيئة الموحدة VERSION (تطابق الملفات الأربعة) — لاحقة الوسم
+          # (fix1 مثلاً) اسم وسم بناء CI فقط بعد فشل جولة، ولا تدخل إصدار المحدّث أبدًا
+          # (وإلا لتقرأ latest.json ‏1.1.0-fix1 وهو أقل من 1.1.0 في semver — كسر ترقية)
+          version = os.environ.get("VERSION") or tag.lstrip("v")
           base = f"https://github.com/CTO-DRS/NexusLink/releases/download/{tag}"
           # أصول updater: توقيعات مولدة أثناء البناء (TAURI_SIGNING_PRIVATE_KEY)
           picks = {
