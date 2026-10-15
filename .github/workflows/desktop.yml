@@ -114,12 +114,7 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/**/*.dmg
           if-no-files-found: error
 
-      - name: Attach bundles to release (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            apps/desktop/src-tauri/target/release/bundle/**/*.AppImage
-            apps/desktop/src-tauri/target/release/bundle/**/*.deb
-            apps/desktop/src-tauri/target/release/bundle/**/*.exe
-            apps/desktop/src-tauri/target/release/bundle/**/*.dmg
+      # الإرفاق بالإصدار من وظيفة release في release.yml حصرًا (كاتب واحد).
+      # إزالة الإرفاق هنا: سباق 404 على الأصول بين هذا السير وrelease.yml عند
+      # الوسوم (v1.1.0-fix1: ‏vcam exe كان يُرفع من وظيفتين متزامنتين) — وهذا
+      # السير يبقى CI حزم artifacts فقط حتى على الوسوم.
