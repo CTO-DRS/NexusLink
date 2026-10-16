@@ -349,6 +349,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { merge-multiple: true, path: dist }
+      # الأصول تهبط متداخلة (bundle/<type>/…) لأن upload-artifact يخزّن نسبةً لجذر
+      # البحث (LCA) — وv1.0.0 لم تمرّ بهذا المسار أبدًا (release job تُخطّى على dispatch
+      # على main وتُجمع latest.json يدويًا). التسطيح شرط: picks وSHA256SUMS
+      # (‎sha256sum *‎ على الجذر حصرًا) وsoftprops كلها تفترض ملفات بمستوى dist الجذر.
+      - name: Flatten dist (artifacts carry bundle subpaths)
+        run: |
+          find dist -mindepth 2 -type f -exec mv -f {} dist/ \;
+          find dist -mindepth 1 -type d -empty -delete
+          ls -la dist/
       # ملاحظات الإصدار عربية/إنجليزية — ملف لكل وسم (docs/releases/<tag>.md)
       # حارس سريع: وسم بلا ملاحظات مزدوجة اللغة = فشل مبكر قبل أي رفع
       - name: Verify release notes exist (AR/EN)
@@ -378,14 +387,15 @@ jobs:
           version = os.environ.get("VERSION") or tag.lstrip("v")
           base = f"https://github.com/CTO-DRS/NexusLink/releases/download/{tag}"
           # أصول updater: توقيعات مولدة أثناء البناء (TAURI_SIGNING_PRIVATE_KEY)
+          # ‏** تعبر المجلدات (recursive=True) — تحصين إضافي بعد تسطيح dist
           picks = {
-              "windows-x86_64": "dist/NexusLink_*_x64-setup.exe.sig",
-              "linux-x86_64": "dist/*.AppImage.sig",
-              "darwin-aarch64": "dist/*.app.tar.gz.sig",
+              "windows-x86_64": "dist/**/NexusLink_*_x64-setup.exe.sig",
+              "linux-x86_64": "dist/**/*.AppImage.sig",
+              "darwin-aarch64": "dist/**/*.app.tar.gz.sig",
           }
           platforms = {}
           for plat, pattern in picks.items():
-              files = sorted(glob.glob(pattern))
+              files = sorted(glob.glob(pattern, recursive=True))
               if not files:
                   continue
               sig_path = files[0]
@@ -406,8 +416,10 @@ jobs:
           with open("dist/latest.json", "w", encoding="utf-8") as f:
               json.dump(latest, f, ensure_ascii=False, indent=2)
           print("latest.json:", list(platforms), "→", version)
-          if not platforms:
-              raise SystemExit("لا توقيعات updater في dist — فشل")
+          # المحدّث تعاقدي للمنصات الثلاث — بيان ناقص يُسقط تحديثات منصة كاملة بصمت
+          missing = sorted(set(picks) - set(platforms))
+          if missing:
+              raise SystemExit(f"منصات updater ناقصة: {missing} — فشل")
           PY
       - name: Generate SHA256 checksums
         run: cd dist && sha256sum * > SHA256SUMS.txt
