@@ -185,10 +185,17 @@ try {
 console.log("\n== G) جرد أصول الإصدار الأخضر ==")
 try {
   // النشر (لا مسودة) مثبت سلوكيًا: releases/latest لا يحسم إلا إصدارًا منشورًا — وC أعادت latest.json فعلية.
-  check("Release v1.0.0 منشور (لا مسودة) — releases/latest لا يحسم المسودات أبدًا وأعاد latest.json فعلية",
-    live?.version === "1.0.0", `live=${live?.version}`)
-  // جرد الأصول من SHA256SUMS المنشورة نفسها (رابط أصل مباشر — بلا حد معدل API)
-  const sumsR2 = await fetch(`https://github.com/${REPO}/releases/download/v1.0.0/SHA256SUMS.txt`, { headers: { "User-Agent": "NexusLink-Path-Verify" }, signal: AbortSignal.timeout(20000) })
+  // منذ v1.1.0: النسخة الحية هي مرجع التحقق (1.1.0+) — إصدار 1.0.0 يبقى تاريخيًا محفوظًا في releases.
+  const LIVE_MIN = "1.1.0"
+  const semverGte = (a, b) => {
+    const p = (s) => s.split(".").map(Number)
+    const [a1, a2, a3] = p(a), [b1, b2, b3] = p(b)
+    return a1 > b1 || (a1 === b1 && (a2 > b2 || (a2 === b2 && a3 >= b3)))
+  }
+  check("الإصدار الحي ≥ " + LIVE_MIN + " منشور (لا مسودة) — releases/latest لا يحسم المسودات أبدًا وأعاد latest.json فعلية",
+    !!live?.version && semverGte(live.version, LIVE_MIN), `live=${live?.version}`)
+  // جرد الأصول من SHA256SUMS للإصدار الحي نفسه (رابط أصل مباشر — بلا حد معدل API)
+  const sumsR2 = await fetch(`https://github.com/${REPO}/releases/latest/download/SHA256SUMS.txt`, { headers: { "User-Agent": "NexusLink-Path-Verify" }, signal: AbortSignal.timeout(20000) })
   const sums2 = await sumsR2.text()
   const sumNames = sums2.split("\n").filter((l) => l.trim()).map((l) => l.trim().split(/\s+/)[1] ?? l.trim().split(/\s+/)[0])
   check("أصول الخط الأخضر كاملة في SHA256SUMS (exe+msi+portable/deb+AppImage/dmg+app.tar.gz/apk/latest.json)",
@@ -197,7 +204,7 @@ try {
   check("latest.json نفسها داخل SHA256SUMS (سلسلة التدقيق تشمل بيان المحدّث)",
     sumNames.some((n) => n === "latest.json"), "manifest covered")
 } catch (e) {
-  check("Release v1.0.0 منشور (لا مسودة) — releases/latest لا يحسم المسودات أبدًا وأعاد latest.json فعلية", false, e.message)
+  check("الإصدار الحي منشور (لا مسودة) وجرد SHA256SUMS متاح", false, e.message)
 }
 
 // ---------------------------------------------------------------------------
