@@ -64,6 +64,42 @@ class CtlEvents {
   static const String screen = 'dev:screen'; // أبعاد الشاشة الحقيقية
 }
 
+/// الجولة 5 (عقد §24) — التحكم بهاتف من هاتف آخر عبر المركز (هاتف→هاتف).
+/// نفس بروتوكول FA-7 حرفيًا بعد التوجيه: الهاتف أ يطلب [ctlStart]/يقطع [ctlStop]
+/// ثم يستقبل [ctlState]/[touchAck]/[rejected] الموجهة إليه، ويرسل [touch]/[text]/[key]
+/// بنفس أسماء أحداث الويب — فكل تنفيذ على الهاتف ب يبقى كما هو حرفيًا.
+/// [agentsList] بث قائمة الهواتف الوكيلة الحية للاختيار، و[screenInfo] بث
+/// أبعاد شاشة أي وكيل (موسومة بـ deviceId — يُفلتر بمعرف الهدف).
+class P2pEvents {
+  // إرسال من الهاتف أ
+  static const String ctlStart = 'p2p:ctl-start'; // {from, target, name?}
+  static const String ctlStop = 'p2p:ctl-stop'; // {target}
+
+  // استقبال على الهاتف أ (توجيه مستهدف من الجسر)
+  static const String ctlState = 'dev:ctl-state'; // {active, controller, target?, reason?}
+  static const String touchAck = 'dev:touch-ack';
+  static const String rejected = 'p2p:ctl-rejected'; // {reason, from, target}
+  static const String agentsList = 'guard:agents'; // {agents:[{deviceId,name}], sessions}
+
+  // إرسال الإدخال (أسماء أحداث الويب نفسها — التوجيه حسب الجلسة الموثقة)
+  static const String touch = 'dev:touch';
+  static const String text = 'dev:text';
+  static const String key = 'dev:key';
+  static const String screenInfo = 'guard:screen'; // {w,h,density,deviceId}
+
+  /// أسباب الرفض من الجسر (p2p:ctl-rejected.reason).
+  static const reasons = {
+    'identity': 'identity',
+    'untrusted': 'untrusted',
+    'target-untrusted': 'target-untrusted',
+    'self': 'self',
+    'target-offline': 'target-offline',
+    'target-busy': 'target-busy',
+    'already-controlling': 'already-controlling',
+    'no-session': 'no-session',
+  };
+}
+
 /// أحداث جسر الوسائط 3005 (عقد §4.3 + إضافات FA-8) — كاميرا/ميكروفون/مراقبة.
 class MediaEvents {
   static const String role = 'media:role'; // تسجيل role=phone
@@ -97,6 +133,11 @@ class MediaEvents {
   static const String screenStop = 'screen:stop';
   static const String screenSet = 'screen:set';
   static const String screenState = 'screen:state';
+
+  // الجولة 5 (عقد §24) — مرآة الهاتف: بث شاشة هاتف لهاتف آخر عبر نفس إشارات
+  // rtc:offer/answer/ice بنوع kind='mirror' (الناشر: هاتف ب بـ getDisplayMedia
+  // — العارض: هاتف أ يجيب). الكمبيوتر يتجاهل النوع حرفيًا (حارس الويب)،
+  // وقاعدة §4.3 سارية: أول إجابة تُقبل لكل جلسة.
 
   // R4 مرحلة ① (عقد §19) — الشاشة الثانية: الهاتف شاشة ممتدة فعلية
   static const String secondScreenCmd = 'secondscreen:cmd'; // enable|disable {w,h,fps,quality}

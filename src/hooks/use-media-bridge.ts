@@ -70,8 +70,11 @@ export function useMediaBridge() {
     })
 
     // ==== بث هاتف حقيقي (كاميرا / ميكروفون / غرفة طفل) ====
-    socket.on("rtc:offer", (d: { kind: "cam" | "mic" | "baby"; sdp?: RTCSessionDescriptionInit }) => {
+    // الجولة 5 (§24): kind=mirror هو بث شاشة هاتف لهاتف آخر (هاتف→هاتف) —
+    // الكمبيوتر ليس عارضه إطلاقًا فيتجاهله (الهاتف أ هو المجيب الوحيد).
+    socket.on("rtc:offer", (d: { kind: "cam" | "mic" | "baby" | "mirror"; sdp?: RTCSessionDescriptionInit }) => {
       if (!d?.sdp) return
+      if (d.kind === "mirror") return
       const onStream = (stream: MediaStream) => {
         if (d.kind === "cam") st().setRemoteWebcam(stream)
         // FA-8: ميك/الطفل الحقيقيان يتوفران في المتجر لعنصري الصوت
@@ -81,7 +84,8 @@ export function useMediaBridge() {
       }
       void recv.handleOffer(d.kind, d.sdp, onStream)
     })
-    socket.on("rtc:ice", (d: { kind: "cam" | "mic" | "baby"; candidate?: RTCIceCandidateInit }) => {
+    socket.on("rtc:ice", (d: { kind: "cam" | "mic" | "baby" | "mirror"; candidate?: RTCIceCandidateInit }) => {
+      if (d?.kind === "mirror") return
       if (d?.candidate) recv.handleIce(d.kind, d.candidate)
     })
 

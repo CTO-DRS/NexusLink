@@ -147,6 +147,15 @@ class MediaController extends Notifier<MediaUiState> {
     await _svc?.stopScreen();
   }
 
+  // الجولة 5 (عقد §24) — مشاركة شاشة هذا الهاتف مع هاتف آخر (kind=mirror)
+  Future<void> startScreenShare() async {
+    await _svc?.startScreenShare();
+  }
+
+  Future<void> stopScreenShare() async {
+    await _svc?.stopScreenShare();
+  }
+
   Future<void> startBaby() async {
     await _svc?.startKind('baby');
   }

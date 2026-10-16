@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/control_providers.dart';
 import '../state/transfer_providers.dart' show nativeBridgeProvider;
+import 'unblock_center_screen.dart';
 
 /// شاشة التحكم عن بعد (FA-7 — بديل AirMirror) في تطبيق الهاتف:
 ///  · البند 5: إرشاد تفعيل خدمة الإتاحة بخطوات عربية + فتح الإعدادات مباشرة
@@ -167,6 +168,19 @@ class _ControlScreenState extends ConsumerState<ControlScreen> {
                           },
                           icon: const Icon(Icons.settings_rounded),
                           label: Text('ctl.openAccSettings'.tr()),
+                        ),
+                        const SizedBox(height: 8),
+                        // الجولة 5 (عقد §25): إن منع أندرويد التفعيل (تثبيت APK)
+                        // — مركز رفع القيود يقود خطوة بخطوة
+                        TextButton.icon(
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const UnblockCenterScreen()),
+                          ),
+                          icon: const Icon(Icons.lock_open_rounded, size: 18),
+                          label: Text(
+                            'unblock.entryFromCtl'.tr(),
+                            style: const TextStyle(fontSize: 12.5),
+                          ),
                         ),
                       ],
                     ],

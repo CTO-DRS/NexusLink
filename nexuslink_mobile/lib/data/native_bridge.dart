@@ -179,6 +179,40 @@ class NativeBridge {
     );
   }
 
+  // ------------------------------------------------------------------
+  // الجولة 5 (عقد §24/§25) — مشاركة الشاشة + مركز رفع القيود
+  // ------------------------------------------------------------------
+
+  /// خدمة أمامية بنوع mediaProjection — شرط أندرويد 14+ للمشاركة.
+  /// الترتيب التعاقدي: موافقة Helper.requestCapturePermission أولًا ثم هذه.
+  Future<void> startScreenShareService() async {
+    await _guard<dynamic>(() => _ch.invokeMethod('startScreenShareService'), null);
+  }
+
+  /// إطفاء خدمة مشاركة الشاشة بعد إيقاف البث.
+  Future<void> stopScreenShareService() async {
+    await _guard<dynamic>(() => _ch.invokeMethod('stopScreenShareService'), null);
+  }
+
+  /// فتح صفحة التطبيق في إعدادات النظام (App Info) — البوابة الأولى لمركز
+  /// رفع القيود: من فيها قائمة ⋮ ← «السماح بالإعدادات المقيّدة» (أندرويد 13+).
+  Future<void> openAppDetails() async {
+    await _guard<dynamic>(() => _ch.invokeMethod('openAppDetails'), null);
+  }
+
+  /// فحص حالة القيد: هل أندرويد يمنع تفعيل الإتاحة لهذا التطبيق (تثبيت APK)؟
+  /// يعيد {restricted: bool, checked: bool} — checked=false إن لم يُستطع الفحص
+  /// على هذه النسخة (تحقق أفضل جهد — بلا ادعاء).
+  Future<({bool restricted, bool checked})> restrictedSettingsStatus() async {
+    return _guard<({bool restricted, bool checked})>(() async {
+      final r = await _ch.invokeMethod<dynamic>('restrictedSettingsStatus');
+      if (r is Map) {
+        return (restricted: r['restricted'] == true, checked: r['checked'] == true);
+      }
+      return (restricted: false, checked: false);
+    }, (restricted: false, checked: false));
+  }
+
   /// لقطة حالة جلسة التحكم من الخدمة (مزامنة عند فتح الواجهة).
   Future<CtlSession> ctlSnapshot() async {
     return _guard<CtlSession>(() async {

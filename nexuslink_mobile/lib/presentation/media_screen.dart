@@ -144,6 +144,57 @@ class _MediaScreenState extends ConsumerState<MediaScreen> {
         ),
         const SizedBox(height: 12),
 
+        // ====== الجولة 5 (عقد §24): مشاركة شاشتي مع هاتف آخر (kind=mirror) ======
+        _Card(
+          title: 'mirror.shareCard'.tr(),
+          icon: Icons.screen_share_rounded,
+          trailing: _PhaseChip(phase: st.mirror.phase),
+          children: [
+            Text(
+              'mirror.shareCard_desc'.tr(),
+              style: const TextStyle(fontSize: 12, height: 1.6),
+            ),
+            const SizedBox(height: 8),
+            if (st.mirror.error != null && st.mirror.error!.isNotEmpty) ...[
+              Text(
+                st.mirror.error!,
+                style: TextStyle(fontSize: 11, color: theme.colorScheme.error, height: 1.5),
+              ),
+              const SizedBox(height: 6),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: st.mirror.phase == MediaPhase.idle || st.mirror.phase == MediaPhase.error
+                        ? () => ctl.startScreenShare()
+                        : null,
+                    icon: const Icon(Icons.cast_rounded),
+                    label: Text('mirror.startShare'.tr()),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: st.mirror.phase == MediaPhase.connecting || st.mirror.phase == MediaPhase.live
+                      ? () => ctl.stopScreenShare()
+                      : null,
+                  icon: const Icon(Icons.stop_rounded),
+                  label: Text('mirror.stopShare'.tr()),
+                ),
+              ],
+            ),
+            if (st.mirror.phase == MediaPhase.live)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'mirror.liveHint'.tr(),
+                  style: const TextStyle(fontSize: 11, height: 1.5),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
         // ================= كويب كام =================
         _Card(
           title: 'media.cam.title'.tr(),

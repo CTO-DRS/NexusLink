@@ -65,6 +65,12 @@ class MediaUiState {
   final int ssH;
   final String? ssError;
 
+  // الجولة 5 (عقد §24) — مرآة الهاتف (هاتف→هاتف): kind='mirror'
+  // mirrorRole: 'share' = أنا أنشر شاشتي · 'view' = أنا أعرض شاشة هاتف آخر
+  final MediaKindState mirror;
+  final MediaStream? mirrorStream; // تدفق الهاتف الآخر الوارد (عارض)
+  final String mirrorRole;
+
   const MediaUiState({
     this.bridgeOnline = false,
     this.cam = const MediaKindState(),
@@ -98,6 +104,9 @@ class MediaUiState {
     this.ssW = 0,
     this.ssH = 0,
     this.ssError,
+    this.mirror = const MediaKindState(),
+    this.mirrorStream,
+    this.mirrorRole = '',
   });
 
   bool get anyStreamOn =>
@@ -145,6 +154,10 @@ class MediaUiState {
     int? ssH,
     String? ssError,
     bool clearSsError = false,
+    MediaKindState? mirror,
+    MediaStream? mirrorStream,
+    bool clearMirrorStream = false,
+    String? mirrorRole,
   }) =>
       MediaUiState(
         bridgeOnline: bridgeOnline ?? this.bridgeOnline,
@@ -179,6 +192,9 @@ class MediaUiState {
         ssW: ssW ?? this.ssW,
         ssH: ssH ?? this.ssH,
         ssError: clearSsError ? null : (ssError ?? this.ssError),
+        mirror: mirror ?? this.mirror,
+        mirrorStream: clearMirrorStream ? null : (mirrorStream ?? this.mirrorStream),
+        mirrorRole: mirrorRole ?? this.mirrorRole,
       );
 }
 
@@ -205,6 +221,8 @@ class MediaService {
   sio.Socket? _socket;
   /// FA-media (§15) — اتصال عرض شاشة الكمبيوتر (الكمبيوتر صاحب الوسائط)
   RTCPeerConnection? _screenPc;
+  /// الجولة 5 (§24) — مرآة الهاتف هاتف→هاتف (ناشر kind=mirror أو عارضه)
+  RTCPeerConnection? _mirrorPc;
 
   // جلسات WebRTC حية (نوعها: cam | mic | baby)
   final Map<String, RTCPeerConnection> _pcs = {};
@@ -300,6 +318,12 @@ class MediaService {
       bind(MediaEvents.rtcAnswer, _onAnswer);
       bind(MediaEvents.rtcIce, _onRemoteIce);
       bind(MediaEvents.rtcOffer, _onScreenOffer); // FA-media: عرض شاشة الكمبيوتر (§15)
+      // الجولة 5 (§24) — مرآة الهاتف: معالجات موازية تنجو مبكرة للأنواع/الأدوار
+      // غير الخاصة بها (المعالجات القائمة تفلتر from='pc' حصرًا، وهذه تفلتر
+      // from='phone' + kind='mirror' — بلا تداخل ولا ازدواج).
+      bind(MediaEvents.rtcAnswer, _onMirrorAnswer);
+      bind(MediaEvents.rtcIce, _onMirrorIce);
+      bind(MediaEvents.rtcOffer, _onMirrorOffer);
       bind(MediaEvents.screenState, _onScreenState);
       bind(MediaEvents.secondScreenState, _onSsState); // R4 ① (§19)
       bind(MediaEvents.camCmd, _onCamCmd);
@@ -328,7 +352,15 @@ class MediaService {
     _socket = null;
     stopAll(reason: 'disconnected');
     unawaited(_teardownScreen()); // FA-media: تفكيك جلسة عرض الشاشة أيضًا
-    _patch((s) => s.copyWith(bridgeOnline: false, clearPreview: true, screen: const MediaKindState()));
+    unawaited(_teardownMirror()); // الجولة 5 (§24): تفكيك مرآة الهاتف (كلا الدورين)
+    _patch((s) => s.copyWith(
+          bridgeOnline: false,
+          clearPreview: true,
+          screen: const MediaKindState(),
+          mirror: const MediaKindState(),
+          clearMirrorStream: true,
+          mirrorRole: '',
+        ));
   }
 
   static Map<Object?, Object?>? _map(dynamic data) {
@@ -679,6 +711,224 @@ class MediaService {
       await pc?.close();
     } catch (_) {}
     _patch((s) => s.copyWith(clearScreenStream: true));
+  }
+
+  // ------------------------------------------------------------------
+  // الجولة 5 (عقد §24) — مرآة الهاتف هاتف→هاتف (kind='mirror'):
+  //  · الناشر (الهاتف ب): Helper.requestCapturePermission (حوار النظام) ←
+  //    FGS بنوع mediaProjection (شرط أندرويد 14+ المتحقق من مصدر المكوّن —
+  //    الموافقة أولًا ثم الخدمة ثم createVirtualDisplay) ← getDisplayMedia
+  //    (يستخدم بيانات الموافقة المخزّنة — بلا حوار ثانٍ) ← rtc:offer kind=mirror.
+  //  · العارض (الهاتف أ): يجيب rtc:offer kind=mirror from=phone — نفس مسار
+  //    _onScreenOffer حرفيًا مع قبول دور الهاتف، وقاعدة §4.3: أول إجابة تُقبل.
+  // ------------------------------------------------------------------
+
+  /// بدء مشاركة شاشة هذا الهاتف (الهاتف ب) — تصل لهاتف واحد على الأقل يجيب.
+  Future<void> startScreenShare() async {
+    if (_mirrorPc != null) return; // جلسة قائمة
+    if (_state.mirrorRole == 'view') return; // عارض وناشر في آن واحد — مسار واحد
+    _patch((s) => s.copyWith(
+          mirror: const MediaKindState(phase: MediaPhase.connecting),
+          mirrorRole: 'share',
+          lastError: null,
+          clearError: true,
+        ));
+    try {
+      // 1) موافقة النظام (تُخزَّن داخليًا في المكوّن) — قبل FGS (شرط أندرويد 14)
+      final granted = await Helper.requestCapturePermission(fullScreenOnly: true);
+      if (granted != true) {
+        _patch((s) => s.copyWith(
+              mirror: const MediaKindState(),
+              mirrorRole: '',
+            ));
+        return; // المستخدم رفض حوار النظام — بلا خطأ
+      }
+      // 2) الخدمة الأمامية بنوع mediaProjection (الموافقة حُصلت — الترتيب صحيح)
+      await native.startScreenShareService();
+      // 3) الالتقاط: المكوّن يستخدم البيانات المخزّنة (بلا حوار ثانٍ)
+      final stream = await navigator.mediaDevices.getDisplayMedia(const {
+        'audio': false,
+        'video': true,
+      });
+      final pc = await createPeerConnection({'iceServers': const []});
+      for (final track in stream.getTracks()) {
+        await pc.addTrack(track, stream);
+      }
+      pc.onIceCandidate = (c) {
+        if (c.candidate == null) return;
+        _emit(MediaEvents.rtcIce, {
+          'kind': 'mirror',
+          'candidate': {
+            'candidate': c.candidate,
+            'sdpMid': c.sdpMid,
+            'sdpMLineIndex': c.sdpMLineIndex,
+          },
+        });
+      };
+      pc.onConnectionState = (st) {
+        if (st == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+          _patch((s) => s.copyWith(mirror: const MediaKindState(phase: MediaPhase.live)));
+        } else if (st == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
+            st == RTCPeerConnectionState.RTCPeerConnectionStateClosed ||
+            st == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+          unawaited(stopScreenShare(reason: 'rtc-$st'));
+        }
+      };
+      _mirrorPc = pc;
+      final offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      final desc = await pc.getLocalDescription();
+      if (desc != null) {
+        _emit(MediaEvents.rtcOffer, {
+          'kind': 'mirror',
+          'sdp': {'type': desc.type, 'sdp': desc.sdp},
+        });
+      }
+    } catch (e) {
+      _patch((s) => s.copyWith(
+            mirror: MediaKindState(phase: MediaPhase.error, error: '$e'),
+            lastError: 'فشل مشاركة الشاشة: $e',
+          ));
+      await _teardownMirror();
+    }
+  }
+
+  /// إيقاف مشاركة الشاشة (الهاتف ب) — تفكيك كامل + إطفاء الخدمة الأمامية.
+  Future<void> stopScreenShare({String reason = 'manual'}) async {
+    final hadShare = _state.mirrorRole == 'share';
+    if (hadShare) await _teardownMirror();
+    _patch((s) => s.copyWith(
+          mirror: const MediaKindState(),
+          mirrorRole: s.mirrorRole == 'share' ? '' : s.mirrorRole,
+        ));
+    if (hadShare) {
+      try {
+        await native.stopScreenShareService();
+      } catch (_) {}
+    }
+  }
+
+  /// تفكيك اتصال المرآة (أي دور) — المسارات فقط، الحالة يديرها المستدعي.
+  Future<void> _teardownMirror() async {
+    final pc = _mirrorPc;
+    _mirrorPc = null;
+    try {
+      await pc?.close();
+    } catch (_) {}
+  }
+
+  /// إجابة العارض (هاتف أ) على عرضنا (هاتف ب) — أول إجابة تُقبل (§4.3).
+  Future<void> _onMirrorAnswer(dynamic raw) async {
+    final m = _map(raw);
+    if (m == null) return;
+    if ('${m['from'] ?? ''}' != 'phone') return; // العارض هاتف — الكمبيوتر مستبعد
+    if ('${m['kind'] ?? ''}' != 'mirror') return;
+    final pc = _mirrorPc;
+    if (pc == null) return;
+    final sdp = m['sdp'];
+    if (sdp is! Map) return;
+    try {
+      await pc.setRemoteDescription(RTCSessionDescription('${sdp['sdp']}', '${sdp['type']}'));
+    } catch (e) {
+      _patch((s) => s.copyWith(
+            mirror: MediaKindState(phase: MediaPhase.error, error: 'answer: $e'),
+            lastError: 'إجابة العارض فشلت: $e',
+          ));
+      await stopScreenShare(reason: 'answer-failed');
+    }
+  }
+
+  /// عرض شاشة هاتف آخر (الهاتف أ) — استقبال rtc:offer kind=mirror من دور phone
+  /// وإجابته — نفس مسار _onScreenOffer حرفيًا (§15) مع قبول دور الهاتف.
+  Future<void> _onMirrorOffer(dynamic raw) async {
+    final m = _map(raw);
+    if (m == null) return;
+    if ('${m['from'] ?? ''}' != 'phone') return; // من هاتف فقط
+    if ('${m['kind'] ?? ''}' != 'mirror') return; // أنواع الكاميرا/الكمبيوتر مساراتها مستقلة
+    if (_mirrorPc != null) return; // جلسة قائمة — أول عرض فقط (§4.3)
+    if (_state.mirrorRole == 'share') return; // ناشر حاليًا — دور واحد في آن واحد
+    final sdp = m['sdp'];
+    if (sdp is! Map) return;
+    _patch((s) => s.copyWith(
+          mirror: const MediaKindState(phase: MediaPhase.connecting),
+          mirrorRole: 'view',
+          lastError: null,
+          clearError: true,
+        ));
+    try {
+      final pc = await createPeerConnection({'iceServers': const []});
+      pc.onIceCandidate = (c) {
+        if (c.candidate == null) return;
+        _emit(MediaEvents.rtcIce, {
+          'kind': 'mirror',
+          'candidate': {
+            'candidate': c.candidate,
+            'sdpMid': c.sdpMid,
+            'sdpMLineIndex': c.sdpMLineIndex,
+          },
+        });
+      };
+      pc.onTrack = (event) {
+        // تدفق شاشة الهاتف الآخر الوارد — أول stream في الحدث
+        final streams = event.streams;
+        if (streams.isNotEmpty) {
+          _patch((s) => s.copyWith(mirrorStream: streams.first, clearMirrorStream: false));
+        }
+      };
+      pc.onConnectionState = (st) {
+        if (st == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+          _patch((s) => s.copyWith(mirror: const MediaKindState(phase: MediaPhase.live)));
+        } else if (st == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
+            st == RTCPeerConnectionState.RTCPeerConnectionStateClosed ||
+            st == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+          // الناشر أوقف المشاركة أو انقطع — تفكيك صامت (نفس سلوك مسار §15)
+          unawaited(_teardownMirror());
+          _patch((s) => s.copyWith(
+                mirror: const MediaKindState(),
+                clearMirrorStream: true,
+                mirrorRole: s.mirrorRole == 'view' ? '' : s.mirrorRole,
+              ));
+        }
+      };
+      _mirrorPc = pc;
+      await pc.setRemoteDescription(RTCSessionDescription('${sdp['sdp']}', '${sdp['type']}'));
+      final answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      final desc = await pc.getLocalDescription();
+      if (desc != null) {
+        _emit(MediaEvents.rtcAnswer, {
+          'kind': 'mirror',
+          'sdp': {'type': desc.type, 'sdp': desc.sdp},
+        });
+      }
+    } catch (e) {
+      _patch((s) => s.copyWith(
+            mirror: MediaKindState(phase: MediaPhase.error, error: '$e'),
+            lastError: 'فشل عرض شاشة الهاتف: $e',
+          ));
+      await _teardownMirror();
+      _patch((s) => s.copyWith(mirrorRole: s.mirrorRole == 'view' ? '' : s.mirrorRole));
+    }
+  }
+
+  /// مرشحات الطرف الآخر (هاتف) — المسار القائم _onRemoteIce يفلتر from='phone'
+  /// حصرًا (سلوك الكمبيوتر)، وهذا المعالج المتوازي يخدم المرآة فقط.
+  Future<void> _onMirrorIce(dynamic raw) async {
+    final m = _map(raw);
+    if (m == null) return;
+    if ('${m['from'] ?? ''}' != 'phone') return;
+    if ('${m['kind'] ?? ''}' != 'mirror') return;
+    final pc = _mirrorPc;
+    if (pc == null) return;
+    final c = m['candidate'];
+    if (c is! Map) return;
+    try {
+      await pc.addCandidate(RTCIceCandidate(
+        '${c['candidate'] ?? ''}',
+        c['sdpMid'] as String?,
+        (c['sdpMLineIndex'] as num?)?.toInt(),
+      ));
+    } catch (_) {}
   }
 
   Future<void> _onRemoteIce(dynamic raw) async {

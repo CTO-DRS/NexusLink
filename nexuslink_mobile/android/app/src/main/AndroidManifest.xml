@@ -8,6 +8,8 @@
     <!-- الخدمة الأمامية الدائمة -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- الجولة 5 (عقد §24): مشاركة شاشة الهاتف هاتف→هاتف (MediaProjection) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- إشعار الحالة الدائم (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -89,6 +91,14 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+
+        <!-- الجولة 5 (عقد §24): مشاركة شاشة الهاتف هاتف→هاتف — خدمة أمامية
+             بنوع mediaProjection (شرط أندرويد 14+) — تُبدأ بعد حوار موافقة
+             النظام حصرًا وبينما التطبيق في المقدمة -->
+        <service
+            android:name=".ScreenShareService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
 
         <!-- FA-10: وضع الفقدان — شاشة ملء الشاشة فوق القفل + رسالة + فتح التطبيق بعد القفل -->
         <activity

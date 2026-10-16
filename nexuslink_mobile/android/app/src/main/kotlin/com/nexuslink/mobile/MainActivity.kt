@@ -393,6 +393,70 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                 }
 
+                // ---------- الجولة 5 (عقد §24/§25): مشاركة الشاشة + مركز رفع القيود ----------
+
+                // خدمة أمامية بنوع mediaProjection — تُستدعى بعد حوار الموافقة
+                // (Helper.requestCapturePermission) حصرًا: شرط أندرويد 14+.
+                "startScreenShareService" -> {
+                    try {
+                        ScreenShareService.start(this)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("fgs_failed", e.message, null)
+                    }
+                }
+
+                "stopScreenShareService" -> {
+                    try {
+                        ScreenShareService.stop(this)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("fgs_failed", e.message, null)
+                    }
+                }
+
+                // صفحة التطبيق في الإعدادات (App Info) — بوابة «السماح بالإعدادات
+                // المقيّدة» (⋮) لأندرويد 13+ عند التثبيت خارج متجر (عقد §25).
+                "openAppDetails" -> {
+                    try {
+                        startActivity(
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.fromParts("package", packageName, null),
+                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("open_failed", e.message, null)
+                    }
+                }
+
+                // فحص القيد (أفضل جهد — صادق): AppOps «android:access_restricted_settings»
+                // (السلسلة الحرفية من AOSP AppOpsManager.OPSTR_ACCESS_RESTRICTED_SETTINGS).
+                // MODE_ERRORED = مقيّد · MODE_ALLOWED/DEFAULT = حرّ (نفس منطق AOSP
+                // RestrictedPreferenceHelper: allowed = mode==MODE_ALLOWED || mode==MODE_DEFAULT).
+                // على بعض النسخ السلسلة غير متاحة (@SystemApi) → checked=false بلا ادعاء.
+                "restrictedSettingsStatus" -> {
+                    var restricted = false
+                    var checked = false
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            val ops = getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+                            val mode = ops.checkOpNoThrow(
+                                "android:access_restricted_settings",
+                                android.os.Process.myUid(),
+                                packageName,
+                            )
+                            checked = mode != null
+                            restricted = mode != null && mode != android.app.AppOpsManager.MODE_ALLOWED &&
+                                mode != android.app.AppOpsManager.MODE_DEFAULT
+                        }
+                    } catch (_: Exception) {
+                        checked = false
+                    }
+                    result.success(mapOf("restricted" to restricted, "checked" to checked))
+                }
+
                 "ctlSnapshot" -> result.success(AgentForegroundService.ctlSnapshot())
 
                 "ctlDecision" -> {

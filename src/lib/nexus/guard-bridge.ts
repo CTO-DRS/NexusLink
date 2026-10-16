@@ -102,6 +102,14 @@ const g = globalThis as unknown as {
   __nexusGuardBooted?: boolean
   __nexusGuardIo?: SocketServer | null
   __nexusGuardAgent?: { socketId: string | null; deviceId: string | null; media: AgentMediaInfo | null }
+  // الجولة 5 (عقد §24) — سجل كل وكلاء الهواتف الحقيقيين (مفتاح = socketId).
+  // agentReg الأصلي يبقى كما هو (الوكيل الأساسي للويب — توافق كامل)، وهنا
+  // نحتفظ بكل هاتف متصل لتوجيه هاتف→هاتف المستهدف.
+  __nexusGuardAgents?: Map<string, { deviceId: string; name: string; at: number }>
+  // جلسات التحكم هاتف→هاتف النشطة (مفتاح = معرف الهاتف المتحكم):
+  // {targetDeviceId, controllerSocketId, targetSocketId} — يُنشئها تأكيد
+  // الهاتف المُتحكَّم به (dev:ctl-state active) ويحذفها أي إنهاء/انقطاع.
+  __nexusP2pSessions?: Map<string, { targetDeviceId: string; controllerSocketId: string; targetSocketId: string; at: number }>
 }
 const BOOT_KEY = "__nexusGuardBooted"
 
@@ -123,6 +131,79 @@ function agentReg(): { socketId: string | null; deviceId: string | null; media: 
 /** نقطة وسائط الهاتف الحالية — تقرأها الطبقة الأصلية/الواجهة من status.desktop.agentMedia. */
 export function agentMedia(): AgentMediaInfo | null {
   return agentReg().media
+}
+
+// ---------------------------------------------------------------------------
+// الجولة 5 (عقد §24) — التحكم بهاتف من هاتف آخر عبر المركز (هاتف→هاتف)
+// نفس بروتوكول FA-7 حرفيًا (dev:ctl-start/state/stop + dev:touch/text/key) —
+// الجديد فقط: سجل تعدد الوكلاء + جلسات موثقة + توجيه مستهدف بمعرف الجهاز.
+// ---------------------------------------------------------------------------
+
+/** سجل كل الوكلاء الحقيقيين المتصلين (مفتاح socketId). */
+function agentsReg(): Map<string, { deviceId: string; name: string; at: number }> {
+  if (!g.__nexusGuardAgents) g.__nexusGuardAgents = new Map()
+  return g.__nexusGuardAgents
+}
+
+/** جلسات هاتف→هاتف النشطة (مفتاح معرف المتحكم). */
+function p2pSessions(): Map<string, { targetDeviceId: string; controllerSocketId: string; targetSocketId: string; at: number }> {
+  if (!g.__nexusP2pSessions) g.__nexusP2pSessions = new Map()
+  return g.__nexusP2pSessions
+}
+
+/** سوكِت وكيل بمعرف جهاز معيّن (للتوجيه المستهدف) — أو null. */
+function agentSocketByDeviceId(ioX: SocketServer, deviceId: string) {
+  for (const [sid, a] of agentsReg()) {
+    if (a.deviceId === deviceId) {
+      const s = ioX.sockets?.sockets?.get(sid)
+      if (s) return s
+    }
+  }
+  return null
+}
+
+/** معرف جهاز سوكِت متصل إن كان وكيلًا مسجلًا. */
+function agentDeviceIdOf(socketId: string): string | null {
+  return agentsReg().get(socketId)?.deviceId ?? null
+}
+
+/** بث قائمة الوكلاء الحية (بعد كل تسجيل/مغادرة) — للهاتف أ ليختار هدفه. */
+function broadcastAgents(ioX: SocketServer) {
+  const byId = new Map<string, { deviceId: string; name: string; at: number }>()
+  for (const a of agentsReg().values()) {
+    const prev = byId.get(a.deviceId)
+    if (!prev || a.at > prev.at) byId.set(a.deviceId, a)
+  }
+  ioX.emit("guard:agents", {
+    agents: [...byId.values()].map((a) => ({ deviceId: a.deviceId, name: a.name })),
+    sessions: [...p2pSessions().keys()],
+    at: Date.now(),
+  })
+}
+
+/** إخلاء جلسات هاتف→هاتف عند انقطاع أحد الطرفين — قطع فوري من الطرفين (عقد §24.أمن). */
+function teardownP2pForDisconnect(ioX: SocketServer, socketId: string) {
+  const sess = p2pSessions()
+  // الطرف المُتحكَّم به انقطع → أخبر المتحكم فورًا
+  for (const [controllerId, s] of [...sess.entries()]) {
+    if (s.targetSocketId !== socketId) continue
+    sess.delete(controllerId)
+    const c = ioX.sockets?.sockets?.get(s.controllerSocketId)
+    try {
+      c?.emit("dev:ctl-state", { active: false, reason: "target-disconnected", controller: controllerId, at: Date.now() })
+    } catch { /* السوكِت مات معه — لا شيء */ }
+    log(ioX, `انقطع الهاتف المُتحكَّم به (جلسة ${controllerId}) — قُطعت جلسة التحكم فورًا`, "warn")
+  }
+  // المتحكم انقطع → أمر قطع فوري للهدف (لا جلسة يتيمة)
+  for (const [controllerId, s] of [...sess.entries()]) {
+    if (s.controllerSocketId !== socketId) continue
+    sess.delete(controllerId)
+    const t = ioX.sockets?.sockets?.get(s.targetSocketId)
+    try {
+      t?.emit("dev:ctl-stop", { reason: "controller-disconnected", at: Date.now() })
+    } catch { /* الهدف انقطع أيضًا */ }
+    log(ioX, `انقطع الهاتف المتحكم (${controllerId}) — أُرسل قطع فوري للهدف`, "warn")
+  }
 }
 
 /** تنظيف عنوان TCP (::-ffff:) إلى IPv4/IPv6 نظيف. */
@@ -214,6 +295,12 @@ export function ensureGuardBridge() {
           const reg = agentReg()
           reg.socketId = socket.id
           if (d?.deviceId) reg.deviceId = String(d.deviceId)
+          // الجولة 5 (§24) — سجل تعدد الوكلاء: كل هاتف يُسجّل بسوكِته ليصل
+          // التوجيه المستهدف هاتف→هاتف، وقائمة الوكلاء تبث للاختيار في الواجهات.
+          if (d?.deviceId) {
+            agentsReg().set(socket.id, { deviceId: String(d.deviceId), name: String(d?.name ?? "هاتف"), at: Date.now() })
+            broadcastAgents(io2)
+          }
           // FA-files (عقد §14) — تسجيل نقطة وسائط الهاتف: IP من عنوان الـ TCP الفعلي
           // للسوكِت (الهاتف على نفس الشبكة المحلية حسب مقصد المنصة) + منفذ/رمز من الوكيل.
           if (d?.media && typeof d.media === "object") {
@@ -249,10 +336,16 @@ export function ensureGuardBridge() {
         }
       })
       socket.on("disconnect", () => {
+        // الجولة 5 (§24) — قطع فوري من الطرفين: انقطاع أي طرف هاتف→هاتف
+        // يُنهي الجلسة للأطراف الأخرى فورًا (لا جلسة يتيمة أبدًا).
+        if (agentsReg().delete(socket.id)) teardownP2pForDisconnect(io2, socket.id)
         // إن انقطع آخر عميل هاتف نعلم الكمبيوتر (يُلتقط غياب المنارة لاحقاً)
         setTimeout(() => {
           const socks = io2?.sockets?.sockets
-          if (socks && socks.size > 0) return
+          if (socks && socks.size > 0) {
+            if (agentsReg().size > 0) broadcastAgents(io2)
+            return
+          }
           phoneGuardOnline = false
           const reg = agentReg()
           if (reg.socketId === socket.id) {
@@ -260,6 +353,7 @@ export function ensureGuardBridge() {
             reg.media = null // نقطة الوسائط انقطعت مع السوكِت — البث غير متاح
           }
           io2?.emit("guard:phone-online", { online: false })
+          if (agentsReg().size > 0) broadcastAgents(io2)
         }, 1500)
       })
 
@@ -336,15 +430,17 @@ export function ensureGuardBridge() {
       }
 
       // ==== FA-7: أبعاد شاشة الهاتف (من الوكيل فقط — تُخزن وتُبث للويب) ====
+      // الجولة 5 (§24): الحقل يوسم بمعرف المرسل نفسه (تعدد وكلاء) — الهاتف أ
+      // يفلتر بمعرف هدفه، والويب يقرأ الوكيل الأساسي كما كان.
       socket.on("dev:screen", (d: { w?: number; h?: number; density?: number }) => {
-        if (agentReg().socketId !== socket.id) return
+        if (agentReg().socketId !== socket.id && !agentsReg().has(socket.id)) return
         const w = Math.round(Number(d?.w ?? 0))
         const h = Math.round(Number(d?.h ?? 0))
         if (w <= 0 || h <= 0) return
         const info: AgentScreenInfo = {
           w, h,
           density: Math.round(Number(d?.density ?? 0)),
-          deviceId: agentReg().deviceId,
+          deviceId: agentDeviceIdOf(socket.id) ?? agentReg().deviceId,
           at: Date.now(),
         }
         ;(globalThis as unknown as { __nexusGuardScreen?: AgentScreenInfo }).__nexusGuardScreen = info
@@ -383,7 +479,66 @@ export function ensureGuardBridge() {
         guardEmitToAgent("dev:ctl-stop", { at: Date.now() })
       })
 
+      // ==== الجولة 5 (§24): جلسة تحكم هاتف→هاتف — بوابة الثقة الكاملة ====
+      // الهاتف أ يطلب {from, target} — يجب: المرسل هو الوكيل صاحب from نفسه
+      // (ربط هوية السوكِت) + الطرفان موثوقان + بلا تحكم ذاتي + الهدف حي وغير
+      // محكوم به. التوجيه إلى سوكِت الهدف بنفس حدث dev:ctl-start المعروف —
+      // فحوار التأكيد والإشعار على الهاتف ب يبقيان كما هما حرفيًا.
+      socket.on("p2p:ctl-start", (d: { from?: string; target?: string; name?: string }) => {
+        const senderDevice = agentDeviceIdOf(socket.id)
+        const from = String(d?.from ?? "").trim()
+        const target = String(d?.target ?? "").trim()
+        const reject = (reason: string) => {
+          socket.emit("p2p:ctl-rejected", { reason, from, target, at: Date.now() })
+          log(io2, `رفض جلسة هاتف→هاتف (${reason}): ${from || "مجهول"} ← ${target || "مجهول"}`, "warn")
+        }
+        // ربط الهوية: من يطلب التحكم يجب أن يكون الوكيل صاحب المعرف نفسه
+        if (!senderDevice || senderDevice !== from) return reject("identity")
+        const dev = store().devices.find((x) => x.id === from)
+        if (!dev || !dev.trusted) return reject("untrusted")
+        const tgt = store().devices.find((x) => x.id === target)
+        if (!tgt || !tgt.trusted) return reject("target-untrusted")
+        // الأمان الحاسم: لا هاتف يتحكم بنفسه إطلاقًا
+        if (from === target) return reject("self")
+        // الهدف حي؟
+        const tSock = agentSocketByDeviceId(io2, target)
+        if (!tSock) return reject("target-offline")
+        // متحكم واحد = جلسة واحدة (الواجهة ترسل p2p:ctl-stop قبل أي طلب جديد)
+        if (p2pSessions().has(from)) return reject("already-controlling")
+        // لا تحكم مزدوج: الهدف غير محكوم به من أحد
+        for (const [, s] of p2pSessions()) {
+          if (s.targetDeviceId === target) return reject("target-busy")
+        }
+        tSock.emit("dev:ctl-start", { from, name: dev.name, p2p: true, at: Date.now() })
+        log(io2, `طلب تحكم هاتف→هاتف من ${dev.name} إلى ${tgt.name} — بانتظار تأكيد الهدف`, "in")
+      })
+
+      // الهاتف أ يقطع الجلسة: قطع فوري للهدف + إشعار حالة للمتحكم (مصدر واحد)
+      socket.on("p2p:ctl-stop", (d: { target?: string }) => {
+        const senderDevice = agentDeviceIdOf(socket.id)
+        if (!senderDevice) return
+        const target = String(d?.target ?? "").trim()
+        const sess = p2pSessions()
+        for (const [cid, s] of [...sess.entries()]) {
+          if (cid !== senderDevice) continue
+          if (target && s.targetDeviceId !== target) continue
+          sess.delete(cid)
+          const t = io2.sockets?.sockets?.get(s.targetSocketId)
+          try {
+            t?.emit("dev:ctl-stop", { reason: "controller-stop", at: Date.now() })
+          } catch { /* الهدف انقطع */ }
+          const c = io2.sockets?.sockets?.get(s.controllerSocketId)
+          try {
+            c?.emit("dev:ctl-state", { active: false, reason: "controller-stop", controller: cid, at: Date.now() })
+          } catch { /* المتحكم هو المرسل نفسه */ }
+          log(io2, `أنهى الهاتف المتحكم (${cid}) جلسة هاتف→هاتف`, "info")
+        }
+      })
+
       // ==== FA-7: أوامر اللمس/النص/الأزرار — توجيه مباشر (بلا صدى للمرسل) ====
+      // الجولة 5 (§24): سوكِت هاتف (وكيل مسجل) → مسار هاتف→هاتف حصرًا — جلسة
+      // موثقة مطلوبة وإلا رفض no-session (يمنع تحكم الهاتف بنفسه عبر الوكيل
+      // الأساسي). سوكِت الويب → المسار القائم إلى الوكيل الأساسي كما كان.
       socket.on("dev:touch", (d: Record<string, unknown>) => {
         if (!touchAllowed(socket.id)) return
         const op = String(d?.op ?? "")
@@ -398,29 +553,110 @@ export function ensureGuardBridge() {
           const dur = Math.min(5000, Math.max(40, Math.round(Number(d?.durationMs ?? 300))))
           payload.durationMs = dur
         }
+        const senderDevice = agentDeviceIdOf(socket.id)
+        if (senderDevice) {
+          const sess = p2pSessions().get(senderDevice)
+          if (!sess) {
+            socket.emit("dev:ctl-rejected", { reason: "no-session", at: Date.now() })
+            return
+          }
+          const t = io2.sockets?.sockets?.get(sess.targetSocketId)
+          try {
+            t?.emit("dev:touch", payload)
+          } catch { /* الهدف انقطع — الإخلاء يحدث في disconnect */ }
+          return
+        }
         guardEmitToAgent("dev:touch", payload)
       })
 
       socket.on("dev:text", (d: { text?: string }) => {
         const text = String(d?.text ?? "")
         if (text.length > 2000) return
+        const senderDevice = agentDeviceIdOf(socket.id)
+        if (senderDevice) {
+          const sess = p2pSessions().get(senderDevice)
+          if (!sess) {
+            socket.emit("dev:ctl-rejected", { reason: "no-session", at: Date.now() })
+            return
+          }
+          const t = io2.sockets?.sockets?.get(sess.targetSocketId)
+          try {
+            t?.emit("dev:text", { text, at: Date.now() })
+          } catch { /* الهدف انقطع */ }
+          return
+        }
         guardEmitToAgent("dev:text", { text, at: Date.now() })
       })
 
       socket.on("dev:key", (d: { action?: string }) => {
         const action = String(d?.action ?? "")
         if (!KEY_ACTIONS.has(action)) return
+        const senderDevice = agentDeviceIdOf(socket.id)
+        if (senderDevice) {
+          const sess = p2pSessions().get(senderDevice)
+          if (!sess) {
+            socket.emit("dev:ctl-rejected", { reason: "no-session", at: Date.now() })
+            return
+          }
+          const t = io2.sockets?.sockets?.get(sess.targetSocketId)
+          try {
+            t?.emit("dev:key", { action, at: Date.now() })
+          } catch { /* الهدف انقطع */ }
+          return
+        }
         guardEmitToAgent("dev:key", { action, at: Date.now() })
       })
 
       // ==== FA-7: تقارير الوكيل — حالة الجلسة وإقرارات التنفيذ (بث للويب) ====
+      // الجولة 5 (§24): حالة هاتف→هاتف تُبث للويب كما هي (الشاشة تعرضها)،
+      // ويضاف توجيه مستهدف للمتحكم الهاتفي + تسجيل/إخلاء الجلسة الموثقة.
       socket.on("dev:ctl-state", (data: Record<string, unknown>) => {
-        if (agentReg().socketId !== socket.id) return
+        if (agentReg().socketId !== socket.id && !agentsReg().has(socket.id)) return
         io2.emit("dev:ctl-state", data)
+        const senderDevice = agentDeviceIdOf(socket.id)
+        if (!senderDevice) return
+        const controller = String(data?.controller ?? "").trim()
+        if (!controller) return
+        const active = data?.active === true
+        if (active) {
+          // تأكيد الهدف (ضغط «سماح») → الجلسة تصبح موثقة وموجهة
+          if (p2pSessions().has(controller)) return // جلسة قائمة — لا ازدواج
+          p2pSessions().set(controller, {
+            targetDeviceId: senderDevice,
+            controllerSocketId: agentSocketByDeviceId(io2, controller)?.id ?? "",
+            targetSocketId: socket.id,
+            at: Date.now(),
+          })
+          const c = agentSocketByDeviceId(io2, controller)
+          try {
+            c?.emit("dev:ctl-state", { ...data, target: senderDevice, at: Date.now() })
+          } catch { /* المتحكم انقطع — الإخلاء في disconnect */ }
+          log(io2, `جلسة هاتف→هاتف نشطة: ${controller} يتحكم بـ${senderDevice}`, "ok")
+        } else {
+          // إنهاء من الهدف أو رفض أو انقطاع: أبلغ المتحكم إن كانت جلسته هي
+          const s = p2pSessions().get(controller)
+          if (s && s.targetDeviceId === senderDevice) {
+            p2pSessions().delete(controller)
+            const c = agentSocketByDeviceId(io2, controller)
+            try {
+              c?.emit("dev:ctl-state", { ...data, target: senderDevice, at: Date.now() })
+            } catch { /* المتحكم انقطع */ }
+          }
+        }
       })
       socket.on("dev:touch-ack", (data: Record<string, unknown>) => {
-        if (agentReg().socketId !== socket.id) return
+        if (agentReg().socketId !== socket.id && !agentsReg().has(socket.id)) return
         io2.emit("dev:touch-ack", data)
+        // توجيه الإقرار للمتحكم الهاتفي (إقرارات اللمس تخصه حصرًا)
+        const senderDevice = agentDeviceIdOf(socket.id)
+        if (!senderDevice) return
+        for (const [cid, s] of p2pSessions()) {
+          if (s.targetDeviceId !== senderDevice) continue
+          const c = agentSocketByDeviceId(io2, cid)
+          try {
+            c?.emit("dev:touch-ack", data)
+          } catch { /* المتحكم انقطع */ }
+        }
       })
 
       // ==== تقارير الهاتف → الكمبيوتر ====

@@ -10,6 +10,8 @@ import '../state/control_providers.dart';
 import '../state/providers.dart';
 import '../state/transfer_providers.dart';
 import 'control_screen.dart';
+import 'phone_remote_screen.dart';
+import 'unblock_center_screen.dart';
 
 /// الإعدادات: المظهر (داكن/فاتح/نظام)، اللغة (ar/en)، معلومات الهوية، حالة الخدمة.
 class SettingsScreen extends ConsumerWidget {
@@ -138,26 +140,62 @@ class SettingsScreen extends ConsumerWidget {
           Builder(builder: (context) {
             final ctl = ref.watch(controlControllerProvider);
             return Card(
-              child: ListTile(
-                leading: Icon(
-                  Icons.touch_app_rounded,
-                  color: ctl.isActive ? cs.error : cs.primary,
+              child: Column(children: [
+                ListTile(
+                  leading: Icon(
+                    Icons.touch_app_rounded,
+                    color: ctl.isActive ? cs.error : cs.primary,
+                  ),
+                  title: Text(
+                    ctl.isActive
+                        ? 'ctl.activeFrom'.tr(args: [ctl.session.name.isEmpty ? 'PC' : ctl.session.name])
+                        : 'settings.remoteEntry'.tr(),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(
+                    ctl.isActive ? 'settings.remoteActiveHint'.tr() : 'settings.remoteHint'.tr(),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ControlScreen()),
+                  ),
                 ),
-                title: Text(
-                  ctl.isActive
-                      ? 'ctl.activeFrom'.tr(args: [ctl.session.name.isEmpty ? 'PC' : ctl.session.name])
-                      : 'settings.remoteEntry'.tr(),
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                // الجولة 5 (عقد §24): التحكم بهاتف من هاتف آخر
+                const Divider(height: 1),
+                ListTile(
+                  leading: Icon(Icons.phonelink_rounded, color: cs.primary),
+                  title: Text(
+                    'settings.p2pEntry'.tr(),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(
+                    'settings.p2pHint'.tr(),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const PhoneRemoteScreen()),
+                  ),
                 ),
-                subtitle: Text(
-                  ctl.isActive ? 'settings.remoteActiveHint'.tr() : 'settings.remoteHint'.tr(),
-                  style: const TextStyle(fontSize: 12),
+                // الجولة 5 (عقد §25): مركز رفع القيود
+                const Divider(height: 1),
+                ListTile(
+                  leading: Icon(Icons.lock_open_rounded, color: cs.tertiary),
+                  title: Text(
+                    'unblock.title'.tr(),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(
+                    'unblock.entryHint'.tr(),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const UnblockCenterScreen()),
+                  ),
                 ),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ControlScreen()),
-                ),
-              ),
+              ]),
             );
           }),
           const SizedBox(height: 14),
