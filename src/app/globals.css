@@ -339,3 +339,8 @@ html[data-sr="on"] *:focus-visible {
 
 /* شبكة مصفوفة البناء */
 .nexus-matrix { border-collapse: separate; border-spacing: 0; }
+
+/* ===== Download site (R5-download-site) ===== */
+@keyframes dash {
+  to { stroke-dashoffset: -28; }
+}
