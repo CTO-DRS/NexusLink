@@ -1015,3 +1015,106 @@ interface TransferJob {
 3. مراجعة المسودة: الأصول الثمانية العشرة + التوقيعات — ثم **Publish** (النشر شرط ظهور التحديث).
 4. التحقق بعد النشر: `releases/latest/download/latest.json` تعيد `1.1.0` (updater-path-verify
    يفحص هذا تلقائيًا) — مستخدمو 1.0.0 يرون إشعار التحديث عند إقلاعهم التالي.
+
+---
+
+## 24. هاتف→هاتف عبر المركز — التحكم عن بُعد بين هاتفين (الجولة 5 — مصدر: guard-bridge.ts + nexuslink_mobile/lib/core/protocol.dart + phone_remote_service.dart + phone_remote_screen.dart + phone_remote_providers.dart + media_service.dart (المرآة) + native_bridge.dart + ScreenShareService.kt + MainActivity.kt + use-media-bridge.ts)
+
+### 24.أ الأدوار والمسار — بروتوكول واحد لا بروتوكول موازٍ
+- **الهاتف أ (المتحكم)** و**الهاتف ب (الهدف)** كلاهما وكيل على جسر الحماية 3006 بنفس تسليم
+  `guard:hello-phone` الحرفي (via gateway `?XTransformPort=3006` أو مباشر) — المركز (سيرفر سطح
+  المكتب) **يوجّه حصرًا** ولا ينفذ شيئًا بنفسه. أسماء أحداث FA-7 على الويب هي نفسها على الهاتف:
+  `p2p:ctl-start/ctl-stop` للجلسة، و`dev:touch/dev:text/dev:key/dev:touch-ack/dev:ctl-state/dev:ctl-stop` للتنفيذ —
+  فكل تنفيذ قائم على الهاتف ب (NexusAccessibilityService::dispatchGesture) يبقى كما هو حرفيًا.
+- `P2pEvents` (protocol.dart) يوثق الأسماء ثنائية الاتجاه — حاجز ثانٍ في وحدة التحكم:
+  `if (targetId == deviceId) return` قبل أي إرسال، وبوابة `_state.sessionActive` على كل إدخال.
+
+### 24.ب بوابة الثقة على الجسر (p2p:ctl-start — ترتيب الرفض الحرفي)
+1. `identity` — المرسل يجب أن يكون الوكيل صاحب `from` نفسه (ربط هوية السوكِت بسجل agentsReg).
+2. `untrusted` — الهاتف الطالب غير مقترن/غير موثوق في مخزن الأجهزة.
+3. `target-untrusted` — الهدف غير مقترن/غير موثوق.
+4. `self` — **لا هاتف يتحكم بنفسه أبدًا** (حاجز مزدوج: على الجسر وفي وحدة التحكم).
+5. `target-offline` — الهدف مقترن لكن لا سوكِت حيًا له.
+6. `already-controlling` — للطالب جلسة قائمة (متحكم واحد = جلسة واحدة).
+7. `target-busy` — الهدف محكوم به من جلسة أخرى (لا تحكم مزدوج أبدًا).
+الرفض يصل الطالب `p2p:ctl-rejected {reason, from, target}` — والواجهة تعرضه مترجمًا (p2p.rejectedReason).
+
+### 24.ج دورة الجلسة الموثقة
+- طلب موثوق → الهدف يستقبل `dev:ctl-start {from, name, p2p:true}` — **حوار «سماح» القائم في
+  Kotlin يبقى كما هو حرفيًا** (لا شاشة تأكيد جديدة ولا بروتوكول موازٍ).
+- موافقة صاحب الهدف = `dev:ctl-state {active:true, reason:"confirmed", controller, name}`
+  (نفس emitCtlState الحرفية في AgentForegroundService؛ الرفض = active:false "denied").
+- الجسر يبث الحالة للويب (مراقبة) **ويوجهها مستهدفًا للمتحكم** مضافةً `target` — الهاتف أ
+  يرى `{active:true, target:<هدفه>}` ويقفل مرحلة session في واجهته.
+- تسجيل الجلسة `p2pSessions[controller] = {targetDeviceId, controllerSocketId, targetSocketId}` —
+  مصدر وحيد للتوجيه. `guard:agents {agents[], sessions[]}` يُبث بعد كل تسجيل/مغادرة للاختيار في الواجهات.
+
+### 24.د توجيه الإدخال — الجلسة الموثقة حصرًا
+- سوكِت **هاتف** (وكيل مسجل) يرسل `dev:touch/text/key` → مسار هاتف→هاتف حصرًا: جلسة موثقة
+  مطلوبة وإلا `dev:ctl-rejected {reason:"no-session"}` — هذا ما يمنع تحكم الهاتف بنفسه أو بغيره
+  عبر مسار الوكيل الأساسي. سوكِت **الويب** → المسار القائم إلى الوكيل الأساسي كما كان (سطح
+  المكتب→هاتف لم يُمس).
+- التنقية نفسها على المسارين: `TOUCH_OPS` (tap/long/swipe/scroll/down/move/up) · `KEY_ACTIONS`
+  (back/home/recents/notifications/keyboard) · `clampCoord` (0..20000 بعُشر واحد) · حد معدل
+  120 حدثًا/ثانية لكل عميل · نص ≤2000 حرف.
+- `dev:touch-ack` من الهدف يبث للويب ويُوجّه للمتحكم الهاتفي حصرًا (عدادات الإقرارات في الواجهة).
+
+### 24.هـ القطع الفوري من الطرفين (عقد الأمان)
+- **من المتحكم**: `p2p:ctl-stop {target}` → `dev:ctl-stop {reason:"controller-stop"}` للهدف فورًا
+  + حالة نهاية `{active:false, target}` للمتحكم + حذف الجلسة (الإدخال اللاحق مرفوض no-session).
+- **انقطاع أي طرف** (teardownP2pForDisconnect): انقطاع الهدف → حالة `{active:false,
+  reason:"target-disconnected"}` للمتحكم؛ انقطاع المتحكم → `dev:ctl-stop
+  {reason:"controller-disconnected"}` للهدف — **لا جلسة يتيمة أبدًا**، والواجهة على الهاتفين
+  تعيد الحالة الخاملة فورًا (disconnect الـ socket = نهاية الجلسة دائمًا).
+
+### 24.و أبعاد الشاشة موسومة بمعرف المرسل (تعدد الوكلاء)
+- `dev:screen {w,h,density}` من أي وكيل → الجسر يوسم `deviceId` (معرف المرسل نفسه) ويبث
+  `guard:screen` — الهاتف أ يستقبل أبعاد **هدفه حصرًا** (فلترة deviceId في phone_remote_service)
+  لتحويل الإحداثيات، والويب يقرأ الوكيل الأساسي كما كان.
+
+### 24.ز المرآة — بث شاشة الهاتف ب إلى الهاتف أ (نفس إشارات §4.3/§15)
+- على قناة الوسائط 3005: الناشر (هاتف ب) يعرض `rtc:offer {kind="mirror"}` والعارض (هاتف أ)
+  يجيب `rtc:answer` — **أول إجابة تُقبل لكل جلسة (§4.3)** وICE يرحّل شفافًا (from="phone").
+- الترتيب التعاقدي على أندرويد 14+ (targetSdk 34): **1)** `Helper.requestCapturePermission` —
+  حوار موافقة النظام (شرط بدء FGS، بيانات الموافقة تُخزَّن داخل المكوّن) **2)** `startScreenShareService`
+  — خدمة أمامية بنوع `mediaProjection` (ScreenShareService — `FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION`
+  صريح، غير مُصدَّرة، إشعار دائم مع إيقاف صريح ACTION_STOP) **3)** `getDisplayMedia` يستخدم بيانات
+  الموافقة المخزنة (بلا حوار ثانٍ). إيقاف المشاركة = تفكيك PeerConnection + إطفاء الخدمة.
+- **الكمبيوتر ليس عارض المرآة إطلاقًا**: عارض الويب (use-media-bridge) يتجاهل `kind:"mirror"`
+  في rtc:offer/rtc:ice حرفيًا — والكمبيوتر يقبل دور phone في الإشارات فقط كمرحّل شفاف.
+
+### 24.ح حدود صادقة
+- فيديو المرآة يمر ببث §4.3 القائم على الشبكة المحلية عبر المركز (نمط الكاميرا/الميكروفون نفسه
+  — بلا تشفير جلسة إضافي)؛ **التحكم** هو ما يخضع لبوابة الثقة والتأكيد والقطع الفوري.
+- الجلسة عبر المركز حصرًا (السيرفر حي) — بلا مسار P2P مباشر بين الهاتفين، وهذا مقصود: نقطة
+  واحدة للثقة والتدقيق والقطع.
+- عارض الهاتف أ يعرض الفيديو فقط؛ الإدخال يعمل حتى بلا فيديو بالإحداثيات المعروفة من
+  guard:screen الموسومة (توثيق الواجهة الصادق: p2p.noMirrorHint).
+
+## 25. مركز رفع القيود (Unblock Center) — «الإعدادات المقيّدة» أندرويد 13+ (الجولة 5 — مصدر: nexuslink_mobile/lib/presentation/unblock_center_screen.dart + MainActivity.kt (openAppDetails/restrictedSettingsStatus) + native_bridge.dart + control_screen.dart/settings_screen.dart (المسارُن))
+
+### 25.أ المشكلة — سلوك نظام لا عطل
+- منذ أندرويد 13 يحمي النظام خدمة الإتاحة القوية: التطبيقات المثبتة يدويًا (APK من خارج متجر)
+  توضع في قيد **«الإعدادات المقيّدة»** فيصبح خيار تفعيلها رماديًا برسالة «الإجراء غير مسموح».
+  NexusLink يُوزَّع APK — لذا أول تفعيل للتحكم اللمسي (FA-7/§13) قد يصطدم بالقيد على 13+.
+
+### 25.ب الفحص — أفضل جهد صادق من مصدر AOSP الحرفي
+- `AppOpsManager.checkOpNoThrow("android:access_restricted_settings", myUid, packageName)` —
+  السلسلة الحرفية من AOSP `AppOpsManager.OPSTR_ACCESS_RESTRICTED_SETTINGS` (أندرويد 13+ حصرًا).
+- الحكم بنفس منطق AOSP RestrictedPreferenceHelper: `restricted = mode != null && mode !=
+  MODE_ALLOWED && mode != MODE_DEFAULT`. السلسلة `@SystemApi` غير متاحة على بعض النسخ →
+  **checked=false بلا ادعاء** — والواجهة تعرض ملاحظة صادقة (unblock.detectLimitation) تفيد
+  برسالة النظام «الإجراء غير مسموح» كدليل بديل.
+
+### 25.ج الفك — خطوات مرة واحدة + أزرار مباشرة
+1. **صفحة التطبيق**: زر يفتح `Settings.ACTION_APPLICATION_DETAILS_SETTINGS` مع `package:`
+   مباشرة (openAppDetails) — أو يدويًا: الإعدادات ← التطبيقات ← NexusLink.
+2. **قائمة ⋮** أعلى صفحة التطبيق → **«السماح بالإعدادات المقيّدة»** (قد يُطلب تحقق بصمة/وجه/PIN).
+3. **تفعيل الخدمة**: الإتاحة ← NexusLink ← تفعيل + «سماح» — والواجهة تعيد فحص الحالة
+   (restrictedSettingsStatus) فتصبح خضراء إن فُكّ القيد.
+
+### 25.د الواجهة — نفس القاموس ونظام الاتجاهات
+- `unblock.*` مفاتيح عربية/إنجليزية متوازية (نفس ملفات الترجمة — RTL تلقائي من نظام التطبيق) —
+  مدخلان: شاشة التحكم (بعد رفض التفعيل) والإعدادات (إدخال دائم p2pEntry/unblock.title).
+- الشرح يفسر **لماذا** (حماية النظام من التطبيقات الخبيثة المثبتة عنك) قبل **كيف** — والفك يدوي
+  مقصود من النظام (لا يوجد مسار برمجي لإلغاء القيد — ذلك سلوك أمني أندرويد موثق).
