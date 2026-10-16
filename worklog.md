@@ -947,3 +947,22 @@ Stage Summary:
 - إفصاح صادق: GitHub linkage حاليًا login=None — إضافة البريد cto.drs@gmail.com إلى إعدادات حساب GitHub (Emails) ستربط الأفاتار والبروفايل بالتاريخ كله (على مستوى الحساب، لا يحتاج إعادة كتابة).
 - جميع SHA المذكورة في هذا الملف قبل هذا القسم تشير لتاريخ ما قبل إعادة الكتابة (مرجع تاريخي)؛ التاريخ الحي بعد 1c4987d.
 - الأدلة: scripts/evidence/r5-git-attribution/ (commits-pre/post، subjects-sha-remap.diff، tags-pre/post) + backup-pre-rewrite.bundle — كلها غير متتبعة ومحلية.
+
+---
+Task ID: R5-download-site
+Agent: main (Super Z)
+Task: موقع تنزيل متكامل للمنتج على مسار /download — بيانات الإصدار الحية من GitHub Releases، تحميلات المنصات الأربع بأحجامها الحقيقية، أدلة التثبيت مع مركز رفع القيود (§25)، AR/EN + RTL بنفس محرك القاموس الواحد
+
+Work Log:
+- إعادة استخدام بنية المشروع القائمة (لا إطار موازٍ): محرك i18n (@/lib/i18n — العربية مفتاح المصدر + ar-en-map.json) والسمة teal وخطاف التفضيلات المحفوظ (nexus-lang/nexus-theme) نفسها.
+- البيانات: لقطة مضمّنة دقيقة (أسماء/بايتات الأصول من API الإصدار v1.1.0-fix4 بتاريخ 2026-10-17) + hook حي use-release-info يجلب releases/latest العام من المتصفح (مهلة 9 ثوانٍ وسقوط صامت إلى اللقطة) — شارة «مباشر من GitHub» تعكس المصدر الفعلي.
+- كشف نظام الزائر عبر useSyncExternalStore (بلا setState داخل effects — قاعدة react-hooks/set-state-in-effect) → زر «تحميل لنظام X» + وسم «مُوصى به لنظامك».
+- الأقسام: Hero (شارة إصدار حية + CTA ذكي + رسوم أجهزة CSS/SVG بخط متصل متحرك) · شبكة التحميلات (Windows: setup/msi/portable — macOS: dmg/tar.gz — Linux: AppImage/deb — Android: apk/aab) مع الأحجام الحقيقية وأيقونة توقيع للأصول الخمسة الموقعة · 8 ميزات · دليل تثبيت بتبويبات (SmartScreen/Gatekeeper/AppImage+deb/APK) + صندوق «مركز رفع القيود (أندرويد 13+)» بخطوات الفك الرسمية الثلاث (ربط §25) · التحقق والتحديث (أوامر SHA256 لكل نظام + latest.json + قائمة التوقيعات) · FAQ بستة أسئلة صادقة (حدود iOS المعلنة) · تذييل ثابت mt-auto مع safe-area.
+- القاموس: +105 مفاتيح AR→EN في ar-en-map.json عبر سكربت محفوظ idempotent (scripts/add_download_i18n.py) — 3201→3304 مفتاحًا.
+- إصلاحات أثناء التحقق الحي: 3 أيقونات lucide غير موجودة في النسخة المثبتة (Smartphone2→TabletSmartphone · FileTransmit→FolderSync · ShieldSignature→Signature) + إزالة asChild من AlertDescription (تحذير React DOM) → كونسول نظيف 0 أخطاء.
+- ملاحظة بيئة: dev server سقط مرتين (OOM معروف في sandbox) — أُعيد تشغيله ودُمجت الفحوص في سكربت واحد (scripts/verify_browser_flows.sh).
+- Agent Browser E2E حي: عرض كامل AR/RTL · تبديل EN حي (ltr|en + نص EN) والعودة (rtl|ar) · تبويب Android يُظهر مركز رفع القيود وخطواته الثلاث · التذييل ملتصق أسفل تمامًا desktop+mobile · لقطات موثقة في scripts/evidence/download-site-*.png · خطأ readonly-database في dev.log قديم ومن API التطبيق القائم (لا علاقة له بالموقع).
+
+Stage Summary:
+- موقع التنزيل الرسمي للمنتج حي على /download: تحميلات موقّعة بأحجام حقيقية + بيانات إصدار حية + أدلة تثبيت صادقة + Unblock Center — بقاموس المشروع الواحد وبلا إطارات موازية.
+- lint نظيف على كل الملفات الجديدة؛ التطبيق الإداري القائم على / لم يُمس حرفيًا.
