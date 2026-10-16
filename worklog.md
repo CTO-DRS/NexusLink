@@ -922,3 +922,28 @@ Work Log:
 Stage Summary:
 - **الجولة 5 مكتملة ومتحقق منها**: (1) هاتف→هاتف عبر المركز يعمل بإعادة استخدام بروتوكول FA-7 حرفيًا — حوار «سماح» الهدف القائم نفسه، وأسماء أحداث الويب نفسها، والسيرفر أضاف التوجيه والبوابة فقط — مع مرآة شاشة kind=mirror على إشارات §4.3 القائمة (الكمبيوتر يتجاهلها حرفيًا). (2) مركز رفع القيود يقود الفك بخطوات صادقة من مصدر AOSP مع زر صفحة التطبيق المباشر.
 - طبقة التحقق (عقد + E2E 38 فحصًا + قائمة ميدانية) هي الإضافة الجوهرية لهذه الجلسة — العملية بلاها كانت منقطعة وغير قابلة للتكرار.
+
+---
+Task ID: R5-git-attribution
+Agent: main (Super Z)
+Task: نسبة تاريخ المستودع كاملًا إلى المالك — إعادة كتابة 136 commit (author+committer) إلى CTO-DRS <cto.drs@gmail.com> عبر git-filter-repo على main فقط، force push، ثم قصر الهوية دائمًا (global+local+خطاف pre-commit) بأمر صريح من المالك
+
+Work Log:
+- الجرد المسبق: 136/136 commit كانت Z User <z@container> (سببها إعدادات بيئة العمل) · الشجرة النهائية ae30623 · main المحلي متقدم بـ commit تلقائي واحد (3d0e908 — db/custom.db فقط، نمط artifact معروف) · 6 وسوم وإصدار v1.1.0-fix4 حي.
+- فحص أمني قبل إعادة الكتابة والدفع: صفر توكنات ghp_/github_pat في تاريخ main كله، والمتوكن الحالي صفر ظهور (فحص git log -p كاملًا + فحص الـ commit غير المرفوع).
+- الأدلة المسبقة: commits-pre.txt (136 سطرًا: H|T|author|committer|تاريخا author/committer|موضوع) + نسخة احتياطية كاملة backup-pre-rewrite.bundle (bundle verify OK).
+- الهوية: git config --global + local = CTO-DRS / cto.drs@gmail.com (الأمرين الحرفيين من المالك) — تحقق طباعي بعدها.
+- إعادة الكتابة: git filter-repo 2.47.0 بـ --refs main --commit-callback (تعيين author_name/email + committer_name/email) — 136 commit في 0.12 ثانية؛ origin بقي كما هو؛ الوسوم لم تُمس.
+- تحقق محلي صارم مقابل النسخة الاحتياطية: **diff البايتات قديم/جديد = 0** · العدد 136=136 · الشجرة النهائية ae30623=ae30623 · التواريخ (author+committer) متطابقة حرفيًا لكل commit · merges 0=0 · أشجار كل commit متطابقة (TREES-IDENTICAL).
+- وحيد اللمس الإضافي (بمحتوى الملفات لا علاقة): filter-repo أعاد ربط مراجع SHA القصيرة داخل 4 رسائل commit (6 أسطر: 82d1c37→a9fd672 · 35907f4→e0b40bd · 3cea500→35d9975 · a716a64→b649dd2 · 97c9cb5→b92882c · 5d0d0da→b7e70d3 · a1a3211→6dece5f) — سلوك افتراضي معياري يمنع مراجع ميتة بعد إعادة الكتابة؛ موثق في subjects-sha-remap.diff.
+- Force push: main من 54aa665 إلى 1c4987d (forced update) عبر inline URL مؤقت — التوكن لا يدخل config ولا أي ملف متتبع (النمط الأمني المعتمد).
+- تحقق بعدي API (scripts/verify_remote_attribution.py، التوكن من env حصرًا): 136/136 على main البعيد = CTO-DRS <cto.drs@gmail.com> (author+committer) · الوسوم الست مطابقة قبل/بعد على المسيّد (بما فيها peeled) · releases/latest: v1.1.0-fix4 | draft=False | 16 assets — لم يتأثر شيء.
+- خطاف pre-commit محلي يمنع أي commit بهوية غير CTO-DRS/cto.drs@gmail.com (منطقه مفحوص PASS) — تنفيذًا لقاعدة «قبل أي commit تأكد من الهوية».
+- إعادة توجيه refs/remotes/origin/main إلى 1c4987d محليًا بعد الدفع (كان filter-repo أعاد ربطه لقيمة وسيطة).
+
+Stage Summary:
+- تاريخ main الكامل (136 commit) منسوب الآن إلى CTO-DRS <cto.drs@gmail.com> على المسيّد، والمحتوى الملفي مطابق حرفيًا (byte-diff=0)، والوسوم والإصدارات لم تُمس.
+- قاعدة دائمة تُطبق من الآن: الهوية تُفحص قبل كل commit (config global+local + خطاف حارس) — وأي commit قادم في هذا المستودع سيكون بتابع المالك.
+- إفصاح صادق: GitHub linkage حاليًا login=None — إضافة البريد cto.drs@gmail.com إلى إعدادات حساب GitHub (Emails) ستربط الأفاتار والبروفايل بالتاريخ كله (على مستوى الحساب، لا يحتاج إعادة كتابة).
+- جميع SHA المذكورة في هذا الملف قبل هذا القسم تشير لتاريخ ما قبل إعادة الكتابة (مرجع تاريخي)؛ التاريخ الحي بعد 1c4987d.
+- الأدلة: scripts/evidence/r5-git-attribution/ (commits-pre/post، subjects-sha-remap.diff، tags-pre/post) + backup-pre-rewrite.bundle — كلها غير متتبعة ومحلية.
