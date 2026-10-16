@@ -2072,6 +2072,294 @@ check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms 
   rcPhone.disconnect()
 
   // ==========================================================================
+  // R5 (عقد §24) — هاتف→هاتف عبر المركز: بوابة الثقة + جلسة موثقة + توجيه الإدخال
+  // + القطع الفوري من الطرفين + وسم guard:screen + مرآة الشاشة (rtc kind=mirror)
+  // كل الفحوص مبنية على حقائق guard-bridge.ts الحرفية (بوابة p2p:ctl-start وترتيبها)
+  // ==========================================================================
+  {
+    console.log("\n== R5 §24: هاتف→هاتف (ثقة + جلسة + توجيه + قطع فوري + مرآة) ==")
+
+    // (أ) هاتفان يسجلان على جسر الحماية 3006 (نفس تسليم guard:hello-phone الحرفي)
+    const pA = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3006" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+    const pB = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3006" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+    await Promise.all([
+      new Promise((res, rej) => { pA.on("connect", res); pA.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("phoneA timeout")), 10000) }),
+      new Promise((res, rej) => { pB.on("connect", res); pB.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("phoneB timeout")), 10000) }),
+    ])
+    const agentsP = new Promise((res) => {
+      pA.on("guard:agents", (d) => {
+        const ids = (d?.agents ?? []).map((a) => a?.deviceId)
+        if (ids.includes("galaxy-s24") && ids.includes("redmi-note13")) res(d)
+      })
+      setTimeout(() => res(null), 8000)
+    })
+    pA.emit("guard:hello-phone", { name: "Galaxy-S24", deviceId: "galaxy-s24" })
+    await sleep(300)
+    pB.emit("guard:hello-phone", { name: "Redmi-Note13", deviceId: "redmi-note13" })
+    const agentsList = await agentsP
+    check("§24: guard:agents يبث الهاتفين معرفةً (تعدد وكلاء) + sessions مصفوفة",
+      Array.isArray(agentsList?.agents) && agentsList.agents.some((a) => a.deviceId === "galaxy-s24")
+        && agentsList.agents.some((a) => a.deviceId === "redmi-note13") && Array.isArray(agentsList?.sessions),
+      JSON.stringify(agentsList?.agents ?? {}).slice(0, 140))
+
+    // (ب) بوابة الثقة — الأسباب الحرفية بترتيب الجسر (identity → self → target-untrusted → target-offline)
+    const p2pReject = (sock, payload, want) => new Promise((res) => {
+      const h = (d) => { if (d?.reason === want) { sock.off("p2p:ctl-rejected", h); res(d) } }
+      sock.on("p2p:ctl-rejected", h)
+      sock.emit("p2p:ctl-start", payload)
+      setTimeout(() => { sock.off("p2p:ctl-rejected", h); res(null) }, 6000)
+    })
+    const rId = await p2pReject(pB, { from: "galaxy-s24", target: "redmi-note13" }, "identity")
+    check("§24: طلب بلا مطابقة هوية السوكِت → identity (ربط الهوية)", rId?.reason === "identity")
+    const rSelf = await p2pReject(pA, { from: "galaxy-s24", target: "galaxy-s24" }, "self")
+    check("§24: لا هاتف يتحكم بنفسه أبدًا → self", rSelf?.reason === "self")
+    const rTgt = await p2pReject(pA, { from: "galaxy-s24", target: "stranger-y" }, "target-untrusted")
+    check("§24: هدف غير مقترن → target-untrusted", rTgt?.reason === "target-untrusted")
+    const rOff = await p2pReject(pA, { from: "galaxy-s24", target: "nexus-tv" }, "target-offline")
+    check("§24: هدف مقترن لكنه غير حي (بلا سوكِت) → target-offline", rOff?.reason === "target-offline")
+
+    // (ج) الجلسة: طلب → dev:ctl-start يصل الهدف → تأكيد صاحبه (سلوك الهاتف الحقيقي
+    // emitCtlState(true,"confirmed",controller) حرفيًا) → حالة موجهة {target} للمتحكم
+    const ctlStartAtB = new Promise((res) => {
+      pB.on("dev:ctl-start", (d) => { if (d?.from === "galaxy-s24" && d?.p2p === true) res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    pA.emit("p2p:ctl-start", { from: "galaxy-s24", target: "redmi-note13", name: "Galaxy-S24" })
+    const startEvt = await ctlStartAtB
+    check("§24: p2p:ctl-start موثوق → dev:ctl-start {from,p2p:true} يصل الهدف",
+      startEvt?.from === "galaxy-s24" && startEvt?.p2p === true, JSON.stringify(startEvt ?? {}).slice(0, 120))
+    const ctlStateAtA = new Promise((res) => {
+      pA.on("dev:ctl-state", (d) => { if (d?.active === true && d?.target === "redmi-note13") res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    pB.emit("dev:ctl-state", { active: true, reason: "confirmed", controller: "galaxy-s24", name: "Galaxy-S24", at: Date.now() })
+    const activeState = await ctlStateAtA
+    check("§24: تأكيد الهدف → جلسة موثقة وحالة موجهة {active,target} للمتحكم",
+      activeState?.active === true && activeState?.target === "redmi-note13", JSON.stringify(activeState ?? {}).slice(0, 120))
+
+    // (د) توجيه الإدخال داخل الجلسة (أسماء أحداث الويب نفسها + تنقية الجسر)
+    const touchAtB = new Promise((res) => {
+      pB.on("dev:touch", (d) => { if (d?.op === "tap") res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    pA.emit("dev:touch", { op: "tap", x: 0.5, y: 0.25, seq: 7 })
+    const touchEvt = await touchAtB
+    check("§24: dev:touch tap يُوجّه للهدف داخل الجلسة (بلا صدى) — clampCoord: 0.25→0.3 (Math.round نصفه لأعلى حرفيًا)",
+      touchEvt?.op === "tap" && touchEvt?.x === 0.5 && touchEvt?.y === 0.3 && touchEvt?.seq === 7,
+      JSON.stringify(touchEvt ?? {}).slice(0, 120))
+    const moveAtB = new Promise((res) => {
+      pB.on("dev:touch", (d) => { if (d?.op === "move") res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    pA.emit("dev:touch", { op: "move", x: 100.5, y: -3 })
+    const moveEvt = await moveAtB
+    check("§24: تنقية clampCoord على مسار الهاتف (1 عشري + السالب→0)",
+      moveEvt?.x === 100.5 && moveEvt?.y === 0, JSON.stringify(moveEvt ?? {}).slice(0, 100))
+    let badOpSeen = false
+    pB.on("dev:touch", (d) => { if (d?.op === "explode") badOpSeen = true })
+    pA.emit("dev:touch", { op: "explode", x: 1, y: 1 })
+    await sleep(1200)
+    check("§24: op خارج القائمة البيضاء (TOUCH_OPS) يُرفض صامتًا", badOpSeen === false)
+    const textAtB = new Promise((res) => {
+      pB.on("dev:text", (d) => { if (typeof d?.text === "string") res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    pA.emit("dev:text", { text: "مرحبا من الهاتف" })
+    const textEvt = await textAtB
+    check("§24: dev:text عربي UTF-8 سليم عبر التوجيه", textEvt?.text === "مرحبا من الهاتف", JSON.stringify(textEvt ?? {}).slice(0, 100))
+    const keyAtB = new Promise((res) => {
+      pB.on("dev:key", (d) => { if (d?.action === "back") res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    pA.emit("dev:key", { action: "back" })
+    const keyEvt = await keyAtB
+    check("§24: dev:key (back) يمر عبر KEY_ACTIONS", keyEvt?.action === "back")
+    const ackAtA = new Promise((res) => {
+      pA.on("dev:touch-ack", (d) => { if (d?.seq === 7) res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    pB.emit("dev:touch-ack", { seq: 7, ok: true, at: Date.now() })
+    const ackEvt = await ackAtA
+    check("§24: dev:touch-ack من الهدف يُوجّه للمتحكم حصرًا", ackEvt?.seq === 7 && ackEvt?.ok === true, JSON.stringify(ackEvt ?? {}).slice(0, 100))
+
+    // (هـ) الحاجز الحاسم: هاتف بلا جلسة موثقة → الإدخال مرفوض no-session
+    // (يمنع تحكم أي هاتف بنفسه أو بغيره عبر مسار الوكيل الأساسي)
+    const noSess = new Promise((res) => {
+      pB.on("dev:ctl-rejected", (d) => { if (d?.reason === "no-session") res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    pB.emit("dev:touch", { op: "tap", x: 0.1, y: 0.1 })
+    const noSessEvt = await noSess
+    check("§24: هاتف بلا جلسة (الهدف نفسه) → no-session (حاجز التحكم الذاتي)",
+      noSessEvt?.reason === "no-session")
+
+    // (و) لا ازدواج: هدف مشغول (target-busy) + متحكم مشغول (already-controlling)
+    const pC = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3006" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+    await new Promise((res, rej) => { pC.on("connect", res); pC.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("phoneC timeout")), 10000) })
+    pC.emit("guard:hello-phone", { name: "iPad-Pro", deviceId: "ipad-pro" })
+    await sleep(500)
+    const rBusy = await p2pReject(pC, { from: "ipad-pro", target: "redmi-note13" }, "target-busy")
+    check("§24: هدف محكوم به من جلسة قائمة → target-busy", rBusy?.reason === "target-busy")
+    const rDup = await p2pReject(pA, { from: "galaxy-s24", target: "ipad-pro" }, "already-controlling")
+    check("§24: متحكم له جلسة قائمة → already-controlling", rDup?.reason === "already-controlling")
+
+    // (ز) القطع الفوري من المتحكم: ctl-stop → أمر للهدف + حالة للمتحكم + حذف الجلسة
+    const stopAtB = new Promise((res) => {
+      pB.on("dev:ctl-stop", (d) => { if (d?.reason === "controller-stop") res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    const stopAtA = new Promise((res) => {
+      // الإشعار للمتحكم يحمل {active:false, reason:"controller-stop", controller} — بلا target (حرفيًا)
+      pA.on("dev:ctl-state", (d) => { if (d?.active === false && d?.reason === "controller-stop" && d?.controller === "galaxy-s24") res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    pA.emit("p2p:ctl-stop", { target: "redmi-note13" })
+    const [bStop, aStop] = await Promise.all([stopAtB, stopAtA])
+    check("§24: p2p:ctl-stop → dev:ctl-stop{controller-stop} للهدف فورًا", bStop?.reason === "controller-stop")
+    check("§24: حالة النهاية {active:false,controller} تعود للمتحكم", aStop?.active === false && aStop?.controller === "galaxy-s24")
+    const noSess2 = new Promise((res) => {
+      pB.on("dev:ctl-rejected", (d) => { if (d?.reason === "no-session") res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    pB.emit("dev:touch", { op: "tap", x: 0.1, y: 0.1 })
+    check("§24: بعد القطع لا جلسة — الإدخال مرفوض مجددًا (حذف فعلي)", (await noSess2)?.reason === "no-session")
+
+    // (ح) القطع الفوري بانقطاع الطرفين (teardown ثنائي الاتجاه — عقد §24.أمن)
+    pA.emit("p2p:ctl-start", { from: "galaxy-s24", target: "redmi-note13", name: "Galaxy-S24" })
+    await sleep(400)
+    const reConfirm = new Promise((res) => {
+      pA.on("dev:ctl-state", (d) => { if (d?.active === true && d?.target === "redmi-note13") res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    pB.emit("dev:ctl-state", { active: true, reason: "confirmed", controller: "galaxy-s24", at: Date.now() })
+    await reConfirm
+    const targetGone = new Promise((res) => {
+      pA.on("dev:ctl-state", (d) => { if (d?.active === false && d?.reason === "target-disconnected") res(d) })
+      setTimeout(() => res(null), 8000)
+    })
+    pB.disconnect()
+    const goneEvt = await targetGone
+    check("§24: انقطاع الهدف → {active:false, target-disconnected} للمتحكم فورًا", goneEvt?.reason === "target-disconnected")
+    const pB2 = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3006" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+    await new Promise((res, rej) => { pB2.on("connect", res); pB2.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("phoneB2 timeout")), 10000) })
+    pB2.emit("guard:hello-phone", { name: "Redmi-Note13", deviceId: "redmi-note13" })
+    await sleep(500)
+    pA.emit("p2p:ctl-start", { from: "galaxy-s24", target: "redmi-note13", name: "Galaxy-S24" })
+    await sleep(400)
+    const reConfirm2 = new Promise((res) => {
+      pA.on("dev:ctl-state", (d) => { if (d?.active === true && d?.target === "redmi-note13") res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    pB2.emit("dev:ctl-state", { active: true, reason: "confirmed", controller: "galaxy-s24", at: Date.now() })
+    await reConfirm2
+    const cutAtB2 = new Promise((res) => {
+      pB2.on("dev:ctl-stop", (d) => { if (d?.reason === "controller-disconnected") res(d) })
+      setTimeout(() => res(null), 8000)
+    })
+    pA.disconnect()
+    const cutEvt = await cutAtB2
+    check("§24: انقطاع المتحكم → dev:ctl-stop{controller-disconnected} للهدف فورًا (لا جلسة يتيمة)", cutEvt?.reason === "controller-disconnected")
+
+    // (ط) وسم guard:screen بمعرف المرسل (تعدد وكلاء) — العارض يفلتر بهدفه في العميل
+    const screenAtB2 = new Promise((res) => {
+      pB2.on("guard:screen", (d) => { if (d?.deviceId === "ipad-pro") res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    pC.emit("dev:screen", { w: 2048, h: 2732, density: 264 })
+    const scrC = await screenAtB2
+    check("§24: dev:screen من وكيل ثالث → guard:screen موسوم deviceId=ipad-pro",
+      scrC?.w === 2048 && scrC?.h === 2732 && scrC?.deviceId === "ipad-pro", JSON.stringify(scrC ?? {}).slice(0, 120))
+    const screenFromB2 = new Promise((res) => {
+      pC.on("guard:screen", (d) => { if (d?.deviceId === "redmi-note13") res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    pB2.emit("dev:screen", { w: 1080, h: 2400, density: 440 })
+    const scrB = await screenFromB2
+    check("§24: وسم المرسل نفسه (1080×2400 @440 → deviceId=redmi-note13)",
+      scrB?.w === 1080 && scrB?.deviceId === "redmi-note13")
+
+    // (ي) المرآة على 3005: إشارات rtc:* الشفافة نفسها بنوع kind=mirror —
+    // الناشر (هاتف ب) يعرض والعارض (هاتف أ) يجيب — والكمبيوتر يتجاهلها (عميله)
+    const mPub = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3005" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+    const mView = io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3005" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+    await Promise.all([mPub, mView].map((s) => new Promise((res, rej) => { s.on("connect", res); s.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("media timeout")), 10000) })))
+    mPub.emit("media:role", { role: "phone", name: "Pub-B" })
+    mView.emit("media:role", { role: "phone", name: "View-A" })
+    await sleep(400)
+    const mirrorAtViewer = new Promise((res) => {
+      mView.on("rtc:offer", (d) => { if (d?.kind === "mirror") res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    mPub.emit("rtc:offer", { kind: "mirror", sdp: { type: "offer", sdp: "v=0\r\no=- 9 2 IN IP4 127.0.0.1\r\n" } })
+    const mirOffer = await mirrorAtViewer
+    check("§24: rtc:offer kind=mirror من الناشر يصل العارض الهاتفي (from=phone)",
+      mirOffer?.kind === "mirror" && mirOffer?.from === "phone", JSON.stringify(mirOffer ?? {}).slice(0, 100))
+    const mirAnswerAtPub = new Promise((res) => {
+      mPub.on("rtc:answer", (d) => { if (d?.kind === "mirror") res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    mView.emit("rtc:answer", { kind: "mirror", sdp: { type: "answer", sdp: "v=0\r\n" } })
+    const mirAns = await mirAnswerAtPub
+    check("§24: rtc:answer kind=mirror من العارض يعود للناشر (أول إجابة §4.3)", mirAns?.kind === "mirror")
+    const mirIceAtPub = new Promise((res) => {
+      mPub.on("rtc:ice", (d) => { if (d?.kind === "mirror" && d?.candidate) res(d) })
+      setTimeout(() => res(null), 6000)
+    })
+    mView.emit("rtc:ice", { kind: "mirror", candidate: { candidate: "candidate:9 1 UDP 2122252543 192.168.1.20 50009 typ host", sdpMid: "0", sdpMLineIndex: 0 } })
+    const mirIce = await mirIceAtPub
+    check("§24: rtc:ice kind=mirror يرحّل بين الهاتفين",
+      mirIce?.candidate?.candidate?.startsWith("candidate:9"), JSON.stringify(mirIce ?? {}).slice(0, 100))
+
+    // (ك) مصادر حرفية — توثيق التعاقد بين الطرفين (نمط فحوص §17/§23)
+    const contractR5 = await fsMod.readFile(pathMod.join(ROOT, "docs/protocol-contract.md"), "utf8")
+    check("§24/§25: العقد موثق (## 24. هاتف→هاتف + ## 25. مركز رفع القيود)",
+      contractR5.includes("## 24.") && contractR5.includes("## 25.") && contractR5.includes('kind="mirror"') && contractR5.includes("access_restricted_settings"))
+    const mobProto = await fsMod.readFile(pathMod.join(ROOT, "nexuslink_mobile/lib/core/protocol.dart"), "utf8")
+    check("§24: P2pEvents — الهاتف يستخدم أسماء أحداث الويب نفسها (p2p:ctl-start/dev:touch/dev:text/dev:key)",
+      mobProto.includes("'p2p:ctl-start'") && mobProto.includes("'dev:touch'") && mobProto.includes("'dev:text'") && mobProto.includes("'dev:key'"))
+    const guardTs = await fsMod.readFile(pathMod.join(ROOT, "src/lib/nexus/guard-bridge.ts"), "utf8")
+    check("§24: الجسر يوجّه (p2p:ctl-start + no-session + teardown ثنائي) — مصدر واحد للتوجيه",
+      guardTs.includes('"p2p:ctl-start"') && guardTs.includes('"no-session"') && guardTs.includes("teardownP2pForDisconnect"))
+    const prSvc = await fsMod.readFile(pathMod.join(ROOT, "nexuslink_mobile/lib/data/phone_remote_service.dart"), "utf8")
+    check("§24: وحدة التحكم الهاتفية — حاجز ذاتي ثانٍ (targetId==deviceId) + بوابة sessionActive للإدخال",
+      prSvc.includes("if (targetId == deviceId) return") && prSvc.includes("!_state.sessionActive"))
+    const manifestR5 = await fsMod.readFile(pathMod.join(ROOT, "nexuslink_mobile/android/app/src/main/AndroidManifest.xml"), "utf8")
+    check("§24: ScreenShareService في المانيفست — FGS بنوع mediaProjection وغير مُصدَّرة",
+      manifestR5.includes("android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION") && manifestR5.includes('android:name=".ScreenShareService"')
+        && manifestR5.includes('android:foregroundServiceType="mediaProjection"') && manifestR5.includes('android:exported="false"'))
+    const sss = await fsMod.readFile(pathMod.join(ROOT, "nexuslink_mobile/android/app/src/main/kotlin/com/nexuslink/mobile/ScreenShareService.kt"), "utf8")
+    check("§24: خدمة المشاركة — FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION + إيقاف صريح (ACTION_STOP)",
+      sss.includes("ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION") && sss.includes("ACTION_STOP"))
+    const mainKt = await fsMod.readFile(pathMod.join(ROOT, "nexuslink_mobile/android/app/src/main/kotlin/com/nexuslink/mobile/MainActivity.kt"), "utf8")
+    check("§24/§25: MainActivity — startScreenShareService + openAppDetails + restrictedSettingsStatus (AppOps الحرفي)",
+      mainKt.includes('"startScreenShareService"') && mainKt.includes('"openAppDetails"') && mainKt.includes('"restrictedSettingsStatus"') && mainKt.includes("android:access_restricted_settings"))
+    const medSvc = await fsMod.readFile(pathMod.join(ROOT, "nexuslink_mobile/lib/data/media_service.dart"), "utf8")
+    check("§24: مسار المشاركة التعاقدي — موافقة النظام أولًا ثم FGS ثم getDisplayMedia (بلا حوار ثانٍ)",
+      medSvc.includes("requestCapturePermission") && medSvc.includes("startScreenShareService") && medSvc.includes("getDisplayMedia"))
+    const umb = await fsMod.readFile(pathMod.join(ROOT, "src/hooks/use-media-bridge.ts"), "utf8")
+    check("§24: عارض الويب يتجاهل kind=mirror حرفيًا (الكمبيوتر ليس عارض المرآة)",
+      umb.includes('d.kind === "mirror"') && umb.includes('d?.kind === "mirror"'))
+
+    // (ل) §25 — مركز رفع القيود: مصادر حرفية + ترجمات متوازية AR/EN
+    const ucs = await fsMod.readFile(pathMod.join(ROOT, "nexuslink_mobile/lib/presentation/unblock_center_screen.dart"), "utf8")
+    check("§25: مركز رفع القيود — فحص AppOps + زر صفحة التطبيق + خطوات الفك",
+      ucs.includes("restrictedSettingsStatus") && ucs.includes("openAppDetails") && ucs.includes("unblock.step1"))
+    const arT = JSON.parse(await fsMod.readFile(pathMod.join(ROOT, "nexuslink_mobile/assets/translations/ar.json"), "utf8"))
+    const enT = JSON.parse(await fsMod.readFile(pathMod.join(ROOT, "nexuslink_mobile/assets/translations/en.json"), "utf8"))
+    check("§24/§25: ترجمات AR/EN متوازية لكل مفاتيح الجولة 5 (p2p/unblock/mirror/settings)",
+      arT?.p2p?.title && enT?.p2p?.title && arT?.unblock?.title && enT?.unblock?.title
+        && arT?.mirror?.shareCard && enT?.mirror?.shareCard && arT?.settings?.p2pEntry && enT?.settings?.p2pEntry)
+    const checklistR5 = await fsMod.readFile(pathMod.join(ROOT, "docs/e2e-checklist.md"), "utf8")
+    check("§24/§25: القائمة الميدانية — اختبار هاتفين حقيقيين + خطوات الفك على جهاز 13+",
+      checklistR5.includes("الجولة 5") && checklistR5.includes("مركز رفع القيود") && checklistR5.includes("الإعدادات المقيّدة"))
+
+    pC.disconnect()
+    pB2.disconnect()
+    mPub.disconnect()
+    mView.disconnect()
+  }
+
+  // ==========================================================================
   // FA-harden (عقد §16) — صلّب الإصدار: الإعدادات المشتركة + التدقيق + المحدّث + التشخيص
   // ==========================================================================
   {
