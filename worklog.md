@@ -880,3 +880,23 @@ Work Log:
 
 Stage Summary:
 - لا تسريب للتوكن الحالي إطلاقًا. التوكن القديم موجود في تاريخ الوسم العام فقط (6375f53) — الإحباط الفوري بإلغائه من إعدادات GitHub (Developer settings → Tokens → Revoke)، وتنقيف التاريخ (git filter-repo/BFG + force-push) قرار صيانة لاحق اختياري لأن التوكن مجاوز أصلًا.
+
+---
+Task ID: R5-release-reverify
+Agent: main (Super Z)
+Task: إعادة تحقق كاملة مستقلة بعد تجديد التوكن — تأكيد أن إطلاق v1.1.0 لا يزال حيًا وسليمًا من كل النواحي (المراحل 1–5 كلها)
+
+Work Log:
+- بيئة الجلسة أُعيدت تهيئتها ففُقد التوكن السابق؛ المستخدم زوّد توكنًا جديدًا (استُخدم inline في curl/git حصرًا — بلا أي ملف).
+- **المرحلة 1 مؤكدة من البعيد**: remote main HEAD = d475a15 يطابق المحلي حرفيًا (لا commit غير مدفوع)، والوسوم الستة كلها على البعيد (v1.0.0، v1.1.0، fix1، fix2، fix3، fix4).
+- **المرحلة 2/3 مؤكدتان**: Release ‏v1.1.0-fix4 ‏draft=False ‏prerelease=False — منشور رسمي، وv1.0.0 سليم بجواره (15 أصلًا).
+- **المرحلة 4 حيًا كلها PASS**:
+  ① نقطة المحدّث الرسمية (بدون توكن — كعميل حقيقي) HTTP 200: ‏version=1.1.0، ‏pub_date=2026-10-16T00:41:30Z (اليوم UTC)، المنصات الثلاث (windows-x86_64/linux-x86_64/darwin-aarch64).
+  ② جرد الأصول 16 (905MB): setup.exe+sig، msi+sig، portable.zip، dmg، AppImage+sig، deb+sig، app.tar.gz+sig، apk، aab، latest.json، SHA256SUMS — الفئات الثمانية التعاقدية كلها PASS.
+  ③ endpoints في tauri.conf.json (plugins.updater) يطابق رابط latest.json المباشر حرفيًا.
+  ④ SHA256SUMS (15 مدخلًا): بصمة latest.json المعلنة = بصمة البايتات الحية المُنزّلة الآن حرفيًا (619ec568…).
+  ⑤ أمني: التوكن الحالي صفر وجود في الملفات المتتبعة/worklog/remote URL (git grep + rg + فحص remote).
+- db/custom.db تعديل تشغيلي فقط — لم يُرفَ (نمط معروف).
+
+Stage Summary:
+- **NexusLink v1.1.0 لا يزال منشورًا وحيًا ومُتحققًا منه بالكامل بتوكن جديد مستقل**: https://github.com/CTO-DRS/NexusLink/releases/tag/v1.1.0-fix4 — نقطة المحدّث ترد 1.1.0 لثلاث منصات بتوقيعات سليمة وSHA256SUMS مطابق للبايتات الحية. كل مراحل خطة الإطلاق الخمس مغلقة.
