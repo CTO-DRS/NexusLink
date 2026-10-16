@@ -88,3 +88,6 @@ scripts/live-verify/target/
 scripts/tablet-verify/target/
 scripts/gyro-verify/target/
 scripts/hardening-verify/target/
+
+# local backup bundles (R5-git-attribution) — never commit
+*.bundle
