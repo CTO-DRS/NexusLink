@@ -6,6 +6,7 @@ import { createServer } from "http"
 import { Server as SocketServer } from "socket.io"
 import { db } from "@/lib/db"
 import { runPairSync, photoSyncTick, generatePhonePhoto, syncDeviceName } from "./sync-engine"
+import { emitAutomationFact } from "./automation-facts"
 
 const PORT = 3007
 
@@ -71,6 +72,8 @@ export function ensureProdBridge() {
           })
           const payload = { ...item, createdAt: item.createdAt.getTime() }
           io2.emit("clip:new", payload)
+          // §26 — نشر الحقيقة لمحرك الروتينات (ناقل داخل العملية — بلا تغيير سلكي)
+          emitAutomationFact({ kind: "clip.received", deviceId: payload.deviceId, deviceName: payload.deviceName, clipKind: payload.kind, at: Date.now() })
           log(io2, `حافظة موحدة: ${d?.kind === "image" ? "صورة" : d?.kind === "file" ? `ملف ${d?.fileName ?? ""}` : "نص"} من ${payload.deviceName}${d?.mode === "auto" ? " (تلقائي)" : ""}`, "in")
         } catch { /* ignore */ }
       })
@@ -189,6 +192,28 @@ export function ensureProdBridge() {
 function emitBridge(io2: SocketServer) {
   return (event: string, payload: Record<string, unknown>) => {
     try { io2.emit(event, payload) } catch { /* ignore */ }
+  }
+}
+
+/** §26 — دفع نص إلى الحافظة الموحدة من محرك الروتينات (نفس قناة clip:new القائمة حرفيًا). */
+export async function prodInjectClip(content: string, deviceName = "PC-OFFICE"): Promise<boolean> {
+  try {
+    const item = await db.prodClip.create({
+      data: {
+        deviceId: "pc-office",
+        deviceName,
+        kind: "text",
+        content: content.slice(0, 4_000_000),
+        fileName: null,
+        filePath: null,
+        size: content.length,
+        mode: "auto",
+      },
+    })
+    io?.emit("clip:new", { ...item, createdAt: item.createdAt.getTime() })
+    return true
+  } catch {
+    return false
   }
 }
 

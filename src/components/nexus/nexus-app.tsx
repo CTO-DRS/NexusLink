@@ -19,6 +19,7 @@ import { MediaView } from "@/components/nexus/media/media-view"
 import { GuardView } from "@/components/nexus/guard/guard-view"
 import { ProdView } from "@/components/nexus/prod/prod-view"
 import { SecView } from "@/components/nexus/sec/sec-view"
+import { AutomationView } from "@/components/nexus/automation/automation-view"
 import { ToolsView } from "@/components/nexus/tools/tools-view"
 import { Onboarding } from "@/components/nexus/onboarding"
 import { CommandPalette, ShortcutsOverlay } from "@/components/nexus/command-palette"
@@ -33,6 +34,7 @@ import { useRemoteBridge } from "@/hooks/use-remote-bridge"
 import { useMediaBridge } from "@/hooks/use-media-bridge"
 import { useGuardBridge } from "@/hooks/use-guard-bridge"
 import { useProdBridge } from "@/hooks/use-prod-bridge"
+import { useAutomationBridge } from "@/hooks/use-automation-bridge"
 
 /**
  * واجهة تطبيق NexusLink الكاملة (12 وحدة).
@@ -72,6 +74,7 @@ export function NexusApp() {
   useGuardBridge()
   // جسر الإنتاجية
   useProdBridge()
+  useAutomationBridge()
 
   // boot once: theme sync + lang + polish prefs + first-run onboarding
   useEffect(() => {
@@ -193,6 +196,7 @@ export function NexusApp() {
             {view === "guard" && <GuardView />}
             {view === "prod" && <ProdView />}
             {view === "security" && <SecView />}
+            {view === "automation" && <AutomationView />}
             {view === "tools" && <ToolsView />}
             {view === "simulator" && <SimulatorView />}
             {view === "settings" && <SettingsView />}

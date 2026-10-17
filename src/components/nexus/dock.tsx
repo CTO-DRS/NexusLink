@@ -8,7 +8,7 @@ import { useI18n } from "@/lib/i18n"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Smartphone, FolderOpen, ArrowLeftRight, HardDrive, Settings2, MonitorSmartphone,
-  MessagesSquare, Bot, MousePointer2, Video, ShieldCheck, Zap, Shield, Wrench,
+  MessagesSquare, Bot, MousePointer2, Video, ShieldCheck, Zap, Shield, Wrench, Workflow,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -23,6 +23,7 @@ const ITEMS: { id: ViewId; label: string; icon: LucideIcon }[] = [
   { id: "guard", label: "الحماية", icon: ShieldCheck },
   { id: "prod", label: "الإنتاجية", icon: Zap },
   { id: "security", label: "الأمان", icon: Shield },
+  { id: "automation", label: "الروتينات", icon: Workflow },
   { id: "tools", label: "الأدوات", icon: Wrench },
   { id: "simulator", label: "هاتف افتراضي", icon: Bot },
   { id: "settings", label: "الإعدادات", icon: Settings2 },

@@ -2816,6 +2816,114 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
         contract37.includes("خلية LiveQoS") && contract37.includes("بلا stop→req")
         && contract37.includes("تغيير الهدف target ما يزال يتطلب جلسة جديدة"), "contract §15")
     }
+
+    // ============================================================
+    // A-1 — محرك الروتينات (عقد §26): قواعد «عند حدوث X نفّذ Y» فوق القنوات القائمة
+    // سلوك حي عبر مقبسين (auto :3008 + prod :3007) + فحوص مصدر + توثيق
+    // ============================================================
+    console.log("\n== A-1: automation engine (rules over existing channels) ==")
+    {
+      const bootA1 = await waitHttp("automation boot", "http://localhost:3000/api/automation/boot", 20000, (j) => j?.ok === true && j?.booted === true)
+      check("A-1: جسر الروتينات يُقلع داخل عملية Next (:3008) idempotent — بذرة القواعد ≥ 3", bootA1?.port === 3008 && bootA1?.rules >= 3, `rules=${bootA1?.rules}`)
+      await waitHttp("prod boot", "http://localhost:3000/api/prod/boot", 20000)
+
+      const { io: ioA1 } = await import("socket.io-client")
+      const mkSockA1 = (port) => ioA1(`http://localhost:${port}`, { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 8000, reconnection: false })
+
+      const behavior = await new Promise((resolve) => {
+        const auto = mkSockA1(3008)
+        const prod = mkSockA1(3007)
+        const timersA1 = []
+        const laterA1 = (fn, ms) => timersA1.push(setTimeout(fn, ms))
+        const out = { connected: false, seedRules: 0, stats: null, clipFired: null, manualFired: null, disabledNoFire: true, onceFired: null, rejected: null, lastRules: null, done: false }
+        const finishA1 = () => { if (out.done) return; out.done = true; timersA1.forEach(clearTimeout); try { auto.disconnect(); prod.disconnect() } catch {}; resolve(out) }
+        laterA1(finishA1, 26500)
+
+        auto.on("connect", () => { out.connected = true })
+        auto.on("auto:state", (s) => {
+          out.seedRules = s?.rules?.length ?? 0
+          out.stats = s?.stats ?? null
+          out.lastRules = s?.rules?.map((r) => r.name) ?? out.lastRules
+        })
+        auto.on("auto:fired", (p) => {
+          if (p?.ruleName === "A1-E2E-clip" && p?.manual === false && !out.clipFired) out.clipFired = p
+          else if (p?.ruleName === "A1-E2E-clip" && p?.manual === false && out.clipFired) out.disabledNoFire = false
+          if (p?.ruleName === "A1-E2E-clip" && p?.manual === true) out.manualFired = p
+          if (p?.ruleName === "A1-E2E-once") out.onceFired = p
+        })
+        auto.on("auto:rejected", (d) => { out.rejected = d?.error ?? "rejected" })
+
+        auto.on("connect", () => {
+          // (1) قاعدة حافظة → إشعار
+          auto.emit("rule:upsert", { rule: { name: "A1-E2E-clip", enabled: true, trigger: { kind: "clip.received" }, action: { kind: "notify", text: "e2e" } } })
+          // (2) الإطلاق التلقائي: clip:push على prod (نفس حدث العميل القائم) → حقيقة داخل العملية → auto:fired
+          laterA1(() => prod.emit("clip:push", { deviceId: "galaxy-s24", deviceName: "E2E-Phone", kind: "text", content: "A1E2E-payload" }), 700)
+          // (3) تشغيل يدوي صريح (باب اختبار القاعدة — يعمل مع قاعدة مفعّلة)
+          laterA1(() => auto.emit("rule:run-now", { id: (out.clipFired || {}).ruleId }), 2600)
+          // (4) تعطيل ثم حقنة ثانية — يجب ألا يُطلق تلقائيًا (بوابة enabled في مسار الحقيقة)
+          laterA1(() => {
+            auto.emit("rule:toggle", { id: (out.clipFired || {}).ruleId, enabled: false })
+            laterA1(() => prod.emit("clip:push", { deviceId: "galaxy-s24", deviceName: "E2E-Phone", kind: "text", content: "A1E2E-after-disable" }), 500)
+          }, 4600)
+          // (5) قاعدة مرة واحدة عند now+3s — مؤقت المحرك (5s) يلتقطها
+          laterA1(() => auto.emit("rule:upsert", { rule: { name: "A1-E2E-once", enabled: true, trigger: { kind: "time.once", at: Date.now() + 3000 }, action: { kind: "notify", text: "once" } } }), 8200)
+          // (6) رفض مدخل فاسد (wol بـ MAC سيء) — auto:rejected مسبب
+          laterA1(() => auto.emit("rule:upsert", { rule: { name: "A1-E2E-bad", enabled: true, trigger: { kind: "device.connect" }, action: { kind: "wol", mac: "NOPE" } } }), 12500)
+          // (7) تنظيف: حذف القاعدتين — يظهر في آخر auto:state
+          laterA1(() => {
+            auto.emit("rule:delete", { id: (out.clipFired || {}).ruleId })
+            auto.emit("rule:delete", { id: (out.onceFired || {}).ruleId })
+          }, 23000)
+          laterA1(finishA1, 25500)
+        })
+      })
+
+      check("A-1: عميل auto متصل + بذرة القواعد والإحصاءات تصل (auto:state)", behavior.connected && behavior.seedRules >= 3 && !!behavior.stats, `seed=${behavior.seedRules}`)
+      check("A-1: سلوك — clip:push على prod (:3007) يولّد حقيقة داخل العملية ويُطلق القاعدة (auto:fired)", !!behavior.clipFired, behavior.clipFired?.detail || "no fire")
+      check("A-1: التشغيل اليدوي run-now يعمل (manual:true) وينفّذ الفعل فعليًا", !!behavior.manualFired && behavior.manualFired.ok === true, "manual run")
+      check("A-1: التعطيل يحجب مسار الحقيقة — حقنة بعد التعطيل بلا إطلاق تلقائي", behavior.disabledNoFire && !!behavior.clipFired, "enabled gate")
+      check("A-1: مشغّل time.once — مؤقت المحرك يلتقط الموعد ويُطلق مرة واحدة", !!behavior.onceFired, "time.once")
+      check("A-1: تعقيم المدخلات — قاعدة wol بـ MAC فاسد تُرفض برسالة (auto:rejected)", !!behavior.rejected, behavior.rejected || "no reject")
+      check("A-1: الحذف — القاعدتان الاختباريتان زالتا من آخر auto:state", Array.isArray(behavior.lastRules) && !behavior.lastRules.some((n) => String(n).startsWith("A1-E2E")), "rules deleted")
+
+      // فحوص المصدر + التوثيق
+      const fspA1 = (await import("node:fs")).default
+      const rdA1 = (p) => { try { return fspA1.readFileSync(pathMod.join(ROOT, p), "utf8") } catch { return "" } }
+      const aBridge = rdA1("src/lib/nexus/automation-bridge.ts")
+      const aTypes = rdA1("src/lib/nexus/automation-types.ts")
+      const aFacts = rdA1("src/lib/nexus/automation-facts.ts")
+      const aProd = rdA1("src/lib/nexus/productivity-bridge.ts")
+      const aBoot = rdA1("src/app/api/automation/boot/route.ts")
+      const aDock = rdA1("src/components/nexus/dock.tsx")
+      const aStoreTs = rdA1("src/lib/store.ts")
+      const aApp = rdA1("src/components/nexus/nexus-app.tsx")
+      const aView = rdA1("src/components/nexus/automation/automation-view.tsx")
+      const aHook = rdA1("src/hooks/use-automation-bridge.ts")
+      const aI18n = rdA1("src/lib/ar-en-map.json")
+      const aContract = rdA1("docs/protocol-contract.md")
+      const aChecklist = rdA1("docs/e2e-checklist.md")
+
+      check("A-1: المصدر — الجسر :3008 داخل Next idempotent (نمط guard) ومشغلات §26 الستة معرّفة",
+        aBridge.includes("const PORT = 3008") && aBridge.includes("ensureAutomationBridge")
+        && ["device.connect", "device.disconnect", "battery.below", "clip.received", "time.once", "time.daily"].every((k) => aTypes.includes(`"${k}"`)), "bridge source")
+      check("A-1: المصدر — الأفعال الأربعة تعبر القنوات القائمة حرفيًا (dev:ring / clip:new / UDP WoL / auto:fired)",
+        aBridge.includes('guardEmitToAgent("dev:ring"') && aBridge.includes("prodInjectClip")
+        && aBridge.includes("dgram") && aBridge.includes('emit("auto:fired"'), "actions reuse channels")
+      check("A-1: المصدر — ناقل حقائق داخل العملية وprod ينشر clip.received بلا أي تغيير سلكي",
+        aFacts.includes("emitAutomationFact") && aFacts.includes("onAutomationFact")
+        && aProd.includes('emitAutomationFact({ kind: "clip.received"') && aProd.includes("export async function prodInjectClip"), "facts bus")
+      check("A-1: المصدر — نظافة المحرك: مانع تكرار 20s + حافة بطارية بإعادة تسليح + تعقيم (MAC/طوابع/حدود)",
+        aBridge.includes("COOLDOWN_MS = 20_000") && aBridge.includes("batteryArmed")
+        && aBridge.includes("MAC_RE") && aBridge.includes("sanitizeRule"), "engine hygiene")
+      check("A-1: الواجهة — boot route + dock «الروتينات» + ViewId + تركيب الجذر والعرض",
+        aBoot.includes("ensureAutomationBridge") && aDock.includes('"الروتينات"') && aDock.includes("Workflow")
+        && aStoreTs.includes('"automation"') && aApp.includes("<AutomationView />") && aApp.includes("useAutomationBridge()"), "ui wiring")
+      check("A-1: الواجهة — محرر كامل (مشغل/فعل) + تشغيل يدوي + سجل + حدود صادقة معروضة",
+        aView.includes("automation-editor") && aView.includes("automation-run-now")
+        && aView.includes("حدود الإصدار الأول") && aHook.includes("/api/automation/boot"), "ui editor")
+      check("A-1: i18n — مفاتيح EN للتبويب في القاموس المشترك", aI18n.includes('"الروتينات": "Routines"') && aI18n.includes('"شغّل الآن": "Run now"'), "i18n")
+      check("A-1: التوثيق — العقد §26 والقائمة الميدانية", aContract.includes("## 26.") && aContract.includes("auto:fired") && aChecklist.includes("الروتينات"), "docs")
+    }
   }
 
 } catch (e) {
