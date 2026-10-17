@@ -1035,3 +1035,23 @@ Work Log:
 Stage Summary:
 - صفحة النشر الرسمية حية الآن بثلاث روابط: عرض مباشر https://cto-drs.github.io/NexusLink/ · تنزيل دائم github.com/CTO-DRS/NexusLink/releases/latest/download/NexusLink-Release-Page.html · من التطبيق ‎/NexusLink-Release-Page.html — كلها نفس الملف المُتحقق منه بايتيًا.
 - main عند 75a90ba وgh-pages عند 45a2122 — الهوية CTO-DRS في كليهما.
+
+---
+Task ID: R5-release-btn
+Agent: Super Z (main)
+Task: موافقة المستخدم («نعم») على الاقتراح — ربط زر «صفحة النشر» في موقع /download الداخلي بالرابط الحي https://cto-drs.github.io/NexusLink/
+
+Work Log:
+- إضافة ثابت RELEASE_PAGE_LIVE في src/lib/download-site-data.ts مع توثيق سبب التمييز عن أصول release (octet-stream يُنزَّل مقابل Pages يُتصفح).
+- زر ثالث في hero صفحة /download (Ghost + أيقونة Globe، target=_blank) بجوار «الميزات» — src/components/download/hero.tsx.
+- رابط في تذييل الموقع المشترك بين «GitHub» و«صفحة الإصدارات» — src/components/download/site-footer.tsx.
+- ترجمة EN للمفتاح الجديد «صفحة النشر» → "Release page" في src/lib/ar-en-map.json (JSON مُتحقق من صحته).
+- إصلاح مسار تحقق: ظهر hydration mismatch بعد التعديل — تبيّن بالcurl المباشر أن SSR الخادم يقدّم الرابطين الجديدين، والمتسبب كان كاش HTTP لمتصفح agent-browser الذي حمل حزم JS قديمة؛ إغلاق المتصفح كليًا وفتح جلسة نظيفة → errors: 0. (ملاحظة جانبية: خادم dev مات عند بدء سابق داخل جلسة Bash عادية — أُعيد تشغيله عبر setsid ليبقى حيًا.)
+- تحقق حي: AR (rtl) زران «صفحة النشر» بالhref الصحيح + EN (ltr) «Release page» ×2 — تبديل اللغة من زر الواجهة نفسه.
+- لقطات توثيقية: scripts/evidence/download-hero-release-btn.png (hero: زر Release page بجوار Features) + download-footer-release-link.png (التذييل: Release page بين GitHub وReleases page).
+- curl للرابط الحي: 200. eslint نظيف + tsc بلا أخطاء على الملفات المعدلة.
+
+Stage Summary:
+- موقع /download الداخلي أصبح يعلن عن صفحة النشر الحية في موضعين بارزين (hero + تذييل) بلغتي الواجهة.
+- الملفات المعدلة: download-site-data.ts، hero.tsx، site-footer.tsx، ar-en-map.json + لقطتا دليل.
+- الخطوة التالية المقترحة الوحيدة المتبقية من الجولة السابقة: نطاق مخصص لـ GitHub Pages (يتطلب دومينًا من المستخدم). المهام المؤجلة الأكبر: C (Phone→Phone عبر الخادم) + Unblock Center داخل التطبيق.
