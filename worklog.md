@@ -1018,3 +1018,20 @@ Work Log:
 Stage Summary:
 - الموقع الرسمي (‎/ + ‎/download) وبنية README محدثة على GitHub الآن.
 - رابط الإصدار: github.com/CTO-DRS/NexusLink/releases/latest — والموقع يعمل محليًا على ‎/ و ‎/download.
+
+---
+Task ID: R5-release-page-html
+Agent: main (Super Z)
+Task: صفحة النشر كمنتج HTML حقيقي — بناء صفحة مستقلة ثنائية اللغة ونشرها في ثلاث قنوات: أصل على إصدار GitHub + GitHub Pages + داخل التطبيق (بناءً على اختيارات المالك: أصل على GitHub + استضافة عامة + عربي/إنجليزي + صفحة كاملة)
+
+Work Log:
+- جلب بيانات الإصدار الحية: 16 أصلًا بأحجامها الحقيقية + محتوى SHA256SUMS.txt كاملًا (15 بصمة) + latest.json (manifest المحدّث بثلاث منصات).
+- بناء ملف HTML مستقل واحد (52,985 بايت — CSS/JS/SVG داخلي كلها، يعمل دون إنترنت): بطل بشارة إصدار حية (fetch releases/latest بمهلة 8ث وسقوط صامت للمضمّن + نقطة خضراء/رمادية تصرح بالمصدر) · CTA ذكي بكشف نظام الزائر (win/mac/linux/android → رابط مباشر + بطاقة «موصى به لنظامك») · شبكة تحميلات المنصات الأربع (9 أصول بأحجام حقيقية + ✓ موقّع للخمسة الموقعة) · قسم تحقق (أوامر SHA256 للأنظمة الثلاثة + ملاحظتا التحديث والتوقيع + SHA256SUMS مضمّن في details) · دليل تثبيت بتبويبات (SmartScreen/Gatekeeper/AppImage+deb/APK) + صندوق Unblock Center (أندرويد 13+: السماح بالإعدادات المقيدة) · 6 أسئلة صادقة (حدود iOS + فحص التحديث كاتصال خارجي وحيد) · سمة فاتحة/داكنة (تفضيل النظام + زر) · i18n كامل AR/EN (87 مفتاحًا، RTL/LTR فوري، حفظ تفضيل).
+- تحقق بناء آلي: HTML parser — صفر وسوم غير مغلقة · كل مفتاح data-i له مدخل قاموس (87/87).
+- تحقق حي بالمتصفح (محليًا ومن Pages): rtl|ar افتراضي · CTA «تحميل لنظامك — Linux» → AppImage · بطاقة card-lin مميزة · نقطة الإصدار الحية خضراء · تبديل EN → ltr|en بنصوص مترجمة · صفر أخطاء صفحة · لقطات AR/EN/موبايل 390px في scripts/evidence/release-page-*.png · فحص HEAD لرابط setup.exe → 200.
+- **النشر (3 قنوات)**: ① أصل على الإصدار v1.1.0-fix4 عبر uploads API — مطابقة بايتات مؤكدة (SHA256 متطابق محليًا/عن بُعد: 15eda4bc…) ② فرع gh-pages جديد (commit 45a2122 — plumbing بهوية CTO-DRS صراحة + .nojekyll) + تفعيل Pages → **https://cto-drs.github.io/NexusLink/** حي 200 بعد أول poll ③ نسخة في public/ بدفعها — التطبيق يخدمها على ‎/NexusLink-Release-Page.html (200).
+- ملاحظة صادقة: أصول الإصدار تُخدَم application/octet-stream أي «تنزيل» لا عرض — لذا Pages هي قناة العرض المباشر والأصل للتنزيل الدائم.
+
+Stage Summary:
+- صفحة النشر الرسمية حية الآن بثلاث روابط: عرض مباشر https://cto-drs.github.io/NexusLink/ · تنزيل دائم github.com/CTO-DRS/NexusLink/releases/latest/download/NexusLink-Release-Page.html · من التطبيق ‎/NexusLink-Release-Page.html — كلها نفس الملف المُتحقق منه بايتيًا.
+- main عند 75a90ba وgh-pages عند 45a2122 — الهوية CTO-DRS في كليهما.
