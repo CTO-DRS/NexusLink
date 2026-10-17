@@ -3275,6 +3275,8 @@
   "فعّل «السماح من هذا المصدر» عند طلب النظام": "Enable «Allow from this source» when the system asks",
   "على أندرويد 13+ إن ظهرت رسالة الإعدادات المحظورة اتبع خطوات مركز رفع القيود أدناه": "On Android 13+ if the restricted-settings message appears follow the Unblock Center steps below",
   "مركز رفع القيود (أندرويد 13+)": "Unblock Center (Android 13+)",
+  "قيد نظامي مقصود: أندرويد 13+ يمنع تفعيل خدمات إمكانية الوصول للتطبيقات المثبتة خارج المتجر برسالة «الإجراء غير مسموح» — الفك يدوي من إعدادات النظام، وهذه خطواته الرسمية:": "Intentional system restriction: Android 13+ blocks accessibility services for apps installed outside the store with the \u00abAction not allowed\u00bb message — the unlock is manual from system settings, and these are its official steps:",
+  "بعد فك القيد عد إلى التطبيق وفعّل الخدمة — الحالة أعلاه ستتحول إلى «مفعّلة» تلقائيًا.": "After unlocking, return to the app and enable the service — the status above will switch to \u00abenabled\u00bb automatically.",
   "أندرويد 13+ يحجب خدمات إمكانية الوصول للتطبيقات المثبتة خارج المتجر — الفك يدوي ومقصود من جوجل، وهذه خطواته الرسمية:": "Android 13+ blocks accessibility services for sideloaded apps — the block is intentional by Google, and these are the official unblock steps:",
   "افتح إعدادات النظام ← التطبيقات ← إدارة التطبيقات ← NexusLink": "Open system Settings → Apps → All apps → NexusLink",
   "من قائمة ⋮ أعلى اليمين اختر «السماح بالإعدادات المحظورة»": "From the ⋮ menu at the top choose «Allow restricted settings»",

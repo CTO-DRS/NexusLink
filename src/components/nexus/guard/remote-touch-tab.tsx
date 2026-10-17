@@ -5,12 +5,13 @@
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
-  Bell, Check, Delete, Eraser, ExternalLink, Hand, Home, Keyboard,
-  LayoutGrid, MousePointerClick, RectangleHorizontal, Send, SquareStack,
+  Bell, Check, ChevronDown, Delete, Eraser, ExternalLink, Hand, Home, Keyboard,
+  LayoutGrid, LockKeyhole, MousePointerClick, RectangleHorizontal, Send, SquareStack,
   TouchpadOff, X,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
 import { Slider } from "@/components/ui/slider"
 import { useGuard } from "@/lib/guard-store"
@@ -24,6 +25,13 @@ const FALLBACK_SCREEN = { w: 1080, h: 2340, density: 440 }
 const TAP_SLOP_PX = 7 // حد الفرق بين النقرة والسحبة (بكسل عرض الويب)
 const LONG_MS = 550 // حد الضغط المطوّل
 
+// مركز رفع القيود (عقد §25) — نفس صياغة موقع التحميل حرفيًا (مفاتيح الترجمة مشتركة)
+const UNBLOCK_INAPP_STEPS = [
+  "افتح إعدادات النظام ← التطبيقات ← إدارة التطبيقات ← NexusLink",
+  "من قائمة ⋮ أعلى اليمين اختر «السماح بالإعدادات المحظورة»",
+  "عد إلى تطبيق NexusLink وفعّل خدمة إمكانية الوصول من شاشة التحكم",
+]
+
 export function RemoteTouchTab() {
   const { ctl, ctlPending, phoneOnline, phoneScreen, phoneAccessibility, apps, setCtlPending, pushLog } = useGuard()
 
@@ -35,6 +43,9 @@ export function RemoteTouchTab() {
   const [textDraft, setTextDraft] = useState("")
   const [scrollSens, setScrollSens] = useState(1.6)
   const [scaleLabel, setScaleLabel] = useState("")
+  // مركز رفع القيود: يُفتح تلقائيًا عند «الإتاحة: غير مفعّلة» (لحظة الحاجة) — وتجاوز يدوي يحترم دائمًا
+  const [unblockOverride, setUnblockOverride] = useState<boolean | null>(null)
+  const unblockOpen = unblockOverride ?? phoneAccessibility === false
 
   const screen = phoneScreen ?? FALLBACK_SCREEN
   const sessionActive = ctl.active
@@ -217,6 +228,45 @@ export function RemoteTouchTab() {
             خدمة الإتاحة غير مفعّلة على الهاتف — من التطبيق: <b>الإعدادات ← التحكم عن بعد</b> ثم اتبع خطوات التفعيل، وإلا ستُرفض كل اللمسات.
           </div>
         )}
+
+        {/* ==== مركز رفع القيود (عقد §25) — دليل الفك الرسمي داخل التطبيق ==== */}
+        <Collapsible
+          open={unblockOpen}
+          onOpenChange={setUnblockOverride}
+          className="mt-2.5 overflow-hidden rounded-xl border border-border/70 bg-muted/30"
+        >
+          <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2.5 text-start text-[12px] font-bold transition-colors hover:bg-accent/50">
+            <LockKeyhole className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span className="flex-1">مركز رفع القيود (أندرويد 13+)</span>
+            <ChevronDown
+              className={cn(
+                "size-4 shrink-0 text-muted-foreground transition-transform",
+                unblockOpen && "rotate-180",
+              )}
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="space-y-2.5 border-t border-border/60 px-3 pb-3 pt-2.5 text-[11.5px] leading-relaxed">
+              <p className="text-muted-foreground">
+                قيد نظامي مقصود: أندرويد 13+ يمنع تفعيل خدمات إمكانية الوصول للتطبيقات المثبتة خارج
+                المتجر برسالة «الإجراء غير مسموح» — الفك يدوي من إعدادات النظام، وهذه خطواته الرسمية:
+              </p>
+              <ol className="space-y-1.5">
+                {UNBLOCK_INAPP_STEPS.map((s, i) => (
+                  <li key={s} className="flex gap-2">
+                    <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                      {i + 1}
+                    </span>
+                    <span>{s}</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="text-muted-foreground">
+                بعد فك القيد عد إلى التطبيق وفعّل الخدمة — الحالة أعلاه ستتحول إلى «مفعّلة» تلقائيًا.
+              </p>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
         {!phoneScreen && (
           <div className="rounded-xl bg-muted/60 px-3 py-2 text-[10.5px] text-muted-foreground mt-2.5">
             أبعاد الشاشة الحقيقية تصل تلقائيًا من الهاتف (dev:screen) — حاليًا تُستخدم قياس افتراضي <span className="font-mono dir-ltr">1080×2340</span> للتحويل.
