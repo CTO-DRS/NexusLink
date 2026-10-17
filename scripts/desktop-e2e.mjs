@@ -2759,6 +2759,63 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
       check("G-1: العقد §6 — صف الفجوة G-1 موثق كمُصلح مع البروتوكول",
         contractG1.includes("G-1") && contractG1.includes("مُصلحة") && contractG1.includes("verifyPairingSecret"), "contract §6")
     }
+
+    // ============================================================
+    // G-37 — التبديل السلس لجودة البث أثناء الجلسة (عقد §15: إغلاق آخر فجوة الجولة 4)
+    // خلية LiveQoS مشتركة: media_screen_set يحدّثها ويرفع rebuild — خيط الالتقاط
+    // يقرأها عند كل إعادة بناء — اتصال WebRTC يبقى حيًا (بلا stop→req)
+    // ============================================================
+    console.log("\n== G-37: live quality switch (smooth, no stop->req) ==")
+    {
+      const fspG37 = (await import("node:fs")).default
+      const rdG37 = (p) => { try { return fspG37.readFileSync(pathMod.join(ROOT, p), "utf8") } catch { return "" } }
+      const mediaRs = rdG37("apps/desktop/src-tauri/src/media.rs")
+      const bridgeTs = rdG37("src/components/nexus/desktop-bridge.tsx")
+      const pcScreen = rdG37("nexuslink_mobile/lib/presentation/pc_screen_screen.dart")
+      const auditMd = rdG37("docs/round4-audit.md")
+      const contract37 = rdG37("docs/protocol-contract.md")
+
+      // (أ) Rust — البنية: خلية حية + جلسة تحملها + الحلقات الثلاث تقرأها
+      check("G-37: خلية LiveQoS — Arc<AtomicU32> fps + Arc<Mutex<String>> quality بـ set/snapshot",
+        mediaRs.includes("struct LiveQoS") && mediaRs.includes("Arc<AtomicU32>")
+        && mediaRs.includes("Arc<std::sync::Mutex<String>>") && mediaRs.includes("fn snapshot"), "live qos cell")
+      check("G-37: ScreenSess تحمل qos: LiveQoS (القيم المعروضة fps/quality تبقى مصدر screen:state)",
+        mediaRs.includes("qos: LiveQoS") && mediaRs.includes("/// القيم المعروضة الحالية"), "session carries cell")
+      check("G-37: حلقات الالتقاط الثلاث بلا تمريرة بالقيمة (qos: LiveQoS ×3 — لا quality: String في التواقيع)",
+        (mediaRs.match(/qos: LiveQoS,/g) || []).length >= 4
+        && !mediaRs.includes("    quality: String,\n    tx: webrtc::runtime::Sender"), "3 loops signature")
+      check("G-37: الحلقات الثلاث تقرأ snapshot أعلى كل دورة خارجية (إعادة بناء بالقيم الجديدة)",
+        (mediaRs.match(/let \(fps, quality\) = qos\.snapshot\(\);/g) || []).length === 3, "3 snapshot reads")
+      check("G-37: media_screen_start ينشئ LiveQoS ويشاركه مع الخيط والجلسة",
+        mediaRs.includes("LiveQoS::new(fps, quality.clone())") && mediaRs.includes("let qos2 = qos.clone();")
+        && mediaRs.includes("capture_loop(stop2, rebuild2, target2, qos2, frame_tx)"), "start wires cell")
+
+      // (ب) Rust — السلوك: set حي + علم rebuild مشروط + بلا ملاحظة «إعادة البث» القديمة
+      check("G-37: media_screen_set حي — qos.set + تحديث المعروض + rebuild مشروط + live:true + w/h للاذاعة",
+        mediaRs.includes("s.qos.set(fps, quality.clone())") && mediaRs.includes("s.rebuild.store(true, Ordering::Relaxed)")
+        && mediaRs.includes("let changed = fps.is_some() || quality.is_some()") && mediaRs.includes('"live": true')
+        && mediaRs.includes('"w": s.w, "h": s.h'), "set is live")
+      check("G-37: ملاحظة «يطبق عند إعادة البث» القديمة زالت (الحد الموثق مرفوع)",
+        !mediaRs.includes("تغيّر الجودة أثناء البث يطبق عند إعادة البث"), "old limit gone")
+
+      // (ج) الجسر — الذريعة لكل العملاء بعد نجاح التبديل
+      check("G-37: جسر الويب — screen:set يستدعي media_screen_set ويذيع screen:state محدثًا عند live",
+        bridgeTs.includes('"media_screen_set"') && bridgeTs.includes("r?.live")
+        && bridgeTs.includes('mediaSock.emit("screen:state"'), "bridge broadcast")
+
+      // (د) Flutter — المسار السلس في شاشة العرض
+      check("G-37: Flutter — الجلسة الحية ترسل screen:set (setScreenQuality) بلا stop→req",
+        pcScreen.includes("setScreenQuality(fps: fps, quality: quality)")
+        && pcScreen.includes("MediaPhase.live")
+        && !pcScreen.includes("إعادة البث بجودة جديدة (stop → req"), "flutter smooth path")
+
+      // (هـ) التوثيق — العقد والتدقيق
+      check("G-37: تدقيق الجولة 4 — صف الفجوة موثق كمُصلح مع خلية LiveQoS",
+        auditMd.includes("G-37") && auditMd.includes("LiveQoS") && auditMd.includes("مُصلحة"), "audit row")
+      check("G-37: العقد §15 — التبديل الحي موثق (LiveQoS بلا stop→req) وحد target الصادق باقٍ",
+        contract37.includes("خلية LiveQoS") && contract37.includes("بلا stop→req")
+        && contract37.includes("تغيير الهدف target ما يزال يتطلب جلسة جديدة"), "contract §15")
+    }
   }
 
 } catch (e) {

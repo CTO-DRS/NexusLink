@@ -23,7 +23,7 @@
 // «أول إجابة من دور pc تُقبل لكل kind وتُتجاهل ما بعدها» — بوابة KindGate
 // في media_core تفرضها محليًا أيضًا (الحارس الثاني بعد الجسر).
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -96,12 +96,51 @@ struct EncodedFrame {
     duration: Duration,
 }
 
+/// G-37 — خلية الجودة الحية للجلسة: يحدّثها media_screen_set ويقرؤها خيط
+/// الالتقاط عند كل إعادة بناء — التبديل سلس (تُراك WebRTC وإرسال RTP يبقيان
+/// حيّين؛ يُعاد بناء الالتقاط والمشفّر وحدهما بالقيم الجديدة — عقد §15).
+#[derive(Clone)]
+struct LiveQoS {
+    fps: Arc<AtomicU32>,
+    quality: Arc<std::sync::Mutex<String>>,
+}
+
+impl LiveQoS {
+    fn new(fps: u32, quality: String) -> Self {
+        Self { fps: Arc::new(AtomicU32::new(fps)), quality: Arc::new(std::sync::Mutex::new(quality)) }
+    }
+
+    fn set(&self, fps: Option<u32>, quality: Option<String>) {
+        if let Some(f) = fps {
+            self.fps.store(f, Ordering::Relaxed);
+        }
+        if let Some(q) = quality {
+            if let Ok(mut g) = self.quality.lock() {
+                *g = q;
+            }
+        }
+    }
+
+    fn snapshot(&self) -> (u32, String) {
+        let f = self.fps.load(Ordering::Relaxed);
+        let q = self
+            .quality
+            .lock()
+            .map(|g| g.clone())
+            .unwrap_or_else(|_| "high".into());
+        (f, q)
+    }
+}
+
 struct ScreenSess {
     gate: core::KindGate,
     pc: Arc<dyn PeerConnection>,
     stop: Arc<AtomicBool>,
     /// تغيير الجودة أثناء البث — خيط الالتقاط يعيد بناء مشفره
     rebuild: Arc<AtomicBool>,
+    /// G-37 — القيم الحية التي يقرؤها خيط الالتقاط (media_screen_set يحدّثها)
+    qos: LiveQoS,
+    /// القيم المعروضة الحالية (تُحدَّث مع كل set ناجح — مصدر screen:state)
     fps: u32,
     quality: String,
     /// أبعاد سطح المكتب/الهدف الكاملة (أساس خريطة اللمس)
@@ -750,14 +789,16 @@ fn capture_loop(
     stop: Arc<AtomicBool>,
     rebuild: Arc<AtomicBool>,
     target: String,
-    fps: u32,
-    quality: String,
+    qos: LiveQoS,
     tx: webrtc::runtime::Sender<EncodedFrame>,
 ) {
     loop {
         if stop.load(Ordering::Relaxed) {
             return;
         }
+        // G-37 — قراءة القيم الحية عند كل إعادة بناء (media_screen_set حدّثتها
+        // فعلى العلم rebuild) — التبديل سلس والاتصال WebRTC باقٍ
+        let (fps, quality) = qos.snapshot();
         let preset = core::quality_preset(&quality);
         let opts = scap::capturer::Options {
             fps,
@@ -835,8 +876,7 @@ fn capture_loop(
     stop: Arc<AtomicBool>,
     rebuild: Arc<AtomicBool>,
     target: String,
-    fps: u32,
-    quality: String,
+    qos: LiveQoS,
     tx: webrtc::runtime::Sender<EncodedFrame>,
 ) {
     use windows_capture::capture::GraphicsCaptureApiHandler;
@@ -895,6 +935,9 @@ fn capture_loop(
         if stop.load(Ordering::Relaxed) {
             return;
         }
+        // G-37 — قراءة القيم الحية عند كل إعادة بناء (media_screen_set حدّثتها
+        // فعلى العلم rebuild) — التبديل سلس والاتصال WebRTC باقٍ
+        let (fps, quality) = qos.snapshot();
         let preset = core::quality_preset(&quality);
         // العنصر: window:HWND أو screen:N (from_index 1-based) — الافتراضي الشاشة الأساسية.
         // الإنشاء داخل كل فرع: Window/Monitor نوعان مختلفان وGraphicsCaptureItem نوع WinRT
@@ -986,8 +1029,7 @@ fn capture_loop(
     stop: Arc<AtomicBool>,
     rebuild: Arc<AtomicBool>,
     target: String,
-    fps: u32,
-    quality: String,
+    qos: LiveQoS,
     tx: webrtc::runtime::Sender<EncodedFrame>,
 ) {
     use x11rb::connection::Connection;
@@ -997,6 +1039,9 @@ fn capture_loop(
         if stop.load(Ordering::Relaxed) {
             return;
         }
+        // G-37 — قراءة القيم الحية عند كل إعادة بناء (media_screen_set حدّثتها
+        // فعلى العلم rebuild) — التبديل سلس والاتصال WebRTC باقٍ
+        let (fps, quality) = qos.snapshot();
         let preset = core::quality_preset(&quality);
         let (conn, screen_num) = match x11rb::connect(None) {
             Ok(v) => v,
@@ -1345,14 +1390,16 @@ pub async fn media_screen_start(
     // خيط الالتقاط/الترميز
     let stop = Arc::new(AtomicBool::new(false));
     let rebuild = Arc::new(AtomicBool::new(false));
+    // G-37 — خلية الجودة الحية: يشاركها الخيط مع الجلسة ليقرأ التغييرات الحية
+    let qos = LiveQoS::new(fps, quality.clone());
     {
         let stop2 = Arc::clone(&stop);
         let rebuild2 = Arc::clone(&rebuild);
         let target2 = target_id.clone();
-        let q2 = quality.clone();
+        let qos2 = qos.clone();
         std::thread::Builder::new()
             .name("media-capture".into())
-            .spawn(move || capture_loop(stop2, rebuild2, target2, fps, q2, frame_tx))
+            .spawn(move || capture_loop(stop2, rebuild2, target2, qos2, frame_tx))
             .map_err(|e| format!("خيط الالتقاط: {e}"))?;
     }
 
@@ -1363,6 +1410,7 @@ pub async fn media_screen_start(
         pc,
         stop,
         rebuild,
+        qos,
         fps,
         quality,
         w: full_w,
@@ -1451,22 +1499,30 @@ fn screen_stop_sync(reason: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// تغيير الجودة أثناء البث — خيط الالتقاط يعيد بناء مشفره (الاتصال يبقى)
+/// تغيير الجودة أثناء البث — G-37: تبديل سلس (الخيط يعيد بناء الالتقاط والمشفّر
+/// بالقيم الجديدة وتُرك اتصال WebRTC والتراك حيّين — بلا stop→req — عقد §15)
 #[tauri::command]
 pub async fn media_screen_set(fps: Option<f64>, quality: Option<String>) -> Result<Value, String> {
     let fps = fps.map(core::sanitize_fps);
     let quality = quality.filter(|q| ["low", "medium", "high", "ultra"].contains(&q.as_str()));
     settings::set_media_defaults(fps, quality.clone());
     let g = SCREEN.lock().unwrap();
-    match g.as_ref() {
+    match g.as_mut() {
         Some(s) => {
+            let changed = fps.is_some() || quality.is_some();
+            s.qos.set(fps, quality.clone());
             if let Some(f) = fps {
-                s.rebuild.store(true, Ordering::Relaxed);
-                // نحدّث القيم المعروضة فقط — الخيط يقرأ الجودة من قيمته الممررة؛
-                // تغيير الجودة/الإطار يتطلب إعادة بناء الجلسة (موثق بصدق)
+                s.fps = f;
             }
-            Ok(json!({"ok": true, "fps": s.fps, "quality": s.quality,
-                      "note": "تغيّر الجودة أثناء البث يطبق عند إعادة البث — موثق §15"}))
+            if let Some(q) = quality {
+                s.quality = q;
+            }
+            if changed {
+                s.rebuild.store(true, Ordering::Relaxed);
+            }
+            Ok(json!({"ok": true, "live": true, "w": s.w, "h": s.h,
+                      "fps": s.fps, "quality": s.quality,
+                      "note": "G-37: التبديل حي — أعيد بناء الالتقاط والمشفّر فقط والاتصال باقٍ"}))
         }
         None => Err("لا بث شاشة قائم".into()),
     }

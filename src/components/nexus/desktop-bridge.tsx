@@ -481,7 +481,16 @@ export function DesktopBridge() {
       void tauriInvoke("media_screen_stop").catch(() => null)
     })
     mediaSock.on("screen:set", (d: { fps?: number; quality?: string }) => {
-      void tauriInvoke("media_screen_set", { fps: d?.fps ?? null, quality: d?.quality ?? null }).catch(() => null)
+      // G-37 — التبديل الحي: عند النجاح نذيع screen:state محدَّثًا (الاتصال باقٍ)
+      void tauriInvoke<{ ok: boolean; live?: boolean; w: number; h: number; fps: number; quality: string }>(
+        "media_screen_set", { fps: d?.fps ?? null, quality: d?.quality ?? null },
+      )
+        .then((r) => {
+          if (r?.live) {
+            mediaSock.emit("screen:state", { action: "state", on: true, w: r.w, h: r.h, fps: r.fps, quality: r.quality, name: "NEXUS-PC" })
+          }
+        })
+        .catch(() => null)
     })
 
     // ---- R4 ① (عقد §19): أوامر الشاشة الثانية من الهاتف ----

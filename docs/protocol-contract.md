@@ -668,12 +668,12 @@ interface TransferJob {
 ### 15.د حالة الوسائط (الشريط والهاتف)
 - `status.desktop.media {screen:{on,fps,quality}, vcam:{video,audio,driver}}` — من نفس المخزن desktop-ui.json عبر `PUT /api/desktop/shortcuts {media:{...}}` (نمط clip/security/sync حرفيًا — readDesktopMedia/writeDesktopMedia + تنقية fps/quality).
 - Tray: عنصر «الوسائط: خاملة/بث الشاشة نشط/كاميرا الهاتف تعمل/شاشة + كاميرا» — يحدثه media.rs عند كل تغيّر (push_tray_media) + حدث Tauri داخلي `media://state`.
-- الهاتف: بطاقة «شاشة الكمبيوتر» في شاشة الوسائط (حالة الطور) + شاشة العرض الكاملة بجودة قابلة للتبديل (إعادة بث فوري بـ stop→req).
+- الهاتف: بطاقة «شاشة الكمبيوتر» في شاشة الوسائط (حالة الطور) + شاشة العرض الكاملة بجودة قابلة للتبديل **حيًا** (G-37: `screen:set` → خلية LiveQoS مشتركة — خيط الالتقاط يقرأها عند كل إعادة بناء فيعيد بناء الالتقاط/المشفّر فقط ويبقي اتصال WebRTC والتراك حيّين — بلا stop→req؛ الجسر يذيع `screen:state` محدّثًا لكل العملاء. حدّ سابق موثق بصدق: تغيير الهدف target ما يزال يتطلب جلسة جديدة — أعاد بناء مصدر التقاط مختلف جوهريًا).
 
 ### 15.هـ فجوات سيرفرية أُصلحت في هذه المرحلة
 | # | الفجوة | ما نُفّذ |
 |---|--------|----------|
-| G-23 | جسر 3005 بلا أحداث عرض الشاشة | `screen:req/screen:stop/screen:set/screen:state` — تنقية صارمة (fps قائمة بيضاء 15..60، quality، w/h ≤ 8192، name ≤ 80، error ≤ 200) + حقن from — مضافة لا تكسر العملاء القائمين |
+| G-23 | جسر 3005 بلا أحداث عرض الشاشة | `screen:req/screen:stop/screen:set/screen:state` — تنقية صارمة (fps قائمة بيضاء 15..60، quality، w/h ≤ 8192، name ≤ 80، error ≤ 200) + حقن from — مضافة لا تكسر العملاء القائمين — **G-37: screen:set صار تبديلًا حيًا (LiveQoS + rebuild بلا قطع اتصال) والجسر يذيع screen:state بعد النجاح** |
 | G-24 | لا مؤشر مطلق في أحداث الإدخال | `rc:pointer` في RC_INPUT بالجسرين (مدمج + mini-service متطابقان) + `sanitizePointer` (0..1 مقرب 4 خانات + قائمة إجراءات) — الرفض الصامت للفاسد |
 | G-25 | status.desktop بلا حالة الوسائط | readDesktopMedia/writeDesktopMedia + `status.desktop.media` + PUT media |
 

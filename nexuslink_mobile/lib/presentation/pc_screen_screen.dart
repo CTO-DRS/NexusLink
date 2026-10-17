@@ -78,18 +78,19 @@ class _PcScreenViewState extends ConsumerState<PcScreenView> {
     _renderer.srcObject = s;
   }
 
-  // إعادة البث بجودة جديدة (stop → req بنفس الاتصال، موثق في §15)
+  // تغيير الجودة أثناء البث (عقد §15 — G-37):
+  //  · جلسة حية → screen:set — تبديل سلس: الكمبيوتر يبني الالتقاط/المشفّر
+  //    بالقيم الجديدة ويبقي اتصال WebRTC حيًا (بلا stop→req).
+  //  · لا جلسة → حفظ القيم فقط لتُطبَّق عند البدء التالي.
   Future<void> _restartWith({int? fps, String? quality}) async {
+    final wasLive = ref.read(mediaControllerProvider).screen.phase == MediaPhase.live;
     setState(() {
       if (fps != null) _fps = fps;
       if (quality != null) _quality = quality;
     });
-    await _media!.stopScreen();
-    _media!.requestScreen(
-      fps: _fps,
-      quality: _quality,
-      target: _target.isEmpty ? null : _target,
-    );
+    if (wasLive) {
+      _media!.setScreenQuality(fps: fps, quality: quality);
+    }
   }
 
   // ---------------------------------------------------------------
@@ -128,7 +129,7 @@ class _PcScreenViewState extends ConsumerState<PcScreenView> {
       appBar: AppBar(
         title: Text('pcscreen.title'.tr()),
         actions: [
-          // جودة البث — إعادة بث فوري بالإعدادات الجديدة
+          // جودة البث — تبديل حي أثناء الجلسة (G-37: screen:set بلا إعادة بث)
           PopupMenuButton<String>(
             icon: const Icon(Icons.tune),
             tooltip: 'pcscreen.quality'.tr(),
