@@ -1,10 +1,10 @@
 "use client"
 
-import { Github, Heart, ExternalLink, Home, LayoutGrid, Download } from "lucide-react"
+import { Github, Heart, Globe, ExternalLink, Home, LayoutGrid, Download } from "lucide-react"
 import Image from "next/image"
 import { useI18n } from "@/lib/i18n"
 import { useReleaseInfo } from "@/hooks/use-release-info"
-import { ISSUES_URL, RELEASES_PAGE, REPO_URL } from "@/lib/download-site-data"
+import { ISSUES_URL, RELEASE_PAGE_LIVE, RELEASES_PAGE, REPO_URL } from "@/lib/download-site-data"
 
 /**
  * تذييل الموقع الرسمي — مشترك بين الرئيسية (/) وصفحة التحميل (/download).
@@ -58,6 +58,15 @@ export function SiteFooter() {
             >
               <Github className="size-4" aria-hidden="true" />
               GitHub
+            </a>
+            <a
+              href={RELEASE_PAGE_LIVE}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Globe className="size-4" aria-hidden="true" />
+              {t("صفحة النشر")}
             </a>
             <a
               href={RELEASES_PAGE}

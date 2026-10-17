@@ -2,7 +2,7 @@
 
 import { useMemo } from "react"
 import { motion } from "framer-motion"
-import { CloudOff, Download, Laptop, MonitorSmartphone, ShieldCheck, Smartphone } from "lucide-react"
+import { CloudOff, Download, Globe, Laptop, MonitorSmartphone, ShieldCheck, Smartphone } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n"
@@ -12,6 +12,7 @@ import {
   assetUrl,
   formatMB,
   primaryAssetFor,
+  RELEASE_PAGE_LIVE,
   type OsKind,
 } from "@/lib/download-site-data"
 
@@ -125,6 +126,12 @@ export function Hero() {
             )}
             <Button size="lg" variant="outline" className="h-12 min-w-40 text-base" asChild>
               <a href="#features">{t("الميزات")}</a>
+            </Button>
+            <Button size="lg" variant="ghost" className="h-12 min-w-40 gap-2 text-base" asChild>
+              <a href={RELEASE_PAGE_LIVE} target="_blank" rel="noopener noreferrer">
+                <Globe className="size-5" aria-hidden="true" />
+                {t("صفحة النشر")}
+              </a>
             </Button>
           </motion.div>
 

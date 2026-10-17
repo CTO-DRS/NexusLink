@@ -11,6 +11,12 @@ export const LATEST_RELEASE_PAGE = `${REPO_URL}/releases/latest`
 export const RELEASE_BASE = `${REPO_URL}/releases/latest/download`
 export const ISSUES_URL = `${REPO_URL}/issues`
 
+/**
+ * صفحة النشر المستقلة (HTML أحادي الملف، عربي/إنجليزي) المستضافة على GitHub Pages.
+ * تُفتح مباشرة في المتصفح — بخلاف أصول release التي تُنزَّل (octet-stream).
+ */
+export const RELEASE_PAGE_LIVE = "https://cto-drs.github.io/NexusLink/"
+
 export interface ReleaseAssetInfo {
   name: string
   bytes: number
