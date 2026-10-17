@@ -6,7 +6,14 @@ import { Button } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n"
 import { REPO_URL } from "@/lib/download-site-data"
 
-const NAV_ITEMS = [
+/**
+ * ترويسة الموقع الرسمي المشترك بين الرئيسية (/) وصفحة التحميل (/download).
+ * variant="download" (الافتراضي): روابط أقسام صفحة التحميل + الرئيسية.
+ * variant="home": روابط أقسام الرئيسية + التحميلات.
+ */
+
+const DOWNLOAD_NAV = [
+  { href: "/", key: "الرئيسية" },
   { href: "#downloads", key: "التحميلات" },
   { href: "#features", key: "الميزات" },
   { href: "#install", key: "دليل التثبيت" },
@@ -14,26 +21,38 @@ const NAV_ITEMS = [
   { href: "#faq", key: "الأسئلة الشائعة" },
 ]
 
-export function SiteHeader() {
+const HOME_NAV = [
+  { href: "#features", key: "الميزات" },
+  { href: "#how", key: "كيف يعمل" },
+  { href: "#security", key: "الأمان" },
+  { href: "#faq", key: "الأسئلة الشائعة" },
+  { href: "/download", key: "التحميلات" },
+]
+
+export function SiteHeader({ variant = "download" }: { variant?: "home" | "download" }) {
   const { lang, t, setLang } = useI18n()
+  const isHome = variant === "home"
+  const navItems = isHome ? HOME_NAV : DOWNLOAD_NAV
+  const brandHref = isHome ? "/" : "/download"
+  const ctaHref = isHome ? "/download" : "#downloads"
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
         <a
-          href="/download"
+          href={brandHref}
           className="flex min-h-11 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="NexusLink"
         >
           <Image src="/logo.svg" alt="" width={30} height={30} className="dark:invert" />
           <span className="text-lg font-bold tracking-tight">NexusLink</span>
           <span className="hidden rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary sm:inline-block">
-            {t("التحميلات")}
+            {isHome ? t("الموقع الرسمي") : t("التحميلات")}
           </span>
         </a>
 
         <nav aria-label="NexusLink" className="hidden items-center gap-1 md:flex">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <a
               key={item.href}
               href={item.href}
@@ -67,7 +86,7 @@ export function SiteHeader() {
             </a>
           </Button>
           <Button size="sm" className="min-h-11 gap-1.5 px-3" asChild>
-            <a href="#downloads">
+            <a href={ctaHref}>
               <Download className="size-4" aria-hidden="true" />
               <span>{t("تنزيل")}</span>
             </a>

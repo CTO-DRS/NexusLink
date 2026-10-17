@@ -221,7 +221,7 @@ export default function PhonePage() {
       {/* الترويسة */}
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-black/70 border-b border-white/10">
         <div className="max-w-md mx-auto px-4 h-14 flex items-center gap-2.5">
-          <Link href="/" className="w-9 h-9 rounded-xl bg-white/10 grid place-items-center" aria-label="عودة للتطبيق">
+          <Link href="/?app=1" className="w-9 h-9 rounded-xl bg-white/10 grid place-items-center" aria-label="عودة للتطبيق">
             <ArrowLeft className="w-4.5 h-4.5" />
           </Link>
           <div className="leading-tight me-auto">

@@ -1,11 +1,15 @@
 "use client"
 
-import { Github, Heart, ExternalLink } from "lucide-react"
+import { Github, Heart, ExternalLink, Home, LayoutGrid, Download } from "lucide-react"
 import Image from "next/image"
 import { useI18n } from "@/lib/i18n"
 import { useReleaseInfo } from "@/hooks/use-release-info"
 import { ISSUES_URL, RELEASES_PAGE, REPO_URL } from "@/lib/download-site-data"
 
+/**
+ * تذييل الموقع الرسمي — مشترك بين الرئيسية (/) وصفحة التحميل (/download).
+ * روابط التنقل بين صفحات الموقع + واجهة التطبيق + روابط GitHub.
+ */
 export function SiteFooter() {
   const { t } = useI18n()
   const { info } = useReleaseInfo()
@@ -20,11 +24,32 @@ export function SiteFooter() {
               <span className="text-base font-bold">NexusLink</span>
             </div>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              {t("موقع التنزيل الرسمي لمشروع NexusLink — ربط الأجهزة محليًا بخصوصية كاملة.")}
+              {t("الموقع الرسمي لمشروع NexusLink — ربط الأجهزة محليًا بخصوصية كاملة، ودون أي سحابة.")}
             </p>
           </div>
 
           <nav aria-label="footer" className="flex flex-col items-center gap-2.5 md:items-start">
+            <a
+              href="/"
+              className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Home className="size-4" aria-hidden="true" />
+              {t("الرئيسية")}
+            </a>
+            <a
+              href="/download"
+              className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Download className="size-4" aria-hidden="true" />
+              {t("تحميل NexusLink")}
+            </a>
+            <a
+              href="/?app=1"
+              className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <LayoutGrid className="size-4" aria-hidden="true" />
+              {t("واجهة التطبيق (تجريبية في المتصفح)")}
+            </a>
             <a
               href={REPO_URL}
               target="_blank"
