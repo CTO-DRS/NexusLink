@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NexusLink — صفحة النشر والتحميل</title>
+<meta name="description" content="NexusLink v1.1.0 — حمّل التطبيق لـ Windows وmacOS وLinux وAndroid. كل شيء محلي على شبكتك، بلا سحابة، بتشفير من الطرف إلى الطرف.">
+<style>
+:root{
+  --brand:#009b8f;--brand-2:#2eb5a4;--brand-soft:rgba(0,155,143,.12);
+  --bg:#f8fafc;--surface:#ffffff;--surface-2:#f1f5f9;--text:#0f172a;--muted:#5b6b7f;
+  --border:#e2e8f0;--code-bg:#0f172a;--code-text:#e2e8f0;--ok:#16a34a;--warn:#b45309;
+  --shadow:0 1px 3px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.06);
+}
+html[data-theme="dark"]{
+  --bg:#0b1120;--surface:#101a2e;--surface-2:#0d1526;--text:#e6edf5;--muted:#93a4b8;
+  --border:#1e2937;--code-bg:#060b16;--brand-soft:rgba(46,181,164,.14);
+  --shadow:0 1px 3px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic","IBM Plex Sans Arabic",Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.7;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+a{color:var(--brand);text-decoration:none}
+h2{font-size:1.7rem;margin-bottom:.4rem}
+.sect{padding:64px 0;border-top:1px solid var(--border)}
+.sect-head{margin-bottom:28px}
+.sect-head p{color:var(--muted);max-width:640px}
+/* header */
+header{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+.hd{display:flex;align-items:center;gap:14px;height:62px}
+.logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:1.05rem;color:var(--text)}
+.logo svg{flex:none}
+nav.main{display:flex;gap:4px;margin-inline-start:12px}
+nav.main a{padding:7px 12px;border-radius:9px;color:var(--muted);font-size:.92rem;font-weight:600}
+nav.main a:hover{color:var(--text);background:var(--surface-2)}
+.hd-actions{margin-inline-start:auto;display:flex;gap:8px;align-items:center}
+.btn-icon{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-size:.9rem;font-weight:700}
+.btn-icon:hover{border-color:var(--brand);color:var(--brand)}
+.gh-btn{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-weight:700;font-size:.9rem}
+.gh-btn:hover{border-color:var(--brand);color:var(--brand)}
+/* hero */
+.hero{padding:72px 0 56px;text-align:center}
+.badge{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:.85rem;font-weight:700;color:var(--muted)}
+.badge .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.badge .dot.live{background:var(--ok);box-shadow:0 0 0 3px rgba(22,163,74,.18)}
+.badge b{color:var(--text)}
+.hero h1{font-size:clamp(1.8rem,4.6vw,2.9rem);line-height:1.25;margin:22px 0 14px;font-weight:800}
+.hero h1 .grad{color:var(--brand)}
+.hero .sub{color:var(--muted);max-width:660px;margin:0 auto 28px;font-size:1.06rem}
+.cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:20px}
+.btn{display:inline-flex;align-items:center;gap:9px;padding:13px 26px;border-radius:12px;font-weight:800;font-size:1rem;border:1px solid transparent;cursor:pointer;transition:.15s}
+.btn-primary{background:var(--brand);color:#fff}
+.btn-primary:hover{background:var(--brand-2)}
+.btn-ghost{background:var(--surface);border-color:var(--border);color:var(--text)}
+.btn-ghost:hover{border-color:var(--brand);color:var(--brand)}
+.chips{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.chip{font-size:.85rem;font-weight:600;color:var(--muted);border:1px dashed var(--border);border-radius:999px;padding:5px 13px}
+.plat-icons{display:flex;gap:26px;justify-content:center;margin-top:34px;color:var(--muted);opacity:.85}
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 16px;text-align:center;box-shadow:var(--shadow)}
+.stat b{display:block;font-size:1.6rem;color:var(--brand);font-weight:800}
+.stat span{font-size:.84rem;color:var(--muted);font-weight:600}
+.stats-note{text-align:center;color:var(--muted);font-size:.82rem;margin-top:12px}
+/* downloads */
+.dl-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.dl-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px;box-shadow:var(--shadow);position:relative}
+.dl-card.recommended{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft),var(--shadow)}
+.rec-tag{position:absolute;top:-11px;inset-inline-start:18px;background:var(--brand);color:#fff;font-size:.72rem;font-weight:800;padding:3px 11px;border-radius:999px}
+.dl-head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.dl-head svg{width:34px;height:34px;color:var(--brand);flex:none}
+.dl-head h3{font-size:1.15rem}
+.dl-sub{color:var(--muted);font-size:.85rem;margin-bottom:14px}
+.asset{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:11px;margin-bottom:8px;background:var(--surface-2)}
+.asset .nm{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.8rem;font-weight:600;word-break:break-all}
+.asset .sz{margin-inline-start:auto;color:var(--muted);font-size:.78rem;font-weight:700;white-space:nowrap}
+.asset a.dl{flex:none;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:var(--brand);color:#fff;font-weight:800}
+.asset a.dl:hover{background:var(--brand-2)}
+.sig-mark{flex:none;color:var(--ok);font-size:.75rem;font-weight:800;white-space:nowrap}
+/* verify */
+.code-block{background:var(--code-bg);color:var(--code-text);border-radius:13px;padding:16px 18px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.84rem;overflow-x:auto;margin-bottom:14px;direction:ltr;text-align:left}
+.code-block .lbl{display:block;color:#7dd3c8;font-family:inherit;font-weight:700;font-size:.76rem;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em}
+.verify-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+.v-note{display:flex;gap:10px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:13px 15px;color:var(--muted);font-size:.9rem;margin-bottom:12px}
+.v-note b{color:var(--text)}
+details.sum{border:1px solid var(--border);border-radius:13px;background:var(--surface);overflow:hidden}
+details.sum summary{cursor:pointer;padding:13px 16px;font-weight:700;font-size:.92rem;color:var(--text)}
+details.sum pre{background:var(--code-bg);color:var(--code-text);padding:14px 18px;font-size:.74rem;line-height:1.6;overflow-x:auto;direction:ltr;text-align:left}
+/* guide */
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.tab-btn{padding:9px 18px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-weight:700;font-size:.92rem;cursor:pointer}
+.tab-btn.active{background:var(--brand);border-color:var(--brand);color:#fff}
+.tab-panel{display:none;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;box-shadow:var(--shadow)}
+.tab-panel.active{display:block}
+.steps{counter-reset:st;list-style:none}
+.steps li{counter-increment:st;position:relative;padding-inline-start:44px;margin-bottom:14px;color:var(--text)}
+.steps li::before{content:counter(st);position:absolute;inset-inline-start:0;top:2px;width:29px;height:29px;border-radius:9px;background:var(--brand-soft);color:var(--brand);font-weight:800;display:flex;align-items:center;justify-content:center;font-size:.9rem}
+.steps li b{font-weight:800}
+.steps li span{color:var(--muted);display:block;font-size:.92rem}
+.unblock{margin-top:20px;border:1px solid var(--warn);border-radius:14px;padding:18px 20px;background:color-mix(in srgb,var(--warn) 7%,var(--surface))}
+.unblock h4{display:flex;align-items:center;gap:8px;color:var(--warn);font-size:1rem;margin-bottom:8px}
+.unblock p,.unblock li{font-size:.9rem;color:var(--text)}
+.unblock .hint{color:var(--muted);margin-top:8px;font-size:.83rem}
+/* faq */
+.faq details{border:1px solid var(--border);border-radius:13px;background:var(--surface);margin-bottom:10px;overflow:hidden}
+.faq summary{cursor:pointer;padding:15px 18px;font-weight:700;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";color:var(--brand);font-size:1.3rem;font-weight:800;flex:none}
+.faq details[open] summary::after{content:"–"}
+.faq .a{padding:0 18px 16px;color:var(--muted);font-size:.94rem}
+/* footer */
+footer{border-top:1px solid var(--border);padding:34px 0;margin-top:20px}
+.ft{display:flex;align-items:center;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:.88rem}
+.ft .links{display:flex;gap:16px;flex-wrap:wrap}
+.ft .links a{font-weight:700}
+.ft .spacer{margin-inline-start:auto}
+@media(max-width:860px){.stats{grid-template-columns:repeat(2,1fr)}.dl-grid{grid-template-columns:1fr}.verify-cols{grid-template-columns:1fr}nav.main{display:none}}
+@media(max-width:520px){.hero{padding:52px 0 40px}.sect{padding:48px 0}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap hd">
+    <a class="logo" href="#top" aria-label="NexusLink">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--brand)"><circle cx="12" cy="5" r="2.6"/><circle cx="5" cy="18" r="2.6"/><circle cx="19" cy="18" r="2.6"/><path d="M12 7.6v3.8M7 16.4l3-3M17 16.4l-3-3"/></svg>
+      NexusLink
+    </a>
+    <nav class="main" aria-label="NexusLink">
+      <a href="#downloads" data-i="nav_dl">التحميلات</a>
+      <a href="#verify" data-i="nav_verify">التحقق</a>
+      <a href="#guide" data-i="nav_guide">دليل التثبيت</a>
+      <a href="#faq" data-i="nav_faq">الأسئلة</a>
+    </nav>
+    <div class="hd-actions">
+      <button class="btn-icon" id="langBtn" title="تبديل اللغة / Switch language" aria-label="تبديل اللغة">EN</button>
+      <button class="btn-icon" id="themeBtn" title="السمة / Theme" aria-label="تبديل السمة">☾</button>
+      <a class="gh-btn" href="https://github.com/CTO-DRS/NexusLink" target="_blank" rel="noopener">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <span class="badge"><span class="dot" id="liveDot"></span><span data-i="hero_badge">أحدث إصدار</span>:&nbsp;<b id="verTag">v1.1.0-fix4</b></span>
+      <h1><span data-i="hero_h1a">حوّل أجهزتك إلى منظومة واحدة</span> <span class="grad" data-i="hero_h1b">… بلا سحابة</span></h1>
+      <p class="sub" data-i="hero_sub">NexusLink يربط هاتفك بجهاز الكمبيوتر محليًا على شبكتك: حافظة مشتركة، نقل ملفات يستأنف بعد الانقطاع، تحكم عن بُعد، مرآة إشعارات ورسائل، وكاميرا افتراضية — كل قناة مشفرة من الطرف إلى الطرف، وكل شيء يعمل على أجهزتك أنت.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" id="smartDl" href="https://github.com/CTO-DRS/NexusLink/releases/latest/download/NexusLink_1.1.0_x64-setup.exe">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16"/></svg>
+          <span data-i="hero_cta" id="smartDlLabel">تحميل لنظامك</span>
+        </a>
+        <a class="btn btn-ghost" href="#downloads" data-i="hero_cta2">تصفح كل التحميلات</a>
+      </div>
+      <div class="chips">
+        <span class="chip" data-i="chip1">تشفير من الطرف إلى الطرف</span>
+        <span class="chip" data-i="chip2">لا سحابة — شبكتك المحلية فقط</span>
+        <span class="chip" data-i="chip3">مجاني للاستخدام الشخصي</span>
+      </div>
+      <div class="plat-icons" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 10.5 4.4v7.1H3V5.5ZM11.5 4.2 21 3v8.5h-9.5V4.2ZM3 12.5h7.5v7.1L3 18.5v-6ZM11.5 12.5H21V21l-9.5-1.3v-7.2Z"/></svg>
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M16.7 12.9c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.86-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3.1 2.4 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.77c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8-.03-.01-2.6-1-2.7-3.8ZM14.3 5.2c.7-.8 1.1-1.9 1-3.1-1 0-2.2.67-2.9 1.5-.6.7-1.2 1.9-1 3 1.1.1 2.2-.6 2.9-1.4Z"/></svg>
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="14" rx="2.5"/><path d="m7 9 3 3-3 3M12 15h5"/></svg>
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8a5 5 0 0 1 10 0v6H7V8ZM5.5 12.5a1.6 1.6 0 1 0 0 3.2v-3.2ZM18.5 12.5a1.6 1.6 0 1 1 0 3.2v-3.2ZM8 16v2.5M16 16v2.5M8 15.5h8"/><path d="m8.5 3.5 1.3 2M15.5 3.5l-1.3 2"/></svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="sect" style="border-top:none;padding-top:8px">
+    <div class="wrap">
+      <div class="stats">
+        <div class="stat"><b>13ms</b><span data-i="stat1">زمن استجابة التحكم P95 (مقاس)</span></div>
+        <div class="stat"><b>43.8MB/s</b><span data-i="stat2">سرعة نقل مقاسة عبر الجسور</span></div>
+        <div class="stat"><b>~110MB</b><span data-i="stat3">ذاكرة واجهة سطح المكتب</span></div>
+        <div class="stat"><b>428</b><span data-i="stat4">فحص E2E آلي أخضر على المشروع</span></div>
+      </div>
+      <p class="stats-note" data-i="stats_note">أرقام مقاسة فعليًا داخل بيئة التطوير الموثقة — قد تختلف حسب شبكتك وأجهزتك.</p>
+    </div>
+  </section>

@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NexusLink — صفحة النشر والتحميل</title>
+<meta name="description" content="NexusLink v1.1.0 — حمّل التطبيق لـ Windows وmacOS وLinux وAndroid. كل شيء محلي على شبكتك، بلا سحابة، بتشفير من الطرف إلى الطرف.">
+<style>
+:root{
+  --brand:#009b8f;--brand-2:#2eb5a4;--brand-soft:rgba(0,155,143,.12);
+  --bg:#f8fafc;--surface:#ffffff;--surface-2:#f1f5f9;--text:#0f172a;--muted:#5b6b7f;
+  --border:#e2e8f0;--code-bg:#0f172a;--code-text:#e2e8f0;--ok:#16a34a;--warn:#b45309;
+  --shadow:0 1px 3px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.06);
+}
+html[data-theme="dark"]{
+  --bg:#0b1120;--surface:#101a2e;--surface-2:#0d1526;--text:#e6edf5;--muted:#93a4b8;
+  --border:#1e2937;--code-bg:#060b16;--brand-soft:rgba(46,181,164,.14);
+  --shadow:0 1px 3px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic","IBM Plex Sans Arabic",Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.7;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+a{color:var(--brand);text-decoration:none}
+h2{font-size:1.7rem;margin-bottom:.4rem}
+.sect{padding:64px 0;border-top:1px solid var(--border)}
+.sect-head{margin-bottom:28px}
+.sect-head p{color:var(--muted);max-width:640px}
+/* header */
+header{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+.hd{display:flex;align-items:center;gap:14px;height:62px}
+.logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:1.05rem;color:var(--text)}
+.logo svg{flex:none}
+nav.main{display:flex;gap:4px;margin-inline-start:12px}
+nav.main a{padding:7px 12px;border-radius:9px;color:var(--muted);font-size:.92rem;font-weight:600}
+nav.main a:hover{color:var(--text);background:var(--surface-2)}
+.hd-actions{margin-inline-start:auto;display:flex;gap:8px;align-items:center}
+.btn-icon{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-size:.9rem;font-weight:700}
+.btn-icon:hover{border-color:var(--brand);color:var(--brand)}
+.gh-btn{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-weight:700;font-size:.9rem}
+.gh-btn:hover{border-color:var(--brand);color:var(--brand)}
+/* hero */
+.hero{padding:72px 0 56px;text-align:center}
+.badge{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:.85rem;font-weight:700;color:var(--muted)}
+.badge .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.badge .dot.live{background:var(--ok);box-shadow:0 0 0 3px rgba(22,163,74,.18)}
+.badge b{color:var(--text)}
+.hero h1{font-size:clamp(1.8rem,4.6vw,2.9rem);line-height:1.25;margin:22px 0 14px;font-weight:800}
+.hero h1 .grad{color:var(--brand)}
+.hero .sub{color:var(--muted);max-width:660px;margin:0 auto 28px;font-size:1.06rem}
+.cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:20px}
+.btn{display:inline-flex;align-items:center;gap:9px;padding:13px 26px;border-radius:12px;font-weight:800;font-size:1rem;border:1px solid transparent;cursor:pointer;transition:.15s}
+.btn-primary{background:var(--brand);color:#fff}
+.btn-primary:hover{background:var(--brand-2)}
+.btn-ghost{background:var(--surface);border-color:var(--border);color:var(--text)}
+.btn-ghost:hover{border-color:var(--brand);color:var(--brand)}
+.chips{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.chip{font-size:.85rem;font-weight:600;color:var(--muted);border:1px dashed var(--border);border-radius:999px;padding:5px 13px}
+.plat-icons{display:flex;gap:26px;justify-content:center;margin-top:34px;color:var(--muted);opacity:.85}
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 16px;text-align:center;box-shadow:var(--shadow)}
+.stat b{display:block;font-size:1.6rem;color:var(--brand);font-weight:800}
+.stat span{font-size:.84rem;color:var(--muted);font-weight:600}
+.stats-note{text-align:center;color:var(--muted);font-size:.82rem;margin-top:12px}
+/* downloads */
+.dl-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.dl-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px;box-shadow:var(--shadow);position:relative}
+.dl-card.recommended{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft),var(--shadow)}
+.rec-tag{position:absolute;top:-11px;inset-inline-start:18px;background:var(--brand);color:#fff;font-size:.72rem;font-weight:800;padding:3px 11px;border-radius:999px}
+.dl-head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.dl-head svg{width:34px;height:34px;color:var(--brand);flex:none}
+.dl-head h3{font-size:1.15rem}
+.dl-sub{color:var(--muted);font-size:.85rem;margin-bottom:14px}
+.asset{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:11px;margin-bottom:8px;background:var(--surface-2)}
+.asset .nm{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.8rem;font-weight:600;word-break:break-all}
+.asset .sz{margin-inline-start:auto;color:var(--muted);font-size:.78rem;font-weight:700;white-space:nowrap}
+.asset a.dl{flex:none;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:var(--brand);color:#fff;font-weight:800}
+.asset a.dl:hover{background:var(--brand-2)}
+.sig-mark{flex:none;color:var(--ok);font-size:.75rem;font-weight:800;white-space:nowrap}
+/* verify */
+.code-block{background:var(--code-bg);color:var(--code-text);border-radius:13px;padding:16px 18px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.84rem;overflow-x:auto;margin-bottom:14px;direction:ltr;text-align:left}
+.code-block .lbl{display:block;color:#7dd3c8;font-family:inherit;font-weight:700;font-size:.76rem;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em}
+.verify-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+.v-note{display:flex;gap:10px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:13px 15px;color:var(--muted);font-size:.9rem;margin-bottom:12px}
+.v-note b{color:var(--text)}
+details.sum{border:1px solid var(--border);border-radius:13px;background:var(--surface);overflow:hidden}
+details.sum summary{cursor:pointer;padding:13px 16px;font-weight:700;font-size:.92rem;color:var(--text)}
+details.sum pre{background:var(--code-bg);color:var(--code-text);padding:14px 18px;font-size:.74rem;line-height:1.6;overflow-x:auto;direction:ltr;text-align:left}
+/* guide */
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.tab-btn{padding:9px 18px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-weight:700;font-size:.92rem;cursor:pointer}
+.tab-btn.active{background:var(--brand);border-color:var(--brand);color:#fff}
+.tab-panel{display:none;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;box-shadow:var(--shadow)}
+.tab-panel.active{display:block}
+.steps{counter-reset:st;list-style:none}
+.steps li{counter-increment:st;position:relative;padding-inline-start:44px;margin-bottom:14px;color:var(--text)}
+.steps li::before{content:counter(st);position:absolute;inset-inline-start:0;top:2px;width:29px;height:29px;border-radius:9px;background:var(--brand-soft);color:var(--brand);font-weight:800;display:flex;align-items:center;justify-content:center;font-size:.9rem}
+.steps li b{font-weight:800}
+.steps li span{color:var(--muted);display:block;font-size:.92rem}
+.unblock{margin-top:20px;border:1px solid var(--warn);border-radius:14px;padding:18px 20px;background:color-mix(in srgb,var(--warn) 7%,var(--surface))}
+.unblock h4{display:flex;align-items:center;gap:8px;color:var(--warn);font-size:1rem;margin-bottom:8px}
+.unblock p,.unblock li{font-size:.9rem;color:var(--text)}
+.unblock .hint{color:var(--muted);margin-top:8px;font-size:.83rem}
+/* faq */
+.faq details{border:1px solid var(--border);border-radius:13px;background:var(--surface);margin-bottom:10px;overflow:hidden}
+.faq summary{cursor:pointer;padding:15px 18px;font-weight:700;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";color:var(--brand);font-size:1.3rem;font-weight:800;flex:none}
+.faq details[open] summary::after{content:"–"}
+.faq .a{padding:0 18px 16px;color:var(--muted);font-size:.94rem}
+/* footer */
+footer{border-top:1px solid var(--border);padding:34px 0;margin-top:20px}
+.ft{display:flex;align-items:center;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:.88rem}
+.ft .links{display:flex;gap:16px;flex-wrap:wrap}
+.ft .links a{font-weight:700}
+.ft .spacer{margin-inline-start:auto}
+@media(max-width:860px){.stats{grid-template-columns:repeat(2,1fr)}.dl-grid{grid-template-columns:1fr}.verify-cols{grid-template-columns:1fr}nav.main{display:none}}
+@media(max-width:520px){.hero{padding:52px 0 40px}.sect{padding:48px 0}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap hd">
+    <a class="logo" href="#top" aria-label="NexusLink">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--brand)"><circle cx="12" cy="5" r="2.6"/><circle cx="5" cy="18" r="2.6"/><circle cx="19" cy="18" r="2.6"/><path d="M12 7.6v3.8M7 16.4l3-3M17 16.4l-3-3"/></svg>
+      NexusLink
+    </a>
+    <nav class="main" aria-label="NexusLink">
+      <a href="#downloads" data-i="nav_dl">التحميلات</a>
+      <a href="#verify" data-i="nav_verify">التحقق</a>
+      <a href="#guide" data-i="nav_guide">دليل التثبيت</a>
+      <a href="#faq" data-i="nav_faq">الأسئلة</a>
+    </nav>
+    <div class="hd-actions">
+      <button class="btn-icon" id="langBtn" title="تبديل اللغة / Switch language" aria-label="تبديل اللغة">EN</button>
+      <button class="btn-icon" id="themeBtn" title="السمة / Theme" aria-label="تبديل السمة">☾</button>
+      <a class="gh-btn" href="https://github.com/CTO-DRS/NexusLink" target="_blank" rel="noopener">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <span class="badge"><span class="dot" id="liveDot"></span><span data-i="hero_badge">أحدث إصدار</span>:&nbsp;<b id="verTag">v1.1.0-fix4</b></span>
+      <h1><span data-i="hero_h1a">حوّل أجهزتك إلى منظومة واحدة</span> <span class="grad" data-i="hero_h1b">… بلا سحابة</span></h1>
+      <p class="sub" data-i="hero_sub">NexusLink يربط هاتفك بجهاز الكمبيوتر محليًا على شبكتك: حافظة مشتركة، نقل ملفات يستأنف بعد الانقطاع، تحكم عن بُعد، مرآة إشعارات ورسائل، وكاميرا افتراضية — كل قناة مشفرة من الطرف إلى الطرف، وكل شيء يعمل على أجهزتك أنت.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" id="smartDl" href="https://github.com/CTO-DRS/NexusLink/releases/latest/download/NexusLink_1.1.0_x64-setup.exe">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16"/></svg>
+          <span data-i="hero_cta" id="smartDlLabel">تحميل لنظامك</span>
+        </a>
+        <a class="btn btn-ghost" href="#downloads" data-i="hero_cta2">تصفح كل التحميلات</a>
+      </div>
+      <div class="chips">
+        <span class="chip" data-i="chip1">تشفير من الطرف إلى الطرف</span>
+        <span class="chip" data-i="chip2">لا سحابة — شبكتك المحلية فقط</span>
+        <span class="chip" data-i="chip3">مجاني للاستخدام الشخصي</span>
+      </div>
+      <div class="plat-icons" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 10.5 4.4v7.1H3V5.5ZM11.5 4.2 21 3v8.5h-9.5V4.2ZM3 12.5h7.5v7.1L3 18.5v-6ZM11.5 12.5H21V21l-9.5-1.3v-7.2Z"/></svg>
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M16.7 12.9c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.86-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3.1 2.4 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.77c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8-.03-.01-2.6-1-2.7-3.8ZM14.3 5.2c.7-.8 1.1-1.9 1-3.1-1 0-2.2.67-2.9 1.5-.6.7-1.2 1.9-1 3 1.1.1 2.2-.6 2.9-1.4Z"/></svg>
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="14" rx="2.5"/><path d="m7 9 3 3-3 3M12 15h5"/></svg>
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8a5 5 0 0 1 10 0v6H7V8ZM5.5 12.5a1.6 1.6 0 1 0 0 3.2v-3.2ZM18.5 12.5a1.6 1.6 0 1 1 0 3.2v-3.2ZM8 16v2.5M16 16v2.5M8 15.5h8"/><path d="m8.5 3.5 1.3 2M15.5 3.5l-1.3 2"/></svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="sect" style="border-top:none;padding-top:8px">
+    <div class="wrap">
+      <div class="stats">
+        <div class="stat"><b>13ms</b><span data-i="stat1">زمن استجابة التحكم P95 (مقاس)</span></div>
+        <div class="stat"><b>43.8MB/s</b><span data-i="stat2">سرعة نقل مقاسة عبر الجسور</span></div>
+        <div class="stat"><b>~110MB</b><span data-i="stat3">ذاكرة واجهة سطح المكتب</span></div>
+        <div class="stat"><b>428</b><span data-i="stat4">فحص E2E آلي أخضر على المشروع</span></div>
+      </div>
+      <p class="stats-note" data-i="stats_note">أرقام مقاسة فعليًا داخل بيئة التطوير الموثقة — قد تختلف حسب شبكتك وأجهزتك.</p>
+    </div>
+  </section>
+  <section class="sect" id="downloads">
+    <div class="wrap">
+      <div class="sect-head">
+        <h2 data-i="dl_title">تحميلات كل المنصات</h2>
+        <p data-i="dl_sub">روابط دائمة تشير دائمًا لأحدث إصدار — الأحجام حقيقية من أصول الإصدار المنشور. الملفات الخمسة الموقعة تحمل علامة ✓ (minisign/Ed25519 عبر Tauri updater).</p>
+      </div>
+      <div class="dl-grid">
+        <div class="dl-card" id="card-win">
+          <span class="rec-tag" data-i="rec" hidden>موصى به لنظامك</span>
+          <div class="dl-head">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 10.5 4.4v7.1H3V5.5ZM11.5 4.2 21 3v8.5h-9.5V4.2ZM3 12.5h7.5v7.1L3 18.5v-6ZM11.5 12.5H21V21l-9.5-1.3v-7.2Z"/></svg>
+            <h3>Windows</h3>
+          </div>
+          <p class="dl-sub" data-i="dl_win_sub">10/11 64-bit — المثبت يجهّز WebView2 تلقائيًا</p>
+          <div class="asset"><span class="nm">NexusLink_1.1.0_x64-setup.exe</span><span class="sig-mark" data-i="sig_lbl">✓ موقّع</span><span class="sz">44.3MB</span><a class="dl" href="https://github.com/CTO-DRS/NexusLink/releases/latest/download/NexusLink_1.1.0_x64-setup.exe" aria-label="Download setup.exe">⭳</a></div>
+          <div class="asset"><span class="nm">NexusLink_1.1.0_x64_en-US.msi</span><span class="sig-mark" data-i="sig_lbl">✓ موقّع</span><span class="sz">81.3MB</span><a class="dl" href="https://github.com/CTO-DRS/NexusLink/releases/latest/download/NexusLink_1.1.0_x64_en-US.msi" aria-label="Download msi">⭳</a></div>
+          <div class="asset"><span class="nm">NexusLink_1.1.0_x64-portable.zip</span><span class="sz">99.8MB</span><a class="dl" href="https://github.com/CTO-DRS/NexusLink/releases/latest/download/NexusLink_1.1.0_x64-portable.zip" aria-label="Download portable">⭳</a></div>
+        </div>
+        <div class="dl-card" id="card-mac">
+          <span class="rec-tag" data-i="rec" hidden>موصى به لنظامك</span>
+          <div class="dl-head">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.7 12.9c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.86-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3.1 2.4 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.77c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8-.03-.01-2.6-1-2.7-3.8ZM14.3 5.2c.7-.8 1.1-1.9 1-3.1-1 0-2.2.67-2.9 1.5-.6.7-1.2 1.9-1 3 1.1.1 2.2-.6 2.9-1.4Z"/></svg>
+            <h3>macOS</h3>
+          </div>
+          <p class="dl-sub" data-i="dl_mac_sub">12+ Apple Silicon (aarch64) — غير موقّع: زر يمين ← Open أول مرة</p>
+          <div class="asset"><span class="nm">NexusLink_1.1.0_aarch64.dmg</span><span class="sz">110.2MB</span><a class="dl" href="https://github.com/CTO-DRS/NexusLink/releases/latest/download/NexusLink_1.1.0_aarch64.dmg" aria-label="Download dmg">⭳</a></div>
+          <div class="asset"><span class="nm">NexusLink.app.tar.gz</span><span class="sig-mark" data-i="sig_lbl">✓ موقّع</span><span class="sz">112.2MB</span><a class="dl" href="https://github.com/CTO-DRS/NexusLink/releases/latest/download/NexusLink.app.tar.gz" aria-label="Download tar.gz">⭳</a></div>
+        </div>
+        <div class="dl-card" id="card-lin">
+          <span class="rec-tag" data-i="rec" hidden>موصى به لنظامك</span>
+          <div class="dl-head">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="14" rx="2.5"/><path d="m7 9 3 3-3 3M12 15h5"/></svg>
+            <h3>Linux</h3>
+          </div>
+          <p class="dl-sub" data-i="dl_lin_sub">x64 — AppImage بلا تثبيت أو deb للتوزيعات الدبيانية</p>
+          <div class="asset"><span class="nm">NexusLink_1.1.0_amd64.AppImage</span><span class="sig-mark" data-i="sig_lbl">✓ موقّع</span><span class="sz">166.2MB</span><a class="dl" href="https://github.com/CTO-DRS/NexusLink/releases/latest/download/NexusLink_1.1.0_amd64.AppImage" aria-label="Download AppImage">⭳</a></div>
+          <div class="asset"><span class="nm">NexusLink_1.1.0_amd64.deb</span><span class="sig-mark" data-i="sig_lbl">✓ موقّع</span><span class="sz">93.0MB</span><a class="dl" href="https://github.com/CTO-DRS/NexusLink/releases/latest/download/NexusLink_1.1.0_amd64.deb" aria-label="Download deb">⭳</a></div>
+        </div>
+        <div class="dl-card" id="card-and">
+          <span class="rec-tag" data-i="rec" hidden>موصى به لنظامك</span>
+          <div class="dl-head">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8a5 5 0 0 1 10 0v6H7V8ZM5.5 12.5a1.6 1.6 0 1 0 0 3.2v-3.2ZM18.5 12.5a1.6 1.6 0 1 1 0 3.2v-3.2ZM8 16v2.5M16 16v2.5M8 15.5h8"/><path d="m8.5 3.5 1.3 2M15.5 3.5l-1.3 2"/></svg>
+            <h3>Android</h3>
+          </div>
+          <p class="dl-sub" data-i="dl_and_sub">الوكيل — «تثبيت من مصدر غير معروف» مرة واحدة</p>
+          <div class="asset"><span class="nm">NexusLink-1.1.0-release.apk</span><span class="sz">133.8MB</span><a class="dl" href="https://github.com/CTO-DRS/NexusLink/releases/latest/download/NexusLink-1.1.0-release.apk" aria-label="Download APK">⭳</a></div>
+          <div class="asset"><span class="nm">app-release.aab</span><span class="sz">63.9MB</span><a class="dl" href="https://github.com/CTO-DRS/NexusLink/releases/latest/download/app-release.aab" aria-label="Download AAB">⭳</a></div>
+        </div>
+      </div>
+      <p class="stats-note"><span data-i="dl_all">كل الأصول الـ 16 (بما فيها SHA256SUMS وlatest.json) على</span> <a href="https://github.com/CTO-DRS/NexusLink/releases/latest" target="_blank" rel="noopener">github.com/CTO-DRS/NexusLink/releases/latest</a></p>
+    </div>
+  </section>
+
+  <section class="sect" id="verify">
+    <div class="wrap">
+      <div class="sect-head">
+        <h2 data-i="ver_title">التحقق والتحديث</h2>
+        <p data-i="ver_sub">تحقق من سلامة الملف قبل التشغيل — بصمة SHA-256 لكل أصل منشورة في SHA256SUMS.txt، والتوقيعات تُثبت أن الملف صدر من هذا المستودع.</p>
+      </div>
+      <div class="verify-cols">
+        <div class="code-block"><span class="lbl" data-i="ver_win">Windows (PowerShell)</span>Invoke-WebRequest https://github.com/CTO-DRS/NexusLink/releases/latest/download/SHA256SUMS.txt
+Get-FileHash .\NexusLink_1.1.0_x64-setup.exe -Algorithm SHA256</div>
+        <div class="code-block"><span class="lbl" data-i="ver_mac">macOS</span>curl -LO https://github.com/CTO-DRS/NexusLink/releases/latest/download/SHA256SUMS.txt
+shasum -a 256 -c SHA256SUMS.txt 2>/dev/null | grep OK</div>
+        <div class="code-block"><span class="lbl" data-i="ver_lin">Linux</span>curl -LO https://github.com/CTO-DRS/NexusLink/releases/latest/download/SHA256SUMS.txt
+sha256sum -c SHA256SUMS.txt 2>/dev/null | grep OK</div>
+      </div>
+      <div class="v-note"><span aria-hidden="true">🔔</span><p><b data-i="ver_note1_t">التحديث التلقائي:</b> <span data-i="ver_note1_b">التطبيق يفحص latest.json من GitHub دوريًا — هذا هو الاتصال الخارجي الوحيد في NexusLink كله، ويمكن تعطيله كليًا من الإعدادات.</span></p></div>
+      <div class="v-note"><span aria-hidden="true">🔒</span><p><b data-i="ver_note2_t">ملفات التوقيع (.sig):</b> <span data-i="ver_note2_b">خمسة أصول موقعة بـ minisign/Ed25519 (prehash Blake2b) — نفس التوقيعات التي يتحقق بها المحدّث الذاتي قبل تثبيت أي تحديث.</span></p></div>
+      <details class="sum">
+        <summary data-i="sum_title">SHA256SUMS.txt — المحتوى الكامل للإصدار v1.1.0-fix4</summary>
+        <pre>73d741d33452e056a2fb9d2f62d792bcc419491ec947b751ec4d4332344e3b9a  NexusLink-1.1.0-release.apk
+6068c5bc0cb0061fbaa47271eb41de7a60e3073c37cf71c4bc08a266d5b2b1bb  NexusLink.app.tar.gz
+0421917644abfe7f69a658f1467b925133b749409e5e7b3858be1417193337d9  NexusLink.app.tar.gz.sig
+e331e9823995ace10acb305b02c38e55a97e8c6e7c3ff055d3871805e192e4ea  NexusLink_1.1.0_aarch64.dmg
+2ed2a69726cab917ebcec4bcd6f55a3044bde5353c658665d3c99f7302dd84fd  NexusLink_1.1.0_amd64.AppImage
+ede9c503864f065b7aa1620e117a699302389d98dc5cef58a1b6a766436edec2  NexusLink_1.1.0_amd64.AppImage.sig
+b523aec027420e82caf3ea3cc0def649a183092ca73a14b4c1807f8bb096a8f9  NexusLink_1.1.0_amd64.deb
+0abfc2cd1686f1d493a1521a666d03788fc9ab70948e4ad2d5b0cab30e0e1011  NexusLink_1.1.0_amd64.deb.sig
+c18799fe0f53ce884334b87151c919a7bfb3c1df74abb06d5026331ab64cec70  NexusLink_1.1.0_x64-portable.zip
+c0ab4eefb9b10df6eede6c0d81661b3ee3a8017ef44354981885b0048ad7c759  NexusLink_1.1.0_x64-setup.exe
+7ae583da524e77b0f2252afe1a661489b8d5e4d31ee5e6f06b84ff895fbecf8b  NexusLink_1.1.0_x64-setup.exe.sig
+ecc8527b0436b31e7be340ce2b0de412eaba0941ada2adfc8e34e9588bfc8196  NexusLink_1.1.0_x64_en-US.msi
+12d894b6b782aac8187dedb41f91595f5ef4bb54314b69f6ff7575f84315443c  NexusLink_1.1.0_x64_en-US.msi.sig
+4dea3c138d4f362f1dd8aef0f199d679349f3e314edf83973310db12ad78988d  app-release.aab
+619ec568a54dac416d1f9deee36fdad55622b610d883a889bacaa3dddecc8fa5  latest.json</pre>
+      </details>
+    </div>
+  </section>
+
+  <section class="sect" id="guide">
+    <div class="wrap">
+      <div class="sect-head">
+        <h2 data-i="guide_title">دليل التثبيت</h2>
+        <p data-i="guide_sub">ثلاث دقائق من التحميل إلى أول اتصال — خطوات صادقة بما فيها تحذيرات أنظمة التشغيل.</p>
+      </div>
+      <div class="tabs" role="tablist">
+        <button class="tab-btn active" data-tab="win" role="tab">Windows</button>
+        <button class="tab-btn" data-tab="mac" role="tab">macOS</button>
+        <button class="tab-btn" data-tab="lin" role="tab">Linux</button>
+        <button class="tab-btn" data-tab="and" role="tab">Android</button>
+      </div>
+      <div class="tab-panel active" id="tab-win" role="tabpanel">
+        <ol class="steps">
+          <li><b data-i="gw1t">حمّل وشغّل المثبت</b><span data-i="gw1s">NexusLink_1.1.0_x64-setup.exe — يثبّت WebView2 تلقائيًا إن غاب عن النظام.</span></li>
+          <li><b data-i="gw2t">إن ظهر SmartScreen</b><span data-i="gw2s">اضغط «More info» ثم «Run anyway» — المثبت موقّع بمفتاح المستودع (تحقق بالبصمة أعلاه إن أردت).</span></li>
+          <li><b data-i="gw3t">شغّل NexusLink</b><span data-i="gw3s">المركز يعمل فورًا: الواجهة + الخادم المضمّن + كل الجسور + أيقونة شريط بحالات حية. بلا أي إعداد.</span></li>
+        </ol>
+      </div>
+      <div class="tab-panel" id="tab-mac" role="tabpanel">
+        <ol class="steps">
+          <li><b data-i="gm1t">افتح الـ DMG واسحب التطبيق</b><span data-i="gm1s">NexusLink_1.1.0_aarch64.dmg → مجلد Applications.</span></li>
+          <li><b data-i="gm2t">أول تشغيل: زر يمين ← Open</b><span data-i="gm2s">التطبيق غير موقّع بشهادة Apple Developer — Gatekeeper يحتاج تأكيدك مرة واحدة فقط.</span></li>
+          <li><b data-i="gm3t">أعطِ الأذونات عند طلبها</b><span data-i="gm3s">Accessibility للتحكم بالكيبورد والماوس — مع شاشة إرشادية تفتح الإعدادات مباشرة.</span></li>
+        </ol>
+      </div>
+      <div class="tab-panel" id="tab-lin" role="tabpanel">
+        <ol class="steps">
+          <li><b data-i="gl1t">AppImage — بلا تثبيت</b><span data-i="gl1s">chmod +x NexusLink_1.1.0_amd64.AppImage ثم شغّله — يعمل على أي توزيعة حديثة.</span></li>
+          <li><b data-i="gl2t">أو deb للتوزيعات الدبيانية</b><span data-i="gl2s">sudo dpkg -i NexusLink_1.1.0_amd64.deb — يضيف التطبيق لقائمة النظام مع تحديثات عادية.</span></li>
+        </ol>
+      </div>
+      <div class="tab-panel" id="tab-and" role="tabpanel">
+        <ol class="steps">
+          <li><b data-i="ga1t">ثبّت الـ APK</b><span data-i="ga1s">اسمح بـ«التثبيت من مصادر غير معروفة» لمتصفحك مرة واحدة ثم ثبّت NexusLink-1.1.0-release.apk.</span></li>
+          <li><b data-i="ga2t">امسح QR أو أدخل يدويًا</b><span data-i="ga2s">تبويب «الاتصال» ← امسح QR من واجهة الكمبيوتر (أو IP الكمبيوتر + منفذ 81) — راية «متصل» تعني أن القنوات الأربع حية.</span></li>
+          <li><b data-i="ga3t">لِبقاء الوكيل حيًا 24 ساعة</b><span data-i="ga3s">فعّل «تجاهل تحسين البطارية» من تبويب الأمان داخل التطبيق + الإقلاع التلقائي مفعّل افتراضيًا.</span></li>
+        </ol>
+        <div class="unblock">
+          <h4>🔓 <span data-i="gu_title">مركز رفع القيود — أندرويد 13+</span></h4>
+          <p data-i="gu_p">إن منع النظام الأذونات الحساسة (الإتاحة / التشغيل التلقائي) لأن التطبيق «مصدر غير معروف»:</p>
+          <ol class="steps" style="margin-top:12px">
+            <li><b data-i="gu1t">الإعدادات ← التطبيقات ← NexusLink</b><span data-i="gu1s">ثم قائمة النقاط الثلاث (⋮) أعلى الشاشة.</span></li>
+            <li><b data-i="gu2t">«السماح بالإعدادات المقيدة»</b><span data-i="gu2s">أكّد الاختيار — هذا قفل Google الرسمي ويُفك من هنا حصرًا.</span></li>
+            <li><b data-i="gu3t">فعّل الأذونات المقيدة</b><span data-i="gu3s">ارجع للتطبيق وفعّل ما طُلب: إتاحة، تشغيل تلقائي، إشعارات دائمة.</span></li>
+          </ol>
+          <p class="hint" data-i="gu_hint">صفحة التطبيق المباشرة: الإعدادات ← التطبيقات ← NexusLink ← «تفاصيل التطبيق» — أو ابحث عن NexusLink في إعدادات النظام.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sect" id="faq">
+    <div class="wrap">
+      <div class="sect-head">
+        <h2 data-i="faq_title">الأسئلة الشائعة</h2>
+        <p data-i="faq_sub">إجابات صادقة بلا تسويق — بما فيها حدود التطبيق المعلنة.</p>
+      </div>
+      <div class="faq">
+        <details><summary data-i="fq1q">هل تحتاج بياناتي إنترنت أو سيرفراتكم؟</summary><div class="a" data-i="fq1a">لا إطلاقًا. كل شيء — ملفات، حافظة، تحكم، وسائط — يعمل بين أجهزتك على شبكتك المحلية. لا حسابات ولا سحابة ولا سيرفر وسيط لنا. الاتصال الخارجي الوحيد هو فحص التحديث من GitHub وهو قابل للتعطيل كليًا من الإعدادات.</div></details>
+        <details><summary data-i="fq2q">ما الذي يعمل على iPhone؟</summary><div class="a" data-i="fq2a">حد صادق: iOS لا يسمح بقراءة SMS/المكالمات/مرآة الإشعارات (قيود Apple). تطبيق iOS يخدم الوسائط والملفات والحافظة فقط — ميزات المرآة الكاملة متاحة على Android.</div></details>
+        <details><summary data-i="fq3q">كيف أعرف أن الملف الذي حمّلته سليم؟</summary><div class="a" data-i="fq3a">قارن بصمة SHA-256 مع SHA256SUMS.txt المنشور (أوامر جاهزة في قسم «التحقق» أعلاه)، وملفات .sig الخمسة موقعة بمفتاح minisign الخاص بالمستودع — نفس التحقق الذي يجريه المحدّث الذاتي قبل أي تحديث.</div></details>
+        <details><summary data-i="fq4q">الوكيل يتوقف على أندرويد 13+ — ما الحل؟</summary><div class="a" data-i="fq4a">أندرويد 13+ يقيد التطبيقات من مصادر غير معروفة. افتح: الإعدادات ← التطبيقات ← NexusLink ← قائمة ⋮ ← «السماح بالإعدادات المقيدة»، ثم فعّل الإتاحة والتشغيل التلقائي — الخطوات الكاملة في دليل التثبيت أعلاه.</div></details>
+        <details><summary data-i="fq5q">هل يمكن التحكم بهاتف من هاتف آخر؟</summary><div class="a" data-i="fq5a">نعم — من إصدار 1.1.0: طلب تحكم عبر المركز يصل للهاتف الهدف بحوار «سماح» صريح، والإدخال يتطلب جلسة موثقة من الطرفين، ولا يمكن لأي جهاز أن يتحكم بنفسه. كل شيء على بروتوكول NexusLink المشفر نفسه.</div></details>
+        <details><summary data-i="fq6q">كم يستهلك من الموارد؟ وهل هو مجاني؟</summary><div class="a" data-i="fq6a">واجهة سطح المكتب ~110MB ذاكرة عند التشغيل، والوكيل مصمم بسياسة خمول (بطارية شبه معدومة في الخمول). مجاني للاستخدام الشخصي بالكامل — بلا حسابات ولا اشتراكات.</div></details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap ft">
+    <span>© <span id="yr">2026</span> CTO-DRS — NexusLink</span>
+    <div class="links">
+      <a href="https://github.com/CTO-DRS/NexusLink" target="_blank" rel="noopener" data-i="ft_repo">المستودع</a>
+      <a href="https://github.com/CTO-DRS/NexusLink/releases/latest" target="_blank" rel="noopener" data-i="ft_rel">الإصدارات</a>
+      <a href="https://github.com/CTO-DRS/NexusLink/releases/latest/download/latest.json" target="_blank" rel="noopener">latest.json</a>
+      <a href="https://github.com/CTO-DRS/NexusLink/releases/latest/download/SHA256SUMS.txt" target="_blank" rel="noopener">SHA256SUMS.txt</a>
+    </div>
+    <span class="spacer" data-i="ft_made">صُنع للشبكات المحلية — كل شيء على أجهزتك أنت.</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+var D={
+title:{ar:"NexusLink — صفحة النشر والتحميل",en:"NexusLink — Download & Release"},
+nav_dl:{ar:"التحميلات",en:"Downloads"},nav_verify:{ar:"التحقق",en:"Verify"},nav_guide:{ar:"دليل التثبيت",en:"Install guide"},nav_faq:{ar:"الأسئلة",en:"FAQ"},
+hero_badge:{ar:"أحدث إصدار",en:"Latest release"},
+hero_h1a:{ar:"حوّل أجهزتك إلى منظومة واحدة",en:"Turn your devices into one system"},
+hero_h1b:{ar:"… بلا سحابة",en:"… with no cloud"},
+hero_sub:{ar:"NexusLink يربط هاتفك بجهاز الكمبيوتر محليًا على شبكتك: حافظة مشتركة، نقل ملفات يستأنف بعد الانقطاع، تحكم عن بُعد، مرآة إشعارات ورسائل، وكاميرا افتراضية — كل قناة مشفرة من الطرف إلى الطرف، وكل شيء يعمل على أجهزتك أنت.",en:"NexusLink connects your phone to your computer locally on your network: shared clipboard, resumable file transfers, remote control, notification & message mirroring, and a virtual camera — every channel end-to-end encrypted, everything runs on your own devices."},
+hero_cta:{ar:"تحميل لنظامك",en:"Download for your system"},
+hero_cta2:{ar:"تصفح كل التحميلات",en:"Browse all downloads"},
+chip1:{ar:"تشفير من الطرف إلى الطرف",en:"End-to-end encrypted"},chip2:{ar:"لا سحابة — شبكتك المحلية فقط",en:"No cloud — your LAN only"},chip3:{ar:"مجاني للاستخدام الشخصي",en:"Free for personal use"},
+stat1:{ar:"زمن استجابة التحكم P95 (مقاس)",en:"Control latency P95 (measured)"},stat2:{ar:"سرعة نقل مقاسة عبر الجسور",en:"Transfer speed measured via bridges"},stat3:{ar:"ذاكرة واجهة سطح المكتب",en:"Desktop UI memory footprint"},stat4:{ar:"فحص E2E آلي أخضر على المشروع",en:"Automated green E2E checks"},
+stats_note:{ar:"أرقام مقاسة فعليًا داخل بيئة التطوير الموثقة — قد تختلف حسب شبكتك وأجهزتك.",en:"Measured in the documented dev environment — may vary with your network and devices."},
+dl_title:{ar:"تحميلات كل المنصات",en:"Downloads for every platform"},
+dl_sub:{ar:"روابط دائمة تشير دائمًا لأحدث إصدار — الأحجام حقيقية من أصول الإصدار المنشور. الملفات الخمسة الموقعة تحمل علامة ✓ (minisign/Ed25519 عبر Tauri updater).",en:"Permanent links that always point to the latest release — sizes are real, straight from published release assets. The five signed assets carry a ✓ mark (minisign/Ed25519 via Tauri updater)."},
+rec:{ar:"موصى به لنظامك",en:"Recommended for your system"},sig_lbl:{ar:"✓ موقّع",en:"✓ signed"},
+dl_win_sub:{ar:"10/11 64-bit — المثبت يجهّز WebView2 تلقائيًا",en:"10/11 64-bit — installer provisions WebView2 automatically"},
+dl_mac_sub:{ar:"12+ Apple Silicon (aarch64) — غير موقّع: زر يمين ← Open أول مرة",en:"12+ Apple Silicon (aarch64) — unsigned: right-click → Open first time"},
+dl_lin_sub:{ar:"x64 — AppImage بلا تثبيت أو deb للتوزيعات الدبيانية",en:"x64 — AppImage (no install) or deb for Debian-based distros"},
+dl_and_sub:{ar:"الوكيل — «تثبيت من مصدر غير معروف» مرة واحدة",en:"The agent — allow \"unknown sources\" once"},
+dl_all:{ar:"كل الأصول الـ 16 (بما فيها SHA256SUMS وlatest.json) على",en:"All 16 assets (incl. SHA256SUMS and latest.json) at"},
+ver_title:{ar:"التحقق والتحديث",en:"Verify & update"},
+ver_sub:{ar:"تحقق من سلامة الملف قبل التشغيل — بصمة SHA-256 لكل أصل منشورة في SHA256SUMS.txt، والتوقيعات تُثبت أن الملف صدر من هذا المستودع.",en:"Verify integrity before running — every asset's SHA-256 is published in SHA256SUMS.txt, and signatures prove the file came from this repository."},
+ver_win:{ar:"Windows (PowerShell)",en:"Windows (PowerShell)"},ver_mac:{ar:"macOS",en:"macOS"},ver_lin:{ar:"Linux",en:"Linux"},
+ver_note1_t:{ar:"التحديث التلقائي:",en:"Automatic updates:"},
+ver_note1_b:{ar:"التطبيق يفحص latest.json من GitHub دوريًا — هذا هو الاتصال الخارجي الوحيد في NexusLink كله، ويمكن تعطيله كليًا من الإعدادات.",en:"The app periodically checks latest.json on GitHub — the only outbound connection in all of NexusLink, fully disableable in Settings."},
+ver_note2_t:{ar:"ملفات التوقيع (.sig):",en:"Signature files (.sig):"},
+ver_note2_b:{ar:"خمسة أصول موقعة بـ minisign/Ed25519 (prehash Blake2b) — نفس التوقيعات التي يتحقق بها المحدّث الذاتي قبل تثبيت أي تحديث.",en:"Five assets signed with minisign/Ed25519 (Blake2b prehash) — the same signatures the self-updater verifies before installing any update."},
+sum_title:{ar:"SHA256SUMS.txt — المحتوى الكامل للإصدار v1.1.0-fix4",en:"SHA256SUMS.txt — full contents for v1.1.0-fix4"},
+guide_title:{ar:"دليل التثبيت",en:"Installation guide"},
+guide_sub:{ar:"ثلاث دقائق من التحميل إلى أول اتصال — خطوات صادقة بما فيها تحذيرات أنظمة التشغيل.",en:"Three minutes from download to first connection — honest steps including OS warnings."},
+gw1t:{ar:"حمّل وشغّل المثبت",en:"Download and run the installer"},gw1s:{ar:"NexusLink_1.1.0_x64-setup.exe — يثبّت WebView2 تلقائيًا إن غاب عن النظام.",en:"NexusLink_1.1.0_x64-setup.exe — provisions WebView2 automatically if missing."},
+gw2t:{ar:"إن ظهر SmartScreen",en:"If SmartScreen appears"},gw2s:{ar:"اضغط «More info» ثم «Run anyway» — المثبت موقّع بمفتاح المستودع (تحقق بالبصمة أعلاه إن أردت).",en:"Click \"More info\" then \"Run anyway\" — the installer is signed with the repository key (verify the hash above if you wish)."},
+gw3t:{ar:"شغّل NexusLink",en:"Launch NexusLink"},gw3s:{ar:"المركز يعمل فورًا: الواجهة + الخادم المضمّن + كل الجسور + أيقونة شريط بحالات حية. بلا أي إعداد.",en:"The hub starts instantly: UI + embedded server + all bridges + a live tray icon. Zero setup."},
+gm1t:{ar:"افتح الـ DMG واسحب التطبيق",en:"Open the DMG and drag the app"},gm1s:{ar:"NexusLink_1.1.0_aarch64.dmg → مجلد Applications.",en:"NexusLink_1.1.0_aarch64.dmg → Applications folder."},
+gm2t:{ar:"أول تشغيل: زر يمين ← Open",en:"First launch: right-click → Open"},gm2s:{ar:"التطبيق غير موقّع بشهادة Apple Developer — Gatekeeper يحتاج تأكيدك مرة واحدة فقط.",en:"The app is not signed with an Apple Developer certificate — Gatekeeper needs your confirmation once only."},
+gm3t:{ar:"أعطِ الأذونات عند طلبها",en:"Grant permissions when asked"},gm3s:{ar:"Accessibility للتحكم بالكيبورد والماوس — مع شاشة إرشادية تفتح الإعدادات مباشرة.",en:"Accessibility is needed for keyboard/mouse control — with a guide screen that opens Settings directly."},
+gl1t:{ar:"AppImage — بلا تثبيت",en:"AppImage — no installation"},gl1s:{ar:"chmod +x NexusLink_1.1.0_amd64.AppImage ثم شغّله — يعمل على أي توزيعة حديثة.",en:"chmod +x NexusLink_1.1.0_amd64.AppImage then run — works on any modern distro."},
+gl2t:{ar:"أو deb للتوزيعات الدبيانية",en:"Or deb for Debian-based distros"},gl2s:{ar:"sudo dpkg -i NexusLink_1.1.0_amd64.deb — يضيف التطبيق لقائمة النظام مع تحديثات عادية.",en:"sudo dpkg -i NexusLink_1.1.0_amd64.deb — adds the app to your system menu with normal updates."},
+ga1t:{ar:"ثبّت الـ APK",en:"Install the APK"},ga1s:{ar:"اسمح بـ«التثبيت من مصادر غير معروفة» لمتصفحك مرة واحدة ثم ثبّت NexusLink-1.1.0-release.apk.",en:"Allow \"install from unknown sources\" for your browser once, then install NexusLink-1.1.0-release.apk."},
+ga2t:{ar:"امسح QR أو أدخل يدويًا",en:"Scan the QR or enter manually"},ga2s:{ar:"تبويب «الاتصال» ← امسح QR من واجهة الكمبيوتر (أو IP الكمبيوتر + منفذ 81) — راية «متصل» تعني أن القنوات الأربع حية.",en:"Connect tab → scan the QR from the computer UI (or computer IP + port 81) — the \"connected\" banner means all four channels are alive."},
+ga3t:{ar:"لِبقاء الوكيل حيًا 24 ساعة",en:"To keep the agent alive 24h"},ga3s:{ar:"فعّل «تجاهل تحسين البطارية» من تبويب الأمان داخل التطبيق + الإقلاع التلقائي مفعّل افتراضيًا.",en:"Enable \"ignore battery optimization\" from the Security tab in the app + auto-start is on by default."},
+gu_title:{ar:"مركز رفع القيود — أندرويد 13+",en:"Unblock Center — Android 13+"},
+gu_p:{ar:"إن منع النظام الأذونات الحساسة (الإتاحة / التشغيل التلقائي) لأن التطبيق «مصدر غير معروف»:",en:"If the system blocks sensitive permissions (accessibility / autostart) because the app is from an \"unknown source\":"},
+gu1t:{ar:"الإعدادات ← التطبيقات ← NexusLink",en:"Settings → Apps → NexusLink"},gu1s:{ar:"ثم قائمة النقاط الثلاث (⋮) أعلى الشاشة.",en:"then the three-dot menu (⋮) at the top."},
+gu2t:{ar:"«السماح بالإعدادات المقيدة»",en:"\"Allow restricted settings\""},gu2s:{ar:"أكّد الاختيار — هذا قفل Google الرسمي ويُفك من هنا حصرًا.",en:"Confirm — this is Google's official lock and is only unlocked here."},
+gu3t:{ar:"فعّل الأذونات المقيدة",en:"Enable the restricted permissions"},gu3s:{ar:"ارجع للتطبيق وفعّل ما طُلب: إتاحة، تشغيل تلقائي، إشعارات دائمة.",en:"Return to the app and enable what's requested: accessibility, autostart, persistent notifications."},
+gu_hint:{ar:"صفحة التطبيق المباشرة: الإعدادات ← التطبيقات ← NexusLink ← «تفاصيل التطبيق» — أو ابحث عن NexusLink في إعدادات النظام.",en:"Direct app page: Settings → Apps → NexusLink → \"App details\" — or search for NexusLink in system settings."},
+faq_title:{ar:"الأسئلة الشائعة",en:"FAQ"},
+faq_sub:{ar:"إجابات صادقة بلا تسويق — بما فيها حدود التطبيق المعلنة.",en:"Honest answers, no marketing — including the app's documented limits."},
+fq1q:{ar:"هل تحتاج بياناتي إنترنت أو سيرفراتكم؟",en:"Does my data need the internet or your servers?"},
+fq1a:{ar:"لا إطلاقًا. كل شيء — ملفات، حافظة، تحكم، وسائط — يعمل بين أجهزتك على شبكتك المحلية. لا حسابات ولا سحابة ولا سيرفر وسيط لنا. الاتصال الخارجي الوحيد هو فحص التحديث من GitHub وهو قابل للتعطيل كليًا من الإعدادات.",en:"Never. Everything — files, clipboard, control, media — runs between your devices on your local network. No accounts, no cloud, no intermediary server of ours. The only outbound connection is the update check on GitHub, fully disableable in Settings."},
+fq2q:{ar:"ما الذي يعمل على iPhone؟",en:"What works on iPhone?"},
+fq2a:{ar:"حد صادق: iOS لا يسمح بقراءة SMS/المكالمات/مرآة الإشعارات (قيود Apple). تطبيق iOS يخدم الوسائط والملفات والحافظة فقط — ميزات المرآة الكاملة متاحة على Android.",en:"Honest limit: iOS does not allow SMS/calls/notification mirroring (Apple restrictions). The iOS app serves media, files and clipboard only — full mirroring features are available on Android."},
+fq3q:{ar:"كيف أعرف أن الملف الذي حمّلته سليم؟",en:"How do I know the file I downloaded is intact?"},
+fq3a:{ar:"قارن بصمة SHA-256 مع SHA256SUMS.txt المنشور (أوامر جاهزة في قسم «التحقق» أعلاه)، وملفات .sig الخمسة موقعة بمفتاح minisign الخاص بالمستودع — نفس التحقق الذي يجريه المحدّث الذاتي قبل أي تحديث.",en:"Compare the SHA-256 hash with the published SHA256SUMS.txt (ready-made commands in the Verify section above), and the five .sig files are signed with the repository's minisign key — the same verification the self-updater performs before any update."},
+fq4q:{ar:"الوكيل يتوقف على أندرويد 13+ — ما الحل؟",en:"The agent stops on Android 13+ — what's the fix?"},
+fq4a:{ar:"أندرويد 13+ يقيد التطبيقات من مصادر غير معروفة. افتح: الإعدادات ← التطبيقات ← NexusLink ← قائمة ⋮ ← «السماح بالإعدادات المقيدة»، ثم فعّل الإتاحة والتشغيل التلقائي — الخطوات الكاملة في دليل التثبيت أعلاه.",en:"Android 13+ restricts apps from unknown sources. Open: Settings → Apps → NexusLink → ⋮ menu → \"Allow restricted settings\", then enable accessibility and autostart — full steps in the install guide above."},
+fq5q:{ar:"هل يمكن التحكم بهاتف من هاتف آخر؟",en:"Can one phone control another phone?"},
+fq5a:{ar:"نعم — من إصدار 1.1.0: طلب تحكم عبر المركز يصل للهاتف الهدف بحوار «سماح» صريح، والإدخال يتطلب جلسة موثقة من الطرفين، ولا يمكن لأي جهاز أن يتحكم بنفسه. كل شيء على بروتوكول NexusLink المشفر نفسه.",en:"Yes — since 1.1.0: a control request via the hub reaches the target phone with an explicit \"allow\" dialog, input requires a trusted session from both sides, and no device can control itself. All on the same encrypted NexusLink protocol."},
+fq6q:{ar:"كم يستهلك من الموارد؟ وهل هو مجاني؟",en:"How resource-hungry is it? Is it free?"},
+fq6a:{ar:"واجهة سطح المكتب ~110MB ذاكرة عند التشغيل، والوكيل مصمم بسياسة خمول (بطارية شبه معدومة في الخمول). مجاني للاستخدام الشخصي بالكامل — بلا حسابات ولا اشتراكات.",en:"The desktop UI uses ~110MB of memory at startup, and the agent is designed with an idle policy (near-zero battery when idle). Completely free for personal use — no accounts, no subscriptions."},
+ft_repo:{ar:"المستودع",en:"Repository"},ft_rel:{ar:"الإصدارات",en:"Releases"},
+ft_made:{ar:"صُنع للشبكات المحلية — كل شيء على أجهزتك أنت.",en:"Built for local networks — everything on your own devices."},
+os_win:{ar:"Windows",en:"Windows"},os_mac:{ar:"macOS",en:"macOS"},os_lin:{ar:"Linux",en:"Linux"},os_and:{ar:"Android",en:"Android"}
+};
+var L=(localStorage.getItem("nexus-site-lang")||"ar");
+function apply(){
+  var d=document.documentElement;d.lang=L;d.dir=(L==="ar"?"rtl":"ltr");
+  document.title=D.title[L];
+  var els=document.querySelectorAll("[data-i]");
+  for(var i=0;i<els.length;i++){var k=els[i].getAttribute("data-i");if(D[k]&&D[k][L])els[i].textContent=D[k][L];}
+  document.getElementById("langBtn").textContent=(L==="ar"?"EN":"ع");
+  cta();
+}
+function cta(){
+  var os=detectOS(),lbl=document.getElementById("smartDlLabel"),a=document.getElementById("smartDl"),base="https://github.com/CTO-DRS/NexusLink/releases/latest/download/";
+  var map={win:["NexusLink_1.1.0_x64-setup.exe","card-win"],mac:["NexusLink_1.1.0_aarch64.dmg","card-mac"],lin:["NexusLink_1.1.0_amd64.AppImage","card-lin"],and:["NexusLink-1.1.0-release.apk","card-and"]};
+  document.querySelectorAll(".rec-tag").forEach(function(t){t.hidden=true});
+  document.querySelectorAll(".dl-card").forEach(function(c){c.classList.remove("recommended")});
+  if(os&&map[os]){
+    a.href=base+map[os][0];
+    lbl.textContent=D.hero_cta[L]+" — "+D["os_"+os][L];
+    var card=document.getElementById(map[os][1]);
+    card.classList.add("recommended");
+    var tag=card.querySelector(".rec-tag");tag.hidden=false;tag.textContent=D.rec[L];
+  } else {lbl.textContent=D.hero_cta[L];a.href="#downloads";}
+}
+function detectOS(){
+  var u=navigator.userAgent;
+  if(/Android/i.test(u))return"and";
+  if(/Win/i.test(u))return"win";
+  if(/Mac|iPhone|iPad/i.test(u))return"mac";
+  if(/Linux|X11/i.test(u))return"lin";
+  return null;
+}
+document.getElementById("langBtn").addEventListener("click",function(){L=(L==="ar"?"en":"ar");localStorage.setItem("nexus-site-lang",L);apply();});
+var themeBtn=document.getElementById("themeBtn");
+function setTheme(t){document.documentElement.setAttribute("data-theme",t);themeBtn.textContent=(t==="dark"?"☀":"☾");localStorage.setItem("nexus-site-theme",t);}
+setTheme(localStorage.getItem("nexus-site-theme")||(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"));
+themeBtn.addEventListener("click",function(){setTheme(document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark");});
+var tabs=document.querySelectorAll(".tab-btn");
+tabs.forEach(function(b){b.addEventListener("click",function(){
+  tabs.forEach(function(x){x.classList.remove("active")});
+  document.querySelectorAll(".tab-panel").forEach(function(p){p.classList.remove("active")});
+  b.classList.add("active");
+  document.getElementById("tab-"+b.getAttribute("data-tab")).classList.add("active");
+});});
+document.getElementById("yr").textContent=new Date().getFullYear();
+var ctrl=null;
+try{
+  ctrl=new AbortController();var to=setTimeout(function(){ctrl.abort()},8000);
+  fetch("https://api.github.com/repos/CTO-DRS/NexusLink/releases/latest",{signal:ctrl.signal})
+  .then(function(r){if(!r.ok)throw 0;return r.json()})
+  .then(function(j){if(j&&j.tag_name){document.getElementById("verTag").textContent=j.tag_name;document.getElementById("liveDot").classList.add("live");}clearTimeout(to);})
+  .catch(function(){clearTimeout(to)});
+}catch(e){}
+apply();
+})();
+</script>
+</body>
+</html>
