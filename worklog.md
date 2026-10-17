@@ -1004,3 +1004,17 @@ Stage Summary:
 - الموقع الرسمي متكامل ومُتحقق منه حيًا مرة أخرى (صفر انحدار) — والتوثيق أصبح مطابقًا لعقد المسارات الفعلي.
 - **الشيء الوحيد الحاجب للنشر**: 6 commits محلية جاهزة (2e308c6 gitignore · 30ba3fe+f5e01c1 artifacts · eab4003 الموقع · ef3457f worklog · 939ff45 README) — يرفعها أمر واحد بعد أن يفعل المالك أحد خيارين في github.com/settings/emails: (أ) إلغاء تأشير «Block command line pushes that expose my private email» (الموصى به) أو (ب) جعل cto.drs@gmail.com عامًا (يكشف بريدًا آخر — غير مستحسن). بعدها: `git push origin main`.
 - الخبر الإيجابي المثبت: cto.drs@gmail.com مرتبط بالحساب — التاريخ كله (137 commit) منسوب للبروفايل CTO-DRS فعليًا.
+
+---
+Task ID: R5-push-live
+Agent: main (Super Z)
+Task: رفع صفحة النشر والموقع الرسمي — أول دفع ناجح بعد فك GH007 من المالك (settings/emails)
+
+Work Log:
+- أمر الدفع الواحد نجح: main ‏42dd047..d03b4f3 — كتلة الـ 8 commits المحجوبة (الموقع الرسمي eab4003 + worklog ef3457f + README 939ff45 + worklog 901e28c + artifacts تلقائية) صارت على المسيّد.
+- تحقق بعدي API: remote HEAD = local HEAD = d03b4f3 · الـ 8 commits كلها CTO-DRS <cto.drs@gmail.com> · الإصدار v1.1.0-fix4 (16 asset) لم يتأثر.
+- GH007 فُكّ من إعدادات حساب المالك (كان بيده حصرًا) — قاعدة الهوية صارت تعمل بكامل طاقتها: تكتب بمفتاح المالك وتُنشر عليه.
+
+Stage Summary:
+- الموقع الرسمي (‎/ + ‎/download) وبنية README محدثة على GitHub الآن.
+- رابط الإصدار: github.com/CTO-DRS/NexusLink/releases/latest — والموقع يعمل محليًا على ‎/ و ‎/download.
