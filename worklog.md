@@ -985,3 +985,22 @@ Stage Summary:
 - commit ‏eab4003 بهوية CTO-DRS <cto.drs@gmail.com> (الخطاف حارس) — **لكن الدفع حجبه GH007**: حساب GitHub فعّل حماية البريد الخاص بينما cto.drs@gmail.com (المطلوبة نصًا من المالك) أُضيفت للتو إلى الحساب فعدّلها GitHub بريدًا خاصًا يمنع نشره عبر الدفع. الواجهة البرمجية لا تغيّر هذا الإعداد — القرار للمالك فقط.
 - **الخلل السريع للمالك** (اختر واحدًا): (أ) github.com/settings/emails ← أزل التأشير من «Block command line pushes that expose my private email» (الأدق — يحفظ الخصوصية ويسمح بالدفع بالهوية المعتمدة) أو (ب) اجعل cto.drs@gmail.com عامًا بإلغاء «Keep my email addresses private» (يكشف mr.drs.vip@gmail.com — غير مستحسن). بعدها: `git push origin main` يدفع eab4003 و30ba3fe معًا.
 - الخبر السار من الفحص: cto.drs@gmail.com صار مؤكدًا على الحساب — تاريخ الـ137 commit المعاد كتابته صار مرتبطًا بحساب CTO-DRS فعليًا (سابقاً login=None).
+
+---
+Task ID: R5-site-completion
+Agent: main (Super Z)
+Task: استكمال الموقع المتكامل بعد عودته — توثيق عقد المسارات في README (فجوة حقيقية: تعليمة QR كانت تشير للجذر الذي صار الموقع الرسمي) + تحقق بصري حي جديد + محاولة دفع (GH007 قائم)
+
+Work Log:
+- فحص الحالة: كل المسارات الأربعة حية 200 (/ و /download و /?app=1 و /?desktop=1) — الموقع المبني في R5-download-site و R5-website-home سليم بلا انحدار.
+- **فجوة موثقة أُصلحت**: README §0 كان يوجه «امسح QR من واجهة الويب http://localhost:3000» — لكن الجذر صار الموقع الرسمي للزوار في R5-website-home؛ مستخدم يتبع README سيصل للموقع التسويقي لا لواجهة التطبيق. الإصلاح: التعليمة الآن «نافذة سطح المكتب أو http://localhost:3000/?app=1» + ملاحظة صريحة بعقد المسارات.
+- README §2: بند «عقد المسارات» الجديد (‎/ الموقع · ‎/download التحميلات · ‎/?app=1 المتصفح · ‎/?desktop=1 سطح المكتب حرفيًا من procman — لا تغيّره).
+- README §7: بنية المستودع تضم src/components/site/ و download/ و download-site-data.ts.
+- تحقق بصري حي بالمتصفح (agent-browser): ‎/ عربي rtl|ar بعنوان «NexusLink — منصة إدارة الأجهزة الموحدة» وبطل «الموقع الرسمي + أحدث إصدار: 1.1.0» + CTAs + أرقام مقاسة + ميزات (بما فيها تحكم هاتف→هاتف) · تبديل اللغة → ltr|en وH1 مترجم «Turn your devices into one seamless system… with no cloud» · /download بالقائمة الإنجليزية الكاملة (Downloads/Why/Installation/Updates/FAQ) · **errors: [] صفر أخطاء صفحة** · لقطات scripts/evidence/site-verify-home-ar.png و site-verify-download-en.png.
+- commit ‏939ff45 بهوية CTO-DRS <cto.drs@gmail.com> (خطاف pre-commit حارس — PASS).
+- محاولة دفع: **GH007 ما زال قائمًا** (remote rejected — email privacy) — لم يتغير إعداد حساب المالك منذ R5-website-home؛ الإصلاح بيده حصرًا.
+
+Stage Summary:
+- الموقع الرسمي متكامل ومُتحقق منه حيًا مرة أخرى (صفر انحدار) — والتوثيق أصبح مطابقًا لعقد المسارات الفعلي.
+- **الشيء الوحيد الحاجب للنشر**: 6 commits محلية جاهزة (2e308c6 gitignore · 30ba3fe+f5e01c1 artifacts · eab4003 الموقع · ef3457f worklog · 939ff45 README) — يرفعها أمر واحد بعد أن يفعل المالك أحد خيارين في github.com/settings/emails: (أ) إلغاء تأشير «Block command line pushes that expose my private email» (الموصى به) أو (ب) جعل cto.drs@gmail.com عامًا (يكشف بريدًا آخر — غير مستحسن). بعدها: `git push origin main`.
+- الخبر الإيجابي المثبت: cto.drs@gmail.com مرتبط بالحساب — التاريخ كله (137 commit) منسوب للبروفايل CTO-DRS فعليًا.
