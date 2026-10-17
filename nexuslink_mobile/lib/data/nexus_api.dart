@@ -40,6 +40,8 @@ class NexusApi {
 
   /// تسجيل الجهاز: POST /api/devices {action:"pair", …}
   /// الحقول مطابقة لما يقبلها السيرفر (بعد إصلاح الحقول الاختيارية للوكيل).
+  /// [secret] = سر آخر رمز QR مُصدَر (G-1 عقد §6): الاقتران يُرفض 403 بدونه،
+  /// ويأتي من مسح الكاميرا أو — للإدخال اليدوي — من جلب /api/devices/qr (عقد §7).
   Future<NexusDevice> pair({
     required String stableId,
     required String deviceName,
@@ -49,6 +51,7 @@ class NexusApi {
     required int storageTotal,
     required int storageUsed,
     required String ip,
+    String? secret,
   }) async {
     final body = jsonEncode({
       'action': 'pair',
@@ -61,6 +64,7 @@ class NexusApi {
       'storageTotal': storageTotal,
       'storageUsed': storageUsed,
       'ip': ip,
+      if (secret != null) 'secret': secret,
     });
     final res = await _client
         .post(
@@ -69,6 +73,13 @@ class NexusApi {
           body: body,
         )
         .timeout(Timeouts.restCall);
+    if (res.statusCode == 403) {
+      // G-1 — رفض مسبب من السيرفر: reason ∈ {no-window, missing, expired, invalid}
+      final j = jsonDecode(res.body);
+      final reason = (j is Map ? j['reason'] : null) ?? 'unknown';
+      final err = (j is Map ? j['error'] : null) ?? 'رُفض الاقتران';
+      throw PairingRejectedException(reason: '$reason', serverMessage: '$err');
+    }
     if (res.statusCode != 200) {
       throw ApiException('pair رفضه السيرفر: HTTP ${res.statusCode}');
     }
@@ -121,4 +132,14 @@ class ApiException implements Exception {
   ApiException(this.message);
   @override
   String toString() => message;
+}
+
+/// G-1 (عقد §6) — رفض الاقتران بسبب فشل تحقق سر QR.
+/// reason ∈ {no-window, missing, expired, invalid} — يعرض للمستخدم [serverMessage].
+class PairingRejectedException implements Exception {
+  final String reason;
+  final String serverMessage;
+  PairingRejectedException({required this.reason, required this.serverMessage});
+  @override
+  String toString() => serverMessage;
 }

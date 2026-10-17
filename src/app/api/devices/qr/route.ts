@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import QRCode from "qrcode"
-import { store } from "@/lib/nexus/devices"
+import { store, PAIRING_TTL_MS } from "@/lib/nexus/devices"
 import crypto from "crypto"
 
 export const dynamic = "force-dynamic"
@@ -48,5 +48,12 @@ export async function GET(req: NextRequest) {
     width: 320, margin: 1,
     color: { dark: "#0f172a", light: "#ffffff" },
   })
-  return NextResponse.json({ qr: dataUrl, code: secret.slice(0, 6).toUpperCase(), payload })
+  // G-1 — شفافية نافذة الاقتران: الصلاحية تعتمد على آخر إصدار (تدوير عند كل GET)
+  return NextResponse.json({
+    qr: dataUrl,
+    code: secret.slice(0, 6).toUpperCase(),
+    payload,
+    ttlMs: PAIRING_TTL_MS,
+    expiresAt: s.pairingIssuedAt + PAIRING_TTL_MS,
+  })
 }

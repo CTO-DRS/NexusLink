@@ -178,24 +178,43 @@ const PHONE_ID = "galaxy-s24-fa10"
 const PC_ID = "pc-office"
 
 async function main() {
+  // ضمان إقلاع جسر الأمان قبل أي اتصال (نمط agent-tx-e2e: boot كسول — الدرس من
+  // التشخيص: جسر ميت = صمت تام بلا أخطاء، وتاريخ 26/26 جاء عبر run-sec-e2e.sh المُقلع)
+  await fetch(`${REST}/api/security/boot`, { method: "POST" }).catch(() => null)
+  await sleep(200)
+
   const phone = makeSecClient({ deviceId: PHONE_ID, name: "Galaxy-S24-FA10", role: "phone" })
   const pc = makeSecClient({ deviceId: PC_ID, name: "PC-OFFICE", role: "desktop" })
   await sleep(300)
 
   // 0) توثيق الطرفين عبر REST (سجل الأجهزة) — قبل أي إعلان هوية
+  // G-1 (عقد §6): الاقتران يتطلب سر آخر رمز QR مُصدَر — يُجلَب قبل التسجيل
+  const qrSec = await fetch(`${REST}/api/devices/qr`).then((r) => r.json()).catch(() => null)
+  const PAIR_SECRET = qrSec?.payload?.secret
   let pairOk = false
   try {
     const r1 = await fetch(`${REST}/api/devices`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "pair", id: PHONE_ID, name: "Galaxy-S24-FA10", kind: "phone", ip: "192.168.1.44", battery: 88, model: "Pixel-Fa10" }),
+      body: JSON.stringify({ action: "pair", id: PHONE_ID, name: "Galaxy-S24-FA10", kind: "phone", ip: "192.168.1.44", battery: 88, model: "Pixel-Fa10", secret: PAIR_SECRET }),
     })
     const r2 = await fetch(`${REST}/api/devices`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "pair", id: PC_ID, name: "PC-OFFICE", kind: "desktop", ip: "192.168.1.2", battery: 100, model: "PC" }),
+      body: JSON.stringify({ action: "pair", id: PC_ID, name: "PC-OFFICE", kind: "desktop", ip: "192.168.1.2", battery: 100, model: "PC", secret: PAIR_SECRET }),
     })
     pairOk = r1.ok && r2.ok
   } catch { /* ignore */ }
-  ok("pair: الطرفان مقترنان وموثوقان في سجل الأجهزة", pairOk)
+  ok("pair: الطرفان مقترنان وموثوقان في سجل الأجهزة (بسر QR صحيح — G-1)", pairOk)
+
+  // سباق الإعلان/الاقتران (يكشفه التشغيل على خادم بارد): العملاء أعلنوا عند t=0
+  // قبل الاقتران (t≈300ms) — ولقطة الثقة في sec:announce التقطتهم غير موثوقين
+  // (sec:pending-trust بلا مسار إعادة تقييم في الجسر). إعادة الاتصال بعد الاقتران
+  // تجعل الإعلان يقع والجهاز موثوق فتُرحَّل المصافحة فورًا — نفس ما يفعله الوكيل
+  // الحقيقي (الاتصال يبدأ بعد إتمام الاقتران في providers.dart::connect).
+  for (const cl of [phone, pc]) {
+    cl.socket.disconnect()
+    cl.socket.connect()
+  }
+  await sleep(600)
 
   // 1) جهاز غريب غير موثوق → sec:pending-trust وبلا kex
   const STRANGER_ID = `stranger-fa10-${Date.now().toString(36)}`

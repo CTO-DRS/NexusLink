@@ -328,12 +328,12 @@ interface TransferJob {
 **الموجود فعليًا (بعد إصلاح Flutter-1):**
 1. الكمبيوتر يولّد QR: `GET /api/devices/qr` → `secret` عشوائي 32-hex + `code` أول 6 أحرف + `payload` نصي.
 2. حمولة QR: `{v:1, proto:"Nexus/1.2", host:<IP حقيقي من ترويسة الطلب>, port:<81 أو 3000>, secret, ts, name:"NEXUS-PC", ports:{rest:3000, comms:3003, remote:3004, media:3005, guard:3006, prod:3007, sec:3009, gateway:81}}`.
-3. إتمام: `POST /api/devices {action:"pair", name, kind, id?, ip?, battery?, storageTotal?, storageUsed?, model?}` → `{ok, device}` (idempotent عبر id/name).
+3. إتمام: `POST /api/devices {action:"pair", name, kind, id?, ip?, battery?, storageTotal?, storageUsed?, model?, secret?}` → `{ok, device}` (idempotent عبر id/name) — **`secret` إلزامي بعد G-1 (أدناه)**.
 
 **الفجوات (G) — الحالة بعد مرحلة Flutter-1:**
 | # | الفجوة | الحالة | ما نُفّذ |
 |---|--------|--------|----------|
-| G-1 | `pair` لا يتحقق من سر QR | ⏳ مؤجلة لمرحلة الأمان | التسجيل عبر pair كما هو؛ التحقق من السر سيُضاف مع مرحلة الأمان |
+| G-1 | `pair` لا يتحقق من سر QR | ✅ **مُصلحة** (مرحلة الأمان) | `verifyPairingSecret()` في `src/lib/nexus/devices.ts`: كل `pair` (جديد وإعادة تسجيل) يتطلب سر آخر رمز QR مُصدَر داخل نافذة 10 دقائق (`PAIRING_TTL_MS`) — مقارنة `crypto.timingSafeEqual` بعد فحص الطول. الرفض 403 مسبب (`reason ∈ {no-window, missing, expired, invalid}`) + رسالة عربية واضحة + تدقيق أمني `pairing-reject` (severity warn) والنجاح `pairing` (info) في سجل §16 (أُضيفت للمفردات المرئية في audit route + شاراتها في audit-tab). `GET /api/devices/qr` يُدوّر السر عند كل إصدار (آخر رمز هو الصالح) ويعيد `ttlMs/expiresAt` للشفافية. العملاء: PairDialog (ويب) يرسل السر ويعالج الرفض بإعادة إصدار تلقائية؛ Flutter `api.pair(secret)` مع `PairingRejectedException` — والإدخال اليدوي يجلب السر من `/api/devices/qr` (نمط §1 أدناه، بلا نقطة `/api/pair/claim` موازية — قرار «لا بروتوكول موازٍ»). **حد صادق**: البوتستراب من نفس قناة REST (الإدخال اليدوي) لا يضيف قربًا فعليًا — الإثبات الأقوى يبقى مسح الكاميرا لرمز معروض على شاشة الكمبيوتر؛ والأجهزة المزروعة في البذرة تظل موثوقة مسبقًا (سجل محاكاة الجولة الأولى). E2E: قسم G-1 في desktop-e2e.mjs (no-window/missing/invalid/قبول/إعادة تسجيل/تدوير/تدقيق/فحوص مصدر). |
 | G-2 | QR يعلن `port:7420` الميت + IP ثابت | ✅ **مُصلحة** | `/api/devices/qr` يشتق host/port من ترويسة Host الواردة، ويعيد `payload` نصيًا + خريطة منافذ الجسور كاملة `ports:{rest,comms,remote,media,guard,prod,sec,gateway}` + `name:"NEXUS-PC"` |
 | G-3 | لا اكتشاف تلقائي | ✅ **مُصلحة** | comms-service يعلن `NEXUS-PC._nexuslink._tcp` عبر bonjour-service (port 81) مع TXT: proto/name/gateway/rest/comms/remote/media/guard/prod/sec — best-effort بلا إيقاف الخدمة عند فشل multicast |
 | G-4 | سجل الأجهزة في الذاكرة | مقبول | الوكيل يعيد التسجيل تلقائيًا (idempotent عبر `id` الثابت) |
@@ -344,7 +344,7 @@ interface TransferJob {
 
 ## 7. حزمة اتصال الوكيل (ما يجب أن يفعله تطبيق Flutter حرفيًا)
 
-1. **اكتشاف/اقتران**: UDP discovery (بعد G-3) أو إدخال IP يدوي → جلب QR من الكمبيوتر أو عرض QR من الهاتف → تبادل السر → `POST /api/pair/claim` (بعد G-1) → حفظ `{serverName, ip, ports, deviceId, secret?, pub}` في drift/SQLite.
+1. **اكتشاف/اقتران**: UDP discovery (بعد G-3) أو إدخال IP يدوي → جلب QR من الكمبيوتر أو عرض QR من الهاتف → تبادل السر → `POST /api/devices {action:"pair", secret}` (**G-1 مُغلقة**: نفس نقطة pair، لا `/api/pair/claim` موازية) → حفظ `{serverName, ip, ports, deviceId, secret?, pub}` في drift/SQLite.
 2. **طبقة الاتصالات**: 3 اتصالات socket.io دائمة (إعادة اتصال تلقائي):
    - `:3003` كمصدر ingest عبر REST + مستمع `phone:*` (رد سريع/SMS/مكالمات/DND).
    - `:3006` كمنارة قرب (`prox:beacon` كل 5s) + منفذ أوامر `dev:*`.

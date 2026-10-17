@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { promises as fs } from "fs"
-import { store, heartbeatBump } from "@/lib/nexus/devices"
+import { store, heartbeatBump, verifyPairingSecret, PAIRING_TTL_MS, type PairingRejectReason } from "@/lib/nexus/devices"
 import { startTransfer, createAgentOfferJob, jobs } from "@/lib/nexus/transfer-engine"
 import { resolveSafe, ensureDeviceRoot, mimeOf } from "@/lib/nexus/fs-server"
 import { isAgentOnline, getAgentDeviceId, guardEmitToAgent } from "@/lib/nexus/guard-bridge"
@@ -39,9 +39,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
     case "pair": {
-      // body: { name, kind, id?, ip?, battery?, storageTotal?, storageUsed?, model? }
+      // body: { name, kind, id?, ip?, battery?, storageTotal?, storageUsed?, model?, secret? }
       // يُستدعى من وكيل الجهاز (تطبيق Flutter): id = معرّف ثابت (Android ID) يجعل
       // إعادة التسجيل idempotent، والحقول الاختيارية تنقل الحالة الحقيقية للجهاز.
+      // G-1 (عقد §6): الاقتران يتطلب سر آخر رمز QR مُصدَر داخل نافذة الصلاحية —
+      // يطبّق على التسجيل الجديد وإعادة التسجيل معًا (منع اختطاف هوية جهاز معروف).
+      const verdict = verifyPairingSecret(body.secret)
+      if (!verdict.ok) {
+        const reasonMsg: Record<PairingRejectReason, string> = {
+          "no-window": "لا نافذة اقتران نشطة — افتح مربع «اقتران جهاز جديد» على الكمبيوتر أولًا ليُصدَر رمز QR",
+          missing: `سر الاقتران مفقود — امسح رمز QR المعروض على شاشة الكمبيوتر (الصلاحية ${PAIRING_TTL_MS / 60000} دقائق)`,
+          expired: `انتهت صلاحية رمز الاقتران (${PAIRING_TTL_MS / 60000} دقائق) — أُصدر رمزًا جديدًا وامسحه`,
+          invalid: "سر الاقتران لا يطابق آخر رمز مُصدَر — تأكد من مسح الرمز الأحدث",
+        }
+        // تدقيق أمني: محاولة اقتران مرفوضة (warn) — مرئية في واجهة المراجعة §16
+        void writeServerAudit({
+          action: "pairing-reject",
+          detail: `رُفض اقتران «${String(body.name ?? "مجهول")}» — السبب: ${verdict.reason}`,
+          severity: "warn",
+          actor: String(body.name ?? "مصدر مجهول"),
+        }).catch(() => null)
+        return NextResponse.json({ ok: false, error: reasonMsg[verdict.reason], reason: verdict.reason }, { status: 403 })
+      }
       const exists = s.devices.find(
         (x) => (body.id && typeof body.id === "string" && x.id === body.id) || x.name === body.name
       )
@@ -54,6 +73,13 @@ export async function POST(req: NextRequest) {
         if (typeof body.ip === "string" && body.ip) exists.ip = body.ip
         // سجّل جذرًا فعليًا للوكيل (مرآة ملفاته قابلة للتصفح من الويب)
         try { ensureDeviceRoot(exists.id) } catch { /* معرّف غير قياسي — تجاهل */ }
+        // G-1 — تدقيق نجاح إعادة التسجيل (تحقق السر نجح)
+        void writeServerAudit({
+          action: "pairing",
+          detail: `إعادة تسجيل «${exists.name}» بسر اقتران صحيح`,
+          actor: exists.name,
+          deviceId: exists.id,
+        }).catch(() => null)
         return NextResponse.json({ ok: true, device: exists })
       }
       const stableId =
@@ -78,6 +104,13 @@ export async function POST(req: NextRequest) {
       s.devices.push(d)
       // جذر فعلي لمرآة ملفات الوكيل الجديد
       try { ensureDeviceRoot(d.id) } catch { /* معرّف غير قياسي — تجاهل */ }
+      // G-1 — تدقيق نجاح الاقتران (إثبات قرب: سر آخر رمز QR مُصدَر)
+      void writeServerAudit({
+        action: "pairing",
+        detail: `اقتران جديد «${d.name}» (${d.kind}) بسر رمز QR صحيح`,
+        actor: d.name,
+        deviceId: d.id,
+      }).catch(() => null)
       return NextResponse.json({ ok: true, device: d })
     }
     case "send-file": {

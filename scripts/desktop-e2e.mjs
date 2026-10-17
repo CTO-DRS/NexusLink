@@ -2648,6 +2648,117 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     const cl23 = rd23("docs/e2e-checklist.md")
     check("§23: القائمة الميدانية §17 — اختبار الترقية الحقيقي (1.0.0 → إشعار → ترقية → إعدادات سليمة)",
       cl23.includes("## 17. اختبار الترقية 1.0.0 → 1.1.0") && cl23.includes("بلا تلف أي إعداد"), "checklist §17")
+
+    // ============================================================
+    // G-1 — تحقق سر الاقتران (عقد §6: إغلاق الفجوة المؤجلة «لمرحلة الأمان»)
+    // نافذة 10 دقائق · تدوير عند كل إصدار (آخر رمز هو الصالح) · رفض مسبب 403 · تدقيق أمني
+    // ============================================================
+    console.log("\n== G-1: pairing secret verification ==")
+    {
+      const g1Base = "http://127.0.0.1:3000"
+      const fspG1 = (await import("node:fs")).default
+      const rdG1 = (p) => { try { return fspG1.readFileSync(pathMod.join(ROOT, p), "utf8") } catch { return "" } }
+      const G1_ID = `e2e-g1-${Date.now().toString(36)}`
+      const postPair = async (body) =>
+        fetch(`${g1Base}/api/devices`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }).catch(() => null)
+
+      // (أ) بلا نافذة اقتران: أول pair بعد إقلاع نظيف → 403 no-window
+      const cold = await postPair({ action: "pair", name: "E2E-G1-Cold", kind: "phone" })
+      const coldJson = await cold?.json().catch(() => null)
+      check("G-1: pair قبل إصدار أي رمز → 403 reason=no-window (لا اقتران أعمى)",
+        cold?.status === 403 && coldJson?.reason === "no-window" && coldJson?.ok === false,
+        `HTTP ${cold?.status} reason=${coldJson?.reason}`)
+
+      // (ب) إصدار رمز: شفافية النافذة (ttlMs + expiresAt)
+      const qr1 = await fetch(`${g1Base}/api/devices/qr`).then((r) => r.json()).catch(() => null)
+      check("G-1: QR يعيد ttlMs=600000 وexpiresAt مستقبليًا",
+        qr1?.ttlMs === 600000 && typeof qr1?.expiresAt === "number" && qr1.expiresAt > Date.now(),
+        `exp-in=${qr1 ? qr1.expiresAt - Date.now() : "?"}ms`)
+      check("G-1: QR الحمولة تحمل السر كاملًا (32 hex) للعميل الممسِك",
+        typeof qr1?.payload?.secret === "string" && qr1.payload.secret.length === 32, `code=${qr1?.code}`)
+
+      // (ج) نافذة نشطة: بلا سر → missing · سر فاسد → invalid
+      const noSec = await postPair({ action: "pair", name: "E2E-G1-NoSecret", kind: "phone" })
+      const noSecJson = await noSec?.json().catch(() => null)
+      check("G-1: pair بلا سر (نافذة نشطة) → 403 reason=missing",
+        noSec?.status === 403 && noSecJson?.reason === "missing", `HTTP ${noSec?.status}`)
+      const badSec = await postPair({ action: "pair", name: "E2E-G1-BadSecret", kind: "phone", secret: "f".repeat(32) })
+      const badSecJson = await badSec?.json().catch(() => null)
+      check("G-1: pair بسر فاسد → 403 reason=invalid",
+        badSec?.status === 403 && badSecJson?.reason === "invalid", `HTTP ${badSec?.status}`)
+
+      // (د) القبول: السر الصحيح → 200 + trusted:true (التسجيل الجديد)
+      const okPair = await postPair({ action: "pair", id: G1_ID, name: "E2E-G1-Phone", kind: "phone", ip: "192.168.1.99", battery: 66, secret: qr1?.payload?.secret })
+      const okJson = await okPair?.json().catch(() => null)
+      check("G-1: pair بسر QR الصحيح → 200 ok:true",
+        okPair?.status === 200 && okJson?.ok === true && okJson?.device?.id === G1_ID, `HTTP ${okPair?.status}`)
+      check("G-1: الجهاز المقترن بسر صحيح trusted:true (سلسلة الثقة §13/§24 سليمة)",
+        okJson?.device?.trusted === true)
+
+      // (هـ) إعادة التسجيل (مسار الجهاز الموجود) تخضع للتحقق نفسه
+      const reReg = await postPair({ action: "pair", id: G1_ID, name: "E2E-G1-Phone", kind: "phone", battery: 65, secret: qr1?.payload?.secret })
+      const reRegJson = await reReg?.json().catch(() => null)
+      check("G-1: إعادة تسجيل نفس الجهاز بسر صحيح → 200 (idempotent بعد التحقق)",
+        reReg?.status === 200 && reRegJson?.device?.id === G1_ID && reRegJson?.device?.battery === 65,
+        `HTTP ${reReg?.status} battery=${reRegJson?.device?.battery}`)
+      const reHijack = await postPair({ action: "pair", id: G1_ID, name: "E2E-G1-Phone", kind: "phone", battery: 10 })
+      check("G-1: إعادة تسجيل بلا سر → 403 (منع اختطاف هوية جهاز معروف)",
+        reHijack?.status === 403, `HTTP ${reHijack?.status}`)
+
+      // (و) التدوير: إصدار جديد يُبطل السابق (آخر رمز مُصدَر هو الصالح)
+      const qr2 = await fetch(`${g1Base}/api/devices/qr`).then((r) => r.json()).catch(() => null)
+      const stale = await postPair({ action: "pair", name: "E2E-G1-Stale", kind: "phone", secret: qr1?.payload?.secret })
+      const staleJson = await stale?.json().catch(() => null)
+      check("G-1: pair بالسر القديم بعد إصدار رمز جديد → 403 reason=invalid (تدوير)",
+        stale?.status === 403 && staleJson?.reason === "invalid" && qr2?.payload?.secret !== qr1?.payload?.secret,
+        `HTTP ${stale?.status}`)
+
+      // (ز) التدقيق الأمني: الرفض warn + النجاح info مرئيان في واجهة المراجعة §16
+      await sleep(400)
+      const auditG1 = await fetch(`${g1Base}/api/desktop/audit?take=500`).then((r) => r.json()).catch(() => null)
+      const g1Events = auditG1?.events ?? []
+      const rejects = g1Events.filter((e) => e.action === "pairing-reject")
+      const accepts = g1Events.filter((e) => e.action === "pairing")
+      check("G-1: تدقيق pairing-reject مرئي (≥5 رفض بأسبابها — severity warn)",
+        rejects.length >= 5 && rejects.every((e) => e.severity === "warn"), `rejects=${rejects.length}`)
+      check("G-1: تدقيق pairing مرئي (≥2 نجاح — جديد + إعادة تسجيل)",
+        accepts.length >= 2, `accepts=${accepts.length}`)
+      check("G-1: تفاصيل الرفض تحمل السبب الآلي (reason) للمطابقة",
+        rejects.some((e) => String(e.detail).includes("no-window"))
+        && rejects.some((e) => String(e.detail).includes("missing"))
+        && rejects.some((e) => String(e.detail).includes("invalid")), "reasons in detail")
+
+      // (ح) فحوص مصدر — البنية التعاقدية في الملفات
+      const g1devices = rdG1("src/lib/nexus/devices.ts")
+      check("G-1: devices.ts — PAIRING_TTL_MS + timingSafeEqual + أسباب الرفع الأربعة",
+        g1devices.includes("PAIRING_TTL_MS = 10 * 60_000") && g1devices.includes("crypto.timingSafeEqual")
+        && g1devices.includes('"no-window"') && g1devices.includes('"expired"'), "verifier source")
+      const g1route = rdG1("src/app/api/devices/route.ts")
+      check("G-1: route.ts — التحقق أعلى pair (قبل مسارَي الجديد والموجود) + 403 مسبب + تدقيق",
+        g1route.includes("verifyPairingSecret(body.secret)") && g1route.includes('status: 403')
+        && g1route.includes('"pairing-reject"') && g1route.includes('"pairing"'), "pair route source")
+      const g1qr = rdG1("src/app/api/devices/qr/route.ts")
+      check("G-1: qr/route.ts — ttlMs/expiresAt في الاستجابة (شفافية النافذة)",
+        g1qr.includes("ttlMs: PAIRING_TTL_MS") && g1qr.includes("expiresAt:"), "qr source")
+      const g1view = rdG1("src/components/nexus/devices-view.tsx")
+      check("G-1: PairDialog — يرسل السر ويعالج الرفض بإعادة إصدار تلقائية",
+        g1view.includes("payload?.secret") && g1view.includes('secret }') && g1view.includes("await begin()"), "dialog source")
+      const g1api = rdG1("nexuslink_mobile/lib/data/nexus_api.dart")
+      check("G-1: Flutter api — معامل secret + 403 → PairingRejectedException",
+        g1api.includes("String? secret") && g1api.includes("PairingRejectedException") && g1api.includes("statusCode == 403"), "flutter api")
+      const g1prov = rdG1("nexuslink_mobile/lib/state/providers.dart")
+      check("G-1: Flutter connect — الإدخال اليدوي يجلب السر من QR (عقد §7) ويمرره لـ pair",
+        g1prov.includes("api.pairingQr()") && g1prov.includes("secret: pairingSecret"), "flutter provider")
+      const g1audit = rdG1("src/app/api/desktop/audit/route.ts")
+      check("G-1: audit route — مفردات pairing في SERVER_ACTIONS (مرئية في المراجعة)",
+        g1audit.includes('"pairing-reject"'), "audit visibility")
+      const contractG1 = rdG1("docs/protocol-contract.md")
+      check("G-1: العقد §6 — صف الفجوة G-1 موثق كمُصلح مع البروتوكول",
+        contractG1.includes("G-1") && contractG1.includes("مُصلحة") && contractG1.includes("verifyPairingSecret"), "contract §6")
+    }
   }
 
 } catch (e) {

@@ -3275,8 +3275,8 @@
   "فعّل «السماح من هذا المصدر» عند طلب النظام": "Enable «Allow from this source» when the system asks",
   "على أندرويد 13+ إن ظهرت رسالة الإعدادات المحظورة اتبع خطوات مركز رفع القيود أدناه": "On Android 13+ if the restricted-settings message appears follow the Unblock Center steps below",
   "مركز رفع القيود (أندرويد 13+)": "Unblock Center (Android 13+)",
-  "قيد نظامي مقصود: أندرويد 13+ يمنع تفعيل خدمات إمكانية الوصول للتطبيقات المثبتة خارج المتجر برسالة «الإجراء غير مسموح» — الفك يدوي من إعدادات النظام، وهذه خطواته الرسمية:": "Intentional system restriction: Android 13+ blocks accessibility services for apps installed outside the store with the \u00abAction not allowed\u00bb message — the unlock is manual from system settings, and these are its official steps:",
-  "بعد فك القيد عد إلى التطبيق وفعّل الخدمة — الحالة أعلاه ستتحول إلى «مفعّلة» تلقائيًا.": "After unlocking, return to the app and enable the service — the status above will switch to \u00abenabled\u00bb automatically.",
+  "قيد نظامي مقصود: أندرويد 13+ يمنع تفعيل خدمات إمكانية الوصول للتطبيقات المثبتة خارج المتجر برسالة «الإجراء غير مسموح» — الفك يدوي من إعدادات النظام، وهذه خطواته الرسمية:": "Intentional system restriction: Android 13+ blocks accessibility services for apps installed outside the store with the «Action not allowed» message — the unlock is manual from system settings, and these are its official steps:",
+  "بعد فك القيد عد إلى التطبيق وفعّل الخدمة — الحالة أعلاه ستتحول إلى «مفعّلة» تلقائيًا.": "After unlocking, return to the app and enable the service — the status above will switch to «enabled» automatically.",
   "أندرويد 13+ يحجب خدمات إمكانية الوصول للتطبيقات المثبتة خارج المتجر — الفك يدوي ومقصود من جوجل، وهذه خطواته الرسمية:": "Android 13+ blocks accessibility services for sideloaded apps — the block is intentional by Google, and these are the official unblock steps:",
   "افتح إعدادات النظام ← التطبيقات ← إدارة التطبيقات ← NexusLink": "Open system Settings → Apps → All apps → NexusLink",
   "من قائمة ⋮ أعلى اليمين اختر «السماح بالإعدادات المحظورة»": "From the ⋮ menu at the top choose «Allow restricted settings»",
@@ -3360,5 +3360,13 @@
   "جاهز تربط أجهزتك؟": "Ready to link your devices?",
   "حمّل النسخة الموقعة لمنصتك، امسح رمز الاقتران، ودع الباقي على شبكتك — حرفيًا في دقائق.": "Grab the signed build for your platform, scan the pairing code, and let the rest stay on your network — literally minutes.",
   "تنزيل الآن": "Download now",
-  "المستودع المفتوح على GitHub": "Open repository on GitHub"
+  "المستودع المفتوح على GitHub": "Open repository on GitHub",
+  "رُفض الاقتران — أُصدر رمزًا جديدًا": "Pairing rejected — a new code was issued",
+  "الصلاحية 10 دقائق — كل إصدار جديد يُبطل الرمز السابق (التحقق G-1)": "Valid for 10 minutes — each new issue invalidates the previous code (G-1 check)",
+  "لا نافذة اقتران نشطة — افتح مربع «اقتران جهاز جديد» على الكمبيوتر أولًا ليُصدَر رمز QR": "No active pairing window — open “Pair a new device” on the computer first to issue a QR code",
+  "سر الاقتران مفقود — امسح رمز QR المعروض على شاشة الكمبيوتر (الصلاحية 10 دقائق)": "Pairing secret missing — scan the QR code shown on the computer screen (valid for 10 minutes)",
+  "انتهت صلاحية رمز الاقتران (10 دقائق) — أُصدر رمزًا جديدًا وامسحه": "Pairing code expired (10 minutes) — a new code was issued, scan it",
+  "سر الاقتران لا يطابق آخر رمز مُصدَر — تأكد من مسح الرمز الأحدث": "Pairing secret doesn’t match the latest issued code — make sure you scanned the newest code",
+  "اقتران": "Pairing",
+  "اقتران مرفوض": "Pairing rejected"
 }

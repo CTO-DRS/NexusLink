@@ -34,8 +34,9 @@ export async function GET(req: NextRequest) {
   const category = url.searchParams.get("category") // مثل native-clipboard أو transfer (اختياري)
   const severity = url.searchParams.get("severity") // info | warn | critical (اختياري)
   // عقد §16 — السجل موحّد: أفعال الطبقة الأصلية (native-* حصرية لنا) + أفعال
-  // مسارات السيرفر (transfer/clipboard/settings/screen — مفردات FA-10 القائمة).
-  const SERVER_ACTIONS = ["transfer", "clipboard", "settings", "screen"] as const
+  // مسارات السيرفر (transfer/clipboard/settings/screen — مفردات FA-10 القائمة
+  // + pairing/pairing-reject — تدقيق الاقتران G-1 من عقد §6).
+  const SERVER_ACTIONS = ["transfer", "clipboard", "settings", "screen", "pairing", "pairing-reject"] as const
   const where: Record<string, unknown> = {
     OR: [{ action: { startsWith: "native-" } }, { action: { in: [...SERVER_ACTIONS] } }],
   }

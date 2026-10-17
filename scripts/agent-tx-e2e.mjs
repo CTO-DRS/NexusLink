@@ -88,15 +88,18 @@ async function main() {
   console.log(`الـ hash المتوقع لمحتوى الأصفار: ${sha256Zeros.slice(0, 16)}…\n`)
 
   // ---------------------------------------------------------------- ربط
+  // G-1 (عقد §6): جلب سر الاقتران من آخر رمز QR مُصدَر قبل التسجيل
+  const qr = await api("/api/devices/qr")
   const pair = await api("/api/devices", {
     method: "POST",
     body: JSON.stringify({
       action: "pair", id: DEVICE_ID, name: DEVICE_NAME, kind: "phone",
       model: "E2E Simulator", battery: 88, storageTotal: 128 * 1024 ** 3,
       storageUsed: 40 * 1024 ** 3, ip: "192.168.1.77",
+      secret: qr.json?.payload?.secret,
     }),
   })
-  check("تسجيل الجهاز (pair) idempotent", pair.json?.ok === true && pair.json?.device?.id === DEVICE_ID)
+  check("تسجيل الجهاز (pair) idempotent — بسر QR صحيح (G-1)", pair.json?.ok === true && pair.json?.device?.id === DEVICE_ID)
 
   // قناة الحماية الدائمة — نفس نمط الخدمة الخلفية
   const guard = io("http://localhost:3006", { transports: ["websocket", "polling"] })

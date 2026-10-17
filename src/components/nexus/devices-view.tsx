@@ -108,6 +108,8 @@ function DeviceCard({ d }: { d: NexusDevice }) {
 function PairDialog() {
   const [qr, setQr] = useState<string | null>(null)
   const [code, setCode] = useState<string | null>(null)
+  // G-1 — سر الاقتران الكامل من حمولة QR (آخر رمز مُصدَر هو الصالح لعشر دقائق)
+  const [secret, setSecret] = useState<string | null>(null)
   const [step, setStep] = useState<"scan" | "confirm">("scan")
   const [loading, setLoading] = useState(false)
 
@@ -116,7 +118,7 @@ function PairDialog() {
     try {
       const r = await fetch("/api/devices/qr")
       const j = await r.json()
-      setQr(j.qr); setCode(j.code); setStep("scan")
+      setQr(j.qr); setCode(j.code); setSecret(j.payload?.secret ?? null); setStep("scan")
     } finally {
       setLoading(false)
     }
@@ -126,10 +128,17 @@ function PairDialog() {
     setLoading(true)
     try {
       const name = `Device-${code}`
-      await fetch("/api/devices", {
+      const res = await fetch("/api/devices", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "pair", name, kind: "phone" }),
+        body: JSON.stringify({ action: "pair", name, kind: "phone", secret }),
       })
+      if (!res.ok) {
+        // G-1 — رفض الاقتران (403): سر مفقود/فاسد/منتهي → إصدار رمز جديد فورًا
+        const j = await res.json().catch(() => ({}))
+        toast.error(j.error || "رُفض الاقتران — أُصدر رمزًا جديدًا")
+        await begin()
+        return
+      }
       const r = await fetch("/api/devices")
       useNexus.getState().setDevices((await r.json()).devices)
       setStep("confirm")
@@ -164,6 +173,7 @@ function PairDialog() {
             <div className="text-center">
               <div className="text-xs text-muted-foreground">الرمز اليدوي</div>
               <div className="font-mono text-2xl font-bold tracking-[0.3em] text-primary">{code}</div>
+              <div className="text-[11px] text-muted-foreground mt-1">الصلاحية 10 دقائق — كل إصدار جديد يُبطل الرمز السابق (التحقق G-1)</div>
             </div>
             {step === "scan" ? (
               <Button className="w-full" onClick={confirm} disabled={loading}>

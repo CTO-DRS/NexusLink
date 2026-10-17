@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
   ScrollText, Download, Trash2, KeyRound, ArrowLeftRight, Lock, Flame,
-  ShieldAlert, Settings2, Search, EyeOff, Info,
+  ShieldAlert, Settings2, Search, EyeOff, Info, QrCode,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -25,6 +25,8 @@ const ACTION_META: Record<string, { label: string; icon: LucideIcon }> = {
   settings: { label: "إعدادات", icon: Settings2 },
   "perm-denied": { label: "رفض صلاحية", icon: ShieldAlert },
   replay: { label: "حماية إعادة", icon: ShieldAlert },
+  pairing: { label: "اقتران", icon: QrCode },
+  "pairing-reject": { label: "اقتران مرفوض", icon: ShieldAlert },
 }
 
 export function AuditTab() {

@@ -67,6 +67,7 @@ check('ping يستجيب pong:true', ping.json?.pong === true, `RTT=${Date.now()
 
 // ==== 3) تسجيل الجهاز (pair) بنفس شكل بيانات السيرفر ====
 console.log('\n── 3) تسجيل الجهاز POST /api/devices {action:"pair"} ──')
+// G-1 (عقد §6): الاقتران يتطلب سر آخر رمز QR مُصدَر — جلبناه من قسم (1)
 const pair = await httpJson('POST', '/api/devices', {
   hostHeader: LAN_HOST_HEADER,
   body: {
@@ -80,6 +81,7 @@ const pair = await httpJson('POST', '/api/devices', {
     storageTotal: 256 * 1024 ** 3,
     storageUsed: 90 * 1024 ** 3,
     ip: '192.168.1.77',
+    secret: payload?.secret,
   },
 })
 check('pair نجح', pair.status === 200 && pair.json?.ok === true, `id=${pair.json?.device?.id}`)

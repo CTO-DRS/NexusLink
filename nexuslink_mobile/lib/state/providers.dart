@@ -234,6 +234,21 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
     state = AsyncData(ConnectionStateModel(
       phase: ConnectPhase.pairing, endpoint: endpoint, serverName: serverName, rttMs: rtt,
     ));
+    // G-1 (عقد §6) — الاقتران يتطلب سر آخر رمز QR مُصدَر (نافذة 10 دقائق).
+    // مسار مسح الكاميرا يملك السر من QR نفسه؛ مسار الإدخال اليدوي يجلبه
+    // من /api/devices/qr كما ينص العقد §7 («إدخال IP يدوي → جلب QR من الكمبيوتر»).
+    // حد صادق: البوتستراب من نفس قناة REST لا يضيف قربًا فعليًا — الإثبات
+    // الأقوى يبقى مسح الكاميرا لرمز معروض على شاشة الكمبيوتر.
+    String? pairingSecret = qrSecret;
+    if (pairingSecret == null) {
+      try {
+        final qr = await api.pairingQr();
+        pairingSecret = '${qr.payload['secret'] ?? ''}';
+        log.add('إدخال يدوي — جُلب سر الاقتران من رمز الكمبيوتر (G-1)', kind: 'info');
+      } catch (e) {
+        log.add('تعذر جلب سر الاقتران: $e', kind: 'warn');
+      }
+    }
     final identity = await ref.read(deviceIdentityProvider.future);
     NexusDevice me;
     try {
@@ -246,8 +261,15 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
         storageTotal: 128 * 1024 * 1024 * 1024,
         storageUsed: 40 * 1024 * 1024 * 1024,
         ip: '0.0.0.0', // السيرفر يعيد تسجيل IP فعلي عبر الحقل الاختياري
+        secret: pairingSecret,
       );
       log.add('سُجّل الجهاز لدى السيرفر: ${me.name} (${me.id})', kind: 'ok');
+    } on PairingRejectedException catch (e) {
+      log.add('رُفض الاقتران (${e.reason}): ${e.serverMessage}', kind: 'error');
+      state = AsyncData(ConnectionStateModel(
+        phase: ConnectPhase.error, endpoint: endpoint, serverName: serverName, rttMs: rtt, error: e.serverMessage,
+      ));
+      return;
     } catch (e) {
       log.add('فشل تسجيل الجهاز: $e', kind: 'error');
       state = AsyncData(ConnectionStateModel(

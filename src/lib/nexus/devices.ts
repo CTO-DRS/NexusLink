@@ -1,5 +1,31 @@
 // NexusLink — device registry with simulated live state + heartbeat.
 import type { NexusDevice } from "./types"
+import crypto from "crypto"
+
+/** نافذة صلاحية سر الاقتران (G-1): آخر رمز QR مُصدَر يقبل الاقتران لعشر دقائق فقط،
+ *  وكل استدعاء جديد لـ /api/devices/qr يُدوّر السر (آخر رمز مُصدَر هو الصالح). */
+export const PAIRING_TTL_MS = 10 * 60_000
+
+export type PairingRejectReason = "no-window" | "missing" | "expired" | "invalid"
+
+/** G-1 (عقد §6) — التحقق من سر الاقتران قبل تسجيل أي جهاز:
+ *  - no-window: لم يُصدر رمز QR إطلاقًا (لا نافذة اقتران نشطة)
+ *  - missing: الطلب بلا سر (الاقتران يتطلب إثبات قرب = مسح الرمز من شاشة الكمبيوتر)
+ *  - expired: فاتت نافذة العشر دقائق
+ *  - invalid: سر لا يطابق آخر رمز مُصدَر (مقارنة timing-safe)
+ *  السر يُبوتستراب من نفس قناة REST عند الإدخال اليدوي (حد موثق بصدق في العقد §6) —
+ *  الإثبات الأقوى يبقى مسح الكاميرا لرمز معروض على شاشة الكمبيوتر. */
+export function verifyPairingSecret(provided: unknown): { ok: true } | { ok: false; reason: PairingRejectReason } {
+  const s = store()
+  if (!s.pairingSecret) return { ok: false, reason: "no-window" }
+  if (typeof provided !== "string" || !provided.trim()) return { ok: false, reason: "missing" }
+  if (Date.now() - s.pairingIssuedAt > PAIRING_TTL_MS) return { ok: false, reason: "expired" }
+  const a = Buffer.from(provided)
+  const b = Buffer.from(s.pairingSecret)
+  // timingSafeEqual يشترط الطول نفسه — فحص الطول أولًا ثم مقارنة زمن-ثابت
+  const match = a.length === b.length && crypto.timingSafeEqual(a, b)
+  return match ? { ok: true } : { ok: false, reason: "invalid" }
+}
 
 interface Store {
   devices: NexusDevice[]
