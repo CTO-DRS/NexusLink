@@ -2608,6 +2608,7 @@
   "عند عودة جهاز للشبكة": "When a device joins the network",
   "عند فقدان الهاتف داخل المنزل أو المكتب: يُقفل الجهاز فوراً وتظهر رسالتك على شاشته — يستطيع من يجده التواصل معك دون فتح أي شيء.": "When the phone is lost at home or office: The device locks immediately and your message appears on its screen — whoever finds it can contact you without opening anything.",
   "عند هبوط البطارية تحت عتبة": "When battery drops below a threshold",
+  "عند بلوغ البطارية عتبة (اكتمال شحن)": "When battery reaches a threshold (charge complete)",
   "عند وصول محتوى للحافظة الموحدة": "When content arrives in the unified clipboard",
   "عندما تعود منارة الهاتف للنطاق يُفتح القفل دون كلمة مرور": "When the phone beacon returns to range, the lock opens without password",
   "عنصر إلى…": "Item to…",

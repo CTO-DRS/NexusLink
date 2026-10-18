@@ -259,6 +259,22 @@ function pollDevices() {
             }
           }
         }
+        // بطارية — حافة صاعدة مع إعادة تسليح (اكتمال الشحن: «نبّهني عندما تصل بطارية X إلى 80%»)
+        if (t.kind === "battery.above") {
+          const th = Math.min(100, Math.max(1, Math.round(t.threshold ?? 80)))
+          for (const [id, cur] of now) {
+            if (!matches(id)) continue
+            const prev = prevSnapshot.get(id)
+            const key = rule.id
+            const armed = batteryArmed.get(key) !== false
+            if (cur.battery >= th && armed && (!prev || prev.battery < th)) {
+              batteryArmed.set(key, false)
+              void onTriggerHit(rule, `البطارية: «${id}» بلغت ${cur.battery}% (العتبة ${th}%)`)
+            } else if (cur.battery <= th - 5 && !batteryArmed.get(key)) {
+              batteryArmed.set(key, true)
+            }
+          }
+        }
       }
     }
     prevSnapshot = now
@@ -328,8 +344,8 @@ function sanitizeRule(input: unknown, existingId?: string): AutoRule | { error: 
 
   const trigger: AutoRule["trigger"] = { kind: tKind as AutoRule["trigger"]["kind"] }
   if (typeof tr.deviceId === "string" && tr.deviceId.trim()) trigger.deviceId = tr.deviceId.trim().slice(0, 64)
-  if (tKind === "battery.below") {
-    const th = Math.round(Number(tr.threshold ?? 20))
+  if (tKind === "battery.below" || tKind === "battery.above") {
+    const th = Math.round(Number(tr.threshold ?? (tKind === "battery.above" ? 80 : 20)))
     if (!Number.isFinite(th)) return { error: "عتبة البطارية يجب أن تكون رقمًا" }
     trigger.threshold = Math.min(100, Math.max(1, th))
   }

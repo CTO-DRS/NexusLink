@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
-  Workflow, MonitorSmartphone, MonitorOff, BatteryLow, ClipboardList, CalendarClock,
+  Workflow, MonitorSmartphone, MonitorOff, BatteryLow, BatteryCharging, ClipboardList, CalendarClock,
   BellRing, ClipboardPaste, PhoneCall, Power, Play, Trash2, Plus, History,
   Clock, Sparkles, ShieldAlert, Timer, Activity, WifiOff, CheckCheck, DatabaseBackup,
 } from "lucide-react"
@@ -29,6 +29,7 @@ const TRIGGER_META: Record<TriggerKind, { icon: typeof Workflow; label: string }
   "device.connect": { icon: MonitorSmartphone, label: "عند عودة جهاز للشبكة" },
   "device.disconnect": { icon: MonitorOff, label: "عند انقطاع جهاز عن الشبكة" },
   "battery.below": { icon: BatteryLow, label: "عند هبوط البطارية تحت عتبة" },
+  "battery.above": { icon: BatteryCharging, label: "عند بلوغ البطارية عتبة (اكتمال شحن)" },
   "clip.received": { icon: ClipboardList, label: "عند وصول محتوى للحافظة الموحدة" },
   "time.once": { icon: Timer, label: "مرة واحدة عند موعد" },
   "time.daily": { icon: CalendarClock, label: "يوميًا عند ساعة محددة" },
@@ -53,6 +54,8 @@ function triggerSummary(r: AutoRule, tr: TFn): string {
       return t.deviceId ? `${t.deviceId}` : dev
     case "battery.below":
       return `${dev} — < ${t.threshold ?? 20}%`
+    case "battery.above":
+      return `${dev} — ≥ ${t.threshold ?? 80}%`
     case "health.battery.sustained":
       return `${dev} — ≤ ${t.threshold ?? 15}% × ${t.durationMin ?? 60} ${tr("دقيقة")}`
     case "health.rtt.sustained":
@@ -101,7 +104,7 @@ export function AutomationView() {
     tKind: r.trigger.kind,
     aKind: r.action.kind,
     deviceId: r.trigger.deviceId || "",
-    threshold: String(r.trigger.threshold ?? 20),
+    threshold: String(r.trigger.threshold ?? (r.trigger.kind === "battery.above" ? 80 : 20)),
     duration: String(r.trigger.durationMin ?? 60),
     onceAt: r.trigger.at ? new Date(r.trigger.at - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
     hh: String(r.trigger.hh ?? 8),
@@ -115,6 +118,7 @@ export function AutomationView() {
     const trig: AutoRule["trigger"] = { kind: draft.tKind }
     if (draft.deviceId.trim()) trig.deviceId = draft.deviceId.trim()
     if (draft.tKind === "battery.below") trig.threshold = Math.min(100, Math.max(1, Math.round(Number(draft.threshold) || 20)))
+    if (draft.tKind === "battery.above") trig.threshold = Math.min(100, Math.max(1, Math.round(Number(draft.threshold) || 80)))
     if (SUSTAINED_TRIGGER_KINDS.includes(draft.tKind)) {
       trig.durationMin = Math.min(1440, Math.max(1, Math.round(Number(draft.duration) || 60)))
       if (draft.tKind === "health.battery.sustained") trig.threshold = Math.min(100, Math.max(1, Math.round(Number(draft.threshold) || 15)))
@@ -306,7 +310,7 @@ export function AutomationView() {
               </div>
               <div className="space-y-1.5">
                 <Label>{t("المشغّل")}</Label>
-                <Select value={draft.tKind} onValueChange={(v) => setDraft({ ...draft, tKind: v as TriggerKind })}>
+                <Select value={draft.tKind} onValueChange={(v) => setDraft({ ...draft, tKind: v as TriggerKind, threshold: v === "battery.above" ? "80" : v === "battery.below" ? "20" : draft.threshold })}>
                   <SelectTrigger data-testid="automation-trigger-select"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(TRIGGER_META).map(([k, m]) => (
@@ -314,10 +318,10 @@ export function AutomationView() {
                     ))}
                   </SelectContent>
                 </Select>
-                {(draft.tKind === "device.connect" || draft.tKind === "device.disconnect" || draft.tKind === "battery.below" || SUSTAINED_TRIGGER_KINDS.includes(draft.tKind)) && (
+                {(draft.tKind === "device.connect" || draft.tKind === "device.disconnect" || draft.tKind === "battery.below" || draft.tKind === "battery.above" || SUSTAINED_TRIGGER_KINDS.includes(draft.tKind)) && (
                   <Input value={draft.deviceId} onChange={(e) => setDraft({ ...draft, deviceId: e.target.value })} placeholder={t("معرّف الجهاز (اختياري — فارغ = أي جهاز)")} />
                 )}
-                {draft.tKind === "battery.below" && (
+                {(draft.tKind === "battery.below" || draft.tKind === "battery.above") && (
                   <div className="flex items-center gap-2">
                     <Label className="shrink-0 text-xs">{t("العتبة %")}</Label>
                     <Input type="number" min={1} max={100} value={draft.threshold} onChange={(e) => setDraft({ ...draft, threshold: e.target.value })} data-testid="automation-threshold-input" />

@@ -3236,6 +3236,105 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     }
 
     // ============================================================
+    // BATTERY-ABOVE — مشغّل بلوغ البطارية (حافة صاعدة، عقد §26.أ):
+    // «نبّهني عندما تصل بطارية X إلى 80%» — عبور صاعد عبر report على جهاز
+    // البذرة galaxy-s24 + إعادة تسليح (هبوط −5 ثم صعود) + لا إطلاق بلا عبور.
+    // المانع العام 20ث يفرض فواصل ≥ 24ث بين العبورين.
+    // ============================================================
+    console.log("\n== BATTERY-ABOVE: battery rising-edge trigger (§26.أ) ==")
+    {
+      const bootBA = await waitHttp("automation boot (BA)", "http://127.0.0.1:3000/api/automation/boot", 20000, (j) => j?.ok === true && j?.booted === true)
+      check("BATTERY-ABOVE: جسر الروتينات حي قبل الفحوص",
+        bootBA?.port === 3008 && bootBA?.rules >= 4, `rules=${bootBA?.rules}`)
+      await sleep(1200)
+
+      const fsBA = (await import("node:fs")).default
+      const pathBA = (await import("node:path")).default
+      const rdBA = (p) => { try { return fsBA.readFileSync(pathBA.join(ROOT, p), "utf8") } catch { return "" } }
+
+      // (أ) فحوص المصدر
+      const typesBA = rdBA("src/lib/nexus/automation-types.ts")
+      const bridgeBA = rdBA("src/lib/nexus/automation-bridge.ts")
+      const viewBA = rdBA("src/components/nexus/automation/automation-view.tsx")
+      const i18nBA = rdBA("src/lib/ar-en-map.json")
+      const contractBA = rdBA("docs/protocol-contract.md")
+      const checklistBA = rdBA("docs/e2e-checklist.md")
+
+      check("BATTERY-ABOVE: المصدر — battery.above في TriggerKind/TRIGGER_KINDS + فرع الجسر (حافة صاعدة + إعادة تسليح −5) + تعقيم العتبة للنوعين",
+        typesBA.includes('"battery.above"')
+        && bridgeBA.includes('t.kind === "battery.above"')
+        && bridgeBA.includes('battery.above" ? 80 : 20')
+        && bridgeBA.includes("بلغت"), "types+bridge+sanitize")
+      check("BATTERY-ABOVE: الواجهة — TRIGGER_META بأيقونة الشحن + ملخص ≥ + صف العتبة المشترك + الافتراضي 80 عند الاختيار",
+        viewBA.includes('"battery.above": { icon: BatteryCharging')
+        && viewBA.includes('case "battery.above":')
+        && viewBA.includes('draft.tKind === "battery.above"')
+        && viewBA.includes('v === "battery.above" ? "80"'), "view")
+      check("BATTERY-ABOVE: i18n — مفتاح EN في القاموس المشترك",
+        i18nBA.includes('"عند بلوغ البطارية عتبة (اكتمال شحن)": "When battery reaches a threshold (charge complete)"'), "i18n")
+      check("BATTERY-ABOVE: التوثيق — العقد §26.أ (المشغلات العشرة + صف الحافة الصاعدة) + القائمة الميدانية §25",
+        contractBA.includes("المشغلات العشرة") && contractBA.includes("`battery.above`") && contractBA.includes("حافة صاعدة")
+        && checklistBA.includes("مشغّل بلوغ البطارية (حافة صاعدة)"), "docs")
+
+      // (ب) السلوك الحي — عبور صاعد عبر report على جهاز البذرة
+      const { io: ioBA } = await import("socket.io-client")
+      const sockBA = ioBA("http://localhost:3008", { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 8000, reconnection: false })
+      const repBA = async (battery) => fetch("http://127.0.0.1:3000/api/devices/health", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "report", deviceId: "galaxy-s24", battery }),
+      }).then((r) => r.json()).catch(() => null)
+
+      const behaviorBA = await new Promise((resolve) => {
+        const out = { done: false, fires: [], rulesSnapshot: null, lastRules: null }
+        const timersBA = []
+        const later = (fn, ms) => timersBA.push(setTimeout(fn, ms))
+        const finish = () => { if (out.done) return; out.done = true; timersBA.forEach(clearTimeout); try { sockBA.disconnect() } catch {}; resolve(out) }
+        later(finish, 70000)
+
+        sockBA.on("auto:state", (s) => { out.rulesSnapshot = s?.rules ?? out.rulesSnapshot; out.lastRules = s?.rules?.map((r) => r.name) ?? out.lastRules })
+        sockBA.on("auto:fired", (p) => { if (String(p?.ruleName || "").startsWith("BA-E2E")) out.fires.push({ at: p.at || Date.now(), ok: p.ok, detail: p.detail || "" }) })
+
+        sockBA.on("connect", () => {
+          void (async () => {
+            try {
+              // القاعدة: عبور صاعد 80% لجهاز البذرة galaxy-s24
+              sockBA.emit("rule:upsert", { rule: { name: "BA-E2E-cross", enabled: true, trigger: { kind: "battery.above", deviceId: "galaxy-s24", threshold: 80 }, action: { kind: "notify", text: "BA-E2E" } } })
+              await sleep(4000)   // لقطة تأسيس prev على الواقع الحالي
+              await repBA(70)     // دون العتبة — لا عبور (وإعادة تسليح صريحة)
+              await sleep(6000)
+              await repBA(85)     // عبور صاعد 70→85 عبر 80
+              await sleep(8000)   // → إطلاق #1 (أقصى توقيت: العاشر + تكة استطلاع ≤ 4ث)
+              await repBA(70)     // هبوط تحت 75 — إعادة تسليح
+              await sleep(18000)  // تجاوز المانع العام 20ث (أسوأ حالة: إطلاق #1 عند 14ث → يزول عند 34ث)
+              await repBA(85)     // عبور ثانٍ → إطلاق #2
+              await sleep(7000)
+              await repBA(86)     // بلا عبور (85→86) — لا إطلاق ثالث
+              await sleep(6000)
+              // التنظيف
+              const found = (out.rulesSnapshot ?? []).find((x) => x.name === "BA-E2E-cross")
+              if (found) sockBA.emit("rule:delete", { id: found.id })
+              await sleep(1500)
+              finish()
+            } catch (e) {
+              console.log("   [BA] error:", e?.message || e)
+              finish()
+            }
+          })()
+        })
+      })
+
+      const fBA = behaviorBA.fires
+      check("BATTERY-ABOVE: عبور صاعد 70→85 عبر عتبة 80 → إطلاق بتفصيل «بلغت (العتبة 80%)»",
+        fBA.length >= 1 && fBA[0]?.detail.includes("بلغت") && fBA[0]?.detail.includes("(العتبة 80%)"), fBA[0]?.detail?.slice(0, 80) || "no fire")
+      check("BATTERY-ABOVE: إعادة التسليح — هبوط 70 (تحت −5) ثم صعود 85 → إطلاق ثانٍ",
+        fBA.length >= 2, `fires=${fBA.length}`)
+      check("BATTERY-ABOVE: بلا عبور (86 بعد 85) — لا إطلاق ثالث (الحافة لا تعيد بلا هبوط −5)",
+        fBA.length === 2, `fires=${fBA.length}`)
+      check("BATTERY-ABOVE: التنظيف — قاعدة BA-E2E زالت من آخر auto:state",
+        Array.isArray(behaviorBA.lastRules) && !behaviorBA.lastRules.some((n) => String(n).startsWith("BA-E2E")), "rule deleted")
+    }
+
+    // ============================================================
     // AUTO-PERSIST — ترسيخ قواعد الروتينات في SQLite (عقد §26.ز):
     // القواعد لا تختفي عند إعادة التشغيل — سلوك حي عبر مقبس :3008 + قراءة
     // جدول NexusAutomationRule مباشرة من نفس قاعدة الخادم (§26.ز/§23)

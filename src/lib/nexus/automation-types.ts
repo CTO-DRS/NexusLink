@@ -3,11 +3,12 @@
 // المبدأ (القاعدة الذهبية): لا بروتوكول موازٍ — كل الأفعال تعبر القنوات القائمة
 // (prod: clip:new · guard: dev:ring · UDP: WoL) وكل الحقائق من مصادر عملية Next القائمة.
 
-/** أنواع المشغلات المدعومة (§26.أ الست اللحظية + §26.و الثلاثة التاريخية). */
+/** أنواع المشغلات المدعومة (§26.أ السبع اللحظية + §26.و الثلاثة التاريخية). */
 export type TriggerKind =
   | "device.connect"      // جهاز في سجل الأجهزة عاد إلى «متصل»
   | "device.disconnect"   // جهاز في سجل الأجهزة غادر إلى «غير متصل»
   | "battery.below"       // بطارية جهاز هبطت تحت العتبة (حافة نازلة + إعادة تسليح +5)
+  | "battery.above"       // بطارية جهاز بلغت العتبة صعودًا (حافة صاعدة + إعادة تسليح −5) — اكتمال الشحن
   | "clip.received"       // وصل محتوى جديد إلى الحافظة الموحدة (من جسر prod)
   | "time.once"           // مرة واحدة عند طابع زمني (epoch ms)
   | "time.daily"          // يوميًا عند ساعة:دقيقة (ساعة الخادم المحلية)
@@ -117,7 +118,7 @@ export interface AutoFiredPayload {
 }
 
 export const TRIGGER_KINDS: readonly TriggerKind[] = [
-  "device.connect", "device.disconnect", "battery.below", "clip.received", "time.once", "time.daily",
+  "device.connect", "device.disconnect", "battery.below", "battery.above", "clip.received", "time.once", "time.daily",
   "health.battery.sustained", "health.rtt.sustained", "health.silence.sustained",
 ] as const
 
