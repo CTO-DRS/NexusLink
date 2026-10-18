@@ -2929,7 +2929,7 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     // HEALTH — مركز صحة الأجهزة (عقد §27): قياس زمني (خانقة 30ث + احتفاظ 24h)
     // + كشف عبورات (انقطاع/عودة/بطارية/استجابة/تخزين) + مسار الوكيل الحقيقي report
     // ============================================================
-    console.log("\n== HEALTH: device health center (telemetry + alerts, contract §26) ==")
+    console.log("\n== HEALTH: device health center (telemetry + alerts, contract §27) ==")
     {
       const fsH = (await import("node:fs")).default
       const rdH = (p) => { try { return fsH.readFileSync(pathMod.join(ROOT, p), "utf8") } catch { return "" } }
@@ -2972,8 +2972,8 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
         && dbTsH.includes('CREATE TABLE IF NOT EXISTS "NexusHealthEvent"')
         && dbTsH.includes("NexusHealthSample_deviceId_createdAt_idx"), "upgrade-safe schema")
       check("HEALTH: العقد §27 موثق (عينات/عبورات/report الحقيقي/حدود صادقة) + مؤشر §3.5",
-        contractH.includes("## 26. مركز صحة الأجهزة") && contractH.includes('action:"report"')
-        && contractH.includes("ترسّخ الحالة بلا أحداث") && contractH.includes("GET|POST /api/devices/health"), "contract §26")
+        contractH.includes("## 27. مركز صحة الأجهزة") && contractH.includes('action:"report"')
+        && contractH.includes("ترسّخ الحالة بلا أحداث") && contractH.includes("GET|POST /api/devices/health"), "contract §27")
 
       // (ب) السلوك — على السيرفر الحي (standalone)
       const hPost = async (body) => fetch(`${B}/api/devices/health`, {
