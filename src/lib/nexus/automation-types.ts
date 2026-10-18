@@ -118,6 +118,19 @@ export interface AutoFiredPayload {
   manual: boolean
 }
 
+/** نتيجة فحص التاريخ الحي من المحرر (§26.ي) — قراءة محضة تُرسَل للمطالب حصرًا
+ *  (auto:test-result عبر socket.emit لا بث): نفس مقيّم سلسلة الدليل §26.و حرفيًا.
+ *  ok=false = رفض (تعقيم/نوع غير تاريخي) — satisfied = حكم التاريخ الحالي. */
+export interface AutoTestResult {
+  ok: boolean
+  error?: string
+  satisfied?: boolean
+  reason?: string
+  /** رقائق الدليل: عدد العينات · تغطية النافذة (دقيقة) · عمر المرساة · عمر آخر عينة. */
+  evidence?: { samples: number; spanMin: number | null; anchorAgeMin: number | null; lastAgeMin: number | null }
+  at: number
+}
+
 export const TRIGGER_KINDS: readonly TriggerKind[] = [
   "device.connect", "device.disconnect", "battery.below", "battery.above", "clip.received", "time.once", "time.daily",
   "health.battery.sustained", "health.rtt.sustained", "health.silence.sustained", "health.storage.sustained",

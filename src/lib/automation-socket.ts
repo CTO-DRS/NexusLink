@@ -1,7 +1,7 @@
 "use client"
 // NexusLink — عميل socket.io لمحرك الروتينات (عقد §26 — XTransformPort=3008)
 import { io, type Socket } from "socket.io-client"
-import type { AutoRule } from "./nexus/automation-types"
+import type { AutoRule, AutoTrigger } from "./nexus/automation-types"
 
 let socket: Socket | null = null
 
@@ -54,4 +54,10 @@ export function autoLogClear() {
 /** تعليم كل التنبيهات غير المرئية كمقروءة (§26.ح) — رسوخًا في SQLite. */
 export function autoAlertsMarkSeen() {
   getAutomationSocket().emit("alerts:mark-seen")
+}
+
+/** فحص التاريخ الحي لمشغّل تاريخي من المحرر (§26.ي) — قراءة محضة: النتيجة عبر
+ *  auto:test-result للمطالب حصرًا (لا سجل ولا ترسيخ ولا مسٍّ للتسليح). */
+export function autoTestTrigger(trigger: AutoTrigger) {
+  getAutomationSocket().emit("rule:test", { trigger })
 }

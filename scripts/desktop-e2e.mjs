@@ -3837,6 +3837,186 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
       try { sockSS.disconnect() } catch { /* ignore */ }
     }
 
+    // TEST-TRIGGER — فحص التاريخ الحي من المحرر (عقد §26.ي):
+    // «هل سيُطلق الآن؟ ولماذا لا؟» بنفس مصدر الحقيقة (evalSustainedTrigger حرفيًا)
+    // بقراءة محضة: النتيجة للمطالب حصرًا (socket.emit لا بث) — بلا سجل ولا ترسيخ
+    // ولا مسٍّ للتسليح. الحي على أجهزة أشباح tt-e2e-* بعينات مزروعة عبر Prisma
+    // (نمط AUTO-HEALTH) — حتمية كاملة بلا تداخل عينات حقيقية.
+    // ============================================================
+    console.log("\n== TEST-TRIGGER: live history test from the editor (§26.ي) ==")
+    {
+      const bootTT = await waitHttp("automation boot (TT)", "http://127.0.0.1:3000/api/automation/boot", 20000, (j) => j?.ok === true && j?.booted === true)
+      check("TEST-TRIGGER: جسر الروتينات حي قبل الفحوص",
+        bootTT?.port === 3008 && bootTT?.rules >= 4, `rules=${bootTT?.rules}`)
+
+      const fsTT = (await import("node:fs")).default
+      const pathTT = (await import("node:path")).default
+      const rdTT = (p) => { try { return fsTT.readFileSync(pathTT.join(ROOT, p), "utf8") } catch { return "" } }
+
+      // (أ) فحوص المصدر
+      const typesTT = rdTT("src/lib/nexus/automation-types.ts")
+      const bridgeTT = rdTT("src/lib/nexus/automation-bridge.ts")
+      const sockTT = rdTT("src/lib/automation-socket.ts")
+      const viewTT = rdTT("src/components/nexus/automation/automation-view.tsx")
+      const i18nTT = rdTT("src/lib/ar-en-map.json")
+      const contractTT = rdTT("docs/protocol-contract.md")
+      const checklistTT = rdTT("docs/e2e-checklist.md")
+
+      check("TEST-TRIGGER: المصدر — الجسر: معالج rule:test (حارس النوع التاريخي + sanitizeTrigger المشترك + evalSustainedTrigger) ونتيجة auto:test-result للمطالب حصرًا بلا بث",
+        bridgeTT.includes('socket.on("rule:test"')
+        && bridgeTT.includes('socket.emit("auto:test-result"')
+        && bridgeTT.includes("فحص التاريخ متاح للمشغلات التاريخية المستمرة فقط")
+        && bridgeTT.includes("function sanitizeTrigger"), "bridge handler")
+
+      check("TEST-TRIGGER: المصدر — دلالة «لا أثر»: معالج rule:test لا يحتوي pushLog ولا persistFire ولا broadcastState ولا مسًّا للتسليح",
+        (() => {
+          const m = bridgeTT.match(/socket\.on\("rule:test"[\s\S]*?\n      \}\)\n/)
+          if (!m) return false
+          const h = m[0]
+          return !h.includes("pushLog") && !h.includes("persistFire") && !h.includes("broadcastState") && !h.includes("sustainedArmed")
+        })(), "no-trace semantics")
+
+      check("TEST-TRIGGER: المصدر — الأنواع: AutoTestResult (ok/satisfied/reason/evidence) في وحدة آمنة للعميل + العميل autoTestTrigger يبث rule:test",
+        typesTT.includes("export interface AutoTestResult")
+        && typesTT.includes("evidence?: { samples: number; spanMin: number | null; anchorAgeMin: number | null; lastAgeMin: number | null }")
+        && sockTT.includes("export function autoTestTrigger(trigger: AutoTrigger)")
+        && sockTT.includes('emit("rule:test", { trigger })'), "types+client")
+
+      check("TEST-TRIGGER: الواجهة — زر الفحص + لوحة النتيجة (حكم/سبب/رقائق) + شارة القِدم + قائمة الأجهزة المنسدلة والمعرّف اليدوي",
+        viewTT.includes('data-testid="automation-test-btn"')
+        && viewTT.includes('data-testid="automation-test-result"')
+        && viewTT.includes('data-testid="automation-test-verdict"')
+        && viewTT.includes('data-testid="automation-test-evidence"')
+        && viewTT.includes('data-testid="automation-test-stale"')
+        && viewTT.includes('data-testid="automation-device-select"')
+        && viewTT.includes('data-testid="automation-device-manual"')
+        && viewTT.includes('value="__manual__"')
+        && viewTT.includes("function buildTrigger"), "view")
+
+      check("TEST-TRIGGER: i18n — مفاتيح EN في القاموس المشترك",
+        i18nTT.includes('"فحص التاريخ الآن": "Test history now"')
+        && i18nTT.includes('"التاريخ يستوفي الشرط الآن": "History satisfies the condition now"')
+        && i18nTT.includes('"التاريخ لا يستوفي الشرط بعد": "History does not satisfy the condition yet"')
+        && i18nTT.includes('"نتيجة لضبط سابق — أعد الفحص": "Result from a previous setting — re-run the test"')
+        && i18nTT.includes('"عينات دليل": "Evidence samples"'), "i18n")
+
+      check("TEST-TRIGGER: التوثيق — العقد §26.ي كاملًا + بند §26.د + القائمة الميدانية §27",
+        contractTT.includes("### 26.ي فحص التاريخ الحي من المحرر")
+        && contractTT.includes("دلالة «لا أثر»")
+        && contractTT.includes("فحص التاريخ الحي (§26.ي)")
+        && contractTT.includes("زر «فحص التاريخ الآن» في المحرر للمشغلات التاريخية")
+        && checklistTT.includes("## 27. فحص التاريخ الحي من المحرر"), "docs")
+
+      // (ب) السلوك الحي — عينات مزروعة على أجهزة أشباح + فحوص عبر rule:test
+      const dbUrlTT = fsTT.readFileSync(pathTT.join(ROOT, ".env"), "utf8").match(/^DATABASE_URL=(.*)$/m)?.[1]
+      const { PrismaClient } = await import("@prisma/client")
+      const pdbTT = new PrismaClient({ datasources: { db: { url: dbUrlTT } }, log: [] })
+      const { io: ioTT } = await import("socket.io-client")
+      const sockTT2 = ioTT("http://localhost:3008", { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 8000, reconnection: false })
+
+      const behaviorTT = await new Promise((resolve) => {
+        const out = { done: false, results: [], stateBefore: null, stateAfter: null, broadcasts: -1, connected: false }
+        const timersTT = []
+        const later = (fn, ms) => timersTT.push(setTimeout(fn, ms))
+        const finish = () => { if (out.done) return; out.done = true; timersTT.forEach(clearTimeout); try { sockTT2.disconnect() } catch {}; resolve(out) }
+        later(finish, 60000)
+
+        // لقطة الحالة عبر اتصال جديد (الترحيب auto:state يبعث الحالة الكاملة —
+        // لا معالج rules:list في الجسر عمدًا: الحالة تُذاع عند التغيير حصرًا)
+        const snapViaNewSocket = () => new Promise((res) => {
+          const s2 = ioTT("http://localhost:3008", { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 8000, reconnection: false })
+          const t0 = setTimeout(() => { try { s2.disconnect() } catch {}; res(null) }, 8000)
+          s2.on("auto:state", (s) => { clearTimeout(t0); try { s2.disconnect() } catch {}; res(s) })
+        })
+
+        sockTT2.on("connect", () => {
+          out.connected = true
+          void (async () => {
+            try {
+              await sleep(500) // تجاوز ترحيب الاتصال (auto:hello + auto:state) قبل عدّاد البث
+              let broadcasts = 0
+              sockTT2.on("auto:state", () => broadcasts++)
+
+              const now = Date.now()
+              // زرع تاريخ اصطناعي حتمي (نمط AUTO-HEALTH):
+              //  tt-e2e-full : مرساة 75ث + نافذتان (45ث/25ث) كلها ≤ 15% → استيفاء
+              //  tt-e2e-mixed: مرساة 10% + عينة 12% + عينة مخالفة 90% → رفض مسبب «عينة مخالفة»
+              //  tt-e2e-empty: بلا عينات → رفض «لا دليل تاريخي»
+              const mk = (deviceId, battery, secsAgo) => ({ deviceId, battery, rttMs: 40, online: true, storagePct: 40, createdAt: new Date(now - secsAgo * 1000) })
+              await pdbTT.nexusHealthSample.createMany({
+                data: [
+                  mk("tt-e2e-full", 10, 75), mk("tt-e2e-full", 12, 45), mk("tt-e2e-full", 11, 25),
+                  mk("tt-e2e-mixed", 10, 75), mk("tt-e2e-mixed", 12, 45), mk("tt-e2e-mixed", 90, 25),
+                ],
+              })
+
+              const test = (trigger) => new Promise((res) => {
+                const t0 = setTimeout(() => res({ timeout: true }), 8000)
+                sockTT2.once("auto:test-result", (r) => { clearTimeout(t0); res(r) })
+                sockTT2.emit("rule:test", { trigger })
+              })
+
+              // (1) استيفاء: بطارية tt-e2e-full ≤ 15% لمدة دقيقة (سلسلة دليل 3 عينات)
+              out.results.push({ case: "full", r: await test({ kind: "health.battery.sustained", deviceId: "tt-e2e-full", threshold: 15, durationMin: 1 }) })
+              // (2) مخالفة: عينة 90% داخل المدة تقطع السلسلة
+              out.results.push({ case: "mixed", r: await test({ kind: "health.battery.sustained", deviceId: "tt-e2e-mixed", threshold: 15, durationMin: 1 }) })
+              // (3) بلا دليل: جهاز بلا عينات
+              out.results.push({ case: "empty", r: await test({ kind: "health.battery.sustained", deviceId: "tt-e2e-empty", threshold: 15, durationMin: 1 }) })
+              // (4) رفض التعقيم: مدة فوق سقف 1440
+              out.results.push({ case: "bad-duration", r: await test({ kind: "health.battery.sustained", threshold: 15, durationMin: 5000 }) })
+              // (5) رفض النوع: مشغل لحظي ليس تاريخيًا
+              out.results.push({ case: "non-sustained", r: await test({ kind: "battery.below", threshold: 20 }) })
+
+              // (6) دلالة «لا أثر»: الحالة قبل/بعد كل الفحوص متطابقة (لقطة عبر اتصال
+              // جديد) + صفر بث auto:state على مقبس الاختبار طوال الفحوص
+              const before = await snapViaNewSocket()
+              out.results.push({ case: "full-again", r: await test({ kind: "health.battery.sustained", deviceId: "tt-e2e-full", threshold: 15, durationMin: 1 }) })
+              const after = await snapViaNewSocket()
+              out.stateBefore = before ? { rules: before.rules?.length, log: before.log?.length, total: before.alerts?.total } : null
+              out.stateAfter = after ? { rules: after.rules?.length, log: after.log?.length, total: after.alerts?.total } : null
+              out.broadcasts = broadcasts
+              finish()
+            } catch (e) {
+              console.log("   [TT] error:", e?.message || e)
+              finish()
+            }
+          })()
+        })
+      })
+
+      const getR = (c) => behaviorTT.results.find((x) => x.case === c)?.r
+      const full = getR("full")
+      check("TEST-TRIGGER: فحص تاريخ مستوفى — satisfied=true بتفصيل «مستمر منذ … وفق التاريخ المسجل» + دليل 3 عينات",
+        full?.ok === true && full?.satisfied === true && String(full?.reason || "").includes("وفق التاريخ المسجل") && full?.evidence?.samples >= 3,
+        full?.reason?.slice(0, 90) || JSON.stringify(full)?.slice(0, 90))
+      const mixed = getR("mixed")
+      check("TEST-TRIGGER: عينة مخالفة داخل المدة — satisfied=false بسبب صادق «عينة مخالفة (90% قبل 0 دقيقة)»",
+        mixed?.ok === true && mixed?.satisfied === false && String(mixed?.reason || "").includes("مخالفة") && String(mixed?.reason || "").includes("(90%"),
+        mixed?.reason?.slice(0, 90) || "no result")
+      const empty = getR("empty")
+      check("TEST-TRIGGER: جهاز بلا عينات — satisfied=false بسبب «لا دليل تاريخي يسبق بداية المدة» (حد §26.و ظاهر لا مخفي)",
+        empty?.ok === true && empty?.satisfied === false && String(empty?.reason || "").includes("لا دليل تاريخي"),
+        empty?.reason?.slice(0, 90) || "no result")
+      const badDur = getR("bad-duration")
+      check("TEST-TRIGGER: رفض التعقيم — مدة 5000 دقيقة ok=false بتفصيل السقف 1440",
+        badDur?.ok === false && String(badDur?.error || "").includes("1440"), badDur?.error?.slice(0, 80) || "no rejection")
+      const nonSus = getR("non-sustained")
+      check("TEST-TRIGGER: رفض النوع — مشغل لحظي ok=false «فحص التاريخ متاح للمشغلات التاريخية المستمرة فقط»",
+        nonSus?.ok === false && String(nonSus?.error || "").includes("تاريخية"), nonSus?.error?.slice(0, 80) || "no rejection")
+      check("TEST-TRIGGER: دلالة «لا أثر» حية — الحالة قبل/بعد الفحوص متطابقة حرفيًا (لقطة عبر اتصال جديد) + صفر بث auto:state أثناء الفحوص",
+        behaviorTT.stateBefore != null && JSON.stringify(behaviorTT.stateBefore) === JSON.stringify(behaviorTT.stateAfter) && behaviorTT.broadcasts === 0,
+        `before=${JSON.stringify(behaviorTT.stateBefore)} after=${JSON.stringify(behaviorTT.stateAfter)} broadcasts=${behaviorTT.broadcasts}`)
+
+      // (ج) التنظيف — العينات المزروعة زالت بلا بقايا
+      const delTT = await pdbTT.nexusHealthSample.deleteMany({ where: { deviceId: { startsWith: "tt-e2e" } } }).catch(() => null)
+      const leftTT = await pdbTT.nexusHealthSample.count({ where: { deviceId: { startsWith: "tt-e2e" } } }).catch(() => -1)
+      check("TEST-TRIGGER: التنظيف — عينات أجهزة tt-e2e-* زالت بلا بقايا (لا قواعد أُنشئت أصلًا — الفحص قراءة محضة)",
+        delTT != null && leftTT === 0, `deleted=${delTT?.count} leftover=${leftTT}`)
+
+      await pdbTT.$disconnect()
+      try { sockTT2.disconnect() } catch { /* ignore */ }
+    }
+
   }
 
 } catch (e) {
