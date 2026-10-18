@@ -16,6 +16,7 @@ import { ensureGuardBridge, guardEmitToAgent } from "./guard-bridge"
 import { ensureProdBridge, prodInjectClip } from "./productivity-bridge"
 import { onAutomationFact } from "./automation-facts"
 import { evalSustainedTrigger, MIN_DURATION_MIN, MAX_DURATION_MIN } from "./automation-health"
+import { loadPersistedRules, persistRuleUpsert, persistRuleDelete } from "./automation-persist"
 import {
   TRIGGER_KINDS, ACTION_KINDS, isSustainedTrigger,
   type AutoRule, type AutoRunEntry, type AutoStatePayload, type AutoFiredPayload,
@@ -28,7 +29,7 @@ const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(
 const g = globalThis as unknown as { __nexusAutoBooted?: boolean }
 const BOOT_KEY = "__nexusAutoBooted"
 
-// ---------- الحالة (ذاكرة الجسر — حد موثق في العقد §26.هـ) ----------
+// ---------- الحالة (القواعد مرسوخة في SQLite §26.ز — السجل في الذاكرة) ----------
 let io: SocketServer | null = null
 let rules: AutoRule[] = []
 let runLog: AutoRunEntry[] = []
@@ -167,15 +168,20 @@ async function executeAction(rule: AutoRule): Promise<{ ok: boolean; detail: str
 // ---------- إطلاق قاعدة ----------
 
 async function fireRule(rule: AutoRule, detail: string, manual: boolean) {
+  // القاعدة الحية في المصفوفة دائمًا — الإطلاق اليدوي (run-now) يمرر نسخة
+  // {…rule} فتُحدّث إحصاءاتها النسخة الحية لا النسخة (وإلا ظهر الإطلاق بلا أثر في العدّاد)
+  const live = rules.find((r) => r.id === rule.id) ?? rule
   const now = Date.now()
-  rule.lastFiredAt = now
-  rule.fireCount++
-  const res = await executeAction(rule)
+  live.lastFiredAt = now
+  live.fireCount++
+  const res = await executeAction(live)
+  // ترسيخ الإحصاءات (§26.ز): lastFiredAt/fireCount يعيشان عبر إعادة التشغيل
+  void persistRuleUpsert(live)
   // التفصيل الصادق = سبب المشغّل + نتيجة الفعل معًا (السبب يجيب «لماذا؟» والنتيجة «ماذا حدث؟»)
   const full = detail && res.detail && res.detail !== detail ? `${detail} — ${res.detail}` : (res.detail || detail)
-  pushLog({ ruleId: rule.id, ruleName: rule.name, at: now, ok: res.ok, detail: full, manual })
+  pushLog({ ruleId: live.id, ruleName: live.name, at: now, ok: res.ok, detail: full, manual })
   const payload: AutoFiredPayload = {
-    ruleId: rule.id, ruleName: rule.name, at: now, ok: res.ok, detail: full, manual,
+    ruleId: live.id, ruleName: live.name, at: now, ok: res.ok, detail: full, manual,
   }
   try { io?.emit("auto:fired", payload) } catch { /* ignore */ }
   broadcastState()
@@ -370,6 +376,30 @@ export function ensureAutomationBridge() {
     rules = seedRules()
     bootedAt = Date.now()
 
+    // استعادة القواعد المرسوخة (§26.ز) — غير حاجبة: الجسر يقلع بالبذور فورًا
+    // وتُستبدل القواعد عند جاهزية القراءة (أول إقلاع: البذور نفسها تُرسَّخ)
+    void (async () => {
+      try {
+        const persisted = await loadPersistedRules()
+        if (persisted && persisted.length) {
+          rules = persisted
+          // مواعيد time.once الماضية لا تُعاد عند الإقلاع (§26.ز): طابع في الماضي
+          // = موعد أُطلق قبل الترسيخ أو فائت أثناء التوقف — لا إعادة إطلاق قديم
+          for (const r of rules) {
+            if (r.trigger.kind === "time.once" && Number(r.trigger.at ?? 0) <= Date.now()) {
+              onceFired.add(r.id)
+            }
+          }
+        } else if (!persisted) {
+          // null بلا صفوف أو بفشل — نرسّخ البذور فقط إذا لم يكن فشل وصول…
+          // التمييز صعب هنا، والأبسط والأصدق: إن كان الجدول فارغًا فعلًا فالتكرار
+          // upsert لا يضر (نفس المعرفات) — نرسّخ البذور الحالية
+          for (const r of rules) await persistRuleUpsert(r)
+        }
+        broadcastState()
+      } catch { /* بلا هلع — البذور تبقى في الذاكرة */ }
+    })()
+
     const httpServer = createServer()
     const io2 = new SocketServer(httpServer, {
       path: "/",
@@ -400,6 +430,7 @@ export function ensureAutomationBridge() {
         } else {
           rules.push(clean)
         }
+        void persistRuleUpsert(rules.find((r) => r.id === clean.id) ?? clean)
         broadcastState()
       })
 
@@ -410,12 +441,15 @@ export function ensureAutomationBridge() {
         batteryArmed.delete(d.id)
         dailyFiredDay.delete(d.id)
         sustainedArmed.delete(d.id)
+        void persistRuleDelete(d.id)
         broadcastState()
       })
 
       socket.on("rule:toggle", (d: { id?: string; enabled?: boolean }) => {
         if (!d?.id) return
         rules = rules.map((r) => (r.id === d.id ? { ...r, enabled: d.enabled !== false } : r))
+        const updated = rules.find((r) => r.id === d.id)
+        if (updated) void persistRuleUpsert(updated)
         broadcastState()
       })
 

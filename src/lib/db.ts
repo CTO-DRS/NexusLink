@@ -66,6 +66,18 @@ function ensureUpgradeSchema(): Promise<void> {
       await db.$executeRawUnsafe(
         `CREATE INDEX IF NOT EXISTS "NexusHealthEvent_createdAt_idx" ON "NexusHealthEvent"("createdAt")`,
       )
+      // ترسيخ قواعد الروتينات (عقد §26.ز) — جدول إضافي بنفس النمط الآمن.
+      // القاعدة الكاملة JSON في payload — الاستعادة الحرفية عند إقلاع الجسر.
+      await db.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS "NexusAutomationRule" (
+           "id"        TEXT     NOT NULL PRIMARY KEY,
+           "name"      TEXT     NOT NULL,
+           "enabled"   BOOLEAN  NOT NULL DEFAULT 1,
+           "payload"   TEXT     NOT NULL,
+           "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+           "updatedAt" DATETIME NOT NULL
+         )`,
+      )
     } catch (e) {
       // بلا هلع: القاعدة الجاهزة (seed 1.1.0) تحوي الجدول مسبقًا؛ فشل ضمان
       // المخطط (قاعدة للقراءة فقط مثلًا) يظهر في مسارات الكتابة بصدق لاحقًا.

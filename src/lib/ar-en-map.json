@@ -3388,7 +3388,6 @@
   "تفريغ السجل": "Clear log",
   "لا تشغيلات بعد": "No runs yet",
   "حدود الإصدار الأول": "v1 limitations",
-  "القواعد والسجل في ذاكرة الجسر — تُستبدل بالقواعد البذرية عند إعادة تشغيل الخادم": "Rules and log live in bridge memory — reset to seed rules on server restart",
   "أفعال الهاتف تعبر قناة الحماية القائمة وتتطلب وكيل هاتف متصلًا": "Phone actions go through the existing guard channel and require a connected phone agent",
   "إيقاظ WoL يعمل داخل الشبكة المحلية فقط (بث UDP :9)": "WoL wake works on the local network only (UDP broadcast :9)",
   "مشغلات الأجهزة تقرأ سجل الأجهزة (الاقتران/القطع) لا نبض الوكيل الحي": "Device triggers read the device registry (pair/forget), not the live agent heartbeat",
@@ -3450,5 +3449,7 @@
   "تاريخي": "Historical",
   "بلا تقارير": "no reports",
   "العتبة ms": "Threshold ms",
-  "مشغلات الصحة التاريخية تقرأ عينات مركز الصحة (احتفاظ 24 ساعة) — تحتاج دليل عينات يُغطي المدة بلا فجوات كبيرة": "Historical health triggers read Health Center samples (24h retention) — they need sample evidence covering the duration without large gaps"
+  "مشغلات الصحة التاريخية تقرأ عينات مركز الصحة (احتفاظ 24 ساعة) — تحتاج دليل عينات يُغطي المدة بلا فجوات كبيرة": "Historical health triggers read Health Center samples (24h retention) — they need sample evidence covering the duration without large gaps",
+  "القواعد محفوظة في قاعدة البيانات وتُستعاد حرفيًا عند إعادة تشغيل الخادم — وحذف قاعدة بذرية يبقى حذفًا": "Rules are persisted in the database and restored verbatim on server restart — deleting a seed rule stays deleted",
+  "سجل التشغيل (آخر 80) يبقى في ذاكرة الجسر ويبدأ نظيفًا عند الإقلاع": "The run log (last 80) stays in bridge memory and starts clean on boot"
 }
