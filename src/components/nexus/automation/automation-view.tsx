@@ -17,9 +17,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Workflow, MonitorSmartphone, MonitorOff, BatteryLow, ClipboardList, CalendarClock,
   BellRing, ClipboardPaste, PhoneCall, Power, Play, Trash2, Plus, History,
-  Clock, Sparkles, ShieldAlert, Timer,
+  Clock, Sparkles, ShieldAlert, Timer, Activity, WifiOff,
 } from "lucide-react"
 import type { TriggerKind, ActionKind, AutoRule } from "@/lib/nexus/automation-types"
+import { SUSTAINED_TRIGGER_KINDS } from "@/lib/nexus/automation-types"
 import { toast } from "sonner"
 
 type TFn = (s: string) => string
@@ -31,6 +32,9 @@ const TRIGGER_META: Record<TriggerKind, { icon: typeof Workflow; label: string }
   "clip.received": { icon: ClipboardList, label: "عند وصول محتوى للحافظة الموحدة" },
   "time.once": { icon: Timer, label: "مرة واحدة عند موعد" },
   "time.daily": { icon: CalendarClock, label: "يوميًا عند ساعة محددة" },
+  "health.battery.sustained": { icon: BatteryLow, label: "بقاء البطارية تحت عتبة لمدة (تاريخي)" },
+  "health.rtt.sustained": { icon: Activity, label: "بقاء الاستجابة فوق عتبة لمدة (تاريخي)" },
+  "health.silence.sustained": { icon: WifiOff, label: "صمت جهاز عن التقارير لمدة (تاريخي)" },
 }
 
 const ACTION_META: Record<ActionKind, { icon: typeof Workflow; label: string }> = {
@@ -42,12 +46,19 @@ const ACTION_META: Record<ActionKind, { icon: typeof Workflow; label: string }> 
 
 function triggerSummary(r: AutoRule, tr: TFn): string {
   const t = r.trigger
+  const dev = t.deviceId || tr("أي جهاز")
   switch (t.kind) {
     case "device.connect":
     case "device.disconnect":
-      return t.deviceId ? `${t.deviceId}` : tr("أي جهاز")
+      return t.deviceId ? `${t.deviceId}` : dev
     case "battery.below":
-      return `${t.deviceId || tr("أي جهاز")} — < ${t.threshold ?? 20}%`
+      return `${dev} — < ${t.threshold ?? 20}%`
+    case "health.battery.sustained":
+      return `${dev} — ≤ ${t.threshold ?? 15}% × ${t.durationMin ?? 60} ${tr("دقيقة")}`
+    case "health.rtt.sustained":
+      return `${dev} — ≥ ${t.threshold ?? 200}ms × ${t.durationMin ?? 60} ${tr("دقيقة")}`
+    case "health.silence.sustained":
+      return `${dev} — ${tr("بلا تقارير")} × ${t.durationMin ?? 60} ${tr("دقيقة")}`
     case "time.once":
       return t.at ? new Date(t.at).toLocaleString() : "—"
     case "time.daily":
@@ -64,6 +75,7 @@ interface Draft {
   aKind: ActionKind
   deviceId: string
   threshold: string
+  duration: string
   onceAt: string
   hh: string
   mm: string
@@ -73,7 +85,7 @@ interface Draft {
 
 const EMPTY_DRAFT: Draft = {
   name: "", tKind: "device.connect", aKind: "notify",
-  deviceId: "", threshold: "20", onceAt: "", hh: "8", mm: "0",
+  deviceId: "", threshold: "20", duration: "60", onceAt: "", hh: "8", mm: "0",
   text: "", mac: "",
 }
 
@@ -90,6 +102,7 @@ export function AutomationView() {
     aKind: r.action.kind,
     deviceId: r.trigger.deviceId || "",
     threshold: String(r.trigger.threshold ?? 20),
+    duration: String(r.trigger.durationMin ?? 60),
     onceAt: r.trigger.at ? new Date(r.trigger.at - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
     hh: String(r.trigger.hh ?? 8),
     mm: String(r.trigger.mm ?? 0),
@@ -102,6 +115,11 @@ export function AutomationView() {
     const trig: AutoRule["trigger"] = { kind: draft.tKind }
     if (draft.deviceId.trim()) trig.deviceId = draft.deviceId.trim()
     if (draft.tKind === "battery.below") trig.threshold = Math.min(100, Math.max(1, Math.round(Number(draft.threshold) || 20)))
+    if (SUSTAINED_TRIGGER_KINDS.includes(draft.tKind)) {
+      trig.durationMin = Math.min(1440, Math.max(1, Math.round(Number(draft.duration) || 60)))
+      if (draft.tKind === "health.battery.sustained") trig.threshold = Math.min(100, Math.max(1, Math.round(Number(draft.threshold) || 15)))
+      if (draft.tKind === "health.rtt.sustained") trig.threshold = Math.min(60000, Math.max(10, Math.round(Number(draft.threshold) || 200)))
+    }
     if (draft.tKind === "time.once") {
       const at = draft.onceAt ? new Date(draft.onceAt).getTime() : 0
       if (!at) { toast.error(t("حدد موعدًا صالحًا")); return }
@@ -185,6 +203,9 @@ export function AutomationView() {
                   </div>
                   <div className="flex flex-wrap gap-1.5 text-[11px]">
                     <Badge variant="outline" className="gap-1 font-normal"><TIcon className="size-3 text-violet-500" />{t(TRIGGER_META[r.trigger.kind]?.label ?? r.trigger.kind)}: <span className="font-medium">{triggerSummary(r, t)}</span></Badge>
+                    {SUSTAINED_TRIGGER_KINDS.includes(r.trigger.kind) && (
+                      <Badge variant="outline" className="gap-1 font-normal text-sky-600 border-sky-500/40" data-testid="automation-historical-badge"><History className="size-3" />{t("تاريخي")}</Badge>
+                    )}
                     <Badge variant="outline" className="gap-1 font-normal"><AIcon className="size-3 text-emerald-500" />{t(ACTION_META[r.action.kind]?.label ?? r.action.kind)}</Badge>
                   </div>
                   <div className="flex items-center gap-1.5 pt-0.5">
@@ -227,6 +248,7 @@ export function AutomationView() {
         <p>• {t("أفعال الهاتف تعبر قناة الحماية القائمة وتتطلب وكيل هاتف متصلًا")}</p>
         <p>• {t("إيقاظ WoL يعمل داخل الشبكة المحلية فقط (بث UDP :9)")}</p>
         <p>• {t("مشغلات الأجهزة تقرأ سجل الأجهزة (الاقتران/القطع) لا نبض الوكيل الحي")}</p>
+        <p>• {t("مشغلات الصحة التاريخية تقرأ عينات مركز الصحة (احتفاظ 24 ساعة) — تحتاج دليل عينات يُغطي المدة بلا فجوات كبيرة")}</p>
       </CardContent></Card>
 
       {/* محرر القاعدة */}
@@ -251,13 +273,26 @@ export function AutomationView() {
                     ))}
                   </SelectContent>
                 </Select>
-                {(draft.tKind === "device.connect" || draft.tKind === "device.disconnect" || draft.tKind === "battery.below") && (
+                {(draft.tKind === "device.connect" || draft.tKind === "device.disconnect" || draft.tKind === "battery.below" || SUSTAINED_TRIGGER_KINDS.includes(draft.tKind)) && (
                   <Input value={draft.deviceId} onChange={(e) => setDraft({ ...draft, deviceId: e.target.value })} placeholder={t("معرّف الجهاز (اختياري — فارغ = أي جهاز)")} />
                 )}
                 {draft.tKind === "battery.below" && (
                   <div className="flex items-center gap-2">
                     <Label className="shrink-0 text-xs">{t("العتبة %")}</Label>
                     <Input type="number" min={1} max={100} value={draft.threshold} onChange={(e) => setDraft({ ...draft, threshold: e.target.value })} data-testid="automation-threshold-input" />
+                  </div>
+                )}
+                {(draft.tKind === "health.battery.sustained" || draft.tKind === "health.rtt.sustained") && (
+                  <div className="flex items-center gap-2">
+                    <Label className="shrink-0 text-xs">{draft.tKind === "health.battery.sustained" ? t("العتبة %") : t("العتبة ms")}</Label>
+                    <Input type="number" min={1} value={draft.threshold} onChange={(e) => setDraft({ ...draft, threshold: e.target.value })} data-testid="automation-threshold-input" />
+                  </div>
+                )}
+                {SUSTAINED_TRIGGER_KINDS.includes(draft.tKind) && (
+                  <div className="flex items-center gap-2">
+                    <Label className="shrink-0 text-xs">{t("المدة (دقائق)")}</Label>
+                    <Input type="number" min={1} max={1440} value={draft.duration} onChange={(e) => setDraft({ ...draft, duration: e.target.value })} data-testid="automation-duration-input" />
+                    <span className="text-[10px] text-muted-foreground shrink-0">{t("1..1440 — يُقرأ من تاريخ مركز الصحة")}</span>
                   </div>
                 )}
                 {draft.tKind === "time.once" && (

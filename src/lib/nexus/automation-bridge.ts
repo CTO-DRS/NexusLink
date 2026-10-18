@@ -15,8 +15,9 @@ import { store } from "./devices"
 import { ensureGuardBridge, guardEmitToAgent } from "./guard-bridge"
 import { ensureProdBridge, prodInjectClip } from "./productivity-bridge"
 import { onAutomationFact } from "./automation-facts"
+import { evalSustainedTrigger, MIN_DURATION_MIN, MAX_DURATION_MIN } from "./automation-health"
 import {
-  TRIGGER_KINDS, ACTION_KINDS,
+  TRIGGER_KINDS, ACTION_KINDS, isSustainedTrigger,
   type AutoRule, type AutoRunEntry, type AutoStatePayload, type AutoFiredPayload,
 } from "./automation-types"
 
@@ -35,6 +36,9 @@ let bootedAt = 0
 
 /** حافة البطارية لكل قاعدة: مسلّحة بانتظار الهبوط تحت العتبة. */
 const batteryArmed = new Map<string, boolean>()
+/** تسليح القواعد التاريخية المستمرة (§26.و): تُطلق مرة لكل حقبة استمرارية —
+ *  وتُعاد التسليح تلقائيًا عند زوال الشرط من التاريخ الحالي. */
+const sustainedArmed = new Map<string, boolean>()
 /** آخر يوم أُطلقت فيه قاعدة يومية (yyyymmdd محلي). */
 const dailyFiredDay = new Map<string, number>()
 /** قواعد time.once التي أطلقت بالفعل. */
@@ -63,6 +67,13 @@ function seedRules(): AutoRule[] {
       id: uid(), name: "وصل محتوى جديد للحافظة", enabled: false,
       trigger: { kind: "clip.received" },
       action: { kind: "notify", text: "وصل محتوى جديد إلى الحافظة الموحدة" },
+      createdAt: now, lastFiredAt: null, fireCount: 0,
+    },
+    {
+      // بذرة توضيحية للمشغلات التاريخية (§26.و) — معطلة افتراضيًا (تحتاج تاريخ عينات)
+      id: uid(), name: "بطارية تحت 15% لمدة ساعة", enabled: false,
+      trigger: { kind: "health.battery.sustained", threshold: 15, durationMin: 60, deviceId: null },
+      action: { kind: "notify", text: "بطارية أحد الأجهزة تحت 15% لمدة ساعة متواصلة" },
       createdAt: now, lastFiredAt: null, fireCount: 0,
     },
   ]
@@ -160,9 +171,11 @@ async function fireRule(rule: AutoRule, detail: string, manual: boolean) {
   rule.lastFiredAt = now
   rule.fireCount++
   const res = await executeAction(rule)
-  pushLog({ ruleId: rule.id, ruleName: rule.name, at: now, ok: res.ok, detail: res.detail || detail, manual })
+  // التفصيل الصادق = سبب المشغّل + نتيجة الفعل معًا (السبب يجيب «لماذا؟» والنتيجة «ماذا حدث؟»)
+  const full = detail && res.detail && res.detail !== detail ? `${detail} — ${res.detail}` : (res.detail || detail)
+  pushLog({ ruleId: rule.id, ruleName: rule.name, at: now, ok: res.ok, detail: full, manual })
   const payload: AutoFiredPayload = {
-    ruleId: rule.id, ruleName: rule.name, at: now, ok: res.ok, detail: res.detail || detail, manual,
+    ruleId: rule.id, ruleName: rule.name, at: now, ok: res.ok, detail: full, manual,
   }
   try { io?.emit("auto:fired", payload) } catch { /* ignore */ }
   broadcastState()
@@ -228,6 +241,27 @@ function pollDevices() {
   } catch { /* سجل الأجهزة غير جاهز بعد */ }
 }
 
+// ---------- حلقة الصحة التاريخية (§26.و) ----------
+
+/** تقييم القواعد المستمرة من عينات §27 كل 15 ثانية: الإطلاق مرة لكل حقبة
+ *  استمرارية (تسليح)، وإعادة التسليح تلقائية عند ظهور عينة مخالفة/زوال الشرط. */
+async function pollHealthSustained() {
+  try {
+    for (const rule of rules) {
+      if (!rule.enabled || !isSustainedTrigger(rule.trigger.kind)) continue
+      const v = await evalSustainedTrigger(rule.trigger)
+      if (v.satisfied) {
+        if (sustainedArmed.get(rule.id) !== false && !coolingDown(rule)) {
+          sustainedArmed.set(rule.id, false)
+          await fireRule(rule, v.reason, false)
+        }
+      } else {
+        sustainedArmed.set(rule.id, true)
+      }
+    }
+  } catch { /* قاعدة البيانات غير جاهزة بعد */ }
+}
+
 function pollTime() {
   try {
     const now = new Date()
@@ -273,6 +307,23 @@ function sanitizeRule(input: unknown, existingId?: string): AutoRule | { error: 
     const th = Math.round(Number(tr.threshold ?? 20))
     if (!Number.isFinite(th)) return { error: "عتبة البطارية يجب أن تكون رقمًا" }
     trigger.threshold = Math.min(100, Math.max(1, th))
+  }
+  if (tKind === "health.battery.sustained" || tKind === "health.rtt.sustained" || tKind === "health.silence.sustained") {
+    const dm = Math.round(Number(tr.durationMin ?? 60))
+    if (!Number.isFinite(dm) || dm < MIN_DURATION_MIN || dm > MAX_DURATION_MIN) {
+      return { error: `المدة بالدقائق يجب أن تكون بين ${MIN_DURATION_MIN} و ${MAX_DURATION_MIN} (سقف تاريخ §27)` }
+    }
+    trigger.durationMin = dm
+  }
+  if (tKind === "health.battery.sustained") {
+    const th = Math.round(Number(tr.threshold ?? 15))
+    if (!Number.isFinite(th)) return { error: "عتبة البطارية يجب أن تكون رقمًا" }
+    trigger.threshold = Math.min(100, Math.max(1, th))
+  }
+  if (tKind === "health.rtt.sustained") {
+    const th = Math.round(Number(tr.threshold ?? 200))
+    if (!Number.isFinite(th)) return { error: "عتبة الاستجابة يجب أن تكون رقمًا" }
+    trigger.threshold = Math.min(60000, Math.max(10, th))
   }
   if (tKind === "time.once") {
     const at = Number(tr.at)
@@ -358,6 +409,7 @@ export function ensureAutomationBridge() {
         onceFired.delete(d.id)
         batteryArmed.delete(d.id)
         dailyFiredDay.delete(d.id)
+        sustainedArmed.delete(d.id)
         broadcastState()
       })
 
@@ -371,6 +423,27 @@ export function ensureAutomationBridge() {
         const rule = rules.find((r) => r.id === d?.id)
         if (!rule) {
           socket.emit("auto:rejected", { error: "قاعدة غير موجودة", at: Date.now() })
+          return
+        }
+        if (isSustainedTrigger(rule.trigger.kind)) {
+          // باب اختبار التاريخ (§26.و): قيّم من التاريخ الحالي — إن استوفى أُطلق
+          // يدويًا، وإلا سُجّل الرفض مسببًا (بلا تغيير لحالة التسليح التلقائية)
+          void (async () => {
+            try {
+              const v = await evalSustainedTrigger(rule.trigger)
+              if (v.satisfied) {
+                // الإطلاق اليدوي الصريح يستهلك الحقبة أيضًا (منع إشعار مزدوج مع التيك)
+                sustainedArmed.set(rule.id, false)
+                await fireRule({ ...rule }, `${v.reason} — تشغيل يدوي`, true)
+              } else {
+                pushLog({ ruleId: rule.id, ruleName: rule.name, at: Date.now(), ok: false, detail: `تشغيل يدوي: التاريخ الحالي لا يثبت استمرار الشرط — ${v.reason}`, manual: true })
+                broadcastState()
+              }
+            } catch {
+              pushLog({ ruleId: rule.id, ruleName: rule.name, at: Date.now(), ok: false, detail: "تشغيل يدوي: فشل تقييم التاريخ الصحي", manual: true })
+              broadcastState()
+            }
+          })()
           return
         }
         void fireRule({ ...rule }, "تشغيل يدوي من الواجهة", true)
@@ -396,9 +469,10 @@ export function ensureAutomationBridge() {
       }
     })
 
-    // استطلاع سجل الأجهزة كل 4 ثوانٍ + المؤقّت الزمني كل 5 ثوانٍ
+    // استطلاع سجل الأجهزة كل 4 ثوانٍ + المؤقّت الزمني كل 5 ثوانٍ + تاريخ الصحة كل 15 ثانية
     setInterval(pollDevices, 4000)
     setInterval(pollTime, 5000)
+    setInterval(() => { void pollHealthSustained() }, 15000)
 
     httpServer.listen(PORT, () => {
       console.log(`[nexus] Automation Bridge on port ${PORT}`)
