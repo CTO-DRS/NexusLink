@@ -77,6 +77,33 @@ function seed(): Store {
   }
 }
 
+// نبض الخدمة الذاتي (عقد §27.هـ): توليد عينات الصحة يعيش في عملية الخادم نفسها —
+// لا يعتمد على فتح أي واجهة. أي «لمسة أولى» على المنظومة (نبضة واجهة، تكة force،
+// تقرير وكيل report، إقلاع جسر الروتينات) تشعل النبض الدائم؛ وبعدها يستمر القياس
+// كل SERVICE_PULSE_MS حتى لو أُغلقت كل الصفحات — فتُبنى سلاسل الدليل للمشغلات
+// التاريخية (§26.و) على مدار الساعة لا على مدار جلسة المتصفح.
+export const SERVICE_PULSE_MS = 4000 // نفس إيقاع نبضة الواجهة — اتساق معدل الجيتر والاستنزاف المحاكى (موثق §27.هـ)
+
+const gPulse = globalThis as unknown as { __nexusServicePulse?: { startedAt: number } }
+
+/** يشعل نبض الخدمة مرة واحدة لكل عملية (idempotent — نمط الجسور: globalThis + علم قبل المؤقت). */
+export function ensureServicePulse() {
+  if (gPulse.__nexusServicePulse) return
+  gPulse.__nexusServicePulse = { startedAt: Date.now() } // العلم قبل المؤقت — لا سباق تكرار حتى مع HMR
+  const timer = setInterval(() => {
+    try { heartbeatBump() } catch { /* النبض لا يُهلِك عملية الخادم أبدًا */ }
+  }, SERVICE_PULSE_MS)
+  // unref: مؤقت لا يحجز عملية قصيرة العمر (سكربتات/اختبارات تستورد الوحدة) —
+  // خادم Next يبقى حيًا بمستمعيه HTTP فيعمل النبض طوال عمر العملية.
+  timer.unref?.()
+}
+
+/** حالة النبض الذاتي — تُعرض في لقطة الصحة (شارة الواجهة + فحوص E2E). */
+export function getServicePulse() {
+  const p = gPulse.__nexusServicePulse
+  return { active: !!p, intervalMs: SERVICE_PULSE_MS, startedAt: p?.startedAt ?? 0 }
+}
+
 export function store(): Store {
   if (!g.__nexusStore || g.__nexusStoreVersion !== SEED_VERSION) {
     g.__nexusStore = seed()
@@ -86,6 +113,9 @@ export function store(): Store {
 }
 
 export function heartbeatBump() {
+  // §27.هـ: أي نبضة (واجهة أو وكيل أو تكة force) تشعل النبض الذاتي الدائم —
+  // بعدها لا تحتاج المنظومة أي واجهة مفتوحة لتوليد العينات.
+  ensureServicePulse()
   for (const d of store().devices) {
     if (d.state === "connected") {
       d.lastSeen = Date.now()

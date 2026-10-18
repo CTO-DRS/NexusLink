@@ -11,7 +11,7 @@
 import { createServer } from "http"
 import { Server as SocketServer } from "socket.io"
 import dgram from "dgram"
-import { store } from "./devices"
+import { store, ensureServicePulse } from "./devices"
 import { ensureGuardBridge, guardEmitToAgent } from "./guard-bridge"
 import { ensureProdBridge, prodInjectClip } from "./productivity-bridge"
 import { onAutomationFact } from "./automation-facts"
@@ -371,6 +371,10 @@ export function automationBridgeStatus() {
 export function ensureAutomationBridge() {
   if (g[BOOT_KEY]) return automationBridgeStatus()
   g[BOOT_KEY] = true
+
+  // §27.هـ: إقلاع محرك الروتينات يشعل نبض الخدمة الذاتي — فبمجرد عمل المحرك
+  // (حتى بلا أي واجهة مفتوحة) تتولد عينات الصحة ويبقى الكشف التاريخي حيًا.
+  ensureServicePulse()
 
   try {
     rules = seedRules()

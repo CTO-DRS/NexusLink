@@ -7,7 +7,7 @@
 // مسار الوكيل الحقيقي: POST /api/devices/health {action:"report"} يحدّث القيم
 // من الجهاز فعليًا ثم يجبر تكة — فتُسجَّل القيم الحقيقية لا المحاكاة.
 import { db, dbReady } from "@/lib/db"
-import { store } from "./devices"
+import { store, ensureServicePulse } from "./devices"
 import type { NexusDevice } from "./types"
 
 export const SAMPLE_INTERVAL_MS = 30_000 // خانقة العينات لكل جهاز
@@ -75,6 +75,7 @@ export async function recordHealthTick(
 ): Promise<{ ok: boolean; recorded: number; events: number; error?: string }> {
   try {
     await dbReady
+    ensureServicePulse() // §27.هـ: أي تكة (force/report/نبضة) تشعل النبض الذاتي الدائم
     const st = state()
     const now = Date.now()
     let events = 0
