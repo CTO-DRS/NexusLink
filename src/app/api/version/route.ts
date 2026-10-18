@@ -2,11 +2,11 @@ import { NextResponse } from "next/server"
 
 // /api/version — الإصدار + سجل الإصدارات الحقيقي (عقد §16 بند 2 + §23).
 // ============================================================
-// الإصدار موحّد 1.1.0 عبر كل المنصات (tauri.conf.json/Cargo.toml/pubspec/package.json
-// — الجولة 4 اكتملت فوق 1.0.0 ووسم v1.1.0 هو الإصدار القادم).
+// الإصدار موحّد 1.2.0 عبر كل المنصات (tauri.conf.json/Cargo.toml/pubspec/package.json
+// — منظومة الروتينات الذكية × مشغّلات الصحة التاريخية اكتملت فوق 1.1.0 ووسم v1.2.0 هو إصدارها).
 // سجل الإصدارات = GitHub Releases للمستودع العام (كاش 10 دقائق) — بلا
 // مفاتيح API، وفشل الجلب (أوفلاين/معدل) يعيد قائمة من الإصدار المحلي وحده.
-const CURRENT = "1.1.0"
+const CURRENT = "1.2.0"
 const RELEASES_API = "https://api.github.com/repos/CTO-DRS/NexusLink/releases?per_page=12"
 
 type HistoryEntry = { version: string; tag: string; date: string; items: string[] }
@@ -18,6 +18,19 @@ function localHistory(): HistoryEntry[] {
   return [
     {
       version: CURRENT,
+      tag: "v1.2.0",
+      date: "2026-10-19",
+      items: [
+        "الروتينات الذكية × مشغّلات الصحة التاريخية: «نبّهني إذا كانت بطارية X تحت 15% لمدة ساعة»",
+        "11 مشغّلًا: 7 لحظية (منها بلوغ الشحن 80%) + 4 تاريخية (بطارية/استجابة/صمت/تخزين) بمقيّم سلسلة دليل",
+        "نبض خدمة ذاتي من الخادم كل 4 ثوانٍ — التاريخ يتولد والروتينات تعمل حتى بلا واجهة مفتوحة",
+        "قواعد دائمة تُستعاد حرفيًا بعد إعادة التشغيل + تنبيهات «لم تُرَ» تنتظر ملخص العودة",
+        "«فحص التاريخ الآن» من المحرر: حكم فوري بالسبب ورقائق الدليل بلا أي أثر",
+        "التحكم بهاتفك من هاتفك الآخر + مركز فك الحجب في تطبيق الهاتف",
+      ],
+    },
+    {
+      version: "1.1.0",
       tag: "v1.1.0",
       date: "2026-10-15",
       items: [
@@ -51,7 +64,7 @@ async function fetchHistory(): Promise<HistoryEntry[]> {
     const r = await fetch(RELEASES_API, {
       signal: ctrl.signal,
       cache: "no-store",
-      headers: { "User-Agent": "NexusLink-Server/1.1.0", Accept: "application/vnd.github+json" },
+      headers: { "User-Agent": "NexusLink-Server/1.2.0", Accept: "application/vnd.github+json" },
     })
     clearTimeout(timer)
     if (!r.ok) throw new Error(`HTTP ${r.status}`)
