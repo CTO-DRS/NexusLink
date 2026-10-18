@@ -423,6 +423,8 @@ jobs:
           PY
       - name: Generate SHA256 checksums
         run: cd dist && sha256sum * > SHA256SUMS.txt
+      - name: Attach static release page
+        run: cp public/NexusLink-Release-Page.html dist/
       - uses: softprops/action-gh-release@v2
         with:
           draft: true
