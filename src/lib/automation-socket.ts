@@ -50,3 +50,8 @@ export function autoRuleRunNow(id: string) {
 export function autoLogClear() {
   getAutomationSocket().emit("log:clear")
 }
+
+/** تعليم كل التنبيهات غير المرئية كمقروءة (§26.ح) — رسوخًا في SQLite. */
+export function autoAlertsMarkSeen() {
+  getAutomationSocket().emit("alerts:mark-seen")
+}

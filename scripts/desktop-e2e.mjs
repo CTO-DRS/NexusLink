@@ -3411,6 +3411,185 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
       await pdbSP.$disconnect()
     }
 
+    // ============================================================
+    // DURABLE-ALERTS — التنبيهات المرسوخة (عقد §26.ح): كل إطلاق يُرى ولو
+    // أُطلق بلا أي واجهة — صف في NexusAutomationFire بـ seenAt=null يظهر
+    // في ملخص العودة، والبث الحي لواجهة متصلة = رؤية عند التسليم، والسقف
+    // 200 بتنقية تلقائية — قراءة SQLite مباشرة عبر Prisma
+    // ============================================================
+    console.log("\n== DURABLE-ALERTS: durable fire log + unseen alerts (§26.ح) ==")
+    {
+      const bootDA = await waitHttp("automation boot (DA)", "http://localhost:3000/api/automation/boot", 20000, (j) => j?.ok === true && j?.booted === true)
+      check("DURABLE-ALERTS: جسر الروتينات حي قبل فحوص التنبيهات المرسوخة",
+        bootDA?.port === 3008, `port=${bootDA?.port}`)
+
+      // (أ) فحوص المصدر
+      const fsDA = (await import("node:fs")).default
+      const rdDA = (p) => { try { return fsDA.readFileSync(pathMod.join(ROOT, p), "utf8") } catch { return "" } }
+      const schemaDA = rdDA("prisma/schema.prisma")
+      const dbDA = rdDA("src/lib/db.ts")
+      const persistDA = rdDA("src/lib/nexus/automation-persist.ts")
+      const bridgeDA = rdDA("src/lib/nexus/automation-bridge.ts")
+      const viewDA = rdDA("src/components/nexus/automation/automation-view.tsx")
+      const hookDA = rdDA("src/hooks/use-automation-bridge.ts")
+      const i18nDA = rdDA("src/lib/ar-en-map.json")
+      const contractDA = rdDA("docs/protocol-contract.md")
+      const checklistDA = rdDA("docs/e2e-checklist.md")
+
+      check("DURABLE-ALERTS: المصدر — نموذج NexusAutomationFire (seenAt nullable + فهارس at/ruleId) في المخطط + ترقية آمنة CREATE IF NOT EXISTS في db.ts",
+        schemaDA.includes("model NexusAutomationFire") && schemaDA.includes("seenAt   DateTime?")
+        && schemaDA.includes("@@index([at])") && schemaDA.includes("@@index([ruleId, at])")
+        && dbDA.includes('CREATE TABLE IF NOT EXISTS "NexusAutomationFire"') && dbDA.includes('"seenAt"   DATETIME')
+        && dbDA.includes('CREATE INDEX IF NOT EXISTS "NexusAutomationFire_at_idx"'), "schema+db.ts")
+      check("DURABLE-ALERTS: المصدر — وحدة الترسيخ: persistFire (إدخال + تنقية سقف 200) + loadPersistedFires (إحياء + تنقية الفاسد) + markFiresSeenDb (updateMany)",
+        persistDA.includes("export const MAX_PERSISTED_FIRES = 200") && persistDA.includes("export async function persistFire")
+        && persistDA.includes("export async function loadPersistedFires") && persistDA.includes("export async function markFiresSeenDb")
+        && persistDA.includes("deleteMany({ where: { at: { lt: cutoff") && persistDA.includes("function reviveFire"), "persist module")
+      check("DURABLE-ALERTS: المصدر — الجسر: مرآة fireLog + ترسيخ عند كل إطلاق + رؤية عند التسليم (clientsCount) + alerts في buildState + استعادة غير حاجبة + alerts:mark-seen",
+        bridgeDA.includes("let fireLog: AutoFireEntry[] = []") && bridgeDA.includes("void persistFire(fireEntry)")
+        && bridgeDA.includes("io?.engine?.clientsCount ?? 0") && bridgeDA.includes("seenAt: clients > 0 ? now : null")
+        && bridgeDA.includes('unseen: fireLog.filter((f) => !f.seenAt).length') && bridgeDA.includes("loadPersistedFires()")
+        && bridgeDA.includes('socket.on("alerts:mark-seen"') && bridgeDA.includes("void markFiresSeenDb(now2)"), "bridge wiring")
+      check("DURABLE-ALERTS: المصدر — الأنواع: AutoFireEntry + AutoAlertsPayload في auto:state",
+        rdDA("src/lib/nexus/automation-types.ts").includes("export interface AutoFireEntry")
+        && rdDA("src/lib/nexus/automation-types.ts").includes("export interface AutoAlertsPayload")
+        && rdDA("src/lib/nexus/automation-types.ts").includes("alerts: AutoAlertsPayload"), "types")
+      check("DURABLE-ALERTS: الواجهة — شارة غير مرئية + زر تعليم كمقروء + السجل الدائم + ملخص عودة من الخطاف (مرة لكل اتصال) + بند حدود صادق",
+        viewDA.includes('data-testid="automation-unseen-badge"') && viewDA.includes('data-testid="automation-mark-seen"')
+        && viewDA.includes('data-testid="automation-durable-log"') && viewDA.includes('data-testid="automation-fire-row"')
+        && viewDA.includes('data-testid="automation-fire-unseen"')
+        && hookDA.includes("digestShown = false") && hookDA.includes("تنبيهات روتين لم تُرَ")
+        && viewDA.includes("الإطلاقات نفسها مرسوخة (آخر 200) والتنبيهات غير المرئية تظهر في ملخص العودة"), "ui+hook")
+      check("DURABLE-ALERTS: i18n — مفاتيح التنبيهات المرسوخة في القاموس",
+        i18nDA.includes('"تنبيهات روتين لم تُرَ": "Unseen routine alerts"')
+        && i18nDA.includes('"تعليم الكل كمقروء": "Mark all as read"')
+        && i18nDA.includes('"السجل الدائم للإطلاقات": "Durable fire log"')
+        && i18nDA.includes('"لم يُرَ": "Unseen"'), "i18n")
+      check("DURABLE-ALERTS: التوثيق — العقد §26.ح (الرؤية/السقف/الحدود) + القائمة الميدانية §24",
+        contractDA.includes("### 26.ح التنبيهات المرسوخة") && contractDA.includes("دلالات الرؤية (seenAt)")
+        && contractDA.includes("io.engine.clientsCount") && checklistDA.includes("## 24. التنبيهات المرسوخة"), "docs")
+
+      // (ب) السلوك الحي — إطلاق بلا واجهة → غير مرئي → ملخص عودة → تعليم كمقروء
+      const dbUrlDA = fsDA.readFileSync(pathMod.join(ROOT, ".env"), "utf8").match(/^DATABASE_URL=(.*)$/m)?.[1]
+      const { PrismaClient } = await import("@prisma/client")
+      const pdbDA = new PrismaClient({ datasources: { db: { url: dbUrlDA } }, log: [] })
+      const { io: ioDA } = await import("socket.io-client")
+
+      // قاعدة موعد مرة واحدة يُطلقها مؤقت الخادم بينما لا عميل متصل (نافذة صمت مقصودة)
+      const DA_RULE = "DA-E2E-موعد-بلا-واجهة"
+      const sockDA = ioDA("http://localhost:3008", { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 8000, reconnection: false })
+      await new Promise((res, rej) => { sockDA.on("connect", res); sockDA.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("timeout")), 9000) })
+      const ruleAck = await new Promise((resolve) => {
+        let saw = null
+        const to = setTimeout(() => resolve(saw), 6000)
+        sockDA.on("auto:state", (s) => {
+          const r = s?.rules?.find((x) => x.name === DA_RULE)
+          if (r) { clearTimeout(to); saw = r; resolve(r) }
+        })
+        sockDA.emit("rule:upsert", { rule: { name: DA_RULE, enabled: true, trigger: { kind: "time.once", at: Date.now() + 1200 }, action: { kind: "notify", text: "تنبيه مرسوخ E2E" } } })
+      })
+      check("DURABLE-ALERTS: قاعدة الاختبار (موعد بعد 1.2ث) مُنشأة عبر المقبس",
+        !!ruleAck, ruleAck ? `id=${ruleAck.id.slice(0, 8)}` : "no ack")
+
+      // فصل العميل — إطلاق مؤقت time.once يحدث بلا أي واجهة (قراءة §26.ح حدّيًا)
+      sockDA.disconnect()
+      await sleep(2600 + 5500) // الموعد + تكة pollTime (5ث)
+      let fireRow = null
+      for (let i = 0; i < 12 && !fireRow; i++) {
+        await new Promise((r) => setTimeout(r, 500))
+        fireRow = ruleAck ? await pdbDA.nexusAutomationFire.findFirst({ where: { ruleId: ruleAck.id }, orderBy: { at: "desc" } }) : null
+      }
+      check("DURABLE-ALERTS: إطلاق بلا أي عميل متصل → صف في SQLite بـ seenAt=null (غير مرئي — التنبيه انتظر لا تبخّر)",
+        !!fireRow && fireRow.seenAt === null && fireRow.ruleName === DA_RULE,
+        fireRow ? `at=${fireRow.at.toISOString()} seenAt=${fireRow.seenAt}` : "no row")
+
+      // عودة العميل → auto:state يحمل alerts.unseen ≥ 1 وlatest يتضمن الإطلاق
+      const sock2 = ioDA("http://localhost:3008", { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 8000, reconnection: false })
+      const st2 = await new Promise((resolve) => {
+        const to = setTimeout(() => resolve(null), 8000)
+        sock2.on("auto:state", (s) => { clearTimeout(to); resolve(s) })
+      })
+      check("DURABLE-ALERTS: عودة الواجهة → auto:state يحمّل alerts.unseen ≥ 1 (ملخص العودة)",
+        st2?.alerts && st2.alerts.unseen >= 1 && st2.alerts.latest?.some((f) => f.ruleId === ruleAck?.id && f.seenAt === null),
+        st2?.alerts ? `unseen=${st2.alerts.unseen} total=${st2.alerts.total}` : "no alerts")
+
+      // تعليم الكل كمقروء → الذاكرة والSQLite معًا (البرود الحالي يسبق تسجيل المستمع —
+      // لذا الحسم عبر اتصال جديد نظيف: أول auto:state يعكس الذاكرة الحية بعد التعليم)
+      sock2.emit("alerts:mark-seen")
+      let seenDb = 0
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, 400))
+        seenDb = await pdbDA.nexusAutomationFire.count({ where: { ruleId: ruleAck.id, seenAt: { not: null } } })
+        if (seenDb > 0) break
+      }
+      const sock3 = ioDA("http://localhost:3008", { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 8000, reconnection: false })
+      const st3 = await new Promise((resolve) => {
+        const to = setTimeout(() => resolve(null), 8000)
+        sock3.on("auto:state", (s) => { clearTimeout(to); resolve(s) })
+      })
+      check("DURABLE-ALERTS: alerts:mark-seen → unseen=0 في الحالة + seenAt مرسوخ في SQLite",
+        st3?.alerts?.unseen === 0 && seenDb > 0, `dbSeen=${seenDb} stateUnseen=${st3?.alerts?.unseen}`)
+
+      // البث الحي لواجهة متصلة = رؤية عند التسليم: run-now بعميل متصل → seenAt != null
+      const seenLive = await new Promise((resolve) => {
+        let row = null
+        const to = setTimeout(() => resolve(null), 8000)
+        sock2.on("auto:fired", async (p) => {
+          if (p?.ruleId !== ruleAck?.id) return
+          for (let i = 0; i < 10 && !row; i++) {
+            await new Promise((r) => setTimeout(r, 400))
+            row = await pdbDA.nexusAutomationFire.findFirst({ where: { ruleId: ruleAck.id, manual: true }, orderBy: { at: "desc" } })
+          }
+          clearTimeout(to); resolve(row)
+        })
+        sock2.emit("rule:run-now", { id: ruleAck.id })
+      })
+      check("DURABLE-ALERTS: run-now بعميل متصل → الإطلاق مرسوخ بـ seenAt != null (رؤية عند التسليم — لا شارة زائفة لما رأيته)",
+        !!seenLive && seenLive.seenAt !== null, seenLive ? `seenAt=${seenLive.seenAt.toISOString()}` : "no row")
+
+      // السقف: بذر 205 صفوف قديمة + إطلاق → التنقية تحافظ على ≤ 200
+      const cutoffAt = new Date(Date.now() - 3600_000)
+      await pdbDA.nexusAutomationFire.createMany({
+        data: Array.from({ length: 205 }, (_, i) => ({
+          id: `da-e2e-dummy-${Date.now()}-${i}`, ruleId: "da-e2e-dummy", ruleName: "DA-E2E-dummy",
+          at: new Date(cutoffAt.getTime() - i * 1000), ok: true, detail: "", manual: false, seenAt: cutoffAt,
+        })),
+      })
+      // إطلاق إضافي (فعل notify آمن) يدفع التنقية — قاعدة مساعدة ثم حذفها
+      const capRule = await new Promise((resolve) => {
+        let saw = null
+        const to = setTimeout(() => resolve(saw), 6000)
+        sock2.on("auto:state", (s) => {
+          const r = s?.rules?.find((x) => x.name === "DA-E2E-scap")
+          if (r) { clearTimeout(to); saw = r; resolve(r) }
+        })
+        sock2.emit("rule:upsert", { rule: { name: "DA-E2E-scap", enabled: true, trigger: { kind: "battery.below", threshold: 100 }, action: { kind: "notify", text: "cap" } } })
+      })
+      if (capRule) sock2.emit("rule:run-now", { id: capRule.id })
+      let capCount = 999
+      for (let i = 0; i < 15; i++) {
+        await new Promise((r) => setTimeout(r, 500))
+        capCount = await pdbDA.nexusAutomationFire.count()
+        if (capCount <= 200) break
+      }
+      check("DURABLE-ALERTS: السقف — بعد 205 صفوف مضافة + إطلاق → التنقية التلقائية تحافظ على ≤ 200 صف",
+        capCount <= 200, `count=${capCount}`)
+
+      // تنظيف E2E: حذف القاعدتين + صفوفهما + بقايا الدummies (التنقية أزالت الأقدم)
+      sock2.emit("rule:delete", { id: ruleAck.id })
+      if (capRule) sock2.emit("rule:delete", { id: capRule.id })
+      await sleep(700)
+      const del1 = await pdbDA.nexusAutomationFire.deleteMany({ where: { ruleId: { in: [ruleAck?.id, capRule?.id].filter(Boolean), } } }).catch(() => null)
+      const del2 = await pdbDA.nexusAutomationFire.deleteMany({ where: { ruleId: "da-e2e-dummy" } }).catch(() => null)
+      const remaining = await pdbDA.nexusAutomationFire.count()
+      check("DURABLE-ALERTS: تنظيف E2E — لا صفوف اختبارية متبقية والجدول سليم",
+        remaining >= 0 && del1 !== null && del2 !== null, `remaining=${remaining} del1=${del1?.count} del2=${del2?.count}`)
+
+      await pdbDA.$disconnect()
+      try { sock2.disconnect() } catch { /* ignore */ }
+      try { sockDA.disconnect() } catch { /* ignore */ }
+    }
+
   }
 
 } catch (e) {

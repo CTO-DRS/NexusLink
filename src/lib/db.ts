@@ -78,6 +78,26 @@ function ensureUpgradeSchema(): Promise<void> {
            "updatedAt" DATETIME NOT NULL
          )`,
       )
+      // ترسيخ إطلاقات الروتينات (عقد §26.ح) — كل إطلاق فعلي يُرسَّخ والتنبيهات
+      // غير المرئية تبقى بانتظار عودة الواجهة. seenAt nullable = غير مرئية بعد.
+      await db.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS "NexusAutomationFire" (
+           "id"       TEXT     NOT NULL PRIMARY KEY,
+           "ruleId"   TEXT     NOT NULL,
+           "ruleName" TEXT     NOT NULL,
+           "at"       DATETIME NOT NULL,
+           "ok"       BOOLEAN  NOT NULL DEFAULT 1,
+           "detail"   TEXT     NOT NULL DEFAULT '',
+           "manual"   BOOLEAN  NOT NULL DEFAULT 0,
+           "seenAt"   DATETIME
+         )`,
+      )
+      await db.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS "NexusAutomationFire_at_idx" ON "NexusAutomationFire"("at")`,
+      )
+      await db.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS "NexusAutomationFire_ruleId_at_idx" ON "NexusAutomationFire"("ruleId", "at")`,
+      )
     } catch (e) {
       // بلا هلع: القاعدة الجاهزة (seed 1.1.0) تحوي الجدول مسبقًا؛ فشل ضمان
       // المخطط (قاعدة للقراءة فقط مثلًا) يظهر في مسارات الكتابة بصدق لاحقًا.

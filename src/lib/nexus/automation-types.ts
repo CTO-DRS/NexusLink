@@ -79,7 +79,31 @@ export interface AutoStatePayload {
     firesToday: number
     lastFiredAt: number | null
   }
+  alerts: AutoAlertsPayload
   bootedAt: number
+}
+
+/** إطلاق مرسوخ (§26.ح) — نسخة دائمة من مدخل السجل مع لحظة الرؤية seenAt:
+ *  null = أُطلق بلا واجهة متصلة ولم يُرَ بعد (يظهر في ملخص العودة). */
+export interface AutoFireEntry {
+  id: string
+  ruleId: string
+  ruleName: string
+  at: number
+  ok: boolean
+  detail: string
+  manual: boolean
+  seenAt: number | null
+}
+
+/** ملخص التنبيهات المرسوخة في حمولة auto:state (§26.ح). */
+export interface AutoAlertsPayload {
+  /** الإطلاقات غير المرئية (seenAt = null) — شارة العودة. */
+  unseen: number
+  /** آخر الإطلاقات المرسوخة للعرض (≤ 12). */
+  latest: AutoFireEntry[]
+  /** إجمالي المرسوخ (سقف الاحتفاظ 200). */
+  total: number
 }
 
 /** حمولة حدث إطلاق الروتين (auto:fired) — تستهلكه الواجهة للتنبيه الفوري. */

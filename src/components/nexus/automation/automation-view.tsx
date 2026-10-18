@@ -5,7 +5,7 @@
 import { useState } from "react"
 import { useI18n } from "@/lib/i18n"
 import { useAutomation } from "@/lib/automation-store"
-import { autoRuleUpsert, autoRuleDelete, autoRuleToggle, autoRuleRunNow, autoLogClear } from "@/lib/automation-socket"
+import { autoRuleUpsert, autoRuleDelete, autoRuleToggle, autoRuleRunNow, autoLogClear, autoAlertsMarkSeen } from "@/lib/automation-socket"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Workflow, MonitorSmartphone, MonitorOff, BatteryLow, ClipboardList, CalendarClock,
   BellRing, ClipboardPaste, PhoneCall, Power, Play, Trash2, Plus, History,
-  Clock, Sparkles, ShieldAlert, Timer, Activity, WifiOff,
+  Clock, Sparkles, ShieldAlert, Timer, Activity, WifiOff, CheckCheck, DatabaseBackup,
 } from "lucide-react"
 import type { TriggerKind, ActionKind, AutoRule } from "@/lib/nexus/automation-types"
 import { SUSTAINED_TRIGGER_KINDS } from "@/lib/nexus/automation-types"
@@ -91,7 +91,7 @@ const EMPTY_DRAFT: Draft = {
 
 export function AutomationView() {
   const { t } = useI18n()
-  const { online, rules, log, stats } = useAutomation()
+  const { online, rules, log, stats, alerts } = useAutomation()
   const [draft, setDraft] = useState<Draft | null>(null)
 
   const openNew = () => setDraft({ ...EMPTY_DRAFT })
@@ -154,6 +154,22 @@ export function AutomationView() {
           {online ? t("المحرك متصل") : t("المحرك غير متصل")}
         </Badge>
       </div>
+
+      {/* شارة التنبيهات غير المرئية (§26.ح) — أُطلقت أثناء الغياب وتنتظر الرؤية */}
+      {alerts && alerts.unseen > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5" data-testid="automation-unseen-banner">
+          <div className="flex items-center gap-2 text-sm">
+            <BellRing className="size-4 shrink-0 text-amber-500" aria-hidden="true" />
+            <span className="font-semibold" data-testid="automation-unseen-badge">
+              {t("تنبيهات روتين لم تُرَ")}: {alerts.unseen}
+            </span>
+            <span className="text-xs text-muted-foreground">{t("أُطلقت أثناء غيابك — آخرها")}: {alerts.latest?.[0]?.ruleName ?? "…"}</span>
+          </div>
+          <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={autoAlertsMarkSeen} data-testid="automation-mark-seen">
+            <CheckCheck className="size-3.5" />{t("تعليم الكل كمقروء")}
+          </Button>
+        </div>
+      )}
 
       {/* الإحصاءات */}
       {stats && (
@@ -241,11 +257,34 @@ export function AutomationView() {
         </div>
       )}
 
+      {/* السجل الدائم (§26.ح) — الإطلاقات المرسوخة تبقى بعد إعادة التشغيل */}
+      {alerts && alerts.total > 0 && (
+        <>
+          <div className="flex items-center justify-between pt-1">
+            <h3 className="text-sm font-semibold flex items-center gap-1.5"><DatabaseBackup className="size-4 text-amber-500" />{t("السجل الدائم للإطلاقات")}</h3>
+            <span className="text-[11px] text-muted-foreground">{t("مرسوخ في قاعدة البيانات — آخر 200 يبقى بعد إعادة التشغيل")} · {alerts.total}</span>
+          </div>
+          <div className="space-y-1.5" data-testid="automation-durable-log">
+            {alerts.latest.map((f) => (
+              <div key={f.id} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs" data-testid="automation-fire-row">
+                <span className={`size-1.5 shrink-0 rounded-full ${!f.seenAt ? "bg-amber-500 animate-pulse" : "bg-muted-foreground/40"}`} />
+                <span className="font-medium shrink-0">{f.ruleName}</span>
+                <span className="text-muted-foreground truncate flex-1">{f.detail}</span>
+                {f.manual && <Badge variant="secondary" className="text-[9px] px-1.5 py-0">{t("يدوي")}</Badge>}
+                {!f.seenAt && <Badge variant="outline" className="shrink-0 border-amber-500/40 text-amber-600 text-[9px] px-1.5 py-0" data-testid="automation-fire-unseen">{t("لم يُرَ")}</Badge>}
+                <span className="text-muted-foreground shrink-0 tabular-nums">{new Date(f.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       {/* حدود صادقة */}
       <Card className="border-amber-500/30 bg-amber-500/5"><CardContent className="p-3.5 text-xs text-muted-foreground space-y-1">
         <div className="font-semibold flex items-center gap-1.5 text-amber-600"><ShieldAlert className="size-3.5" />{t("حدود الإصدار الأول")}</div>
         <p>• {t("القواعد محفوظة في قاعدة البيانات وتُستعاد حرفيًا عند إعادة تشغيل الخادم — وحذف قاعدة بذرية يبقى حذفًا")}</p>
         <p>• {t("سجل التشغيل (آخر 80) يبقى في ذاكرة الجسر ويبدأ نظيفًا عند الإقلاع")}</p>
+        <p>• {t("الإطلاقات نفسها مرسوخة (آخر 200) والتنبيهات غير المرئية تظهر في ملخص العودة — الإطلاق بلا واجهة مفتوحة لا يضيع، وإيقاف عملية الخادم يوقف الالتقاط")}</p>
         <p>• {t("أفعال الهاتف تعبر قناة الحماية القائمة وتتطلب وكيل هاتف متصلًا")}</p>
         <p>• {t("إيقاظ WoL يعمل داخل الشبكة المحلية فقط (بث UDP :9)")}</p>
         <p>• {t("مشغلات الأجهزة تقرأ سجل الأجهزة (الاقتران/القطع) لا نبض الوكيل الحي")}</p>
