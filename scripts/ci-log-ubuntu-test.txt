@@ -1,0 +1,260 @@
+﻿2026-10-18T21:26:40.8422405Z Current runner version: '2.337.0'
+2026-10-18T21:26:40.8442691Z ##[group]Runner Image Provisioner
+2026-10-18T21:26:40.8443421Z Hosted Compute Agent
+2026-10-18T21:26:40.8443971Z Version: 20261012.601
+2026-10-18T21:26:40.8444486Z Commit: f3dc54e1fb89da6852db922499a0233137369e1d
+2026-10-18T21:26:40.8445067Z Build Date: 2026-10-12T17:48:21Z
+2026-10-18T21:26:40.8445719Z Worker ID: {8df26881-f698-4541-8e53-7238612bb3aa}
+2026-10-18T21:26:40.8446282Z Region: westus3
+2026-10-18T21:26:40.8446747Z Cloud: Azure
+2026-10-18T21:26:40.8447201Z ##[endgroup]
+2026-10-18T21:26:40.8448190Z ##[group]Operating System
+2026-10-18T21:26:40.8448820Z Ubuntu
+2026-10-18T21:26:40.8449409Z 24.04.5
+2026-10-18T21:26:40.8449863Z LTS
+2026-10-18T21:26:40.8450300Z ##[endgroup]
+2026-10-18T21:26:40.8450780Z ##[group]Runner Image
+2026-10-18T21:26:40.8451298Z Image: ubuntu-24.04
+2026-10-18T21:26:40.8451761Z Version: 20261012.334.1
+2026-10-18T21:26:40.8452814Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261012.334/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-18T21:26:40.8454065Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261012.334
+2026-10-18T21:26:40.8454881Z ##[endgroup]
+2026-10-18T21:26:40.8455780Z ##[group]GITHUB_TOKEN Permissions
+2026-10-18T21:26:40.8457594Z Contents: write
+2026-10-18T21:26:40.8458079Z Metadata: read
+2026-10-18T21:26:40.8458548Z ##[endgroup]
+2026-10-18T21:26:40.8460587Z Secret source: Actions
+2026-10-18T21:26:40.8461372Z Cache mode: write
+2026-10-18T21:26:40.8462039Z Prepare workflow directory
+2026-10-18T21:26:40.9509771Z Prepare all required actions
+2026-10-18T21:26:40.9550239Z Getting action download info
+2026-10-18T21:26:41.2361026Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-18T21:26:41.3357473Z Download action repository 'oven-sh/setup-bun@v2' (SHA:0c5077e51419868618aeaa5fe8019c62421857d6)
+2026-10-18T21:26:42.0825007Z Complete job name: test (ubuntu-latest)
+2026-10-18T21:26:42.2922731Z ##[group]Run actions/checkout@v4
+2026-10-18T21:26:42.2923860Z with:
+2026-10-18T21:26:42.2924539Z   repository: CTO-DRS/NexusLink
+2026-10-18T21:26:42.2932062Z   token: ***
+2026-10-18T21:26:42.2932737Z   ssh-strict: true
+2026-10-18T21:26:42.2933426Z   ssh-user: git
+2026-10-18T21:26:42.2934121Z   persist-credentials: true
+2026-10-18T21:26:42.2934900Z   clean: true
+2026-10-18T21:26:42.2935606Z   sparse-checkout-cone-mode: true
+2026-10-18T21:26:42.2936432Z   fetch-depth: 1
+2026-10-18T21:26:42.2937141Z   fetch-tags: false
+2026-10-18T21:26:42.2937841Z   show-progress: true
+2026-10-18T21:26:42.2938562Z   lfs: false
+2026-10-18T21:26:42.2939209Z   submodules: false
+2026-10-18T21:26:42.2940074Z   set-safe-directory: true
+2026-10-18T21:26:42.2940896Z   allow-unsafe-pr-checkout: false
+2026-10-18T21:26:42.2941921Z env:
+2026-10-18T21:26:42.2942557Z   VERSION: 1.2.0
+2026-10-18T21:26:42.2943235Z ##[endgroup]
+2026-10-18T21:26:42.3789621Z Syncing repository: CTO-DRS/NexusLink
+2026-10-18T21:26:42.3792242Z ##[group]Getting Git version info
+2026-10-18T21:26:42.3793366Z Working directory is '/home/runner/work/NexusLink/NexusLink'
+2026-10-18T21:26:42.3794989Z [command]/usr/bin/git version
+2026-10-18T21:26:42.4199649Z git version 2.55.0
+2026-10-18T21:26:42.4219407Z ##[endgroup]
+2026-10-18T21:26:42.4232117Z Temporarily overriding HOME='/home/runner/work/_temp/bc4ee0e5-194f-4f46-b6fd-541f88a8cedd' before making global git config changes
+2026-10-18T21:26:42.4235649Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-18T21:26:42.4238864Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/NexusLink/NexusLink
+2026-10-18T21:26:42.4675651Z Deleting the contents of '/home/runner/work/NexusLink/NexusLink'
+2026-10-18T21:26:42.4680408Z ##[group]Initializing the repository
+2026-10-18T21:26:42.4684031Z [command]/usr/bin/git init /home/runner/work/NexusLink/NexusLink
+2026-10-18T21:26:42.4905263Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-18T21:26:42.4907493Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-18T21:26:42.4909197Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-18T21:26:42.4910856Z hint: call:
+2026-10-18T21:26:42.4911743Z hint:
+2026-10-18T21:26:42.4912691Z hint: 	git config --global init.defaultBranch <name>
+2026-10-18T21:26:42.4913670Z hint:
+2026-10-18T21:26:42.4914579Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-18T21:26:42.4916576Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-18T21:26:42.4917865Z hint:
+2026-10-18T21:26:42.4918537Z hint: 	git branch -m <name>
+2026-10-18T21:26:42.4919438Z hint:
+2026-10-18T21:26:42.4920435Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-18T21:26:42.4922039Z Initialized empty Git repository in /home/runner/work/NexusLink/NexusLink/.git/
+2026-10-18T21:26:42.4924778Z [command]/usr/bin/git remote add origin https://github.com/CTO-DRS/NexusLink
+2026-10-18T21:26:42.4963184Z ##[endgroup]
+2026-10-18T21:26:42.4964795Z ##[group]Disabling automatic garbage collection
+2026-10-18T21:26:42.4966074Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-18T21:26:42.4995987Z ##[endgroup]
+2026-10-18T21:26:42.5000414Z ##[group]Setting up auth
+2026-10-18T21:26:42.5001626Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-18T21:26:42.5028424Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-18T21:26:42.5323979Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-18T21:26:42.5354716Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-18T21:26:42.5539138Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-18T21:26:42.5569050Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-18T21:26:42.5755065Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-18T21:26:42.5789379Z ##[endgroup]
+2026-10-18T21:26:42.5790600Z ##[group]Fetching the repository
+2026-10-18T21:26:42.5797284Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +0778f84ab66e5d626ec088fdf4dc0585354a5e62:refs/tags/v1.2.0
+2026-10-18T21:26:47.2161817Z From https://github.com/CTO-DRS/NexusLink
+2026-10-18T21:26:47.2162513Z  * [new ref]         0778f84ab66e5d626ec088fdf4dc0585354a5e62 -> v1.2.0
+2026-10-18T21:26:47.2164586Z ##[endgroup]
+2026-10-18T21:26:47.2165123Z ##[group]Determining the checkout info
+2026-10-18T21:26:47.2166929Z ##[endgroup]
+2026-10-18T21:26:47.2171995Z [command]/usr/bin/git sparse-checkout disable
+2026-10-18T21:26:47.2217650Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-18T21:26:47.2245167Z ##[group]Checking out the ref
+2026-10-18T21:26:47.2248729Z [command]/usr/bin/git checkout --progress --force refs/tags/v1.2.0
+2026-10-18T21:26:47.9708470Z Note: switching to 'refs/tags/v1.2.0'.
+2026-10-18T21:26:47.9708892Z 
+2026-10-18T21:26:47.9709149Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-18T21:26:47.9712444Z changes and commit them, and you can discard any commits you make in this
+2026-10-18T21:26:47.9714553Z state without impacting any branches by switching back to a branch.
+2026-10-18T21:26:47.9719751Z 
+2026-10-18T21:26:47.9720118Z If you want to create a new branch to retain commits you create, you may
+2026-10-18T21:26:47.9720833Z do so (now or later) by using -c with the switch command. Example:
+2026-10-18T21:26:47.9721240Z 
+2026-10-18T21:26:47.9721477Z   git switch -c <new-branch-name>
+2026-10-18T21:26:47.9722069Z 
+2026-10-18T21:26:47.9722206Z Or undo this operation with:
+2026-10-18T21:26:47.9722421Z 
+2026-10-18T21:26:47.9722535Z   git switch -
+2026-10-18T21:26:47.9722752Z 
+2026-10-18T21:26:47.9723030Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-18T21:26:47.9723422Z 
+2026-10-18T21:26:47.9725193Z HEAD is now at 0778f84 release: v1.2.0 — الروتينات الذكية × مشغّلات الصحة التاريخية — رفع الإصدار الموحّد 1.1.0→1.2.0 عبر الملفات الأربعة (package/tauri.conf/Cargo.toml+lock/pubspec 1.2.0+3) + VERSION في release.yml + سجل /api/version بإصدار 1.2.0 + ملاحظات إصدار AR/EN (docs/releases/v1.2.0.md) — الوسم v1.2.0 يشغّل بناء المنصات الخمس
+2026-10-18T21:26:47.9734449Z ##[endgroup]
+2026-10-18T21:26:47.9775129Z [command]/usr/bin/git log -1 --format=%H
+2026-10-18T21:26:47.9797745Z 0778f84ab66e5d626ec088fdf4dc0585354a5e62
+2026-10-18T21:26:48.1016097Z ##[group]Run oven-sh/setup-bun@v2
+2026-10-18T21:26:48.1016404Z with:
+2026-10-18T21:26:48.1016618Z   no-cache: false
+2026-10-18T21:26:48.1018776Z   token: ***
+2026-10-18T21:26:48.1018973Z env:
+2026-10-18T21:26:48.1019170Z   VERSION: 1.2.0
+2026-10-18T21:26:48.1019530Z ##[endgroup]
+2026-10-18T21:26:48.7104313Z Downloading a new version of Bun: https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-linux-x64.zip
+2026-10-18T21:26:49.0298394Z [command]/usr/bin/unzip -o -q /home/runner/work/_temp/50f71db1-b89b-4c5b-9258-4361f34d64df.zip
+2026-10-18T21:26:49.6356352Z [command]/home/runner/.bun/bin/bun --revision
+2026-10-18T21:26:49.6400089Z 1.4.3+c6da4a4d3
+2026-10-18T21:26:49.7420047Z ##[group]Run bun install --frozen-lockfile
+2026-10-18T21:26:49.7420399Z [36;1mbun install --frozen-lockfile[0m
+2026-10-18T21:26:49.8603881Z shell: /usr/bin/bash -e {0}
+2026-10-18T21:26:49.8604139Z env:
+2026-10-18T21:26:49.8604319Z   VERSION: 1.2.0
+2026-10-18T21:26:49.8604502Z ##[endgroup]
+2026-10-18T21:26:49.9200920Z bun install v1.4.3 (c6da4a4d3)
+2026-10-18T21:26:53.8245986Z 
+2026-10-18T21:26:53.8246470Z + @tailwindcss/postcss@4.1.18
+2026-10-18T21:26:53.8246902Z + @types/react@19.2.8
+2026-10-18T21:26:53.8247188Z + @types/react-dom@19.2.3
+2026-10-18T21:26:53.8247461Z + bun-types@1.3.6
+2026-10-18T21:26:53.8247714Z + esbuild@0.28.2
+2026-10-18T21:26:53.8247956Z + eslint@9.39.2
+2026-10-18T21:26:53.8248216Z + eslint-config-next@16.1.3
+2026-10-18T21:26:53.8248505Z + tailwindcss@4.1.18
+2026-10-18T21:26:53.8248763Z + tw-animate-css@1.4.0
+2026-10-18T21:26:53.8249040Z + typescript@5.9.3
+2026-10-18T21:26:53.8249447Z + @dnd-kit/core@6.3.1
+2026-10-18T21:26:53.8249796Z + @dnd-kit/sortable@10.0.0
+2026-10-18T21:26:53.8250080Z + @dnd-kit/utilities@3.2.2
+2026-10-18T21:26:53.8250359Z + @hookform/resolvers@5.2.2
+2026-10-18T21:26:53.8250647Z + @mdxeditor/editor@3.52.3
+2026-10-18T21:26:53.8250927Z + @noble/curves@1.8.2
+2026-10-18T21:26:53.8251192Z + @noble/hashes@1.8.0
+2026-10-18T21:26:53.8251446Z + @prisma/client@6.19.2
+2026-10-18T21:26:53.8251741Z + @radix-ui/react-accordion@1.2.12
+2026-10-18T21:26:53.8252072Z + @radix-ui/react-alert-dialog@1.1.15
+2026-10-18T21:26:53.8252436Z + @radix-ui/react-aspect-ratio@1.1.8
+2026-10-18T21:26:53.8252759Z + @radix-ui/react-avatar@1.1.11
+2026-10-18T21:26:53.8253050Z + @radix-ui/react-checkbox@1.3.3
+2026-10-18T21:26:53.8253358Z + @radix-ui/react-collapsible@1.1.12
+2026-10-18T21:26:53.8253687Z + @radix-ui/react-context-menu@2.2.16
+2026-10-18T21:26:53.8254028Z + @radix-ui/react-dialog@1.1.15
+2026-10-18T21:26:53.8254344Z + @radix-ui/react-dropdown-menu@2.1.16
+2026-10-18T21:26:53.8254676Z + @radix-ui/react-hover-card@1.1.15
+2026-10-18T21:26:53.8255010Z + @radix-ui/react-label@2.1.8
+2026-10-18T21:26:53.8255327Z + @radix-ui/react-menubar@1.1.16
+2026-10-18T21:26:53.8255643Z + @radix-ui/react-navigation-menu@1.2.14
+2026-10-18T21:26:53.8255980Z + @radix-ui/react-popover@1.1.15
+2026-10-18T21:26:53.8256292Z + @radix-ui/react-progress@1.1.8
+2026-10-18T21:26:53.8256603Z + @radix-ui/react-radio-group@1.3.8
+2026-10-18T21:26:53.8256934Z + @radix-ui/react-scroll-area@1.2.10
+2026-10-18T21:26:53.8257281Z + @radix-ui/react-select@2.2.6
+2026-10-18T21:26:53.8257868Z + @radix-ui/react-separator@1.1.8
+2026-10-18T21:26:53.8258188Z + @radix-ui/react-slider@1.3.6
+2026-10-18T21:26:53.8258492Z + @radix-ui/react-slot@1.2.4
+2026-10-18T21:26:53.8258794Z + @radix-ui/react-switch@1.2.6
+2026-10-18T21:26:53.8259093Z + @radix-ui/react-tabs@1.1.13
+2026-10-18T21:26:53.8259516Z + @radix-ui/react-toast@1.2.15
+2026-10-18T21:26:53.8259869Z + @radix-ui/react-toggle@1.1.10
+2026-10-18T21:26:53.8260198Z + @radix-ui/react-toggle-group@1.1.11
+2026-10-18T21:26:53.8260537Z + @radix-ui/react-tooltip@1.2.8
+2026-10-18T21:26:53.8260852Z + @reactuses/core@6.1.9
+2026-10-18T21:26:53.8261150Z + @tanstack/react-query@5.90.19
+2026-10-18T21:26:53.8261489Z + @tanstack/react-table@8.21.3
+2026-10-18T21:26:53.8261788Z + @types/qrcode@1.5.6
+2026-10-18T21:26:53.8262080Z + class-variance-authority@0.7.1
+2026-10-18T21:26:53.8262387Z + clsx@2.1.1
+2026-10-18T21:26:53.8262630Z + cmdk@1.1.1
+2026-10-18T21:26:53.8262870Z + date-fns@4.1.0
+2026-10-18T21:26:53.8263141Z + embla-carousel-react@8.6.0
+2026-10-18T21:26:53.8263456Z + framer-motion@12.26.2
+2026-10-18T21:26:53.8263732Z + input-otp@1.4.2
+2026-10-18T21:26:53.8263999Z + lucide-react@0.525.0
+2026-10-18T21:26:53.8264265Z + next@16.1.3
+2026-10-18T21:26:53.8264515Z + next-auth@4.24.13
+2026-10-18T21:26:53.8264777Z + next-intl@4.7.0
+2026-10-18T21:26:53.8265030Z + next-themes@0.4.6
+2026-10-18T21:26:53.8265285Z + prisma@6.19.2
+2026-10-18T21:26:53.8265535Z + qrcode@1.5.4
+2026-10-18T21:26:53.8265775Z + react@19.2.3
+2026-10-18T21:26:53.8266043Z + react-day-picker@9.13.0
+2026-10-18T21:26:53.8266564Z + react-dom@19.2.3
+2026-10-18T21:26:53.8266940Z + react-hook-form@7.71.1
+2026-10-18T21:26:53.8267241Z + react-markdown@10.1.0
+2026-10-18T21:26:53.8267540Z + react-resizable-panels@3.0.6
+2026-10-18T21:26:53.8267880Z + react-syntax-highlighter@15.6.6
+2026-10-18T21:26:53.8268204Z + recharts@2.15.4
+2026-10-18T21:26:53.8268453Z + sharp@0.34.5
+2026-10-18T21:26:53.8268698Z + socket.io@4.8.4
+2026-10-18T21:26:53.8268955Z + socket.io-client@4.8.4
+2026-10-18T21:26:53.8269654Z + sonner@2.0.7
+2026-10-18T21:26:53.8269920Z + tailwind-merge@3.4.0
+2026-10-18T21:26:53.8270205Z + tailwindcss-animate@1.0.7
+2026-10-18T21:26:53.8270499Z + uuid@11.1.0
+2026-10-18T21:26:53.8270737Z + vaul@1.1.2
+2026-10-18T21:26:53.8270998Z + z-ai-web-dev-sdk@0.0.18
+2026-10-18T21:26:53.8271291Z + zod@4.3.5
+2026-10-18T21:26:53.8271529Z + zustand@5.0.10
+2026-10-18T21:26:53.8271678Z 
+2026-10-18T21:26:53.8271807Z 876 packages installed [3.90s]
+2026-10-18T21:26:53.8380742Z ##[group]Run bun run lint
+2026-10-18T21:26:53.8381409Z [36;1mbun run lint[0m
+2026-10-18T21:26:53.8440330Z shell: /usr/bin/bash -e {0}
+2026-10-18T21:26:53.8440567Z env:
+2026-10-18T21:26:53.8440753Z   VERSION: 1.2.0
+2026-10-18T21:26:53.8440952Z ##[endgroup]
+2026-10-18T21:26:53.8605446Z $ eslint .
+2026-10-18T21:27:12.2647022Z 
+2026-10-18T21:27:12.2654504Z /home/runner/work/NexusLink/NexusLink/scripts/clean-stale-e2e-rules.cjs
+2026-10-18T21:27:12.2655307Z   2:12  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+2026-10-18T21:27:12.2656140Z   3:14  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+2026-10-18T21:27:12.2656870Z   5:26  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+2026-10-18T21:27:12.2657300Z 
+2026-10-18T21:27:12.2657724Z ✖ 3 problems (3 errors, 0 warnings)
+2026-10-18T21:27:12.2658031Z 
+2026-10-18T21:27:12.5205785Z error: script "lint" exited with code 1
+2026-10-18T21:27:12.5224196Z ##[error]Process completed with exit code 1.
+2026-10-18T21:27:12.5662504Z Post job cleanup.
+2026-10-18T21:27:12.6403836Z [command]/usr/bin/git version
+2026-10-18T21:27:12.6439567Z git version 2.55.0
+2026-10-18T21:27:12.6481541Z Temporarily overriding HOME='/home/runner/work/_temp/51d52c8f-3527-415a-9441-f6471677a873' before making global git config changes
+2026-10-18T21:27:12.6483420Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-18T21:27:12.6484355Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/NexusLink/NexusLink
+2026-10-18T21:27:12.6517529Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-18T21:27:12.6574353Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-18T21:27:12.6813730Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-18T21:27:12.6839575Z http.https://github.com/.extraheader
+2026-10-18T21:27:12.6849763Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-18T21:27:12.6881212Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-18T21:27:12.7131587Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-18T21:27:12.7164330Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-18T21:27:12.7613141Z Cleaning up orphan processes
+2026-10-18T21:27:12.7874181Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
