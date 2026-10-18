@@ -16,10 +16,10 @@ import { ensureGuardBridge, guardEmitToAgent } from "./guard-bridge"
 import { ensureProdBridge, prodInjectClip } from "./productivity-bridge"
 import { onAutomationFact } from "./automation-facts"
 import { evalSustainedTrigger, MIN_DURATION_MIN, MAX_DURATION_MIN } from "./automation-health"
-import { loadPersistedRules, persistRuleUpsert, persistRuleDelete } from "./automation-persist"
+import { loadPersistedRules, persistRuleUpsert, persistRuleDelete, persistFire, loadPersistedFires, markFiresSeenDb } from "./automation-persist"
 import {
   TRIGGER_KINDS, ACTION_KINDS, isSustainedTrigger,
-  type AutoRule, type AutoRunEntry, type AutoStatePayload, type AutoFiredPayload,
+  type AutoRule, type AutoRunEntry, type AutoStatePayload, type AutoFiredPayload, type AutoFireEntry,
 } from "./automation-types"
 
 const PORT = 3008
@@ -34,6 +34,9 @@ let io: SocketServer | null = null
 let rules: AutoRule[] = []
 let runLog: AutoRunEntry[] = []
 let bootedAt = 0
+/** الإطلاقات المرسوخة (§26.ح): مرآة ذاكرة لآخر 200 إطلاق — تُستعاد من SQLite
+ *  عند الإقلاع وتُرسَّخ عند كل إطلاق، فتبقى التنبيهات بعد إعادة التشغيل. */
+let fireLog: AutoFireEntry[] = []
 
 /** حافة البطارية لكل قاعدة: مسلّحة بانتظار الهبوط تحت العتبة. */
 const batteryArmed = new Map<string, boolean>()
@@ -92,6 +95,11 @@ function buildState(): AutoStatePayload {
       rulesEnabled: rules.filter((r) => r.enabled).length,
       firesToday,
       lastFiredAt: lastFired.length ? Math.max(...lastFired) : null,
+    },
+    alerts: {
+      unseen: fireLog.filter((f) => !f.seenAt).length,
+      latest: fireLog.slice(0, 12).map((f) => ({ ...f })),
+      total: fireLog.length,
     },
     bootedAt,
   }
@@ -180,6 +188,17 @@ async function fireRule(rule: AutoRule, detail: string, manual: boolean) {
   // التفصيل الصادق = سبب المشغّل + نتيجة الفعل معًا (السبب يجيب «لماذا؟» والنتيجة «ماذا حدث؟»)
   const full = detail && res.detail && res.detail !== detail ? `${detail} — ${res.detail}` : (res.detail || detail)
   pushLog({ ruleId: live.id, ruleName: live.name, at: now, ok: res.ok, detail: full, manual })
+  // ترسيخ الإطلاق نفسه (§26.ح): البث الحي لواجهة متصلة يعدّه رؤية عند التسليم
+  // (clientsCount > 0)، وإلا يبقى «غير مرئي» بانتظار ملخص العودة عند الاتصال التالي.
+  let clients = 0
+  try { clients = io?.engine?.clientsCount ?? 0 } catch { clients = 0 }
+  const fireEntry: AutoFireEntry = {
+    id: uid(), ruleId: live.id, ruleName: live.name, at: now, ok: res.ok, detail: full, manual,
+    seenAt: clients > 0 ? now : null,
+  }
+  fireLog.unshift(fireEntry)
+  if (fireLog.length > 200) fireLog.length = 200
+  void persistFire(fireEntry)
   const payload: AutoFiredPayload = {
     ruleId: live.id, ruleName: live.name, at: now, ok: res.ok, detail: full, manual,
   }
@@ -404,6 +423,18 @@ export function ensureAutomationBridge() {
       } catch { /* بلا هلع — البذور تبقى في الذاكرة */ }
     })()
 
+    // استعادة الإطلاقات المرسوخة (§26.ح) — غير حاجبة: مرآة الذاكرة تُملأ من
+    // آخر 200 إطلاق، فتبقى التنبيهات غير المرئية بعد إعادة التشغيل
+    void (async () => {
+      try {
+        const fires = await loadPersistedFires()
+        if (fires && fires.length) {
+          fireLog = fires
+          broadcastState()
+        }
+      } catch { /* بلا هلع — التنبيهات الحالية تبقى */ }
+    })()
+
     const httpServer = createServer()
     const io2 = new SocketServer(httpServer, {
       path: "/",
@@ -489,6 +520,14 @@ export function ensureAutomationBridge() {
 
       socket.on("log:clear", () => {
         runLog = []
+        broadcastState()
+      })
+
+      // تعليم كل التنبيهات غير المرئية كمقروءة (§26.ح) — رسوخًا في SQLite
+      socket.on("alerts:mark-seen", () => {
+        const now2 = Date.now()
+        for (const f of fireLog) if (!f.seenAt) f.seenAt = now2
+        void markFiresSeenDb(now2)
         broadcastState()
       })
     })
