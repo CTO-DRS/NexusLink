@@ -3441,5 +3441,14 @@
   "بطارية منخفضة": "Low battery",
   "استجابة متدهورة": "Latency degraded",
   "التخزين شبه ممتلئ": "Storage nearly full",
-  "متصل الآن": "Online now"
+  "متصل الآن": "Online now",
+  "بقاء البطارية تحت عتبة لمدة (تاريخي)": "Battery stays below threshold for a duration (history)",
+  "بقاء الاستجابة فوق عتبة لمدة (تاريخي)": "Latency stays above threshold for a duration (history)",
+  "صمت جهاز عن التقارير لمدة (تاريخي)": "Device stops reporting for a duration (history)",
+  "المدة (دقائق)": "Duration (minutes)",
+  "1..1440 — يُقرأ من تاريخ مركز الصحة": "1..1440 — read from Health Center history",
+  "تاريخي": "Historical",
+  "بلا تقارير": "no reports",
+  "العتبة ms": "Threshold ms",
+  "مشغلات الصحة التاريخية تقرأ عينات مركز الصحة (احتفاظ 24 ساعة) — تحتاج دليل عينات يُغطي المدة بلا فجوات كبيرة": "Historical health triggers read Health Center samples (24h retention) — they need sample evidence covering the duration without large gaps"
 }

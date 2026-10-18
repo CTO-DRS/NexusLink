@@ -3,7 +3,7 @@
 // المبدأ (القاعدة الذهبية): لا بروتوكول موازٍ — كل الأفعال تعبر القنوات القائمة
 // (prod: clip:new · guard: dev:ring · UDP: WoL) وكل الحقائق من مصادر عملية Next القائمة.
 
-/** أنواع المشغلات المدعومة في الإصدار الأول (§26.أ). */
+/** أنواع المشغلات المدعومة (§26.أ الست اللحظية + §26.و الثلاثة التاريخية). */
 export type TriggerKind =
   | "device.connect"      // جهاز في سجل الأجهزة عاد إلى «متصل»
   | "device.disconnect"   // جهاز في سجل الأجهزة غادر إلى «غير متصل»
@@ -11,6 +11,9 @@ export type TriggerKind =
   | "clip.received"       // وصل محتوى جديد إلى الحافظة الموحدة (من جسر prod)
   | "time.once"           // مرة واحدة عند طابع زمني (epoch ms)
   | "time.daily"          // يوميًا عند ساعة:دقيقة (ساعة الخادم المحلية)
+  | "health.battery.sustained" // تاريخي: البطارية ≤ العتبة لمدة متواصلة (من عينات §27)
+  | "health.rtt.sustained"     // تاريخي: الاستجابة ≥ العتبة لمدة متواصلة (عينات متصلة فقط)
+  | "health.silence.sustained" // تاريخي: لا عينات صحة خلال المدة (صمت الجهاز عن التقارير)
 
 /** أنواع الأفعال المدعومة في الإصدار الأول (§26.ب) — كلها قنوات قائمة. */
 export type ActionKind =
@@ -23,8 +26,10 @@ export interface AutoTrigger {
   kind: TriggerKind
   /** مرشّح الجهاز من سجل الأجهزة (null/غياب = أي جهاز) — للمشغلات الجهازية. */
   deviceId?: string | null
-  /** عتبة البطارية 1..100 — لمشغّل battery.below. */
+  /** عتبة البطارية 1..100 أو الاستجابة ms 10..60000 (نفس الحقل حسب النوع). */
   threshold?: number
+  /** المدة بالدقائق 1..1440 — للمشغلات التاريخية المستمرة (سقف الاحتفاظ 24h في §27). */
+  durationMin?: number
   /** الطابع الزمني (epoch ms) — لمشغّل time.once. */
   at?: number
   /** الساعة 0..23 — لمشغّل time.daily. */
@@ -89,7 +94,18 @@ export interface AutoFiredPayload {
 
 export const TRIGGER_KINDS: readonly TriggerKind[] = [
   "device.connect", "device.disconnect", "battery.below", "clip.received", "time.once", "time.daily",
+  "health.battery.sustained", "health.rtt.sustained", "health.silence.sustained",
 ] as const
+
+/** المشغلات التاريخية المستمرة (§26.و) — تُقيَّم من عينات مركز الصحة لا من اللحظة الحالية.
+ *  في وحدة الأنواع (لا المقيّم) ليبقى الاستيراد آمنًا للعميل. */
+export const SUSTAINED_TRIGGER_KINDS: readonly TriggerKind[] = [
+  "health.battery.sustained", "health.rtt.sustained", "health.silence.sustained",
+] as const
+
+export function isSustainedTrigger(kind: TriggerKind): boolean {
+  return SUSTAINED_TRIGGER_KINDS.includes(kind)
+}
 
 export const ACTION_KINDS: readonly ActionKind[] = [
   "notify", "clipboard.push", "phone.ring", "wol",

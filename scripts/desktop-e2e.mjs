@@ -3034,6 +3034,201 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
         capped && win24.window === "24h" && Array.isArray(win24.series.rtt), "downsample cap")
     }
 
+    // ============================================================
+    // AUTO-HEALTH — ربط الروتينات بالصحة التاريخية (عقد §26.و):
+    // «نبّهني إذا كانت بطارية X تحت 15% لمدة ساعة» — تقييم من عينات §27
+    // سلوك حي عبر مقبس auto (:3008) + زرع تاريخ اصطناعي عبر Prisma
+    // (أجهزة أشباح معزولة ah-e2e-* — دقيقة حتمية بلا تداخل عينات حقيقية)
+    // ============================================================
+    console.log("\n== AUTO-HEALTH: routines × historical health triggers (§26.و) ==")
+    {
+      const bootAH = await waitHttp("automation boot (AH)", "http://localhost:3000/api/automation/boot", 20000, (j) => j?.ok === true && j?.booted === true)
+      check("AUTO-HEALTH: جسر الروتينات حي — البذرة صارت رباعية (بذرة تاريخية توضيحية معطلة)",
+        bootAH?.port === 3008 && bootAH?.rules >= 4, `rules=${bootAH?.rules}`)
+
+      // قراءة DATABASE_URL من .env (نفس قاعدة الخادم) + عميل Prisma للزرع
+      const fsAH = (await import("node:fs")).default
+      const rdAH = (p) => { try { return fsAH.readFileSync(pathMod.join(ROOT, p), "utf8") } catch { return "" } }
+      const dbUrl = fsAH.readFileSync(pathMod.join(ROOT, ".env"), "utf8").match(/^DATABASE_URL=(.*)$/m)?.[1]
+      const { PrismaClient } = await import("@prisma/client")
+      const pdb = new PrismaClient({ datasources: { db: { url: dbUrl } }, log: [] })
+
+      // (أ) فحوص المصدر
+      const typesAH = rdAH("src/lib/nexus/automation-types.ts")
+      const evalAH = rdAH("src/lib/nexus/automation-health.ts")
+      const bridgeAH = rdAH("src/lib/nexus/automation-bridge.ts")
+      const viewAH = rdAH("src/components/nexus/automation/automation-view.tsx")
+      const i18nAH = rdAH("src/lib/ar-en-map.json")
+      const contractAH = rdAH("docs/protocol-contract.md")
+      const checklistAH = rdAH("docs/e2e-checklist.md")
+
+      check("AUTO-HEALTH: المصدر — ثلاثة أنواع تاريخية في TriggerKind/TRIGGER_KINDS + SUSTAINED_TRIGGER_KINDS + isSustainedTrigger (وحدة آمنة للعميل)",
+        typesAH.includes('"health.battery.sustained"') && typesAH.includes('"health.rtt.sustained"')
+        && typesAH.includes('"health.silence.sustained"') && typesAH.includes("SUSTAINED_TRIGGER_KINDS")
+        && typesAH.includes("isSustainedTrigger") && typesAH.includes("durationMin?: number"), "types")
+      check("AUTO-HEALTH: المصدر — المقيّم: سلسلة الدليل (مرساة/نافذة/فجوة/تقادم) + سقف 1440 + الصمت لمعروف الإبلاغ",
+        evalAH.includes("gapAllowanceMs") && evalAH.includes("ANCHOR_STALE_MS") && evalAH.includes("MAX_DURATION_MIN = 1440")
+        && evalAH.includes("nexusHealthSample") && evalAH.includes("لم يُبلّغ صحة قط")
+        && evalAH.includes("فجوة عينات") && evalAH.includes("دليل متقادم"), "evaluator")
+      check("AUTO-HEALTH: المصدر — الجسر: تكة 15 ثانية + تسليح الحقب (sustainedArmed) + باب run-now للمستمر + تنظيف الحذف",
+        bridgeAH.includes("pollHealthSustained") && bridgeAH.includes("sustainedArmed")
+        && bridgeAH.includes("void pollHealthSustained() }, 15000") && bridgeAH.includes("isSustainedTrigger(rule.trigger.kind)")
+        && bridgeAH.split("sustainedArmed.delete").length >= 2, "bridge wiring")
+      check("AUTO-HEALTH: الواجهة — حقل المدة + شارة «تاريخي» + الأنواع الثلاثة في المحرر",
+        viewAH.includes("automation-duration-input") && viewAH.includes("automation-historical-badge")
+        && viewAH.includes("بقاء البطارية تحت عتبة لمدة (تاريخي)") && viewAH.includes("صمت جهاز عن التقارير لمدة (تاريخي)")
+        && viewAH.includes("SUSTAINED_TRIGGER_KINDS"), "ui editor")
+      check("AUTO-HEALTH: i18n — مفاتيح EN في القاموس المشترك",
+        i18nAH.includes('"المدة (دقائق)": "Duration (minutes)"') && i18nAH.includes('"تاريخي": "Historical"')
+        && i18nAH.includes('"بلا تقارير": "no reports"'), "i18n")
+      check("AUTO-HEALTH: التوثيق — العقد §26.و (سلسلة الدليل + التسليح) + القائمة الميدانية",
+        contractAH.includes("### 26.و") && contractAH.includes("سلسلة الدليل")
+        && contractAH.includes("نبّهني إذا كانت بطارية X تحت 15% لمدة ساعة")
+        && checklistAH.includes("تاريخية"), "docs")
+
+      // (ب) السلوك الحي — زرع التاريخ ثم تقييم عبر المقبس
+      const { io: ioAH } = await import("socket.io-client")
+      const sockAH = ioAH("http://localhost:3008", { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 8000, reconnection: false })
+
+      const behaviorAH = await new Promise((resolve) => {
+        const out = { done: false, rulesNamed: [], rejected: null, fires: new Map(), logEntries: [], lastRules: null }
+        const timersAH = []
+        const later = (fn, ms) => timersAH.push(setTimeout(fn, ms))
+        const finish = () => { if (out.done) return; out.done = true; timersAH.forEach(clearTimeout); try { sockAH.disconnect() } catch {}; resolve(out) }
+        later(finish, 42000)
+
+        sockAH.on("auto:state", (s) => {
+          const names = s?.rules?.map((r) => r.name) ?? []
+          // تراكمي — الحالة النهائية بعد الحذف تفقد الأسماء والفحص يتحقق من «ظهرت يومًا»
+          out.rulesNamed = [...new Set([...out.rulesNamed, ...names])]
+          out.lastRules = names
+          if (Array.isArray(s?.log)) out.logEntries = s.log
+        })
+        sockAH.on("auto:fired", (p) => {
+          if (!String(p?.ruleName || "").startsWith("AH-E2E")) return
+          const arr = out.fires.get(p.ruleName) ?? []
+          arr.push({ at: p.at || Date.now(), ok: p.ok, detail: p.detail || "", manual: p.manual })
+          out.fires.set(p.ruleName, arr)
+        })
+        sockAH.on("auto:rejected", (d) => { out.rejected = d?.error ?? "rejected" })
+
+        sockAH.on("connect", () => {
+          void (async () => {
+            try {
+              const t0 = Date.now()
+              const at = (dev, offMin, battery, rttMs, online = true) => ({
+                deviceId: dev, battery, rttMs, online, createdAt: new Date(t0 - offMin * 60000),
+              })
+              const G = { batt: "ah-e2e-batt", viol: "ah-e2e-viol", gap: "ah-e2e-gap", rtt: "ah-e2e-rtt", sil: "ah-e2e-sil", any: "ah-e2e-any" }
+
+              // زرع التاريخ الاصطناعي (تسامح الفجوة لمدة 60د = 15د — سلاسل بفجوات 14د)
+              await pdb.nexusHealthSample.createMany({ data: [
+                // بطارية جيدة: ≤15% منذ 66 دقيقة بلا فجوات > 14د → مستوفى
+                at(G.batt, 66, 12, 40), at(G.batt, 52, 11, 40), at(G.batt, 38, 10, 40), at(G.batt, 24, 9, 40), at(G.batt, 10, 9, 40), at(G.batt, 2, 9, 40),
+                // مخالف: عينة 80% قبل 12 دقيقة داخل النافذة (الفجوات سليمة عمدًا) → غير مستوفى بسبب المخالفة وحدها
+                at(G.viol, 66, 12, 40), at(G.viol, 52, 11, 40), at(G.viol, 38, 10, 40), at(G.viol, 24, 9, 40), at(G.viol, 12, 80, 40), at(G.viol, 2, 9, 40),
+                // فجوة: سلسلة صحيحة القيم لكن فجوة 46د تقطع الاستمرارية → غير مستوفى
+                at(G.gap, 66, 12, 40), at(G.gap, 20, 10, 40), at(G.gap, 5, 9, 40),
+                // استجابة: 250ms متصلة منذ 66 دقيقة → مستوفى
+                at(G.rtt, 66, 80, 250), at(G.rtt, 52, 80, 250), at(G.rtt, 38, 80, 250), at(G.rtt, 24, 80, 250), at(G.rtt, 10, 80, 250), at(G.rtt, 2, 80, 250),
+                // صمت: عينة واحدة قديمة (3 ساعات) لجهاز معروف الإبلاغ → صمت 180د ≥ 45د
+                at(G.sil, 180, 50, 50),
+                // صمت لأي جهاز (deviceId=null): مرشح ثانٍ قديم
+                at(G.any, 180, 50, 50),
+              ] })
+
+              // القواعد السبع (آخرها durationMin فاسد → رفض)
+              const mk = (name, trigger) => sockAH.emit("rule:upsert", { rule: { name, enabled: true, trigger, action: { kind: "notify", text: "AH-E2E" } } })
+              mk("AH-E2E-batt", { kind: "health.battery.sustained", deviceId: G.batt, threshold: 15, durationMin: 60 })
+              mk("AH-E2E-viol", { kind: "health.battery.sustained", deviceId: G.viol, threshold: 15, durationMin: 60 })
+              mk("AH-E2E-gap", { kind: "health.battery.sustained", deviceId: G.gap, threshold: 15, durationMin: 60 })
+              mk("AH-E2E-rtt", { kind: "health.rtt.sustained", deviceId: G.rtt, threshold: 200, durationMin: 60 })
+              mk("AH-E2E-sil", { kind: "health.silence.sustained", deviceId: G.sil, durationMin: 45 })
+              mk("AH-E2E-any", { kind: "health.silence.sustained", durationMin: 45 })
+              sockAH.emit("rule:upsert", { rule: { name: "AH-E2E-bad", enabled: true, trigger: { kind: "health.battery.sustained", deviceId: G.batt, threshold: 15, durationMin: 2000 }, action: { kind: "notify" } } })
+
+              // إطلاقات يدوية صريحة (باب اختبار التاريخ) — التيك قد يسبقها (مقبول كلاهما)
+              later(() => { for (const n of ["AH-E2E-batt", "AH-E2E-viol", "AH-E2E-gap", "AH-E2E-rtt", "AH-E2E-sil", "AH-E2E-any"]) {
+                // run-now يحتاج id — نلتقطه من آخر auto:state
+                const found = (out.rulesSnapshot ?? []).find((x) => x.name === n)
+                if (found) sockAH.emit("rule:run-now", { id: found.id })
+              } }, 2200)
+
+              // إعادة التسليح: مخالفة جديدة → لا إطلاق خلال حقبتها → زوالها → إطلاق ثانٍ
+              later(async () => {
+                const tV = Date.now()
+                out.tViol = tV
+                await pdb.nexusHealthSample.create({ data: at(G.batt, 0.4, 60, 40) }) // 60% قبل 24 ثانية
+              }, 7000)
+              later(() => {
+                const found = (out.rulesSnapshot ?? []).find((x) => x.name === "AH-E2E-batt")
+                if (found) sockAH.emit("rule:run-now", { id: found.id }) // غير مستوفى الآن → سجل ok=false
+              }, 9000)
+              later(async () => {
+                out.tClean = Date.now()
+                await pdb.nexusHealthSample.deleteMany({ where: { deviceId: G.batt, battery: 60 } }) // زوال المخالفة
+                const found = (out.rulesSnapshot ?? []).find((x) => x.name === "AH-E2E-batt")
+                if (found) sockAH.emit("rule:run-now", { id: found.id }) // مستوفى مجددًا → إطلاق ثانٍ
+              }, 26000)
+
+              // تنظيف القواعد (العينات تُنظف بعد الوعود)
+              later(() => {
+                for (const x of (out.rulesSnapshot ?? []).filter((x) => String(x.name).startsWith("AH-E2E"))) {
+                  sockAH.emit("rule:delete", { id: x.id })
+                }
+              }, 36000)
+              later(finish, 39000)
+            } catch (e) {
+              console.log("   [AH] plant error:", e?.message || e)
+              finish()
+            }
+          })()
+        })
+
+        // لقطة القواعد مع المعرفات (لـ run-now والحذف)
+        sockAH.on("auto:state", (s) => { out.rulesSnapshot = s?.rules ?? out.rulesSnapshot })
+      })
+
+      const firesBatt = behaviorAH.fires.get("AH-E2E-batt") ?? []
+      const firesViol = behaviorAH.fires.get("AH-E2E-viol") ?? []
+      const firesGap = behaviorAH.fires.get("AH-E2E-gap") ?? []
+      const firesRtt = behaviorAH.fires.get("AH-E2E-rtt") ?? []
+      const firesSil = behaviorAH.fires.get("AH-E2E-sil") ?? []
+      const firesAny = behaviorAH.fires.get("AH-E2E-any") ?? []
+      const inViolEra = firesBatt.filter((f) => f.at >= (behaviorAH.tViol ?? Infinity) && f.at <= (behaviorAH.tClean ?? 0))
+      const afterClean = firesBatt.filter((f) => f.at > (behaviorAH.tClean ?? Infinity))
+      const violLogRefusal = behaviorAH.logEntries.some((e) => e.ruleName === "AH-E2E-viol" && e.manual === true && e.ok === false)
+
+      check("AUTO-HEALTH: القواعد الست المستمرة قُبلت وظاهرة في auto:state",
+        ["AH-E2E-batt", "AH-E2E-viol", "AH-E2E-gap", "AH-E2E-rtt", "AH-E2E-sil", "AH-E2E-any"].every((n) => behaviorAH.rulesNamed.includes(n)), `everNamed=${behaviorAH.rulesNamed.filter((n) => String(n).startsWith("AH-E2E")).length}`)
+      check("AUTO-HEALTH: تعقيم المدة — durationMin=2000 مرفوض مسببًا (سقف تاريخ §27 = 1440)",
+        !!behaviorAH.rejected && String(behaviorAH.rejected).includes("المدة"), behaviorAH.rejected || "no reject")
+      check("AUTO-HEALTH: بطارية ≤15% لمدة 60 دقيقة (تاريخ مزروع 66 دقيقة) → أُطلقت بتفصيل «مستمر»",
+        firesBatt.length >= 1 && firesBatt.some((f) => f.ok && f.detail.includes("مستمر")), firesBatt[0]?.detail?.slice(0, 80) || "no fire")
+      check("AUTO-HEALTH: عينة مخالفة داخل المدة (80% قبل 12د) → لا إطلاق + رفض مسبب في السجل (ok=false يدوي)",
+        firesViol.length === 0 && violLogRefusal, `fires=${firesViol.length} refusal=${violLogRefusal}`)
+      check("AUTO-HEALTH: فجوة عينات 46د > التسامح 15د → لا إطلاق (الاستمرارية غير مثبتة)",
+        firesGap.length === 0, `fires=${firesGap.length}`)
+      check("AUTO-HEALTH: استجابة ≥200ms لمدة 60 دقيقة → أُطلقت",
+        firesRtt.length >= 1 && firesRtt.some((f) => f.ok && f.detail.includes("مستمر")), firesRtt[0]?.detail?.slice(0, 80) || "no fire")
+      check("AUTO-HEALTH: صمت 45 دقيقة (عينة قديمة 3 ساعات) → أُطلق للجهاز المعروف الإبلاغ",
+        firesSil.length >= 1, firesSil[0]?.detail?.slice(0, 80) || "no fire")
+      check("AUTO-HEALTH: deviceId=null (أي جهاز) — الصمت التاريخي يجد المرشح القديم ويُطلق",
+        firesAny.length >= 1, firesAny[0]?.detail?.slice(0, 80) || "no fire")
+      check("AUTO-HEALTH: إعادة التسليح — صفر إطلاق خلال حقبة المخالفة + إطلاق ثانٍ بعد زوالها",
+        firesBatt.length >= 2 && inViolEra.length === 0 && afterClean.length >= 1,
+        `total=${firesBatt.length} inEra=${inViolEra.length} after=${afterClean.length}`)
+      check("AUTO-HEALTH: التنظيف — قواعد AH-E2E زالت من آخر auto:state",
+        Array.isArray(behaviorAH.lastRules) && !behaviorAH.lastRules.some((n) => String(n).startsWith("AH-E2E")), "rules deleted")
+
+      // تنظيف العينات المزروعة (أجهزة الأشباح) + التحقق
+      await pdb.nexusHealthSample.deleteMany({ where: { deviceId: { startsWith: "ah-e2e-" } } })
+      const leftover = await pdb.nexusHealthSample.count({ where: { deviceId: { startsWith: "ah-e2e-" } } })
+      check("AUTO-HEALTH: العينات المزروعة (أجهزة الأشباح) زالت من قاعدة §27 — بلا تلويث للتاريخ الحقيقي",
+        leftover === 0, `leftover=${leftover}`)
+      await pdb.$disconnect()
+    }
+
   }
 
 } catch (e) {
