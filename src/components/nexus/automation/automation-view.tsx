@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Workflow, MonitorSmartphone, MonitorOff, BatteryLow, BatteryCharging, ClipboardList, CalendarClock,
   BellRing, ClipboardPaste, PhoneCall, Power, Play, Trash2, Plus, History,
-  Clock, Sparkles, ShieldAlert, Timer, Activity, WifiOff, CheckCheck, DatabaseBackup,
+  Clock, Sparkles, ShieldAlert, Timer, Activity, WifiOff, CheckCheck, DatabaseBackup, HardDrive,
 } from "lucide-react"
 import type { TriggerKind, ActionKind, AutoRule } from "@/lib/nexus/automation-types"
 import { SUSTAINED_TRIGGER_KINDS } from "@/lib/nexus/automation-types"
@@ -36,6 +36,7 @@ const TRIGGER_META: Record<TriggerKind, { icon: typeof Workflow; label: string }
   "health.battery.sustained": { icon: BatteryLow, label: "بقاء البطارية تحت عتبة لمدة (تاريخي)" },
   "health.rtt.sustained": { icon: Activity, label: "بقاء الاستجابة فوق عتبة لمدة (تاريخي)" },
   "health.silence.sustained": { icon: WifiOff, label: "صمت جهاز عن التقارير لمدة (تاريخي)" },
+  "health.storage.sustained": { icon: HardDrive, label: "بقاء التخزين فوق عتبة لمدة (تاريخي)" },
 }
 
 const ACTION_META: Record<ActionKind, { icon: typeof Workflow; label: string }> = {
@@ -60,6 +61,8 @@ function triggerSummary(r: AutoRule, tr: TFn): string {
       return `${dev} — ≤ ${t.threshold ?? 15}% × ${t.durationMin ?? 60} ${tr("دقيقة")}`
     case "health.rtt.sustained":
       return `${dev} — ≥ ${t.threshold ?? 200}ms × ${t.durationMin ?? 60} ${tr("دقيقة")}`
+    case "health.storage.sustained":
+      return `${dev} — ≥ ${t.threshold ?? 90}% × ${t.durationMin ?? 60} ${tr("دقيقة")}`
     case "health.silence.sustained":
       return `${dev} — ${tr("بلا تقارير")} × ${t.durationMin ?? 60} ${tr("دقيقة")}`
     case "time.once":
@@ -123,6 +126,7 @@ export function AutomationView() {
       trig.durationMin = Math.min(1440, Math.max(1, Math.round(Number(draft.duration) || 60)))
       if (draft.tKind === "health.battery.sustained") trig.threshold = Math.min(100, Math.max(1, Math.round(Number(draft.threshold) || 15)))
       if (draft.tKind === "health.rtt.sustained") trig.threshold = Math.min(60000, Math.max(10, Math.round(Number(draft.threshold) || 200)))
+      if (draft.tKind === "health.storage.sustained") trig.threshold = Math.min(100, Math.max(1, Math.round(Number(draft.threshold) || 90)))
     }
     if (draft.tKind === "time.once") {
       const at = draft.onceAt ? new Date(draft.onceAt).getTime() : 0
@@ -310,7 +314,7 @@ export function AutomationView() {
               </div>
               <div className="space-y-1.5">
                 <Label>{t("المشغّل")}</Label>
-                <Select value={draft.tKind} onValueChange={(v) => setDraft({ ...draft, tKind: v as TriggerKind, threshold: v === "battery.above" ? "80" : v === "battery.below" ? "20" : draft.threshold })}>
+                <Select value={draft.tKind} onValueChange={(v) => setDraft({ ...draft, tKind: v as TriggerKind, threshold: v === "battery.above" ? "80" : v === "battery.below" ? "20" : v === "health.storage.sustained" ? "90" : draft.threshold })}>
                   <SelectTrigger data-testid="automation-trigger-select"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(TRIGGER_META).map(([k, m]) => (
@@ -327,9 +331,9 @@ export function AutomationView() {
                     <Input type="number" min={1} max={100} value={draft.threshold} onChange={(e) => setDraft({ ...draft, threshold: e.target.value })} data-testid="automation-threshold-input" />
                   </div>
                 )}
-                {(draft.tKind === "health.battery.sustained" || draft.tKind === "health.rtt.sustained") && (
+                {(draft.tKind === "health.battery.sustained" || draft.tKind === "health.rtt.sustained" || draft.tKind === "health.storage.sustained") && (
                   <div className="flex items-center gap-2">
-                    <Label className="shrink-0 text-xs">{draft.tKind === "health.battery.sustained" ? t("العتبة %") : t("العتبة ms")}</Label>
+                    <Label className="shrink-0 text-xs">{draft.tKind === "health.battery.sustained" ? t("العتبة %") : draft.tKind === "health.storage.sustained" ? t("العتبة %") : t("العتبة ms")}</Label>
                     <Input type="number" min={1} value={draft.threshold} onChange={(e) => setDraft({ ...draft, threshold: e.target.value })} data-testid="automation-threshold-input" />
                   </div>
                 )}

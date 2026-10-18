@@ -9,7 +9,7 @@ const DEVICE_NAME = "Galaxy S24 (sim)"
 
 const sock = io("http://127.0.0.1:81", {
   query: { XTransformPort: "3006" },
-  transports: ["websocket", "polling"],
+  transports: ["polling", "websocket"],
   reconnection: true,
 })
 

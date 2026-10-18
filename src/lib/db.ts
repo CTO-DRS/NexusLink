@@ -52,6 +52,18 @@ function ensureUpgradeSchema(): Promise<void> {
       await db.$executeRawUnsafe(
         `CREATE INDEX IF NOT EXISTS "NexusHealthSample_createdAt_idx" ON "NexusHealthSample"("createdAt")`,
       )
+      // ترقية إضافية آمنة (§26.ط): عمود storagePct لعينات التخزين — محروس بـ
+      // PRAGMA table_info فلا يُنفَّذ إلا مرة واحدة على قواعد قائمة، وADD COLUMN
+      // بـ DEFAULT ثابت إضافيّة بحتة: الصفوف القائمة تبقى حرفيًا كما هي (تُقرأ 0
+      // = «بلا دليل تخزين» فلا تُطلق مشغلًا تاريخيًا زائفًا أبدًا).
+      try {
+        const sampleCols = await db.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info("NexusHealthSample")`)
+        if (Array.isArray(sampleCols) && !sampleCols.some((c) => c.name === "storagePct")) {
+          await db.$executeRawUnsafe(`ALTER TABLE "NexusHealthSample" ADD COLUMN "storagePct" INTEGER NOT NULL DEFAULT 0`)
+        }
+      } catch (e) {
+        console.error('[db] storagePct column ensure:', e instanceof Error ? e.message : e)
+      }
       await db.$executeRawUnsafe(
         `CREATE TABLE IF NOT EXISTS "NexusHealthEvent" (
            "id"         TEXT     NOT NULL PRIMARY KEY,

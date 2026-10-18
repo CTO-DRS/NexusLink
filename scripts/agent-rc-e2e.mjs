@@ -37,8 +37,8 @@ async function main() {
   ok("boot /api/remote/boot يعيد حالة الجسر", !!boot && boot.port === 3004, JSON.stringify(boot))
   await wait(300)
 
-  const phone = io(`${GW}/?XTransformPort=3004`, { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 10000 })
-  const web = io(`${GW}/?XTransformPort=3004`, { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 10000 })
+  const phone = io(`${GW}/?XTransformPort=3004`, { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 10000 })
+  const web = io(`${GW}/?XTransformPort=3004`, { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 10000 })
 
   const events = { phone: {}, web: {} }
   function collect(sock, key, list) {

@@ -3,7 +3,7 @@ import { io } from "socket.io-client"
 
 function probe(name, url) {
   return new Promise((resolve) => {
-    const s = io(url, { transports: ["websocket", "polling"], timeout: 6000, reconnection: false })
+    const s = io(url, { transports: ["polling", "websocket"], timeout: 6000, reconnection: false })
     const done = (ok) => { try { s.close() } catch {} ; console.log(`${name}: ${ok ? "CONNECTED" : "FAIL"}`); resolve(ok) }
     s.on("connect", () => done(true))
     s.on("connect_error", () => done(false))
