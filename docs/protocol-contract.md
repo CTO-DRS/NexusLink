@@ -118,6 +118,7 @@ interface TransferJob {
 - `POST /api/security/wipe` · `GET /api/security/audit` · `GET /api/security/pcap` · `GET /api/security/recv`
 - `GET /api/prod/state|pairs|photos|profiles|network|clipboard|handoff|backup` + POST نظيراتها
 - `GET|POST /api/{guard,media,remote,prod,security}/boot` — إقلاع الجسور idempotent داخل عملية Next (هاتف يستطيع استدعاءها لضمان عمل الجسور)
+- `GET|POST /api/devices/health` — مركز صحة الأجهزة (قياس زمني + تنبيهات + مسار الوكيل الحقيقي report) — التفاصيل في §27
 
 ---
 
@@ -1163,3 +1164,48 @@ interface TransferJob {
 2. **مشغلات الأجهزة تقرأ سجل الأجهزة** (pair/forget/تغير الحالة المسجل) — لا نبض الوكيل الحي؛ حالة الوكيل الفعلية على قناة الحماية ليست مصدر هذا المشغل.
 3. **أفعال الهاتف** تتطلب وكيلًا متصلًا، و**WoL** محلي الشبكة — كلاهما يفشل بسجل صادق لا بصمت.
 4. لا قفل هاتف ولا مسح من الروتينات عمدًا — قناة FA-10 المشفرة لها بوابة ثقتها الخاصة ولا تُستدعى أتمتةً (قرار أمني متعمد).
+## 27. مركز صحة الأجهزة — قياس زمني + تنبيهات (مصدر: src/lib/nexus/health.ts + src/app/api/devices/health/route.ts + src/components/nexus/health-panel.tsx)
+
+> طبقة قياس **إضافية بحتة** — لا تعدل أي بروتوكول قائم: نبض `GET /api/devices`
+> يظل كما هو حرفيًا، ومركز الصحة يقرأ حالته ويؤرشفها. أي وكيل قائم يعمل
+> دون أي تغيير.
+
+### 27.أ ما يُقاس ولماذا
+- **العينات**: `NexusHealthSample {deviceId, battery, rttMs, online, createdAt}` — خانقة
+  `SAMPLE_INTERVAL_MS = 30_000` لكل جهاز (النبضات الأسرع لا تضاعف العينات).
+- **الاحتفاظ**: `RETENTION_MS = 24h` — تنقية دورية كل `PRUNE_EVERY_MS = 5min`
+  (عينات + أحداث فوق 24 ساعة تُحذف) — تُغطي نوافذ العرض 1h/6h/24h.
+- **العبورات (أحداث `NexusHealthEvent`)** — تُكتشف على كل نبضة/تكة force:
+  | النوع | المستوى | شرط العبور | الصفاء |
+  |-------|---------|------------|--------|
+  | `offline` | warn | connected → غير connected | كل انتقال (edge-triggered) |
+  | `online` | info | غير connected → connected | كل انتقال |
+  | `low-battery` | warn | battery ≤ `LOW_BATTERY_PCT` (15) | مرة لكل عبور، صفاء عند الصعود |
+  | `rtt-degraded` | warn | متصل + rtt > `RTT_DEGRADED_MS` (150) | مرة لكل عبور، صفاء عند النزول |
+  | `storage-high` | warn | used/total ≥ `STORAGE_HIGH_PCT` (90) | مرة لكل عبور، صفاء عند النزول |
+- أول تكة بعد إقلاع السيرفر **ترسّخ الحالة بلا أحداث** — منع فيض «عودة» زائف
+  عند كل إقلاع (تكة force عند الإقلاع تسجل العينات فقط).
+
+### 27.ب REST (على :3000 أو عبر البوابة :81)
+| Endpoint | الشكل الفعلي |
+|----------|--------------|
+| `GET /api/devices/health?device=<id\|all>&window=<1h\|6h\|24h>` | `{window, since, devices[], series:{battery[],rtt[]}, events[], alerts[], counts, limits}` — `devices[]` = ملخص لكل جهاز `{deviceId,name,kind,online,uptimePct|null,avgRttMs|null,minBattery|null,samples,points[]}`؛ `series` = صفوف دلو زمني موحّد (60 دلوًا عبر النافذة، قيمة الجهاز = متوسط دلوِه؛ **rtt من العينات المتصلة فقط** — قيمة الجهاز المقطوع باقية ولا تُضلّل المخطط)؛ `alerts` = أحداث warn (الأحدث أولًا، ≤12) |
+| `POST /api/devices/health {action:"force-sample"}` | `{ok, recorded, events}` — يجبر تكة قياس فورية (تجاوز الخانقة) — زر «التقاط عينة الآن» وأدوات التحقق |
+| `POST /api/devices/health {action:"report", deviceId, battery?, rttMs?}` | **مسار الوكيل الحقيقي**: قيم فعلية من الجهاز — تحقق صارم (`battery` رقم 0..100 يُقصّ، `rttMs` رقم ≥ 0) → تحديث سجل الأجهزة → تكة force تسجل العينة وتقيّم العبورات → `{ok, device:{id,name,battery,rttMs}, recorded, events}`؛ 404 جهاز غير موجود، 400 بلا قيم/قيم فاسدة |
+
+### 27.ج الربط بالنبض القائم
+- `heartbeatBump()` (devices.ts) تُشغّل تكة قياس بعد الجيتر — استيراد ديناميكي
+  يكسر دورة الوحدات (health.ts يقرأ `store()` من devices.ts) — fire-and-forget
+  لا يبطئ النبضة ولا يُهلِكها عند فشل SQLite (خطأ يُسجَّل ويعود `{ok:false}`).
+- `POST /api/devices` (connect/disconnect/forget/pair) يجبر تكة force بعد كل
+  نجاح — فتُرصد الانتقالات لحظيًا دون انتظار النبضة التالية.
+
+### 27.د الواجهة والحدود الصادقة
+- `HealthPanel` أعلى صفحة الأجهزة: شرائح ملخص (متصل/متوسط استجابة/أدنى بطارية/
+  تنبيهات) + مخططا خط (بطارية %، استجابة ms) بلون لكل جهاز (جدول الإتاحة هو
+  مفتاح الألوان) + قائمة تنبيهات بصياغة مركبة من النوع + اسم الجهاز (ترجمة EN
+  كاملة — رسائل الخادم العربية تبقى في DB كسجل).
+- **حدود موثقة**: قيم الأجهزة المحاكاة (بذرة v3) مشتقة من جيتر النبض — الوكيل
+  الحقيقي يدفع قيمه الفعلية عبر `report` (27.ب)؛ سجل حذف الاقتران لا يمحو
+  تاريخ عيناته (يظهر في `device=all` بلا اسم حي)؛ عينات EN: النوافذ الثلاث
+  داخل حد الاحتفاظ 24h — لا تاريخ أقدم من ذلك.

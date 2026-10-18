@@ -95,4 +95,10 @@ export function heartbeatBump() {
       d.battery = Math.max(5, d.battery - (Math.random() < 0.15 ? 1 : 0))
     }
   }
+  // مركز صحة الأجهزة (عقد §27): كل نبضة = تكة قياس (خانقة 30ث لكل جهاز) + كشف
+  // العبورات (انقطاع/عودة/بطارية/استجابة/تخزين). استيراد ديناميكي يكسر دورة
+  // الوحدات (health.ts يقرأ store من هنا) — fire-and-forget لا يُبطئ النبضة.
+  import("./health")
+    .then((m) => m.recordHealthTick(store().devices))
+    .catch(() => {})
 }

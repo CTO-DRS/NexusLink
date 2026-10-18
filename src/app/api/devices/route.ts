@@ -9,6 +9,14 @@ import type { NexusDevice } from "@/lib/nexus/types"
 
 export const dynamic = "force-dynamic"
 
+// مركز صحة الأجهزة (عقد §27): أي تغيير حالة جهاز يجبر تكة قياس فورية —
+// فتُرصد الانتقالات (انقطاع/عودة/اقتران) لحظيًا دون انتظار النبضة التالية.
+const forceHealthTick = () => {
+  import("@/lib/nexus/health")
+    .then((m) => m.recordHealthTick(store().devices, { force: true }))
+    .catch(() => {})
+}
+
 export async function GET() {
   heartbeatBump()
   return NextResponse.json({ devices: store().devices })
@@ -25,6 +33,7 @@ export async function POST(req: NextRequest) {
       if (!d) return NextResponse.json({ error: "الجهاز غير موجود" }, { status: 404 })
       d.state = "connected"
       d.lastSeen = Date.now()
+      forceHealthTick()
       return NextResponse.json({ ok: true, device: d })
     }
     case "disconnect": {
@@ -32,10 +41,12 @@ export async function POST(req: NextRequest) {
       if (!d) return NextResponse.json({ error: "الجهاز غير موجود" }, { status: 404 })
       d.state = "offline"
       d.lastSeen = Date.now()
+      forceHealthTick()
       return NextResponse.json({ ok: true, device: d })
     }
     case "forget": {
       s.devices = s.devices.filter((x) => x.id !== body.id)
+      forceHealthTick()
       return NextResponse.json({ ok: true })
     }
     case "pair": {
@@ -80,6 +91,7 @@ export async function POST(req: NextRequest) {
           actor: exists.name,
           deviceId: exists.id,
         }).catch(() => null)
+        forceHealthTick()
         return NextResponse.json({ ok: true, device: exists })
       }
       const stableId =
@@ -111,6 +123,7 @@ export async function POST(req: NextRequest) {
         actor: d.name,
         deviceId: d.id,
       }).catch(() => null)
+      forceHealthTick()
       return NextResponse.json({ ok: true, device: d })
     }
     case "send-file": {

@@ -2924,6 +2924,116 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
       check("A-1: i18n — مفاتيح EN للتبويب في القاموس المشترك", aI18n.includes('"الروتينات": "Routines"') && aI18n.includes('"شغّل الآن": "Run now"'), "i18n")
       check("A-1: التوثيق — العقد §26 والقائمة الميدانية", aContract.includes("## 26.") && aContract.includes("auto:fired") && aChecklist.includes("الروتينات"), "docs")
     }
+
+    // ============================================================
+    // HEALTH — مركز صحة الأجهزة (عقد §27): قياس زمني (خانقة 30ث + احتفاظ 24h)
+    // + كشف عبورات (انقطاع/عودة/بطارية/استجابة/تخزين) + مسار الوكيل الحقيقي report
+    // ============================================================
+    console.log("\n== HEALTH: device health center (telemetry + alerts, contract §26) ==")
+    {
+      const fsH = (await import("node:fs")).default
+      const rdH = (p) => { try { return fsH.readFileSync(pathMod.join(ROOT, p), "utf8") } catch { return "" } }
+      const schemaH = rdH("prisma/schema.prisma")
+      const healthTs = rdH("src/lib/nexus/health.ts")
+      const devicesTsH = rdH("src/lib/nexus/devices.ts")
+      const devRouteH = rdH("src/app/api/devices/route.ts")
+      const healthRouteH = rdH("src/app/api/devices/health/route.ts")
+      const devViewH = rdH("src/components/nexus/devices-view.tsx")
+      const panelH = rdH("src/components/nexus/health-panel.tsx")
+      const dbTsH = rdH("src/lib/db.ts")
+      const contractH = rdH("docs/protocol-contract.md")
+      const B = "http://127.0.0.1:3000"
+
+      // (أ) المصدر — البنية الكاملة
+      check("HEALTH: مخطط Prisma — NexusHealthSample + NexusHealthEvent بفهارس [deviceId,createdAt] و[createdAt]",
+        schemaH.includes("model NexusHealthSample") && schemaH.includes("model NexusHealthEvent")
+        && schemaH.includes("@@index([deviceId, createdAt])") && schemaH.includes("@@index([createdAt])"), "schema")
+      check("HEALTH: المحرك — خانقة 30ث + احتفاظ 24h + تنقية 5min + عتبات (15/150/90)",
+        healthTs.includes("SAMPLE_INTERVAL_MS = 30_000") && healthTs.includes("RETENTION_MS = 24 * 3600_000")
+        && healthTs.includes("PRUNE_EVERY_MS = 5 * 60_000") && healthTs.includes("LOW_BATTERY_PCT = 15")
+        && healthTs.includes("RTT_DEGRADED_MS = 150") && healthTs.includes("STORAGE_HIGH_PCT = 90"), "engine params")
+      check("HEALTH: كشف العبورات — offline/online edge-triggered + بطارية/استجابة/تخزين مرة لكل عبور + ترسيخ أول تكة بلا أحداث",
+        healthTs.includes('type: "offline"') && healthTs.includes('type: "online"')
+        && healthTs.includes('type: "low-battery"') && healthTs.includes('type: "rtt-degraded"')
+        && healthTs.includes('type: "storage-high"') && healthTs.includes("!st.booted"), "transitions")
+      check("HEALTH: الربط — النبضة تشغل تكة (استيراد ديناميكي) + مسارات حالة الأجهزة تجبر تكة force",
+        devicesTsH.includes('import("./health")') && devicesTsH.includes("recordHealthTick(store().devices)")
+        && devRouteH.includes("forceHealthTick") && devRouteH.includes('{ force: true }'), "heartbeat wiring")
+      check("HEALTH: المسار — GET لقطة + POST force-sample + POST report بقصّ battery 0..100 وrtt ≥ 0",
+        healthRouteH.includes("getHealthSnapshot") && healthRouteH.includes('"force-sample"')
+        && healthRouteH.includes('"report"') && healthRouteH.includes("Math.min(100, Math.round(body.battery))")
+        && healthRouteH.includes("Math.max(0, Math.round(body.rttMs))"), "route contract")
+      check("HEALTH: الواجهة — HealthPanel أعلى صفحة الأجهزة (مخططا خط + محدد نافذة + التقاط عينة + تنبيهات)",
+        devViewH.includes('import { HealthPanel } from "@/components/nexus/health-panel"') && devViewH.includes("<HealthPanel />")
+        && panelH.includes("LineChart") && panelH.includes("force-sample")
+        && panelH.includes('setWindow_') && panelH.includes("مركز صحة الأجهزة"), "panel UI")
+      check("HEALTH: الترقية الآمنة — CREATE TABLE IF NOT EXISTS للجدولين في db.ts (نمط §23 بلا مساس بالبيانات)",
+        dbTsH.includes('CREATE TABLE IF NOT EXISTS "NexusHealthSample"')
+        && dbTsH.includes('CREATE TABLE IF NOT EXISTS "NexusHealthEvent"')
+        && dbTsH.includes("NexusHealthSample_deviceId_createdAt_idx"), "upgrade-safe schema")
+      check("HEALTH: العقد §27 موثق (عينات/عبورات/report الحقيقي/حدود صادقة) + مؤشر §3.5",
+        contractH.includes("## 26. مركز صحة الأجهزة") && contractH.includes('action:"report"')
+        && contractH.includes("ترسّخ الحالة بلا أحداث") && contractH.includes("GET|POST /api/devices/health"), "contract §26")
+
+      // (ب) السلوك — على السيرفر الحي (standalone)
+      const hPost = async (body) => fetch(`${B}/api/devices/health`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      }).then((r) => r.json())
+      const hGet = async (q = "") => fetch(`${B}/api/devices/health${q}`).then((r) => r.json())
+
+      const fs1 = await hPost({ action: "force-sample" })
+      check("HEALTH: force-sample يسجل عينات فورية لكل أجهزة البذرة (≥5) بتجاوز الخانقة",
+        fs1.ok === true && fs1.recorded >= 5, `recorded=${fs1.recorded}`)
+
+      await hPost({ action: "report", deviceId: "galaxy-s24", battery: 9 })
+      const snap1 = await hGet("?device=all&window=1h")
+      const g24 = snap1.devices.find((d) => d.deviceId === "galaxy-s24")
+      check("HEALTH: لقطة 1h — سلاسل بطارية غير فارغة + ملخص galaxy-s24 بعينات",
+        Array.isArray(snap1.series.battery) && snap1.series.battery.length > 0
+        && g24 && g24.samples > 0, `samples=${g24?.samples}`)
+      check("HEALTH: report بطارية 9% → عبور low-battery warn ظاهر في التنبيهات",
+        snap1.alerts.some((a) => a.deviceId === "galaxy-s24" && a.type === "low-battery" && a.level === "warn"), "low-battery alert")
+
+      const fs2 = await hPost({ action: "report", deviceId: "galaxy-s24", battery: 9 })
+      check("HEALTH: تقرير مطابق ثانٍ → صفر أحداث (مرة واحدة لكل عبور — لا فيض تنبيهات)",
+        fs2.ok === true && fs2.events === 0, `events=${fs2.events}`)
+
+      await hPost({ action: "report", deviceId: "galaxy-s24", rttMs: 250 })
+      const snap2 = await hGet("?device=all&window=1h")
+      check("HEALTH: report استجابة 250ms → عبور rtt-degraded warn",
+        snap2.alerts.some((a) => a.deviceId === "galaxy-s24" && a.type === "rtt-degraded"), "rtt alert")
+
+      const dis = await fetch(`${B}/api/devices`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "disconnect", id: "redmi-note13" }),
+      }).then((r) => r.json())
+      await hPost({ action: "force-sample" })
+      const snap3 = await hGet("?device=all&window=1h")
+      check("HEALTH: قطع redmi-note13 → انتقال offline warn مرصود",
+        dis.ok === true && snap3.alerts.some((a) => a.deviceId === "redmi-note13" && a.type === "offline"), "offline event")
+
+      const conn = await fetch(`${B}/api/devices`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "connect", id: "redmi-note13" }),
+      }).then((r) => r.json())
+      await hPost({ action: "force-sample" })
+      const snap4 = await hGet("?device=all&window=1h")
+      const redmi = snap4.devices.find((d) => d.deviceId === "redmi-note13")
+      check("HEALTH: إعادة الاتصال → انتقال online info + الإتاحة محسوبة 0..100",
+        conn.ok === true && snap4.events.some((e) => e.deviceId === "redmi-note13" && e.type === "online" && e.level === "info")
+        && redmi && redmi.uptimePct !== null && redmi.uptimePct >= 0 && redmi.uptimePct <= 100, `uptime=${redmi?.uptimePct}`)
+
+      const one = await hGet("?device=galaxy-s24&window=6h")
+      check("HEALTH: فلتر جهاز واحد + نافذة 6h — جهاز واحد فقط وعيناته",
+        one.devices.length === 1 && one.devices[0].deviceId === "galaxy-s24"
+        && typeof one.counts?.samples === "number" && one.counts.samples > 0, "device filter")
+
+      const capped = snap4.devices.every((d) => d.points.length <= 120)
+      const win24 = await hGet("?device=all&window=24h")
+      check("HEALTH: سقف النقاط ≤120 لكل جهاز + نافذة 24h مقبولة بشكل سليم",
+        capped && win24.window === "24h" && Array.isArray(win24.series.rtt), "downsample cap")
+    }
+
   }
 
 } catch (e) {

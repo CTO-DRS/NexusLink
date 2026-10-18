@@ -253,3 +253,32 @@ model DesktopSetting {
   value     String   // JSON: appLock | idle | updater | general
   updatedAt DateTime @updatedAt
 }
+
+// ===== NexusLink — مركز صحة الأجهزة (عقد §26) =====
+// عينات قياس زمنية لكل جهاز (بطارية/استجابة/إتاحة) + أحداث صحة (انقطاع/عودة/
+// بطارية منخفضة/استجابة متدهورة/تخزين ممتلئ). العينات تُسجَّل من نبض GET
+// /api/devices (خانقة 30ث لكل جهاز) ومن مسار الوكيل الحقيقي POST report.
+// الاحتفاظ 24 ساعة (تنقية دورية) — تُغطي نوافذ العرض 1h/6h/24h.
+model NexusHealthSample {
+  id        String   @id @default(cuid())
+  deviceId  String
+  battery   Int
+  rttMs     Int
+  online    Boolean
+  createdAt DateTime @default(now())
+
+  @@index([deviceId, createdAt])
+  @@index([createdAt])
+}
+
+model NexusHealthEvent {
+  id         String   @id @default(cuid())
+  deviceId   String
+  deviceName String
+  type       String   // offline | online | low-battery | rtt-degraded | storage-high
+  level      String   @default("info") // info | warn
+  message    String
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}

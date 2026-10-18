@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import type { NexusDevice } from "@/lib/nexus/types"
+import { HealthPanel } from "@/components/nexus/health-panel"
 
 const kindIcon = (k: string) => (k === "phone" ? Smartphone : k === "tablet" ? Tablet : k === "tv" ? Tv : Monitor)
 const modeLabel = (m: string) => (m === "wifi" ? "واي فاي" : m === "hotspot" ? "نقطة اتصال" : "USB")
@@ -200,6 +201,8 @@ export function DevicesView() {
 
   return (
     <div className="space-y-6">
+      <HealthPanel />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold">الأجهزة المقترنة</h1>

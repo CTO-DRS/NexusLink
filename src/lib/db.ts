@@ -34,6 +34,38 @@ function ensureUpgradeSchema(): Promise<void> {
            "updatedAt" DATETIME NOT NULL
          )`,
       )
+      // مركز صحة الأجهزة (عقد §27) — جدولان إضافيان بنفس نمط الترقية الآمنة:
+      // CREATE TABLE IF NOT EXISTS بلا أي مساس بالبيانات القائمة.
+      await db.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS "NexusHealthSample" (
+           "id"        TEXT     NOT NULL PRIMARY KEY,
+           "deviceId"  TEXT     NOT NULL,
+           "battery"   INTEGER  NOT NULL,
+           "rttMs"     INTEGER  NOT NULL,
+           "online"    BOOLEAN  NOT NULL,
+           "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+         )`,
+      )
+      await db.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS "NexusHealthSample_deviceId_createdAt_idx" ON "NexusHealthSample"("deviceId", "createdAt")`,
+      )
+      await db.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS "NexusHealthSample_createdAt_idx" ON "NexusHealthSample"("createdAt")`,
+      )
+      await db.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS "NexusHealthEvent" (
+           "id"         TEXT     NOT NULL PRIMARY KEY,
+           "deviceId"   TEXT     NOT NULL,
+           "deviceName" TEXT     NOT NULL,
+           "type"       TEXT     NOT NULL,
+           "level"      TEXT     NOT NULL DEFAULT 'info',
+           "message"    TEXT     NOT NULL,
+           "createdAt"  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+         )`,
+      )
+      await db.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS "NexusHealthEvent_createdAt_idx" ON "NexusHealthEvent"("createdAt")`,
+      )
     } catch (e) {
       // بلا هلع: القاعدة الجاهزة (seed 1.1.0) تحوي الجدول مسبقًا؛ فشل ضمان
       // المخطط (قاعدة للقراءة فقط مثلًا) يظهر في مسارات الكتابة بصدق لاحقًا.
