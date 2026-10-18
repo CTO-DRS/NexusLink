@@ -1362,3 +1362,21 @@ Stage Summary:
 - «إعادة التشغيل» اكتملت بمعناها القوي: المنظومة العقدية كاملة (أربع خدمات منها البوابة التي لم تكن تُقلع أصلًا) حية ومستقرة عبر الاستدعاءات، ومسار الإقلاع ترسّخ في dev.sh المرفوع لجيتهب — أي إقلاع حاوية قادم (زر إعادة التشغيل البيئي) يوقظ كل شيء تلقائيًا بما فيه البوابة على 8180.
 - الملفات: .zscripts/dev.sh (+48: start_gateway بـ node + فحص صحة متسامح + سجل) — قاعدة ops جديدة: الإقلاع الدائم = setsid bash .zscripts/dev.sh (الناجي من القاتل البيئي) / الإقلاع المباشر من الأداة = يُقتل بين الاستدعاءات.
 - مزامنة 0/0 @ 7b73f1c — لا أعمال معلقة — ملاحظة صادقة: حقل «port» في /__gw/health يعلن 81 (الميناء المفضل) بينما المستمع الفعلي 8180 بعد التراجع — نفس سلوك فحوص E2E المعتمدة (ok+role هما العقد).
+
+---
+Task ID: CI-pages-release-page
+Agent: Super Z (main)
+Task: «نكمل» — استكمال بناء الحزمة على جيتهب: فحص حالة الإصدار v1.2.0-fix2 وإغلاق آخر بقايا CI حمراء (سير Pages الميت منذ ولادته) + تحديث صفحة النشر للإصدار الحي
+
+Work Log:
+- **القاعدة الذهبية أولًا**: worklog + مسح GitHub API — الاكتشاف: بناء الحزمة اكتمل فعليًا في الجلسة السابقة (Release 5 منصات + Desktop Tauri @ f08b474: success) والإصدار v1.2.0-fix2 منشور بـ 16 أصلًا (APK/AAB/dmg/app.tar.gz/AppImage/deb/exe/msi/portable/latest.json/SHA256SUMS) وهو الـ latest الرسمي — البقايا الوحيدة: سير «Deploy Next.js site to Pages» أحمر في كل دفعة منذ ولادته.
+- **تشخيص Pages**: Setup Node يفشل — «Dependencies lock file is not found» — القالب الرسمي يفترض npm (cache:npm + package-lock) والمستودع bun؛ والأعمق: التطبيق ديناميكي (Socket.IO+Prisma+API routes) لا يُصدَّر ساكنًا أصلًا فقالب next build → ./out مستحيل — والموقع الحي كان يخدم نشرًا قديمًا (v1.1.0-fix4) من بقايا نشر سابق.
+- **إعادة كتابة nextjs.yml**: نشر ساكن حصيف — نسخ public/NexusLink-Release-Page.html كـ index.html إلى _site ورفعه عبر upload-pages-artifact + deploy-pages — بلا Node إطلاقًا (لا setup-node ولا install ولا build) + فلتر paths (السير والصفحة حصرًا) — باسم «Deploy release page to Pages».
+- **تحديث صفحة النشر إلى v1.2.0-fix2** (4 دفعات MultiEdit ذرية): meta + verTag + smartDl + خريطة JS — الأصول التسعة بأسماء 1.2.0 وأحجامها الحقيقية من API (setup 44.5 / msi 81.9 / portable 100.4 / dmg 110.8 / tar.gz 112.9 / AppImage 166.8 / deb 93.7 / apk 133.8 / aab 64.0) — كتلة SHA256SUMS كاملة بالبصمات الفعلية للإصدار — أمثلة التحقق وأدلة التثبيت (ثابت + قاموس ar/en) — «الأصول الـ 17» بعد إرفاق الصفحة نفسها — ذكر «روتينات ذكية بمشغّلات صحة تاريخية» في hero_sub (ar+en) — إحصاء E2E 428→585 — بقي «من إصدار 1.1.0» في fq5a عمدًا (نسخة تقديم التحكم هاتف↔هاتف).
+- **release.yml**: خطوة «Attach static release page» قبل softprops النهائي — cp الصفحة إلى dist فتُرفق تلقائيًا مع كل إصدار قادم (توازية v1.1.0-fix4 التي حملت الـ HTML يدويًا).
+- **التحقق الحي**: دفعة ed0f5e3 → سير Pages **success لأول مرة في تاريخه** — الموقع الحي (cache-buster) يخدم v1.2.0-fix2 + 585 — رفع NexusLink-Release-Page.html أصلًا للإصدار عبر API (53200 bytes, uploaded) → الإصدار 17 أصلًا مطابقًا لنص الصفحة — نسخة download/ متزامنة.
+
+Stage Summary:
+- «قم ببناء الحزمة في جيتهب» مغلقة بالكامل: بناء 5 منصات أخضر + إصدار v1.2.0-fix2 بـ 17 أصلًا (بما فيها صفحة النشر) + صفحة نشر حية محدثة على https://cto-drs.github.io/NexusLink/ + سير Pages أخضر دائم لا يعاد إلا عند تغيير الصفحة أو سيرها + الإرفاق التلقائي للصفحة في الإصدارات القادمة.
+- الملفات: .github/workflows/nextjs.yml (إعادة كتابة كاملة) · .github/workflows/release.yml (+2) · public/NexusLink-Release-Page.html (17 مرجعًا إصداريًا) · download/ متزامنة · ed0f5e3.
+- حدود صادقة: pages/builds/latest API يعرض بناءً قديمًا (45a2122) لأن build_type=workflow ينشر عبر deployments لا آلية البناء القديمة — الحكم بالمحتوى الحي لا بسجل البناء القديم · شارة verTag الحية تسحب الاسم من API فتبقى صحيحة في الإصدارات القادمة حتى قبل تحديث نص الصفحة يدويًا.
