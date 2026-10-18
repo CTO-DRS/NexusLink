@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/phone_remote_service.dart';
 import 'providers.dart';
-import 'transfer_providers.dart' show nativeBridgeProvider;
 
 // ---------------------------------------------------------------------------
 // الجولة 5 (عقد §24) — مزود التحكم بهاتف آخر (هاتف→هاتف عبر المركز).
