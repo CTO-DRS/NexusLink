@@ -2,10 +2,11 @@
 // NexusLink — تبويب الروتينات (عقد §26) — محرّك الأتمتة فوق القنوات القائمة
 // قواعد «عند حدوث X نفّذ Y»: مشغلات (أجهزة/بطارية/حافظة/وقت) → أفعال
 // (إشعار/حافظة موحدة/رنين الهاتف/WoL). كل الأفعال تعبر القنوات القائمة حرفيًا.
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useI18n } from "@/lib/i18n"
+import { useNexus } from "@/lib/store"
 import { useAutomation } from "@/lib/automation-store"
-import { autoRuleUpsert, autoRuleDelete, autoRuleToggle, autoRuleRunNow, autoLogClear, autoAlertsMarkSeen } from "@/lib/automation-socket"
+import { autoRuleUpsert, autoRuleDelete, autoRuleToggle, autoRuleRunNow, autoLogClear, autoAlertsMarkSeen, autoTestTrigger, getAutomationSocket } from "@/lib/automation-socket"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -18,8 +19,9 @@ import {
   Workflow, MonitorSmartphone, MonitorOff, BatteryLow, BatteryCharging, ClipboardList, CalendarClock,
   BellRing, ClipboardPaste, PhoneCall, Power, Play, Trash2, Plus, History,
   Clock, Sparkles, ShieldAlert, Timer, Activity, WifiOff, CheckCheck, DatabaseBackup, HardDrive,
+  FlaskConical, CheckCircle2, AlertTriangle,
 } from "lucide-react"
-import type { TriggerKind, ActionKind, AutoRule } from "@/lib/nexus/automation-types"
+import type { TriggerKind, ActionKind, AutoRule, AutoTestResult } from "@/lib/nexus/automation-types"
 import { SUSTAINED_TRIGGER_KINDS } from "@/lib/nexus/automation-types"
 import { toast } from "sonner"
 
@@ -80,6 +82,7 @@ interface Draft {
   tKind: TriggerKind
   aKind: ActionKind
   deviceId: string
+  deviceManual: boolean
   threshold: string
   duration: string
   onceAt: string
@@ -91,52 +94,89 @@ interface Draft {
 
 const EMPTY_DRAFT: Draft = {
   name: "", tKind: "device.connect", aKind: "notify",
-  deviceId: "", threshold: "20", duration: "60", onceAt: "", hh: "8", mm: "0",
+  deviceId: "", deviceManual: false, threshold: "20", duration: "60", onceAt: "", hh: "8", mm: "0",
   text: "", mac: "",
+}
+
+/** بناء المشغّل من مسودة المحرر — مشترك بين الحفظ (save) وفحص التاريخ الحي (§26.ي)
+ *  — نفس المقصوصات والافتراضيات حرفيًا (التعقيم النهائي على الجسر §26.ج). */
+function buildTrigger(d: Draft): AutoRule["trigger"] {
+  const trig: AutoRule["trigger"] = { kind: d.tKind }
+  if (d.deviceId.trim()) trig.deviceId = d.deviceId.trim()
+  if (d.tKind === "battery.below") trig.threshold = Math.min(100, Math.max(1, Math.round(Number(d.threshold) || 20)))
+  if (d.tKind === "battery.above") trig.threshold = Math.min(100, Math.max(1, Math.round(Number(d.threshold) || 80)))
+  if (SUSTAINED_TRIGGER_KINDS.includes(d.tKind)) {
+    trig.durationMin = Math.min(1440, Math.max(1, Math.round(Number(d.duration) || 60)))
+    if (d.tKind === "health.battery.sustained") trig.threshold = Math.min(100, Math.max(1, Math.round(Number(d.threshold) || 15)))
+    if (d.tKind === "health.rtt.sustained") trig.threshold = Math.min(60000, Math.max(10, Math.round(Number(d.threshold) || 200)))
+    if (d.tKind === "health.storage.sustained") trig.threshold = Math.min(100, Math.max(1, Math.round(Number(d.threshold) || 90)))
+  }
+  if (d.tKind === "time.once") {
+    const at = d.onceAt ? new Date(d.onceAt).getTime() : 0
+    if (at) trig.at = at
+  }
+  if (d.tKind === "time.daily") {
+    trig.hh = Math.min(23, Math.max(0, Math.round(Number(d.hh) || 0)))
+    trig.mm = Math.min(59, Math.max(0, Math.round(Number(d.mm) || 0)))
+  }
+  return trig
 }
 
 export function AutomationView() {
   const { t } = useI18n()
   const { online, rules, log, stats, alerts } = useAutomation()
+  const devices = useNexus((s) => s.devices)
   const [draft, setDraft] = useState<Draft | null>(null)
+  // فحص التاريخ الحي (§26.ي) — نتيجة القراءة المحضة + ضبط المشغّل المُختبر (لشارة القِدم)
+  const [testResult, setTestResult] = useState<AutoTestResult | null>(null)
+  const [testing, setTesting] = useState(false)
+  const [testedJson, setTestedJson] = useState<string | null>(null)
 
-  const openNew = () => setDraft({ ...EMPTY_DRAFT })
-  const openEdit = (r: AutoRule) => setDraft({
-    id: r.id,
-    name: r.name,
-    tKind: r.trigger.kind,
-    aKind: r.action.kind,
-    deviceId: r.trigger.deviceId || "",
-    threshold: String(r.trigger.threshold ?? (r.trigger.kind === "battery.above" ? 80 : 20)),
-    duration: String(r.trigger.durationMin ?? 60),
-    onceAt: r.trigger.at ? new Date(r.trigger.at - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
-    hh: String(r.trigger.hh ?? 8),
-    mm: String(r.trigger.mm ?? 0),
-    text: r.action.text || "",
-    mac: r.action.mac || "",
-  })
+  // اشتراك نتيجة الفحص — للمطالب حصرًا (الجسر يرسل auto:test-result عبر socket.emit لا بث)
+  useEffect(() => {
+    const s = getAutomationSocket()
+    const onResult = (r: AutoTestResult) => { setTesting(false); setTestResult(r) }
+    s.on("auto:test-result", onResult)
+    return () => { s.off("auto:test-result", onResult) }
+  }, [])
+
+  const resetTest = () => { setTestResult(null); setTesting(false); setTestedJson(null) }
+  const openNew = () => { resetTest(); setDraft({ ...EMPTY_DRAFT }) }
+  const openEdit = (r: AutoRule) => {
+    resetTest()
+    setDraft({
+      id: r.id,
+      name: r.name,
+      tKind: r.trigger.kind,
+      aKind: r.action.kind,
+      deviceId: r.trigger.deviceId || "",
+      // قاعدة تشير لجهاز غير مدرج في الاقتران الحي (له تاريخ §27) — إدخال يدوي يحفظها
+      deviceManual: !!(r.trigger.deviceId && !devices.some((d) => d.id === r.trigger.deviceId)),
+      threshold: String(r.trigger.threshold ?? (r.trigger.kind === "battery.above" ? 80 : 20)),
+      duration: String(r.trigger.durationMin ?? 60),
+      onceAt: r.trigger.at ? new Date(r.trigger.at - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
+      hh: String(r.trigger.hh ?? 8),
+      mm: String(r.trigger.mm ?? 0),
+      text: r.action.text || "",
+      mac: r.action.mac || "",
+    })
+  }
+
+  const runTest = () => {
+    if (!draft) return
+    const trig = buildTrigger(draft)
+    setTestedJson(JSON.stringify(trig))
+    setTestResult(null)
+    setTesting(true)
+    autoTestTrigger(trig)
+  }
+  // شارة القِدم: عُدّل الشرط بعد الفحص — النتيجة لضبط سابق ولا تمثل الحقول الحالية
+  const testStale = !!testResult?.ok && testedJson !== null && testedJson !== JSON.stringify(buildTrigger(draft ?? EMPTY_DRAFT))
 
   const save = () => {
     if (!draft) return
-    const trig: AutoRule["trigger"] = { kind: draft.tKind }
-    if (draft.deviceId.trim()) trig.deviceId = draft.deviceId.trim()
-    if (draft.tKind === "battery.below") trig.threshold = Math.min(100, Math.max(1, Math.round(Number(draft.threshold) || 20)))
-    if (draft.tKind === "battery.above") trig.threshold = Math.min(100, Math.max(1, Math.round(Number(draft.threshold) || 80)))
-    if (SUSTAINED_TRIGGER_KINDS.includes(draft.tKind)) {
-      trig.durationMin = Math.min(1440, Math.max(1, Math.round(Number(draft.duration) || 60)))
-      if (draft.tKind === "health.battery.sustained") trig.threshold = Math.min(100, Math.max(1, Math.round(Number(draft.threshold) || 15)))
-      if (draft.tKind === "health.rtt.sustained") trig.threshold = Math.min(60000, Math.max(10, Math.round(Number(draft.threshold) || 200)))
-      if (draft.tKind === "health.storage.sustained") trig.threshold = Math.min(100, Math.max(1, Math.round(Number(draft.threshold) || 90)))
-    }
-    if (draft.tKind === "time.once") {
-      const at = draft.onceAt ? new Date(draft.onceAt).getTime() : 0
-      if (!at) { toast.error(t("حدد موعدًا صالحًا")); return }
-      trig.at = at
-    }
-    if (draft.tKind === "time.daily") {
-      trig.hh = Math.min(23, Math.max(0, Math.round(Number(draft.hh) || 0)))
-      trig.mm = Math.min(59, Math.max(0, Math.round(Number(draft.mm) || 0)))
-    }
+    const trig = buildTrigger(draft)
+    if (draft.tKind === "time.once" && !trig.at) { toast.error(t("حدد موعدًا صالحًا")); return }
     const act: AutoRule["action"] = { kind: draft.aKind }
     if (draft.text.trim()) act.text = draft.text.trim()
     if (draft.aKind === "wol") act.mac = draft.mac.trim()
@@ -323,7 +363,23 @@ export function AutomationView() {
                   </SelectContent>
                 </Select>
                 {(draft.tKind === "device.connect" || draft.tKind === "device.disconnect" || draft.tKind === "battery.below" || draft.tKind === "battery.above" || SUSTAINED_TRIGGER_KINDS.includes(draft.tKind)) && (
-                  <Input value={draft.deviceId} onChange={(e) => setDraft({ ...draft, deviceId: e.target.value })} placeholder={t("معرّف الجهاز (اختياري — فارغ = أي جهاز)")} />
+                  draft.deviceManual ? (
+                    <div className="flex items-center gap-2">
+                      <Input value={draft.deviceId} onChange={(e) => setDraft({ ...draft, deviceId: e.target.value })} placeholder={t("معرّف الجهاز — إدخال يدوي")} data-testid="automation-device-manual" />
+                      <Button size="sm" variant="ghost" className="h-8 shrink-0 text-xs" onClick={() => setDraft({ ...draft, deviceManual: false, deviceId: "" })}>{t("اختيار من القائمة")}</Button>
+                    </div>
+                  ) : (
+                    <Select value={draft.deviceId || "__any__"} onValueChange={(v) => setDraft({ ...draft, deviceManual: v === "__manual__", deviceId: v === "__any__" || v === "__manual__" ? "" : v })}>
+                      <SelectTrigger data-testid="automation-device-select"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__any__">{t("أي جهاز")}</SelectItem>
+                        {devices.map((d) => (
+                          <SelectItem key={d.id} value={d.id}>{d.name}{d.name !== d.id ? ` — ${d.id}` : ""}</SelectItem>
+                        ))}
+                        <SelectItem value="__manual__">{t("معرّف يدوي…")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )
                 )}
                 {(draft.tKind === "battery.below" || draft.tKind === "battery.above") && (
                   <div className="flex items-center gap-2">
@@ -342,6 +398,39 @@ export function AutomationView() {
                     <Label className="shrink-0 text-xs">{t("المدة (دقائق)")}</Label>
                     <Input type="number" min={1} max={1440} value={draft.duration} onChange={(e) => setDraft({ ...draft, duration: e.target.value })} data-testid="automation-duration-input" />
                     <span className="text-[10px] text-muted-foreground shrink-0">{t("1..1440 — يُقرأ من تاريخ مركز الصحة")}</span>
+                  </div>
+                )}
+                {/* فحص التاريخ الحي (§26.ي) — قراءة محضة قبل الحفظ: هل يستوفي التاريخ الحالي الشرط؟ ولماذا لا؟ */}
+                {SUSTAINED_TRIGGER_KINDS.includes(draft.tKind) && (
+                  <div className="space-y-2 rounded-xl border bg-muted/40 p-2.5" data-testid="automation-test-box">
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={runTest} disabled={testing} data-testid="automation-test-btn">
+                        <FlaskConical className="size-3" />
+                        {testing ? t("جارٍ فحص التاريخ…") : t("فحص التاريخ الآن")}
+                      </Button>
+                      {testStale && (
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-500/40 text-amber-600" data-testid="automation-test-stale">{t("نتيجة لضبط سابق — أعد الفحص")}</Badge>
+                      )}
+                    </div>
+                    {testResult && testResult.ok && (
+                      <div className={`rounded-lg border px-2.5 py-2 space-y-1 ${testResult.satisfied ? "border-emerald-500/40 bg-emerald-500/5" : "border-amber-500/40 bg-amber-500/5"}`} data-testid="automation-test-result">
+                        <div className={`text-xs font-semibold flex items-center gap-1.5 ${testResult.satisfied ? "text-emerald-600" : "text-amber-600"}`} data-testid="automation-test-verdict">
+                          {testResult.satisfied ? <CheckCircle2 className="size-3.5" /> : <AlertTriangle className="size-3.5" />}
+                          {testResult.satisfied ? t("التاريخ يستوفي الشرط الآن") : t("التاريخ لا يستوفي الشرط بعد")}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed" dir="auto">{testResult.reason}</p>
+                        <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground" data-testid="automation-test-evidence">
+                          <span className="rounded-md border px-1.5 py-0.5">{t("عينات دليل")}: {testResult.evidence?.samples ?? 0}</span>
+                          <span className="rounded-md border px-1.5 py-0.5">{t("تغطية")}: {testResult.evidence?.spanMin != null ? `${testResult.evidence.spanMin} ${t("دقيقة")}` : "—"}</span>
+                          <span className="rounded-md border px-1.5 py-0.5">{t("عمر المرساة")}: {testResult.evidence?.anchorAgeMin != null ? `${testResult.evidence.anchorAgeMin} ${t("دقيقة")}` : "—"}</span>
+                          <span className="rounded-md border px-1.5 py-0.5">{t("آخر عينة")}: {testResult.evidence?.lastAgeMin != null ? `${testResult.evidence.lastAgeMin} ${t("دقيقة")}` : "—"}</span>
+                        </div>
+                      </div>
+                    )}
+                    {testResult && !testResult.ok && (
+                      <div className="rounded-lg border border-red-500/40 bg-red-500/5 px-2.5 py-2 text-xs text-red-600" data-testid="automation-test-error">{testResult.error}</div>
+                    )}
+                    <p className="text-[10px] text-muted-foreground">{t("الفحص قراءة محضة من التاريخ الحالي — بلا أي أثر")}</p>
                   </div>
                 )}
                 {draft.tKind === "time.once" && (

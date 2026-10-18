@@ -19,7 +19,7 @@ import { evalSustainedTrigger, MIN_DURATION_MIN, MAX_DURATION_MIN } from "./auto
 import { loadPersistedRules, persistRuleUpsert, persistRuleDelete, persistFire, loadPersistedFires, markFiresSeenDb } from "./automation-persist"
 import {
   TRIGGER_KINDS, ACTION_KINDS, isSustainedTrigger,
-  type AutoRule, type AutoRunEntry, type AutoStatePayload, type AutoFiredPayload, type AutoFireEntry,
+  type AutoRule, type AutoRunEntry, type AutoStatePayload, type AutoFiredPayload, type AutoFireEntry, type AutoTrigger,
 } from "./automation-types"
 
 const PORT = 3008
@@ -330,19 +330,12 @@ function pollTime() {
 
 // ---------- تعقيم المدخلات ----------
 
-function sanitizeRule(input: unknown, existingId?: string): AutoRule | { error: string } {
-  if (!input || typeof input !== "object") return { error: "قاعدة غير صالحة" }
-  const r = input as Record<string, unknown>
-  const name = typeof r.name === "string" ? r.name.trim().slice(0, 80) : ""
-  if (!name) return { error: "اسم القاعدة مطلوب" }
-  const tr = (r.trigger ?? {}) as Record<string, unknown>
-  const ac = (r.action ?? {}) as Record<string, unknown>
+/** تعقيم المشغّل وحده (§26.ي) — مشترك بين rule:upsert (sanitizeRule)
+ *  وrule:test (فحص التاريخ الحي من المحرر) — نفس القواعد حرفيًا. */
+function sanitizeTrigger(tr: Record<string, unknown>): AutoTrigger | { error: string } {
   const tKind = String(tr.kind ?? "")
-  const aKind = String(ac.kind ?? "")
   if (!TRIGGER_KINDS.includes(tKind as never)) return { error: `نوع مشغّل غير معروف: ${tKind}` }
-  if (!ACTION_KINDS.includes(aKind as never)) return { error: `نوع فعل غير معروف: ${aKind}` }
-
-  const trigger: AutoRule["trigger"] = { kind: tKind as AutoRule["trigger"]["kind"] }
+  const trigger: AutoTrigger = { kind: tKind as AutoTrigger["kind"] }
   if (typeof tr.deviceId === "string" && tr.deviceId.trim()) trigger.deviceId = tr.deviceId.trim().slice(0, 64)
   if (tKind === "battery.below" || tKind === "battery.above") {
     const th = Math.round(Number(tr.threshold ?? (tKind === "battery.above" ? 80 : 20)))
@@ -381,6 +374,21 @@ function sanitizeRule(input: unknown, existingId?: string): AutoRule | { error: 
     if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return { error: "الموعد اليومي يتطلب ساعة 0-23 ودقيقة 0-59" }
     trigger.hh = hh; trigger.mm = mm
   }
+  return trigger
+}
+
+function sanitizeRule(input: unknown, existingId?: string): AutoRule | { error: string } {
+  if (!input || typeof input !== "object") return { error: "قاعدة غير صالحة" }
+  const r = input as Record<string, unknown>
+  const name = typeof r.name === "string" ? r.name.trim().slice(0, 80) : ""
+  if (!name) return { error: "اسم القاعدة مطلوب" }
+  const tr = (r.trigger ?? {}) as Record<string, unknown>
+  const ac = (r.action ?? {}) as Record<string, unknown>
+  const aKind = String(ac.kind ?? "")
+  if (!ACTION_KINDS.includes(aKind as never)) return { error: `نوع فعل غير معروف: ${aKind}` }
+
+  const trigger = sanitizeTrigger(tr)
+  if ("error" in trigger) return trigger
 
   const action: AutoRule["action"] = { kind: aKind as AutoRule["action"]["kind"] }
   if (typeof ac.text === "string") action.text = ac.text.slice(0, 300)
@@ -537,6 +545,34 @@ export function ensureAutomationBridge() {
           return
         }
         void fireRule({ ...rule }, "تشغيل يدوي من الواجهة", true)
+      })
+
+      // فحص التاريخ الحي من المحرر (§26.ي) — قراءة محضة: تقييم المشغّل التاريخي من
+      // عينات §27 الحالية بمقيّم سلسلة الدليل نفسه (evalSustainedTrigger حرفيًا)،
+      // والنتيجة للمطالب حصرًا (socket.emit لا بث) — بلا سجل تشغيل ولا ترسيخ ولا
+      // أي مسٍ للتسليح أو الإحصاءات: auto:state لا يتغير أبدًا بفعل فحص.
+      socket.on("rule:test", (d: { trigger?: unknown }) => {
+        const tr = (d?.trigger ?? {}) as Record<string, unknown>
+        const tKind = String(tr.kind ?? "")
+        if (!isSustainedTrigger(tKind as AutoTrigger["kind"])) {
+          socket.emit("auto:test-result", { ok: false, error: "فحص التاريخ متاح للمشغلات التاريخية المستمرة فقط", at: Date.now() })
+          return
+        }
+        const clean = sanitizeTrigger(tr)
+        if ("error" in clean) {
+          socket.emit("auto:test-result", { ok: false, error: clean.error, at: Date.now() })
+          return
+        }
+        void (async () => {
+          try {
+            const v = await evalSustainedTrigger(clean)
+            socket.emit("auto:test-result", {
+              ok: true, satisfied: v.satisfied, reason: v.reason, evidence: v.evidence, at: Date.now(),
+            })
+          } catch (e) {
+            socket.emit("auto:test-result", { ok: false, error: `فشل تقييم التاريخ: ${e instanceof Error ? e.message : String(e)}`, at: Date.now() })
+          }
+        })()
       })
 
       socket.on("log:clear", () => {
