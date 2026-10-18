@@ -149,11 +149,13 @@ export async function recordHealthTick(
     }
 
     // 2) العينات — خانقة SAMPLE_INTERVAL_MS لكل جهاز (force يتجاوز الخانقة)
-    const rows: { deviceId: string; battery: number; rttMs: number; online: boolean }[] = []
+    // storagePct يُؤرشف مع كل عينة (§26.ط) — دليل التخزين التاريخي لمشغّل
+    // health.storage.sustained: «بقاء التخزين فوق عتبة لمدة».
+    const rows: { deviceId: string; battery: number; rttMs: number; online: boolean; storagePct: number }[] = []
     for (const d of devices) {
       if (!opts?.force && now - (st.lastSampleAt.get(d.id) ?? 0) < SAMPLE_INTERVAL_MS) continue
       st.lastSampleAt.set(d.id, now)
-      rows.push({ deviceId: d.id, battery: d.battery, rttMs: d.rttMs, online: d.state === "connected" })
+      rows.push({ deviceId: d.id, battery: d.battery, rttMs: d.rttMs, online: d.state === "connected", storagePct: d.storageTotal ? Math.round((d.storageUsed / d.storageTotal) * 100) : 0 })
     }
     if (rows.length) await db.nexusHealthSample.createMany({ data: rows })
 

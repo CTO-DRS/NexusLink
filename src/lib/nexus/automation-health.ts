@@ -15,6 +15,9 @@
 //   (له عينة داخل آخر 24 ساعة) — الجهاز الذي لم يُبلّغ قط لا يُطلق صمتًا زائفًا.
 // البطارية تُقرأ من كل العينات (آخر قيمة معروولة حتى أثناء الانقطاع)، والاستجابة
 // من العينات المتصلة فقط (نمط §27 — rtt الجهاز المقطوع قيمة باقية لا تُضلّل).
+// التخزين (§26.ط) يُقرأ من العينات المتصلة فقط — القيمة المؤرشفة للجهاز المقطوع باقية (آخر
+// قيمة معروفة) وقد تُضلّل بعد تفريغ مساحة خارجيًا؛ متطلب الاتصال يجعل الامتلاء المستمر
+// دليلًا حاضرًا لا قيمة باقية — نمط rtt نفسه (§27).
 import { db, dbReady } from "@/lib/db"
 import { isSustainedTrigger, type AutoTrigger, type TriggerKind } from "./automation-types"
 
@@ -46,16 +49,25 @@ const NO_EV: SustainedEvidence = { samples: 0, spanMin: null, anchorAgeMin: null
 
 function mins(ms: number) { return Math.round(ms / 60_000) }
 
-function condMet(kind: TriggerKind, threshold: number, s: { battery: number; rttMs: number; online: boolean }): boolean {
+function condMet(kind: TriggerKind, threshold: number, s: { battery: number; rttMs: number; online: boolean; storagePct: number }): boolean {
   if (kind === "health.battery.sustained") return s.battery <= threshold
   if (kind === "health.rtt.sustained") return s.online && s.rttMs >= threshold
+  if (kind === "health.storage.sustained") return s.online && s.storagePct >= threshold
   return true
 }
 
 function describeCond(kind: TriggerKind, threshold: number, deviceId: string): string {
   if (kind === "health.battery.sustained") return `بطارية «${deviceId}» تحت ${threshold}%`
   if (kind === "health.rtt.sustained") return `استجابة «${deviceId}» فوق ${threshold}ms`
+  if (kind === "health.storage.sustained") return `تخزين «${deviceId}» فوق ${threshold}%`
   return `صمت «${deviceId}» عن تقارير الصحة`
+}
+
+/** قيمة العينة الجوهرية للنوع — تظهر في تفاصيل المخالفة والأدلة. */
+function sampleValue(kind: TriggerKind, s: { battery: number; rttMs: number; storagePct: number }): string {
+  if (kind === "health.battery.sustained") return `${s.battery}%`
+  if (kind === "health.rtt.sustained") return `${s.rttMs}ms`
+  return `${s.storagePct}%`
 }
 
 /** تقييم شرط مستمر لجهاز واحد من عيناته المؤرشفة. */
@@ -121,7 +133,7 @@ async function evalForDevice(
     }
   }
   if (!condMet(kind, threshold, anchor)) {
-    const val = kind === "health.battery.sustained" ? `${anchor.battery}%` : `${anchor.rttMs}ms`
+    const val = sampleValue(kind, anchor)
     return {
       satisfied: false,
       reason: `${describeCond(kind, threshold, deviceId)}: الدليل عند بداية المدة مخالف (${val})`,
@@ -137,7 +149,7 @@ async function evalForDevice(
   }
   const bad = inWin.find((s) => !condMet(kind, threshold, s))
   if (bad) {
-    const val = kind === "health.battery.sustained" ? `${bad.battery}%` : `${bad.rttMs}ms`
+    const val = sampleValue(kind, bad)
     return {
       satisfied: false,
       reason: `${describeCond(kind, threshold, deviceId)}: عينة مخالفة داخل المدة (${val} قبل ${mins(now - bad.createdAt.getTime())} دقيقة)`,

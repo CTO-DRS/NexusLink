@@ -1,7 +1,7 @@
 // تنظيف نهائي لحالة الجسر الحية: بذرة واحدة لكل اسم + حذف قاعدة الاختبار الحية
 import { io } from "socket.io-client"
 
-const sock = io("http://127.0.0.1:3008", { path: "/", transports: ["websocket", "polling"], forceNew: true, reconnection: false, timeout: 8000 })
+const sock = io("http://127.0.0.1:3008", { path: "/", transports: ["polling", "websocket"], forceNew: true, reconnection: false, timeout: 8000 })
 
 const latest = { state: null }
 sock.on("auto:state", (s) => { latest.state = s })

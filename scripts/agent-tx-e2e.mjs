@@ -102,7 +102,7 @@ async function main() {
   check("تسجيل الجهاز (pair) idempotent — بسر QR صحيح (G-1)", pair.json?.ok === true && pair.json?.device?.id === DEVICE_ID)
 
   // قناة الحماية الدائمة — نفس نمط الخدمة الخلفية
-  const guard = io("http://localhost:3006", { transports: ["websocket", "polling"] })
+  const guard = io("http://localhost:3006", { transports: ["polling", "websocket"] })
   const offers = []
   const txCmds = []
   guard.on("tx:offer", (d) => offers.push(d))
@@ -338,7 +338,7 @@ async function main() {
   // ================================================================ 4) نصوص/روابط 3007
   console.log("\n--- 4) النصوص والروابط السريعة عبر جسر الإنتاجية 3007 ---")
   {
-    const prod = io("http://localhost:3007", { transports: ["websocket", "polling"] })
+    const prod = io("http://localhost:3007", { transports: ["polling", "websocket"] })
     const clips = []
     const hands = []
     prod.on("clip:new", (d) => clips.push(d))

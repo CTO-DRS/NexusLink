@@ -260,12 +260,13 @@ model DesktopSetting {
 // /api/devices (خانقة 30ث لكل جهاز) ومن مسار الوكيل الحقيقي POST report.
 // الاحتفاظ 24 ساعة (تنقية دورية) — تُغطي نوافذ العرض 1h/6h/24h.
 model NexusHealthSample {
-  id        String   @id @default(cuid())
-  deviceId  String
-  battery   Int
-  rttMs     Int
-  online    Boolean
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  deviceId   String
+  battery    Int
+  rttMs      Int
+  online     Boolean
+  storagePct Int      @default(0)
+  createdAt  DateTime @default(now())
 
   @@index([deviceId, createdAt])
   @@index([createdAt])

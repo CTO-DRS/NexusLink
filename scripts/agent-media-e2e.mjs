@@ -40,8 +40,8 @@ async function main() {
   await wait(300)
 
   // عميلان: هاتف (role=phone) وويب (role=pc) — عبر البوابة 81 كما يفعل الويب والوكيل
-  const phone = io(`${GW}/?XTransformPort=3005`, { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 10000 })
-  const web = io(`${GW}/?XTransformPort=3005`, { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 10000 })
+  const phone = io(`${GW}/?XTransformPort=3005`, { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 10000 })
+  const web = io(`${GW}/?XTransformPort=3005`, { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 10000 })
 
   const events = { phone: {}, web: {} }
   function collect(sock, key, list) {
@@ -138,7 +138,7 @@ async function main() {
   ok("media:ping → media:pong بنفس t", pong?.t === 12345)
 
   // 11) 3006 — أمر الرن يبث لكل العملاء (تنفيذ التنفيذ الحقيقي في Kotlin على الهاتف)
-  const guard = io(`${GW}/?XTransformPort=3006`, { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 10000 })
+  const guard = io(`${GW}/?XTransformPort=3006`, { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 10000 })
   const ringSeen = new Promise((r) => guard.once("dev:ring", r))
   try {
     await waitConnect(guard, "guard-3006")

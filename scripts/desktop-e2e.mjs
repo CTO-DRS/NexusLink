@@ -95,8 +95,17 @@ try {
   spawnProc("gateway", process.execPath, [`${RES}gateway/gateway.cjs`],
     { GATEWAY_PORT: "81", REST_PORT: "3000" },
     (l) => { console.log("   " + l.slice(0, 160)); const m = l.match(/PORT=(\d+)/); if (m) gwPort = Number(m[1]) })
-  await sleep(1200)
-  if (!gwPort) throw new Error("gateway لم يعلن منفذه (PORT=…)")
+  // انتظار ديناميكي — تسلسل التراجع 81→8180 (EACCES ثم إعادة استماع) قد يتجاوز
+  // ثانية واحدة؛ ثابت زمني واحد سبّب فشل إقلاع كامل دون سبب حقيقي (درس موثق).
+  for (let i = 0; i < 40 && !gwPort; i++) await sleep(250)
+  if (!gwPort) {
+    // غيّة bun موثقة الآن: في مسار التراجع الخادم حي ويجيب /__gw/health لكن
+    // callback نجاح الاستماع لا يُطلق فلا يُطبع «PORT=8180» (تحت node يعمل).
+    // الاستشعار المباشر للمنفذ البديل هو الحسم الصادق — الهوية من role=gateway.
+    const fb = await fetch("http://127.0.0.1:8180/__gw/health").then((r) => r.json()).catch(() => null)
+    if (fb?.ok === true && fb?.role === "gateway") gwPort = 8180
+    else throw new Error("gateway لم يعلن منفذه (PORT=…)")
+  }
   const gw = await waitHttp("gateway /__gw/health", `http://127.0.0.1:${gwPort}/__gw/health`, 15000)
   check("gateway: /__gw/health", gw?.ok === true && gw?.role === "gateway", `port=${gwPort}`)
 
@@ -921,6 +930,9 @@ check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms 
     check("R4 §19: secondscreen:state من pc تصل الهاتف (active/target/w/h)",
       ssState?.active === true && ssState?.target === "screen:1" && ssState?.w === 1080 && ssState?.h === 2400,
       JSON.stringify(ssState ?? {}).slice(0, 120))
+    // تصريف بث الحالة الذاتي (emit الكمبيوتر أعلاه يُبث لكل المآخذ بما فيها نفسه —
+    // قد يتأخر تسليمه عبر polling البوابة) قبل اختبار الرفض — أي حدث بعده مصدره الهاتف
+    await sleep(1000)
     let phoneStateLeak = false
     ssPc.on("secondscreen:state", () => { phoneStateLeak = true })
     ssPhone.emit("secondscreen:state", { active: true, target: "screen:9" })
@@ -2834,7 +2846,7 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
       await waitHttp("prod boot", "http://localhost:3000/api/prod/boot", 20000)
 
       const { io: ioA1 } = await import("socket.io-client")
-      const mkSockA1 = (port) => ioA1(`http://localhost:${port}`, { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 8000, reconnection: false })
+      const mkSockA1 = (port) => ioA1(`http://localhost:${port}`, { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 8000, reconnection: false })
 
       const behavior = await new Promise((resolve) => {
         const auto = mkSockA1(3008)
@@ -3094,7 +3106,7 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
 
       // (ب) السلوك الحي — زرع التاريخ ثم تقييم عبر المقبس
       const { io: ioAH } = await import("socket.io-client")
-      const sockAH = ioAH("http://localhost:3008", { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 8000, reconnection: false })
+      const sockAH = ioAH("http://localhost:3008", { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 8000, reconnection: false })
 
       const behaviorAH = await new Promise((resolve) => {
         const out = { done: false, rulesNamed: [], rejected: null, fires: new Map(), logEntries: [], lastRules: null }
@@ -3272,13 +3284,13 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
         && viewBA.includes('v === "battery.above" ? "80"'), "view")
       check("BATTERY-ABOVE: i18n — مفتاح EN في القاموس المشترك",
         i18nBA.includes('"عند بلوغ البطارية عتبة (اكتمال شحن)": "When battery reaches a threshold (charge complete)"'), "i18n")
-      check("BATTERY-ABOVE: التوثيق — العقد §26.أ (المشغلات العشرة + صف الحافة الصاعدة) + القائمة الميدانية §25",
-        contractBA.includes("المشغلات العشرة") && contractBA.includes("`battery.above`") && contractBA.includes("حافة صاعدة")
+      check("BATTERY-ABOVE: التوثيق — العقد §26.أ (المشغلات الأحد عشر + صف الحافة الصاعدة) + القائمة الميدانية §25",
+        contractBA.includes("المشغلات الأحد عشر") && contractBA.includes("`battery.above`") && contractBA.includes("حافة صاعدة")
         && checklistBA.includes("مشغّل بلوغ البطارية (حافة صاعدة)"), "docs")
 
       // (ب) السلوك الحي — عبور صاعد عبر report على جهاز البذرة
       const { io: ioBA } = await import("socket.io-client")
-      const sockBA = ioBA("http://localhost:3008", { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 8000, reconnection: false })
+      const sockBA = ioBA("http://localhost:3008", { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 8000, reconnection: false })
       const repBA = async (battery) => fetch("http://127.0.0.1:3000/api/devices/health", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "report", deviceId: "galaxy-s24", battery }),
@@ -3386,7 +3398,7 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
 
       // (ب) السلوك الحي — كتابة عبر المقبس وقراءة من SQLite
       const { io: ioAP } = await import("socket.io-client")
-      const sockAP = ioAP("http://localhost:3008", { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 8000, reconnection: false })
+      const sockAP = ioAP("http://localhost:3008", { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 8000, reconnection: false })
       const apState = await new Promise((resolve) => {
         const to = setTimeout(() => resolve(null), 8000)
         sockAP.on("auto:state", (s) => { clearTimeout(to); resolve(s) })
@@ -3576,7 +3588,7 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
 
       // قاعدة موعد مرة واحدة يُطلقها مؤقت الخادم بينما لا عميل متصل (نافذة صمت مقصودة)
       const DA_RULE = "DA-E2E-موعد-بلا-واجهة"
-      const sockDA = ioDA("http://localhost:3008", { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 8000, reconnection: false })
+      const sockDA = ioDA("http://localhost:3008", { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 8000, reconnection: false })
       await new Promise((res, rej) => { sockDA.on("connect", res); sockDA.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("timeout")), 9000) })
       const ruleAck = await new Promise((resolve) => {
         let saw = null
@@ -3603,7 +3615,7 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
         fireRow ? `at=${fireRow.at.toISOString()} seenAt=${fireRow.seenAt}` : "no row")
 
       // عودة العميل → auto:state يحمل alerts.unseen ≥ 1 وlatest يتضمن الإطلاق
-      const sock2 = ioDA("http://localhost:3008", { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 8000, reconnection: false })
+      const sock2 = ioDA("http://localhost:3008", { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 8000, reconnection: false })
       const st2 = await new Promise((resolve) => {
         const to = setTimeout(() => resolve(null), 8000)
         sock2.on("auto:state", (s) => { clearTimeout(to); resolve(s) })
@@ -3621,7 +3633,7 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
         seenDb = await pdbDA.nexusAutomationFire.count({ where: { ruleId: ruleAck.id, seenAt: { not: null } } })
         if (seenDb > 0) break
       }
-      const sock3 = ioDA("http://localhost:3008", { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 8000, reconnection: false })
+      const sock3 = ioDA("http://localhost:3008", { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 8000, reconnection: false })
       const st3 = await new Promise((resolve) => {
         const to = setTimeout(() => resolve(null), 8000)
         sock3.on("auto:state", (s) => { clearTimeout(to); resolve(s) })
@@ -3687,6 +3699,142 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
       await pdbDA.$disconnect()
       try { sock2.disconnect() } catch { /* ignore */ }
       try { sockDA.disconnect() } catch { /* ignore */ }
+    }
+
+    // ============================================================
+    // STORAGE-SUSTAINED — مشغّل التخزين التاريخي (عقد §26.ط):
+    // «نبّهني إذا بقي تخزين X فوق 90% لمدة ساعة» — عمود storagePct يؤرشف مع كل
+    // عينة، والمقيّم يقرأ سلسلة الدليل (مرساة + نافذة). السلوك الحي على جهاز
+    // البذرة redmi-note13 (تخزينه 80%): قاعدة 80% تُطلق من التاريخ، وقاعدة 85%
+    // لا تُطلق أبدًا (80 < 85) + run-now يسجّل رفضًا صادقًا + تعقيم المدة.
+    // ============================================================
+    console.log("\n== STORAGE-SUSTAINED: storage sustained trigger (§26.ط) ==")
+    {
+      const bootSS = await waitHttp("automation boot (SS)", "http://127.0.0.1:3000/api/automation/boot", 20000, (j) => j?.ok === true && j?.booted === true)
+      check("STORAGE-SUSTAINED: جسر الروتينات حي قبل الفحوص",
+        bootSS?.port === 3008 && bootSS?.rules >= 4, `rules=${bootSS?.rules}`)
+
+      const fsSS = (await import("node:fs")).default
+      const pathSS = (await import("node:path")).default
+      const rdSS = (p) => { try { return fsSS.readFileSync(pathSS.join(ROOT, p), "utf8") } catch { return "" } }
+
+      // (أ) فحوص المصدر
+      const typesSS = rdSS("src/lib/nexus/automation-types.ts")
+      const healthSS = rdSS("src/lib/nexus/automation-health.ts")
+      const bridgeSS = rdSS("src/lib/nexus/automation-bridge.ts")
+      const dbSS = rdSS("src/lib/db.ts")
+      const viewSS = rdSS("src/components/nexus/automation/automation-view.tsx")
+      const i18nSS = rdSS("src/lib/ar-en-map.json")
+      const contractSS = rdSS("docs/protocol-contract.md")
+      const checklistSS = rdSS("docs/e2e-checklist.md")
+
+      check("STORAGE-SUSTAINED: المصدر — health.storage.sustained في الأنواع (TriggerKind/SUSTAINED/TRIGGER_KINDS = 11) + تقييم التخزين (condMet متصل فقط + describeCond + sampleValue)",
+        typesSS.includes('"health.storage.sustained"')
+        && (typesSS.match(/health\.storage\.sustained/g) || []).length >= 3
+        && healthSS.includes('if (kind === "health.storage.sustained") return s.online && s.storagePct >= threshold')
+        && healthSS.includes('return `تخزين «${deviceId}» فوق ${threshold}%`')
+        && healthSS.includes("function sampleValue"), "types+evaluator")
+      check("STORAGE-SUSTAINED: الأرشفة — عمود storagePct في المخطط + ترقية محروسة PRAGMA في db.ts + تسجيله في كل عينة",
+        dbSS.includes('PRAGMA table_info("NexusHealthSample")')
+        && dbSS.includes('ADD COLUMN "storagePct" INTEGER NOT NULL DEFAULT 0')
+        && rdSS("src/lib/nexus/health.ts").includes("storagePct: d.storageTotal ? Math.round((d.storageUsed / d.storageTotal) * 100) : 0 }")
+        && rdSS("prisma/schema.prisma").includes("storagePct Int      @default(0)"), "archive")
+      check("STORAGE-SUSTAINED: تعقيم الجسر — المدة للمشغلات الأربع + عتبة التخزين افتراضي 90 مقصوصة 1..100",
+        bridgeSS.includes('tKind === "health.silence.sustained" || tKind === "health.storage.sustained"')
+        && bridgeSS.includes('tKind === "health.storage.sustained"') && bridgeSS.includes("tr.threshold ?? 90"), "bridge sanitize")
+      check("STORAGE-SUSTAINED: الواجهة — أيقونة HardDrive + ملخص ≥ % + الافتراضي 90 عند الاختيار + صف العتبة",
+        viewSS.includes('"health.storage.sustained": { icon: HardDrive')
+        && viewSS.includes('case "health.storage.sustained":')
+        && viewSS.includes('v === "health.storage.sustained" ? "90"')
+        && viewSS.includes('draft.tKind === "health.storage.sustained"'), "view")
+      check("STORAGE-SUSTAINED: i18n — مفتاح EN في القاموس المشترك",
+        i18nSS.includes('"بقاء التخزين فوق عتبة لمدة (تاريخي)": "Storage stays above threshold for a duration (history)"'), "i18n")
+      check("STORAGE-SUSTAINED: التوثيق — العقد §26.أ (الأحد عشر) + §26.ط كاملًا + القائمة الميدانية §26",
+        contractSS.includes("المشغلات الأحد عشر") && contractSS.includes("### 26.ط مشغّل التخزين التاريخي")
+        && contractSS.includes("storagePct INTEGER NOT NULL DEFAULT 0") && checklistSS.includes("## 26. مشغّل التخزين التاريخي"), "docs")
+
+      // (ب) السلوك الحي — قاعدتان على redmi-note13 (تخزينه 80% ثابت)
+      const dbUrlSS = fsSS.readFileSync(pathSS.join(ROOT, ".env"), "utf8").match(/^DATABASE_URL=(.*)$/m)?.[1]
+      const { PrismaClient } = await import("@prisma/client")
+      const pdbSS = new PrismaClient({ datasources: { db: { url: dbUrlSS } }, log: [] })
+      const { io: ioSS } = await import("socket.io-client")
+      const sockSS = ioSS("http://localhost:3008", { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 8000, reconnection: false })
+
+      const behaviorSS = await new Promise((resolve) => {
+        const out = { done: false, fires: [], rejects: [], rulesSnapshot: null, lastRules: null, logEntries: [] }
+        const timersSS = []
+        const later = (fn, ms) => timersSS.push(setTimeout(fn, ms))
+        const finish = () => { if (out.done) return; out.done = true; timersSS.forEach(clearTimeout); try { sockSS.disconnect() } catch {}; resolve(out) }
+        later(finish, 180000)
+
+        sockSS.on("auto:state", (s) => {
+          out.rulesSnapshot = s?.rules ?? out.rulesSnapshot
+          out.lastRules = s?.rules?.map((r) => r.name) ?? out.lastRules
+          if (Array.isArray(s?.log)) out.logEntries = s.log
+        })
+        sockSS.on("auto:fired", (p) => { if (String(p?.ruleName || "").startsWith("SS-E2E")) out.fires.push({ name: p.ruleName, ok: p.ok, detail: p.detail || "", manual: !!p.manual }) })
+        sockSS.on("auto:rejected", (p) => { out.rejects.push(String(p?.error || "")) })
+
+        sockSS.on("connect", () => {
+          void (async () => {
+            try {
+              // (0) عينات مرساة فورية: force-sample الآن → تصبح مرساة بعد 70ث
+              await fetch("http://127.0.0.1:3000/api/devices/health", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "force-sample" }) }).then((r) => r.json()).catch(() => null)
+              await sleep(70000)  // المرساة تتقادم خارج النافذة (مدة 1 دقيقة)
+
+              // (1) قاعدتان: فوق 75% (تُطلق — الجهاز عند 80%) وفوق 85% (لا تُطلق أبدًا)
+              sockSS.emit("rule:upsert", { rule: { name: "SS-E2E-full", enabled: true, trigger: { kind: "health.storage.sustained", deviceId: "redmi-note13", threshold: 75, durationMin: 1 }, action: { kind: "notify", text: "SS-E2E" } } })
+              sockSS.emit("rule:upsert", { rule: { name: "SS-E2E-never", enabled: true, trigger: { kind: "health.storage.sustained", deviceId: "redmi-note13", threshold: 85, durationMin: 1 }, action: { kind: "notify", text: "SS-E2E" } } })
+              await sleep(2000)
+
+              // (2) تعقيم المدة: 5000 دقيقة فوق سقف 1440 → رفض مسبب
+              sockSS.emit("rule:upsert", { rule: { name: "SS-E2E-bad-duration", enabled: true, trigger: { kind: "health.storage.sustained", threshold: 90, durationMin: 5000 }, action: { kind: "notify", text: "SS-E2E" } } })
+              await sleep(95000)  // تكة تقييم ≤15ث + نافذة المدة دقيقة كاملة فوق المرساة
+
+              // (3) run-now لقاعدة 85% → رفض صادق ok=false في السجل (يُرى من auto:state لا من حدث منفصل)
+              const never = (out.rulesSnapshot ?? []).find((x) => x.name === "SS-E2E-never")
+              if (never) sockSS.emit("rule:run-now", { id: never.id })
+              await sleep(4000)
+
+              // (4) التنظيف — بالمعرفات من لقطة القواعد الكاملة
+              for (const nm of ["SS-E2E-full", "SS-E2E-never"]) {
+                const f = (out.rulesSnapshot ?? []).find((x) => x.name === nm)
+                if (f) sockSS.emit("rule:delete", { id: f.id })
+              }
+              await sleep(1500)
+              finish()
+            } catch (e) {
+              console.log("   [SS] error:", e?.message || e)
+              finish()
+            }
+          })()
+        })
+      })
+
+      const fSS = behaviorSS.fires
+      const autoFire = fSS.find((x) => x.name === "SS-E2E-full" && !x.manual && x.ok)
+      check("STORAGE-SUSTAINED: قاعدة 75% على جهاز 80% → إطلاق من التاريخ بتفصيل «مستمر منذ … وفق التاريخ المسجل»",
+        !!autoFire && autoFire.detail.includes("تخزين") && autoFire.detail.includes("75%") && autoFire.detail.includes("وفق التاريخ المسجل"), autoFire?.detail?.slice(0, 90) || "no fire")
+      check("STORAGE-SUSTAINED: لا إطلاق لقاعدة 85% (80% < 85) — التاريخ الصادق يمنع الزائف",
+        !fSS.some((x) => x.name === "SS-E2E-never" && x.ok && !x.manual), `fires=${fSS.map((x) => `${x.name}:${x.ok}`).join(",")}`)
+      check("STORAGE-SUSTAINED: run-now لقاعدة 85% → رفض صادق ok=false في السجل بتفصيل «مخالف (80%)» (يُرى من auto:state — نمط AUTO-HEALTH)",
+        behaviorSS.logEntries.some((e) => e.ruleName === "SS-E2E-never" && e.manual === true && e.ok === false && String(e.detail || "").includes("(80%)")),
+        behaviorSS.logEntries.find((e) => e.ruleName === "SS-E2E-never")?.detail?.slice(0, 80) || "no refusal entry")
+      check("STORAGE-SUSTAINED: تعقيم المدة — 5000 دقيقة مرفوضة بتفصيل السقف 1440",
+        behaviorSS.rejects.some((e) => e.includes("1440")), behaviorSS.rejects[0]?.slice(0, 80) || "no rejection")
+
+      // (ج) الأرشفة مباشرة من SQLite — عينات redmi-note-13 الحديثة كلها تحمل storagePct=80
+      const recent = await pdbSS.nexusHealthSample.findMany({
+        where: { deviceId: "redmi-note13", createdAt: { gte: new Date(Date.now() - 10 * 60_000) } },
+        orderBy: { createdAt: "desc" }, take: 6,
+      }).catch(() => [])
+      check("STORAGE-SUSTAINED: الأرشفة الحية — آخر عينات redmi-note-13 كلها تحمل storagePct=80 (تُكتب مع كل عينة)",
+        recent.length >= 3 && recent.every((r) => r.storagePct === 80), `n=${recent.length} vals=${recent.map((r) => r.storagePct).join(",")}`)
+      check("STORAGE-SUSTAINED: التنظيف — قاعدتا SS-E2E زالتا من آخر auto:state",
+        Array.isArray(behaviorSS.lastRules) && !behaviorSS.lastRules.some((n) => String(n).startsWith("SS-E2E")), "rules deleted")
+
+      await pdbSS.$disconnect()
+      try { sockSS.disconnect() } catch { /* ignore */ }
     }
 
   }

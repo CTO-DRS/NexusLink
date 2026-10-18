@@ -3,7 +3,7 @@
 // المبدأ (القاعدة الذهبية): لا بروتوكول موازٍ — كل الأفعال تعبر القنوات القائمة
 // (prod: clip:new · guard: dev:ring · UDP: WoL) وكل الحقائق من مصادر عملية Next القائمة.
 
-/** أنواع المشغلات المدعومة (§26.أ السبع اللحظية + §26.و الثلاثة التاريخية). */
+/** أنواع المشغلات المدعومة (§26.أ السبع اللحظية + §26.و/ط الأربعة التاريخية). */
 export type TriggerKind =
   | "device.connect"      // جهاز في سجل الأجهزة عاد إلى «متصل»
   | "device.disconnect"   // جهاز في سجل الأجهزة غادر إلى «غير متصل»
@@ -15,6 +15,7 @@ export type TriggerKind =
   | "health.battery.sustained" // تاريخي: البطارية ≤ العتبة لمدة متواصلة (من عينات §27)
   | "health.rtt.sustained"     // تاريخي: الاستجابة ≥ العتبة لمدة متواصلة (عينات متصلة فقط)
   | "health.silence.sustained" // تاريخي: لا عينات صحة خلال المدة (صمت الجهاز عن التقارير)
+  | "health.storage.sustained" // تاريخي: التخزين ≥ العتبة لمدة متواصلة (§26.ط — امتلاء مستمر)
 
 /** أنواع الأفعال المدعومة في الإصدار الأول (§26.ب) — كلها قنوات قائمة. */
 export type ActionKind =
@@ -119,13 +120,13 @@ export interface AutoFiredPayload {
 
 export const TRIGGER_KINDS: readonly TriggerKind[] = [
   "device.connect", "device.disconnect", "battery.below", "battery.above", "clip.received", "time.once", "time.daily",
-  "health.battery.sustained", "health.rtt.sustained", "health.silence.sustained",
+  "health.battery.sustained", "health.rtt.sustained", "health.silence.sustained", "health.storage.sustained",
 ] as const
 
-/** المشغلات التاريخية المستمرة (§26.و) — تُقيَّم من عينات مركز الصحة لا من اللحظة الحالية.
+/** المشغلات التاريخية المستمرة (§26.و + §26.ط) — تُقيَّم من عينات مركز الصحة لا من اللحظة الحالية.
  *  في وحدة الأنواع (لا المقيّم) ليبقى الاستيراد آمنًا للعميل. */
 export const SUSTAINED_TRIGGER_KINDS: readonly TriggerKind[] = [
-  "health.battery.sustained", "health.rtt.sustained", "health.silence.sustained",
+  "health.battery.sustained", "health.rtt.sustained", "health.silence.sustained", "health.storage.sustained",
 ] as const
 
 export function isSustainedTrigger(kind: TriggerKind): boolean {

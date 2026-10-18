@@ -349,7 +349,7 @@ function sanitizeRule(input: unknown, existingId?: string): AutoRule | { error: 
     if (!Number.isFinite(th)) return { error: "عتبة البطارية يجب أن تكون رقمًا" }
     trigger.threshold = Math.min(100, Math.max(1, th))
   }
-  if (tKind === "health.battery.sustained" || tKind === "health.rtt.sustained" || tKind === "health.silence.sustained") {
+  if (tKind === "health.battery.sustained" || tKind === "health.rtt.sustained" || tKind === "health.silence.sustained" || tKind === "health.storage.sustained") {
     const dm = Math.round(Number(tr.durationMin ?? 60))
     if (!Number.isFinite(dm) || dm < MIN_DURATION_MIN || dm > MAX_DURATION_MIN) {
       return { error: `المدة بالدقائق يجب أن تكون بين ${MIN_DURATION_MIN} و ${MAX_DURATION_MIN} (سقف تاريخ §27)` }
@@ -365,6 +365,11 @@ function sanitizeRule(input: unknown, existingId?: string): AutoRule | { error: 
     const th = Math.round(Number(tr.threshold ?? 200))
     if (!Number.isFinite(th)) return { error: "عتبة الاستجابة يجب أن تكون رقمًا" }
     trigger.threshold = Math.min(60000, Math.max(10, th))
+  }
+  if (tKind === "health.storage.sustained") {
+    const th = Math.round(Number(tr.threshold ?? 90))
+    if (!Number.isFinite(th)) return { error: "عتبة التخزين يجب أن تكون رقمًا" }
+    trigger.threshold = Math.min(100, Math.max(1, th))
   }
   if (tKind === "time.once") {
     const at = Number(tr.at)

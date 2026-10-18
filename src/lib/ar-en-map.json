@@ -2513,6 +2513,7 @@
   "صلاحية «${d.feature}» لـ ${d.deviceId}: ${d.enabled ? \"مسموح\" : \"موقوف\"}": "\"${d.feature}\" permission for ${d.deviceId}: ${d.enabled ? \"Allowed\" : \"Blocked\"}",
   "صلاحية كل ميزة — لكل جهاز على حدة": "Permission for each feature — per device",
   "صمت جهاز عن التقارير لمدة (تاريخي)": "Device stops reporting for a duration (history)",
+  "بقاء التخزين فوق عتبة لمدة (تاريخي)": "Storage stays above threshold for a duration (history)",
   "صوت الرنين": "Ringtone",
   "صوت الوسائط": "Media Sound",
   "صوت مرتفع — تنبيه فعال": "High Volume — Effective Alert",
