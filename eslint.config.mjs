@@ -47,6 +47,8 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
   ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills",
     // سكربتات CJS متعمدة تعمل بـ node الخام داخل حزمة سطح المكتب (بلا تبعيات ولا تحويل)
     "apps/desktop/**", "mini-services/gateway/**",
+    // سكربتات صيانة CJS خام في scripts (تنظيف بقايا E2E وما شابه — node خام بلا تحويل)
+    "scripts/*.cjs",
     // مخرجات تحقق مصدر flutter_webrtc المنزّلة — ملفات مولّدة (Dart→JS) لا تُلمس ولا تُراجع
     "scripts/deps-verify/**"]
 }];
