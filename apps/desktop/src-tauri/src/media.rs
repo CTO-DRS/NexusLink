@@ -1506,7 +1506,7 @@ pub async fn media_screen_set(fps: Option<f64>, quality: Option<String>) -> Resu
     let fps = fps.map(core::sanitize_fps);
     let quality = quality.filter(|q| ["low", "medium", "high", "ultra"].contains(&q.as_str()));
     settings::set_media_defaults(fps, quality.clone());
-    let g = SCREEN.lock().unwrap();
+    let mut g = SCREEN.lock().unwrap();
     match g.as_mut() {
         Some(s) => {
             let changed = fps.is_some() || quality.is_some();

@@ -6,6 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../data/media_service.dart';
 import '../data/nexus_api.dart';
+import '../data/phone_remote_service.dart';
 import '../domain/models.dart';
 import '../state/media_providers.dart';
 import '../state/phone_remote_providers.dart';
@@ -108,6 +109,7 @@ class _PhoneRemoteScreenState extends ConsumerState<PhoneRemoteScreen> {
     _press = null;
     _last = null;
     final remote = ref.read(phoneRemoteProvider);
+    final ctrl = ref.read(phoneRemoteProvider.notifier);
     if (press == null || last == null || !remote.sessionActive) return;
     final box = _surfaceSize;
     if (box == null) return;
@@ -117,12 +119,12 @@ class _PhoneRemoteScreenState extends ConsumerState<PhoneRemoteScreen> {
     final dur = DateTime.now().millisecondsSinceEpoch - press.t;
     if (dist < tapSlopPx * tapSlopPx) {
       if (dur >= longMs) {
-        remote.sendTouch({'op': 'long', 'x': p1.x, 'y': p1.y, 'durationMs': 700, 'seq': _seq++});
+        ctrl.sendTouch({'op': 'long', 'x': p1.x, 'y': p1.y, 'durationMs': 700, 'seq': _seq++});
       } else {
-        remote.sendTouch({'op': 'tap', 'x': p1.x, 'y': p1.y, 'seq': _seq++});
+        ctrl.sendTouch({'op': 'tap', 'x': p1.x, 'y': p1.y, 'seq': _seq++});
       }
     } else {
-      remote.sendTouch({
+      ctrl.sendTouch({
         'op': 'swipe',
         'x': p1.x, 'y': p1.y, 'x2': p2.x, 'y2': p2.y,
         'durationMs': (dur.clamp(90, 1200)),
@@ -145,12 +147,13 @@ class _PhoneRemoteScreenState extends ConsumerState<PhoneRemoteScreen> {
     final box = _surfaceSize;
     if (box == null) return;
     final remote = ref.read(phoneRemoteProvider);
+    final ctrl = ref.read(phoneRemoteProvider.notifier);
     if (!remote.sessionActive) return;
     final p = _toTarget(d.localFocalPoint, box);
     final t = _targetScreen;
     // الإصبع ينزل مع المحتوى (مثل الهاتف): أسفل المحتوى = سحبة لأعلى
     final y2 = (p.y - dy.round() * 2).clamp(0, t.h);
-    remote.sendTouch({
+    ctrl.sendTouch({
       'op': 'scroll',
       'x': p.x, 'y': p.y, 'x2': p.x, 'y2': y2,
       'durationMs': 240,
