@@ -282,3 +282,17 @@ model NexusHealthEvent {
 
   @@index([createdAt])
 }
+
+// ===== NexusLink — ترسيخ قواعد الروتينات (عقد §26.ز) =====
+// القاعدة الكاملة تُخزَّن JSON في payload (تسامح مستقبلي مع حقول مشغلات/أفعال
+// جديدة بلا ترقية مخطط) — تُستعاد حرفيًا عند إقلاع الجسر فلا تختفي القواعد
+// المنشأة عند إعادة تشغيل الخادم، وحذف قاعدة بذرية يبقى حذفًا (لا تعود).
+// id = معرف القاعدة في الذاكرة نفسه (uid) — يظل مفتاح التسليح والحقب ثابتًا.
+model NexusAutomationRule {
+  id        String   @id
+  name      String
+  enabled   Boolean  @default(true)
+  payload   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

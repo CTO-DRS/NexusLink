@@ -3229,6 +3229,120 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
       await pdb.$disconnect()
     }
 
+    // ============================================================
+    // AUTO-PERSIST — ترسيخ قواعد الروتينات في SQLite (عقد §26.ز):
+    // القواعد لا تختفي عند إعادة التشغيل — سلوك حي عبر مقبس :3008 + قراءة
+    // جدول NexusAutomationRule مباشرة من نفس قاعدة الخادم (§26.ز/§23)
+    // ============================================================
+    console.log("\n== AUTO-PERSIST: rule persistence in SQLite (§26.ز) ==")
+    {
+      const bootAP = await waitHttp("automation boot (AP)", "http://localhost:3000/api/automation/boot", 20000, (j) => j?.ok === true && j?.booted === true)
+      check("AUTO-PERSIST: جسر الروتينات حي قبل فحوص الترسيخ",
+        bootAP?.port === 3008 && bootAP?.rules >= 4, `rules=${bootAP?.rules}`)
+      // الاستعادة/الترسيخ غير حاجبة عند الإقلاع — انتظار قصير يجعل الفحص حتميًا
+      await sleep(1500)
+
+      const fsAP = (await import("node:fs")).default
+      const rdAP = (p) => { try { return fsAP.readFileSync(pathMod.join(ROOT, p), "utf8") } catch { return "" } }
+      const dbUrlAP = fsAP.readFileSync(pathMod.join(ROOT, ".env"), "utf8").match(/^DATABASE_URL=(.*)$/m)?.[1]
+      const { PrismaClient } = await import("@prisma/client")
+      const pdbAP = new PrismaClient({ datasources: { db: { url: dbUrlAP } }, log: [] })
+
+      // (أ) فحوص المصدر
+      const schemaAP = rdAP("prisma/schema.prisma")
+      const dbAP = rdAP("src/lib/db.ts")
+      const persistAP = rdAP("src/lib/nexus/automation-persist.ts")
+      const bridgeAP = rdAP("src/lib/nexus/automation-bridge.ts")
+      const viewAP = rdAP("src/components/nexus/automation/automation-view.tsx")
+      const i18nAP = rdAP("src/lib/ar-en-map.json")
+      const contractAP = rdAP("docs/protocol-contract.md")
+      const checklistAP = rdAP("docs/e2e-checklist.md")
+
+      check("AUTO-PERSIST: المصدر — نموذج NexusAutomationRule في المخطط (payload JSON + id = معرف الذاكرة) + ترقية آمنة CREATE IF NOT EXISTS في db.ts",
+        schemaAP.includes("model NexusAutomationRule") && schemaAP.includes("payload   String")
+        && dbAP.includes('CREATE TABLE IF NOT EXISTS "NexusAutomationRule"') && dbAP.includes('"payload"   TEXT     NOT NULL'), "schema+db.ts")
+      check("AUTO-PERSIST: المصدر — وحدة الترسيخ: استعادة بتحقق هيكلي (revive) + تنقية الصفوف الفاسدة + upsert/delete idempotent",
+        persistAP.includes("export async function loadPersistedRules") && persistAP.includes("function reviveRule")
+        && persistAP.includes("TRIGGER_KINDS.includes") && persistAP.includes("deleteMany") && persistAP.includes("dbReady"), "persist module")
+      check("AUTO-PERSIST: المصدر — الجسر: الاستعادة غير الحاجبة عند الإقلاع + ترسيخ upsert/toggle/delete + إحصاءات الإطلاق على القاعدة الحية + استهلاك time.once الماضي",
+        bridgeAP.includes("loadPersistedRules") && bridgeAP.includes("persistRuleUpsert") && bridgeAP.includes("persistRuleDelete")
+        && bridgeAP.includes("rules.find((r) => r.id === rule.id) ?? rule") && bridgeAP.includes("time.once\" && Number(r.trigger.at ?? 0) <= Date.now()"), "bridge wiring")
+      check("AUTO-PERSIST: الواجهة — بطاقة الحدود توثق الترسيخ والسجل وحده بذاكرة",
+        viewAP.includes("القواعد محفوظة في قاعدة البيانات وتُستعاد حرفيًا عند إعادة تشغيل الخادم — وحذف قاعدة بذرية يبقى حذفًا")
+        && viewAP.includes("سجل التشغيل (آخر 80) يبقى في ذاكرة الجسر ويبدأ نظيفًا عند الإقلاع"), "ui limits")
+      check("AUTO-PERSIST: i18n — مفتاحا الترسيخ في القاموس والمفتاح المهجور زال",
+        i18nAP.includes('"القواعد محفوظة في قاعدة البيانات وتُستعاد حرفيًا عند إعادة تشغيل الخادم — وحذف قاعدة بذرية يبقى حذفًا": "Rules are persisted in the database and restored verbatim on server restart — deleting a seed rule stays deleted"')
+        && i18nAP.includes('"سجل التشغيل (آخر 80) يبقى في ذاكرة الجسر ويبدأ نظيفًا عند الإقلاع": "The run log (last 80) stays in bridge memory and starts clean on boot"')
+        && !i18nAP.includes("القواعد والسجل في ذاكرة الجسر"), "i18n")
+      check("AUTO-PERSIST: التوثيق — العقد §26.ز (الاستعادة/الدلالات) + القائمة الميدانية §22",
+        contractAP.includes("### 26.ز") && contractAP.includes("ترسيخ القواعد — SQLite عبر Prisma")
+        && contractAP.includes("الموعد الفائت أثناء التوقف لا يُطلق قديمًا")
+        && checklistAP.includes("## 22. ترسيخ القواعد"), "docs")
+
+      // (ب) السلوك الحي — كتابة عبر المقبس وقراءة من SQLite
+      const { io: ioAP } = await import("socket.io-client")
+      const sockAP = ioAP("http://localhost:3008", { path: "/", transports: ["websocket", "polling"], forceNew: true, timeout: 8000, reconnection: false })
+      const apState = await new Promise((resolve) => {
+        const to = setTimeout(() => resolve(null), 8000)
+        sockAP.on("auto:state", (s) => { clearTimeout(to); resolve(s) })
+      })
+      const ruleNamesAP = apState?.rules?.map((r) => r.name) ?? []
+      check("AUTO-PERSIST: البذور الربع مرسوخة في SQLite (أول إقلاع بعد الترقية يرسّخها)",
+        ruleNamesAP.includes("بطارية جهاز منخفضة") && ruleNamesAP.includes("جهاز غادر الشبكة")
+        && ruleNamesAP.includes("وصل محتوى جديد للحافظة") && ruleNamesAP.includes("بطارية تحت 15% لمدة ساعة")
+        && await (async () => { const c = await pdbAP.nexusAutomationRule.count(); return c >= 4 })(), `dbRows=${await pdbAP.nexusAutomationRule.count()}`)
+
+      // upsert عبر المقبس → صف في SQLite بالمعرف نفسه وpayload كامل
+      const upsertAck = await new Promise((resolve) => {
+        let saw = null
+        const to = setTimeout(() => resolve(saw), 6000)
+        sockAP.on("auto:state", (s) => {
+          const r = s?.rules?.find((x) => x.name === "PERSIST-E2E-قاعدة")
+          if (r) { clearTimeout(to); saw = r; resolve(r) }
+        })
+        sockAP.emit("rule:upsert", { rule: { name: "PERSIST-E2E-قاعدة", enabled: true, trigger: { kind: "battery.below", threshold: 33 }, action: { kind: "notify", text: "ترسيخ E2E" } } })
+      })
+      // الترسيخ fire-and-forget بعد تحديث الذاكرة — استطلاع الصف بلا سباق
+      let row1 = null
+      for (let i = 0; i < 12 && !row1; i++) {
+        await new Promise((r) => setTimeout(r, 300))
+        row1 = upsertAck ? await pdbAP.nexusAutomationRule.findUnique({ where: { id: upsertAck.id } }) : null
+      }
+      const pay1 = row1 ? JSON.parse(row1.payload) : null
+      check("AUTO-PERSIST: rule:upsert عبر المقبس → صف فوري في SQLite (id = معرف الذاكرة + payload يحمل المشغل/الفعل)",
+        !!row1 && row1.enabled === true && pay1?.trigger?.kind === "battery.below" && pay1?.trigger?.threshold === 33 && pay1?.action?.kind === "notify",
+        row1 ? `id=${row1.id.slice(0, 8)} th=${pay1?.trigger?.threshold}` : "no row")
+
+      // toggle → الحالة تنعكس في الصف
+      if (upsertAck) sockAP.emit("rule:toggle", { id: upsertAck.id, enabled: false })
+      await new Promise((r) => setTimeout(r, 700))
+      const row2 = upsertAck ? await pdbAP.nexusAutomationRule.findUnique({ where: { id: upsertAck.id } }) : null
+      check("AUTO-PERSIST: rule:toggle → enabled=false ترسيخًا في الصف",
+        row2?.enabled === false, `enabled=${row2?.enabled}`)
+
+      // run-now (notify — فعل آمن) → fireCount يزيد في الذاكرة وفي الصف (القاعدة الحية)
+      if (upsertAck) {
+        sockAP.emit("rule:run-now", { id: upsertAck.id })
+        await new Promise((r) => setTimeout(r, 900))
+      }
+      const row3 = upsertAck ? await pdbAP.nexusAutomationRule.findUnique({ where: { id: upsertAck.id } }) : null
+      check("AUTO-PERSIST: run-now → fireCount=1 مرسوخ في الصف (الإحصاءات تعيش عبر إعادة التشغيل)",
+        row3?.payload && JSON.parse(row3.payload).fireCount === 1, `fireCount=${row3 ? JSON.parse(row3.payload).fireCount : "none"}`)
+
+      // delete → الصف زال من SQLite (الحذف رسوخًا — لا يعود عند الإقلاع)
+      if (upsertAck) sockAP.emit("rule:delete", { id: upsertAck.id })
+      await new Promise((r) => setTimeout(r, 700))
+      const row4 = upsertAck ? await pdbAP.nexusAutomationRule.findUnique({ where: { id: upsertAck.id } }) : null
+      check("AUTO-PERSIST: rule:delete → الصف زال من SQLite (الحذف رسوخًا — البذور المحذوفة لا تعود)",
+        row4 === null, row4 ? "row still there" : "deleted")
+
+      const dbRowsEnd = await pdbAP.nexusAutomationRule.count()
+      check("AUTO-PERSIST: النهاية — لا صفوف PERSIST-E2E متبقية والبذور سليمة",
+        dbRowsEnd >= 4 && !(await pdbAP.nexusAutomationRule.findMany()).some((r) => r.name.includes("PERSIST-E2E")), `rows=${dbRowsEnd}`)
+      await pdbAP.$disconnect()
+      try { sockAP.disconnect() } catch { /* ignore */ }
+    }
+
   }
 
 } catch (e) {
