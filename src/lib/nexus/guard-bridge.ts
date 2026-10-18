@@ -339,6 +339,15 @@ export function ensureGuardBridge() {
         // الجولة 5 (§24) — قطع فوري من الطرفين: انقطاع أي طرف هاتف→هاتف
         // يُنهي الجلسة للأطراف الأخرى فورًا (لا جلسة يتيمة أبدًا).
         if (agentsReg().delete(socket.id)) teardownP2pForDisconnect(io2, socket.id)
+        // FA-files — نقطة وسائط الوكيل تموت مع سوكِت مالكها فورًا مهما بقي من
+        // عملاء آخرين (مشاهدون/هواتف): بقاءها كان يترك نقطة بث ميتة معلنة في
+        // status.desktop.agentMedia لهاتف انقطع فعليًا (كشفتها حزمة E2E).
+        const regOwner = agentReg()
+        if (regOwner.socketId === socket.id) {
+          regOwner.socketId = null
+          regOwner.media = null
+          io2?.emit("guard:phone-online", { online: false })
+        }
         // إن انقطع آخر عميل هاتف نعلم الكمبيوتر (يُلتقط غياب المنارة لاحقاً)
         setTimeout(() => {
           const socks = io2?.sockets?.sockets
@@ -347,11 +356,6 @@ export function ensureGuardBridge() {
             return
           }
           phoneGuardOnline = false
-          const reg = agentReg()
-          if (reg.socketId === socket.id) {
-            reg.socketId = null
-            reg.media = null // نقطة الوسائط انقطعت مع السوكِت — البث غير متاح
-          }
           io2?.emit("guard:phone-online", { online: false })
           if (agentsReg().size > 0) broadcastAgents(io2)
         }, 1500)

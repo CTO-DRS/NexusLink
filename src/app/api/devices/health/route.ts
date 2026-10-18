@@ -7,7 +7,7 @@
 //   {action:"force-sample"}                       → يجبر تكة قياس فورية (تجاوز الخانقة) — زر «التقاط عينة الآن» وأدوات التحقق
 //   {action:"report", deviceId, battery?, rttMs?} → مسار الوكيل الحقيقي: قيم فعلية من الجهاز تُحدَّث في السجل وتُسجَّل عينة
 import { NextRequest, NextResponse } from "next/server"
-import { store } from "@/lib/nexus/devices"
+import { store, getServicePulse } from "@/lib/nexus/devices"
 import {
   recordHealthTick, getHealthSnapshot, WINDOWS,
   LOW_BATTERY_PCT, RTT_DEGRADED_MS, STORAGE_HIGH_PCT, RETENTION_MS, SAMPLE_INTERVAL_MS,
@@ -22,7 +22,8 @@ export async function GET(req: NextRequest) {
   const window: HealthWindow = w in WINDOWS ? w : "1h"
   const device = sp.get("device") || "all"
   const snap = await getHealthSnapshot(window, device)
-  return NextResponse.json({ ...snap, limits: { LOW_BATTERY_PCT, RTT_DEGRADED_MS, STORAGE_HIGH_PCT, RETENTION_MS, SAMPLE_INTERVAL_MS } })
+  // نبض الخدمة الذاتي (§27.هـ) — شارة الواجهة وفحوص E2E تقرأه من هنا
+  return NextResponse.json({ ...snap, pulse: getServicePulse(), limits: { LOW_BATTERY_PCT, RTT_DEGRADED_MS, STORAGE_HIGH_PCT, RETENTION_MS, SAMPLE_INTERVAL_MS } })
 }
 
 export async function POST(req: NextRequest) {

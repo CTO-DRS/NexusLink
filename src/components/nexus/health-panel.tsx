@@ -34,6 +34,7 @@ interface HealthSnapshot {
   series: { battery: Record<string, number | null>[]; rtt: Record<string, number | null>[] }
   alerts: { id: string; deviceId: string; deviceName: string; type: string; level: string; createdAt: number }[]
   counts: { samples: number; events: number }
+  pulse?: { active: boolean; intervalMs: number; startedAt: number }
 }
 
 const timeLabel = (t: number) =>
@@ -122,7 +123,18 @@ export function HealthPanel() {
               <HeartPulse className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-bold">{t("مركز صحة الأجهزة")}</h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="font-bold">{t("مركز صحة الأجهزة")}</h2>
+                {snap?.pulse?.active && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-500/12 text-teal-600 dark:text-teal-400 px-2 py-0.5 text-[10px] font-medium" data-testid="pulse-badge">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-500 opacity-60" />
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-teal-500" />
+                    </span>
+                    {t("نبض ذاتي من الخادم — كل 4 ثوانٍ")}
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {t("قياس زمني للبطارية والاستجابة والإتاحة — عينة كل 30 ثانية، احتفاظ 24 ساعة")}
               </p>
@@ -257,6 +269,11 @@ export function HealthPanel() {
             </ul>
           )}
         </div>
+
+        {/* حد صادق — نبض الخدمة الذاتي (§27.هـ) */}
+        <p className="text-[11px] text-muted-foreground border-t pt-2.5">
+          {t("القياس ذاتي من عملية الخادم: إغلاق كل الصفحات لا يوقف توليد العينات — أجهزة البذرة تُستنزف محاكاةً ما دام الخادم يعمل، والوكيل الحقيقي يتجاوزها عبر report")}
+        </p>
       </CardContent>
     </Card>
   )

@@ -3451,5 +3451,8 @@
   "العتبة ms": "Threshold ms",
   "مشغلات الصحة التاريخية تقرأ عينات مركز الصحة (احتفاظ 24 ساعة) — تحتاج دليل عينات يُغطي المدة بلا فجوات كبيرة": "Historical health triggers read Health Center samples (24h retention) — they need sample evidence covering the duration without large gaps",
   "القواعد محفوظة في قاعدة البيانات وتُستعاد حرفيًا عند إعادة تشغيل الخادم — وحذف قاعدة بذرية يبقى حذفًا": "Rules are persisted in the database and restored verbatim on server restart — deleting a seed rule stays deleted",
-  "سجل التشغيل (آخر 80) يبقى في ذاكرة الجسر ويبدأ نظيفًا عند الإقلاع": "The run log (last 80) stays in bridge memory and starts clean on boot"
+  "سجل التشغيل (آخر 80) يبقى في ذاكرة الجسر ويبدأ نظيفًا عند الإقلاع": "The run log (last 80) stays in bridge memory and starts clean on boot",
+  "نبض ذاتي من الخادم — كل 4 ثوانٍ": "Autonomous server pulse — every 4s",
+  "القياس ذاتي من عملية الخادم: إغلاق كل الصفحات لا يوقف توليد العينات — أجهزة البذرة تُستنزف محاكاةً ما دام الخادم يعمل، والوكيل الحقيقي يتجاوزها عبر report": "Measurement runs inside the server process: closing all pages never stops sampling — seed devices keep simulated drain while the server runs, real agents override via report",
+  "النبض الذاتي من الخادم يولّد العينات (كل 30 ث لكل جهاز) ما دامت عملية الخادم تعمل — إغلاق الواجهة لا يوقف الكشف": "The autonomous server pulse generates samples (every 30s per device) as long as the server process runs — closing the UI never stops detection"
 }

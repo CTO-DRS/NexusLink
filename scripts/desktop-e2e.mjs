@@ -1929,9 +1929,15 @@ check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms 
     await fetch(`http://127.0.0.1:3000/api/desktop/shortcuts`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sync: { pairs: [] } }) })
 
     // (و) انقطاع الهاتف يمحو نقطة الوسائط (البث غير متاح بدون قناة حية)
+    // استطلاع محدود بدل نوم ثابت — تنظيف النقطة لحظي لكن تأتيه يتسابق مع حمولة الحزمة
     filesSock.disconnect()
-    await sleep(2600)
-    const st4 = await fetch(`http://127.0.0.1:3000/api/desktop/status`).then((r) => r.json())
+    let st4 = null
+    const wipeT0 = Date.now()
+    while (Date.now() - wipeT0 < 8000) {
+      await sleep(400)
+      st4 = await fetch(`http://127.0.0.1:3000/api/desktop/status`).then((r) => r.json()).catch(() => null)
+      if (st4?.desktop?.agentMedia == null) break
+    }
     check("FA-files: انقطاع الهاتف يمحو نقطة الوسائط", st4?.desktop?.agentMedia == null, JSON.stringify(st4?.desktop?.agentMedia))
 
     // (ز) العقد §14 موثق حرفيًا
@@ -3341,6 +3347,68 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
         dbRowsEnd >= 4 && !(await pdbAP.nexusAutomationRule.findMany()).some((r) => r.name.includes("PERSIST-E2E")), `rows=${dbRowsEnd}`)
       await pdbAP.$disconnect()
       try { sockAP.disconnect() } catch { /* ignore */ }
+    }
+
+    // ============================================================
+    // SERVICE-PULSE — نبض الخدمة الذاتي (عقد §27.هـ): القياس بلا واجهة
+    // نافذة صمت حتمية (لا fetch ولا socket ولا متصفح) + قراءة SQLite مباشرة
+    // + حقل pulse في لقطة الصحة — إثبات أن التوليد خاصية الخادم لا المتصفح
+    // ============================================================
+    console.log("\n== SERVICE-PULSE: autonomous service pulse (§27.هـ) ==")
+    {
+      // (أ) فحوص المصدر
+      const fsSP = (await import("node:fs")).default
+      const rdSP = (p) => { try { return fsSP.readFileSync(pathMod.join(ROOT, p), "utf8") } catch { return "" } }
+      const devSP = rdSP("src/lib/nexus/devices.ts")
+      const healthSP = rdSP("src/lib/nexus/health.ts")
+      const bridgeSP = rdSP("src/lib/nexus/automation-bridge.ts")
+      const routeSP = rdSP("src/app/api/devices/health/route.ts")
+      const panelSP = rdSP("src/components/nexus/health-panel.tsx")
+      const viewSP = rdSP("src/components/nexus/automation/automation-view.tsx")
+      const i18nSP = rdSP("src/lib/ar-en-map.json")
+      const contractSP = rdSP("docs/protocol-contract.md")
+      const checklistSP = rdSP("docs/e2e-checklist.md")
+
+      check("SERVICE-PULSE: المصدر — ensureServicePulse (حارس globalThis + علم قبل المؤقت + unref) + getServicePulse + SERVICE_PULSE_MS=4000",
+        devSP.includes("export function ensureServicePulse") && devSP.includes("__nexusServicePulse = { startedAt: Date.now() }")
+        && devSP.includes("timer.unref?.()") && devSP.includes("export function getServicePulse")
+        && devSP.includes("SERVICE_PULSE_MS = 4000"), "devices.ts")
+      check("SERVICE-PULSE: المصدر — الإشعال من كل المصادر: heartbeatBump + recordHealthTick + إقلاع جسر الروتينات",
+        devSP.includes("ensureServicePulse()\n  for (const d of store().devices)")
+        && healthSP.includes("ensureServicePulse() // §27.هـ") && bridgeSP.includes("ensureServicePulse()"), "ignition wiring")
+      check("SERVICE-PULSE: المصدر — لقطة الصحة تصدر pulse {active, intervalMs, startedAt}",
+        routeSP.includes("pulse: getServicePulse()"), "health route")
+      check("SERVICE-PULSE: الواجهة — شارة النبض الحية في الترويسة + الحد الصادق أسفل اللوحة",
+        panelSP.includes('data-testid="pulse-badge"') && panelSP.includes("نبض ذاتي من الخادم — كل 4 ثوانٍ")
+        && panelSP.includes("القياس ذاتي من عملية الخادم"), "health panel")
+      check("SERVICE-PULSE: الواجهة — بطاقة حدود الروتينات توثق النبض الذاتي",
+        viewSP.includes("النبض الذاتي من الخادم يولّد العينات (كل 30 ث لكل جهاز) ما دامت عملية الخادم تعمل — إغلاق الواجهة لا يوقف الكشف"), "automation view")
+      check("SERVICE-PULSE: i18n — المفاتيح الثلاثة في القاموس",
+        i18nSP.includes('"نبض ذاتي من الخادم — كل 4 ثوانٍ": "Autonomous server pulse — every 4s"')
+        && i18nSP.includes("Measurement runs inside the server process")
+        && i18nSP.includes("closing the UI never stops detection"), "i18n")
+      check("SERVICE-PULSE: التوثيق — العقد §27.هـ (الميكانيكا/الإشعال/الحدود) + تحديث حد §26.و + القائمة الميدانية §23",
+        contractSP.includes("### 27.هـ نبض الخدمة الذاتي") && contractSP.includes("__nexusServicePulse")
+        && contractSP.includes("نبض الخدمة الذاتي (§27.هـ) يولّد عينة كل ~30 ث لكل جهاز ما دامت عملية الخادم تعمل")
+        && checklistSP.includes("## 23. نبض الخدمة الذاتي"), "docs")
+
+      // (ب) السلوك الحي — نافذة صمت 42 ثانية: الإشعال سبق عبر إقلاع جسر الروتينات
+      const dbUrlSP = fsSP.readFileSync(pathMod.join(ROOT, ".env"), "utf8").match(/^DATABASE_URL=(.*)$/m)?.[1]
+      const { PrismaClient } = await import("@prisma/client")
+      const pdbSP = new PrismaClient({ datasources: { db: { url: dbUrlSP } }, log: [] })
+      const hp0 = await fetch("http://localhost:3000/api/devices/health?device=all&window=1h").then((r) => r.json()).catch(() => null)
+      check("SERVICE-PULSE: حقل pulse في اللقطة — نشط بفاصل 4 ث (أُشعل من إقلاع الجسر بلا أي واجهة)",
+        hp0?.pulse?.active === true && hp0?.pulse?.intervalMs === 4000, JSON.stringify(hp0?.pulse))
+      const t0SP = Date.now()
+      console.log("   [SERVICE-PULSE] نافذة صمت 42 ثانية — لا استدعاءات ولا متصفح…")
+      await sleep(42_000)
+      const fresh = await pdbSP.nexusHealthSample.findMany({ where: { createdAt: { gt: new Date(t0SP) } } })
+      const freshDevs = new Set(fresh.map((x) => x.deviceId))
+      check("SERVICE-PULSE: عينات وُلدت خلال صمت 42 ث — لا واجهة مفتوحة ولا استدعاءات من الحزمة (التوليد من الخادم)",
+        fresh.length >= 3, `fresh=${fresh.length}`)
+      check("SERVICE-PULSE: العينات الذاتية تغطي عدة أجهزة (التكة تجول على سجل الأجهزة كله)",
+        freshDevs.size >= 2, `devices=${[...freshDevs].join(",")}`)
+      await pdbSP.$disconnect()
     }
 
   }
