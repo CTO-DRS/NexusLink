@@ -1,0 +1,1019 @@
+﻿2026-10-18T22:02:20.0639890Z Current runner version: '2.337.0'
+2026-10-18T22:02:20.0676904Z ##[group]Runner Image Provisioner
+2026-10-18T22:02:20.0678191Z Hosted Compute Agent
+2026-10-18T22:02:20.0679268Z Version: 20261002.596
+2026-10-18T22:02:20.0680273Z Commit: c3d12f3313a95f25162a1503be624f3b0617f8c0
+2026-10-18T22:02:20.0681636Z Build Date: 2026-10-02T22:28:27Z
+2026-10-18T22:02:20.0682779Z Worker ID: {bdaf5645-64d7-44d7-bf11-4f2a7318ca29}
+2026-10-18T22:02:20.0683941Z Region: eastus
+2026-10-18T22:02:20.0685329Z Cloud: Azure
+2026-10-18T22:02:20.0686337Z ##[endgroup]
+2026-10-18T22:02:20.0688674Z ##[group]Operating System
+2026-10-18T22:02:20.0689826Z Microsoft Windows Server 2025
+2026-10-18T22:02:20.0690914Z 10.0.26100
+2026-10-18T22:02:20.0692016Z Datacenter
+2026-10-18T22:02:20.0692954Z ##[endgroup]
+2026-10-18T22:02:20.0693965Z ##[group]Runner Image
+2026-10-18T22:02:20.0695042Z Image: windows-2025-vs2026
+2026-10-18T22:02:20.0696226Z Version: 20261007.264.1
+2026-10-18T22:02:20.0699039Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20261007.264/images/windows/Windows2025-VS2026-Readme.md
+2026-10-18T22:02:20.0702267Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20261007.264
+2026-10-18T22:02:20.0704095Z ##[endgroup]
+2026-10-18T22:02:20.0706470Z ##[group]GITHUB_TOKEN Permissions
+2026-10-18T22:02:20.0709041Z Contents: write
+2026-10-18T22:02:20.0710056Z Metadata: read
+2026-10-18T22:02:20.0711013Z ##[endgroup]
+2026-10-18T22:02:20.0714097Z Secret source: Actions
+2026-10-18T22:02:20.0715701Z Cache mode: write
+2026-10-18T22:02:20.0716891Z Prepare workflow directory
+2026-10-18T22:02:20.1127025Z Prepare all required actions
+2026-10-18T22:02:20.1176164Z Getting action download info
+2026-10-18T22:02:20.3061317Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-18T22:02:20.4362256Z Download action repository 'oven-sh/setup-bun@v2' (SHA:0c5077e51419868618aeaa5fe8019c62421857d6)
+2026-10-18T22:02:20.5818722Z Download action repository 'dtolnay/rust-toolchain@stable' (SHA:b725eda525362e7cf34af9a7243cac1e3f01a7ec)
+2026-10-18T22:02:20.6487045Z Download action repository 'Swatinem/rust-cache@v2' (SHA:6323deb102c322ba6fcbdcafc7e3dddab59af2b6)
+2026-10-18T22:02:20.8252089Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-18T22:02:21.0374455Z Download action repository 'softprops/action-gh-release@v2' (SHA:3bb12739c298aeb8a4eeaf626c5b8d85266b0e65)
+2026-10-18T22:02:21.3898445Z Complete job name: desktop (windows-latest, windows, nsis msi, -v, win-x64, x86_64-pc-windows-msvc)
+2026-10-18T22:02:21.5411727Z ##[group]Run actions/checkout@v4
+2026-10-18T22:02:21.5413053Z with:
+2026-10-18T22:02:21.5413579Z   repository: CTO-DRS/NexusLink
+2026-10-18T22:02:21.5422012Z   token: ***
+2026-10-18T22:02:21.5423020Z   ssh-strict: true
+2026-10-18T22:02:21.5423605Z   ssh-user: git
+2026-10-18T22:02:21.5424173Z   persist-credentials: true
+2026-10-18T22:02:21.5424807Z   clean: true
+2026-10-18T22:02:21.5425397Z   sparse-checkout-cone-mode: true
+2026-10-18T22:02:21.5426094Z   fetch-depth: 1
+2026-10-18T22:02:21.5426636Z   fetch-tags: false
+2026-10-18T22:02:21.5427201Z   show-progress: true
+2026-10-18T22:02:21.5427815Z   lfs: false
+2026-10-18T22:02:21.5428331Z   submodules: false
+2026-10-18T22:02:21.5428904Z   set-safe-directory: true
+2026-10-18T22:02:21.5429578Z   allow-unsafe-pr-checkout: false
+2026-10-18T22:02:21.5430545Z env:
+2026-10-18T22:02:21.5430959Z   VERSION: 1.2.0
+2026-10-18T22:02:21.5431394Z ##[endgroup]
+2026-10-18T22:02:21.6880575Z Syncing repository: CTO-DRS/NexusLink
+2026-10-18T22:02:21.6882593Z ##[group]Getting Git version info
+2026-10-18T22:02:21.6883355Z Working directory is 'D:\a\NexusLink\NexusLink'
+2026-10-18T22:02:21.7830291Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-10-18T22:02:22.0623545Z git version 2.56.0.windows.2
+2026-10-18T22:02:22.0685985Z ##[endgroup]
+2026-10-18T22:02:22.0707634Z Temporarily overriding HOME='D:\a\_temp\cf3641fb-86c7-428a-b3d8-cb7d6f1ed996' before making global git config changes
+2026-10-18T22:02:22.0714092Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-18T22:02:22.0720312Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\NexusLink\NexusLink
+2026-10-18T22:02:22.1550715Z Deleting the contents of 'D:\a\NexusLink\NexusLink'
+2026-10-18T22:02:22.1557120Z ##[group]Initializing the repository
+2026-10-18T22:02:22.1567556Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\NexusLink\NexusLink
+2026-10-18T22:02:22.2669094Z Initialized empty Git repository in D:/a/NexusLink/NexusLink/.git/
+2026-10-18T22:02:22.2718699Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/CTO-DRS/NexusLink
+2026-10-18T22:02:22.3351052Z ##[endgroup]
+2026-10-18T22:02:22.3352771Z ##[group]Disabling automatic garbage collection
+2026-10-18T22:02:22.3359622Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-10-18T22:02:22.3731551Z ##[endgroup]
+2026-10-18T22:02:22.3733154Z ##[group]Setting up auth
+2026-10-18T22:02:22.3743384Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-10-18T22:02:22.4123568Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-10-18T22:02:23.7365999Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-18T22:02:23.7739483Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-10-18T22:02:24.3400340Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-18T22:02:24.3886757Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-10-18T22:02:24.9540565Z [command]"C:\Program Files\Git\bin\git.exe" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-10-18T22:02:24.9934552Z ##[endgroup]
+2026-10-18T22:02:24.9935488Z ##[group]Fetching the repository
+2026-10-18T22:02:24.9956146Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +70feacae520375955c8db20fa956d1538b7c971c:refs/tags/v1.2.0-fix1
+2026-10-18T22:02:28.5532304Z From https://github.com/CTO-DRS/NexusLink
+2026-10-18T22:02:28.5533277Z  * [new ref]         70feacae520375955c8db20fa956d1538b7c971c -> v1.2.0-fix1
+2026-10-18T22:02:28.5573578Z ##[endgroup]
+2026-10-18T22:02:28.5576482Z ##[group]Determining the checkout info
+2026-10-18T22:02:28.5577185Z ##[endgroup]
+2026-10-18T22:02:28.5591677Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-10-18T22:02:28.6126713Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-10-18T22:02:28.6554058Z ##[group]Checking out the ref
+2026-10-18T22:02:28.6564296Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force refs/tags/v1.2.0-fix1
+2026-10-18T22:02:29.7101673Z Updating files:  24% (324/1347)
+2026-10-18T22:02:29.7185902Z Updating files:  25% (337/1347)
+2026-10-18T22:02:29.7233089Z Updating files:  26% (351/1347)
+2026-10-18T22:02:29.7283021Z Updating files:  27% (364/1347)
+2026-10-18T22:02:29.7329536Z Updating files:  28% (378/1347)
+2026-10-18T22:02:29.7383333Z Updating files:  29% (391/1347)
+2026-10-18T22:02:29.7426099Z Updating files:  30% (405/1347)
+2026-10-18T22:02:29.7463586Z Updating files:  31% (418/1347)
+2026-10-18T22:02:29.7503587Z Updating files:  32% (432/1347)
+2026-10-18T22:02:29.7539818Z Updating files:  33% (445/1347)
+2026-10-18T22:02:29.7582891Z Updating files:  34% (458/1347)
+2026-10-18T22:02:29.7619119Z Updating files:  35% (472/1347)
+2026-10-18T22:02:29.7682464Z Updating files:  36% (485/1347)
+2026-10-18T22:02:29.7738265Z Updating files:  37% (499/1347)
+2026-10-18T22:02:29.7784632Z Updating files:  38% (512/1347)
+2026-10-18T22:02:29.7867312Z Updating files:  39% (526/1347)
+2026-10-18T22:02:29.7877158Z Updating files:  40% (539/1347)
+2026-10-18T22:02:29.7914396Z Updating files:  41% (553/1347)
+2026-10-18T22:02:29.7963151Z Updating files:  42% (566/1347)
+2026-10-18T22:02:29.8007213Z Updating files:  43% (580/1347)
+2026-10-18T22:02:29.8050508Z Updating files:  44% (593/1347)
+2026-10-18T22:02:29.8128980Z Updating files:  45% (607/1347)
+2026-10-18T22:02:29.8177343Z Updating files:  46% (620/1347)
+2026-10-18T22:02:29.8218973Z Updating files:  47% (634/1347)
+2026-10-18T22:02:29.8259326Z Updating files:  48% (647/1347)
+2026-10-18T22:02:29.8297057Z Updating files:  49% (661/1347)
+2026-10-18T22:02:29.8331773Z Updating files:  50% (674/1347)
+2026-10-18T22:02:29.8372919Z Updating files:  51% (687/1347)
+2026-10-18T22:02:29.8407375Z Updating files:  52% (701/1347)
+2026-10-18T22:02:29.8439969Z Updating files:  53% (714/1347)
+2026-10-18T22:02:29.8477031Z Updating files:  54% (728/1347)
+2026-10-18T22:02:29.8509996Z Updating files:  55% (741/1347)
+2026-10-18T22:02:29.8543836Z Updating files:  56% (755/1347)
+2026-10-18T22:02:29.8581176Z Updating files:  57% (768/1347)
+2026-10-18T22:02:29.8620818Z Updating files:  58% (782/1347)
+2026-10-18T22:02:29.8649328Z Updating files:  59% (795/1347)
+2026-10-18T22:02:29.8678970Z Updating files:  60% (809/1347)
+2026-10-18T22:02:29.8737681Z Updating files:  61% (822/1347)
+2026-10-18T22:02:29.8824229Z Updating files:  62% (836/1347)
+2026-10-18T22:02:29.8948839Z Updating files:  63% (849/1347)
+2026-10-18T22:02:29.9157972Z Updating files:  64% (863/1347)
+2026-10-18T22:02:29.9258076Z Updating files:  65% (876/1347)
+2026-10-18T22:02:29.9291872Z Updating files:  66% (890/1347)
+2026-10-18T22:02:29.9338603Z Updating files:  67% (903/1347)
+2026-10-18T22:02:29.9450304Z Updating files:  68% (916/1347)
+2026-10-18T22:02:29.9736730Z Updating files:  69% (930/1347)
+2026-10-18T22:02:29.9936285Z Updating files:  70% (943/1347)
+2026-10-18T22:02:30.1376123Z Updating files:  71% (957/1347)
+2026-10-18T22:02:30.1493731Z Updating files:  72% (970/1347)
+2026-10-18T22:02:30.1614684Z Updating files:  73% (984/1347)
+2026-10-18T22:02:30.1742273Z Updating files:  74% (997/1347)
+2026-10-18T22:02:30.1859291Z Updating files:  75% (1011/1347)
+2026-10-18T22:02:30.1973510Z Updating files:  76% (1024/1347)
+2026-10-18T22:02:30.2235401Z Updating files:  77% (1038/1347)
+2026-10-18T22:02:30.2333820Z Updating files:  78% (1051/1347)
+2026-10-18T22:02:30.2379572Z Updating files:  79% (1065/1347)
+2026-10-18T22:02:30.2433401Z Updating files:  80% (1078/1347)
+2026-10-18T22:02:30.2477921Z Updating files:  81% (1092/1347)
+2026-10-18T22:02:30.2532023Z Updating files:  82% (1105/1347)
+2026-10-18T22:02:30.2574067Z Updating files:  83% (1119/1347)
+2026-10-18T22:02:30.2610972Z Updating files:  84% (1132/1347)
+2026-10-18T22:02:30.2655035Z Updating files:  85% (1145/1347)
+2026-10-18T22:02:30.2694064Z Updating files:  86% (1159/1347)
+2026-10-18T22:02:30.2736504Z Updating files:  87% (1172/1347)
+2026-10-18T22:02:30.2776360Z Updating files:  88% (1186/1347)
+2026-10-18T22:02:30.2815197Z Updating files:  89% (1199/1347)
+2026-10-18T22:02:30.2852526Z Updating files:  90% (1213/1347)
+2026-10-18T22:02:30.2889289Z Updating files:  91% (1226/1347)
+2026-10-18T22:02:30.2917526Z Updating files:  92% (1240/1347)
+2026-10-18T22:02:30.2949045Z Updating files:  93% (1253/1347)
+2026-10-18T22:02:30.2976245Z Updating files:  94% (1267/1347)
+2026-10-18T22:02:30.3028474Z Updating files:  95% (1280/1347)
+2026-10-18T22:02:30.3067461Z Updating files:  96% (1294/1347)
+2026-10-18T22:02:30.3106405Z Updating files:  97% (1307/1347)
+2026-10-18T22:02:30.3139097Z Updating files:  98% (1321/1347)
+2026-10-18T22:02:30.3190851Z Updating files:  99% (1334/1347)
+2026-10-18T22:02:30.3191879Z Updating files: 100% (1347/1347)
+2026-10-18T22:02:30.3192164Z Updating files: 100% (1347/1347), done.
+2026-10-18T22:02:30.3299213Z Note: switching to 'refs/tags/v1.2.0-fix1'.
+2026-10-18T22:02:30.3299613Z 
+2026-10-18T22:02:30.3299959Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-18T22:02:30.3300580Z changes and commit them, and you can discard any commits you make in this
+2026-10-18T22:02:30.3301132Z state without impacting any branches by switching back to a branch.
+2026-10-18T22:02:30.3301457Z 
+2026-10-18T22:02:30.3301679Z If you want to create a new branch to retain commits you create, you may
+2026-10-18T22:02:30.3302182Z do so (now or later) by using -c with the switch command. Example:
+2026-10-18T22:02:30.3302475Z 
+2026-10-18T22:02:30.3302587Z   git switch -c <new-branch-name>
+2026-10-18T22:02:30.3302785Z 
+2026-10-18T22:02:30.3302890Z Or undo this operation with:
+2026-10-18T22:02:30.3303063Z 
+2026-10-18T22:02:30.3303161Z   git switch -
+2026-10-18T22:02:30.3303293Z 
+2026-10-18T22:02:30.3303530Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-18T22:02:30.3303891Z 
+2026-10-18T22:02:30.3305358Z HEAD is now at 70feaca fix-ci: v1.2.0-fix1 — استثناء سكربتات صيانة CJS الخام (scripts/*.cjs) من eslint بنمط الاستثناءات المتعمدة الموثق — جولة CI الأولى (39167300578) فشلت في test ×3 منصات على no-require-imports لـ clean-stale-e2e-rules.cjs — lint محليًا نظيف — بلا أي تغيير على الميزات + ملاحظات fix1
+2026-10-18T22:02:30.3492781Z ##[endgroup]
+2026-10-18T22:02:30.3965666Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-10-18T22:02:30.4315412Z 70feacae520375955c8db20fa956d1538b7c971c
+2026-10-18T22:02:30.4787049Z ##[group]Run oven-sh/setup-bun@v2
+2026-10-18T22:02:30.4787371Z with:
+2026-10-18T22:02:30.4787558Z   no-cache: false
+2026-10-18T22:02:30.4790451Z   token: ***
+2026-10-18T22:02:30.4790631Z env:
+2026-10-18T22:02:30.4790789Z   VERSION: 1.2.0
+2026-10-18T22:02:30.4791000Z ##[endgroup]
+2026-10-18T22:02:30.9962369Z Downloading a new version of Bun: https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-windows-x64.zip
+2026-10-18T22:02:31.5042788Z [command]"C:\Program Files\PowerShell\7\pwsh.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Unrestricted -Command "$ErrorActionPreference = 'Stop' ; try { Add-Type -AssemblyName System.IO.Compression.ZipFile } catch { } ; try { [System.IO.Compression.ZipFile]::ExtractToDirectory('D:\a\_temp\a8ae683e-e081-49d0-a061-4a81b7419414.zip', 'D:\a\_temp\4fbd9f30-dfe0-469f-8f17-c6757028bedf', $true) } catch { if (($_.Exception.GetType().FullName -eq 'System.Management.Automation.MethodException') -or ($_.Exception.GetType().FullName -eq 'System.Management.Automation.RuntimeException') ){ Expand-Archive -LiteralPath 'D:\a\_temp\a8ae683e-e081-49d0-a061-4a81b7419414.zip' -DestinationPath 'D:\a\_temp\4fbd9f30-dfe0-469f-8f17-c6757028bedf' -Force } else { throw $_ } } ;"
+2026-10-18T22:02:32.2517906Z [command]C:\Users\runneradmin\.bun\bin\bun.exe --revision
+2026-10-18T22:02:32.7939758Z 1.4.3+c6da4a4d3
+2026-10-18T22:02:32.8330126Z ##[group]Run bun install --frozen-lockfile
+2026-10-18T22:02:32.8330717Z [36;1mbun install --frozen-lockfile[0m
+2026-10-18T22:02:32.8895122Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-10-18T22:02:32.8895635Z env:
+2026-10-18T22:02:32.8895881Z   VERSION: 1.2.0
+2026-10-18T22:02:32.8896152Z ##[endgroup]
+2026-10-18T22:02:33.1965325Z bun install v1.4.3 (c6da4a4d3)
+2026-10-18T22:03:25.0164940Z 
+2026-10-18T22:03:25.0165425Z + @tailwindcss/postcss@4.1.18
+2026-10-18T22:03:25.0165956Z + @types/react@19.2.8
+2026-10-18T22:03:25.0166718Z + @types/react-dom@19.2.3
+2026-10-18T22:03:25.0167042Z + bun-types@1.3.6
+2026-10-18T22:03:25.0167384Z + esbuild@0.28.2
+2026-10-18T22:03:25.0167941Z + eslint@9.39.2
+2026-10-18T22:03:25.0168301Z + eslint-config-next@16.1.3
+2026-10-18T22:03:25.0169649Z + tailwindcss@4.1.18
+2026-10-18T22:03:25.0170055Z + tw-animate-css@1.4.0
+2026-10-18T22:03:25.0171108Z + typescript@5.9.3
+2026-10-18T22:03:25.0171524Z + @dnd-kit/core@6.3.1
+2026-10-18T22:03:25.0171848Z + @dnd-kit/sortable@10.0.0
+2026-10-18T22:03:25.0172193Z + @dnd-kit/utilities@3.2.2
+2026-10-18T22:03:25.0172530Z + @hookform/resolvers@5.2.2
+2026-10-18T22:03:25.0172919Z + @mdxeditor/editor@3.52.3
+2026-10-18T22:03:25.0173227Z + @noble/curves@1.8.2
+2026-10-18T22:03:25.0173523Z + @noble/hashes@1.8.0
+2026-10-18T22:03:25.0173828Z + @prisma/client@6.19.2
+2026-10-18T22:03:25.0174180Z + @radix-ui/react-accordion@1.2.12
+2026-10-18T22:03:25.0174665Z + @radix-ui/react-alert-dialog@1.1.15
+2026-10-18T22:03:25.0175180Z + @radix-ui/react-aspect-ratio@1.1.8
+2026-10-18T22:03:25.0175599Z + @radix-ui/react-avatar@1.1.11
+2026-10-18T22:03:25.0176019Z + @radix-ui/react-checkbox@1.3.3
+2026-10-18T22:03:25.0176826Z + @radix-ui/react-collapsible@1.1.12
+2026-10-18T22:03:25.0177145Z + @radix-ui/react-context-menu@2.2.16
+2026-10-18T22:03:25.0177432Z + @radix-ui/react-dialog@1.1.15
+2026-10-18T22:03:25.0177708Z + @radix-ui/react-dropdown-menu@2.1.16
+2026-10-18T22:03:25.0177999Z + @radix-ui/react-hover-card@1.1.15
+2026-10-18T22:03:25.0178264Z + @radix-ui/react-label@2.1.8
+2026-10-18T22:03:25.0178511Z + @radix-ui/react-menubar@1.1.16
+2026-10-18T22:03:25.0178765Z + @radix-ui/react-navigation-menu@1.2.14
+2026-10-18T22:03:25.0179042Z + @radix-ui/react-popover@1.1.15
+2026-10-18T22:03:25.0179288Z + @radix-ui/react-progress@1.1.8
+2026-10-18T22:03:25.0179590Z + @radix-ui/react-radio-group@1.3.8
+2026-10-18T22:03:25.0180016Z + @radix-ui/react-scroll-area@1.2.10
+2026-10-18T22:03:25.0180350Z + @radix-ui/react-select@2.2.6
+2026-10-18T22:03:25.0180607Z + @radix-ui/react-separator@1.1.8
+2026-10-18T22:03:25.0180856Z + @radix-ui/react-slider@1.3.6
+2026-10-18T22:03:25.0181097Z + @radix-ui/react-slot@1.2.4
+2026-10-18T22:03:25.0181331Z + @radix-ui/react-switch@1.2.6
+2026-10-18T22:03:25.0181562Z + @radix-ui/react-tabs@1.1.13
+2026-10-18T22:03:25.0181989Z + @radix-ui/react-toast@1.2.15
+2026-10-18T22:03:25.0182268Z + @radix-ui/react-toggle@1.1.10
+2026-10-18T22:03:25.0182539Z + @radix-ui/react-toggle-group@1.1.11
+2026-10-18T22:03:25.0183539Z + @radix-ui/react-tooltip@1.2.8
+2026-10-18T22:03:25.0183805Z + @reactuses/core@6.1.9
+2026-10-18T22:03:25.0184035Z + @tanstack/react-query@5.90.19
+2026-10-18T22:03:25.0184270Z + @tanstack/react-table@8.21.3
+2026-10-18T22:03:25.0184500Z + @types/qrcode@1.5.6
+2026-10-18T22:03:25.0184723Z + class-variance-authority@0.7.1
+2026-10-18T22:03:25.0185241Z + clsx@2.1.1
+2026-10-18T22:03:25.0185481Z + cmdk@1.1.1
+2026-10-18T22:03:25.0185664Z + date-fns@4.1.0
+2026-10-18T22:03:25.0185998Z + embla-carousel-react@8.6.0
+2026-10-18T22:03:25.0186332Z + framer-motion@12.26.2
+2026-10-18T22:03:25.0186651Z + input-otp@1.4.2
+2026-10-18T22:03:25.0186854Z + lucide-react@0.525.0
+2026-10-18T22:03:25.0187540Z + next@16.1.3
+2026-10-18T22:03:25.0188164Z + next-auth@4.24.13
+2026-10-18T22:03:25.0188528Z + next-intl@4.7.0
+2026-10-18T22:03:25.0188829Z + next-themes@0.4.6
+2026-10-18T22:03:25.0189041Z + prisma@6.19.2
+2026-10-18T22:03:25.0189237Z + qrcode@1.5.4
+2026-10-18T22:03:25.0192105Z + react@19.2.3
+2026-10-18T22:03:25.0192404Z + react-day-picker@9.13.0
+2026-10-18T22:03:25.0192721Z + react-dom@19.2.3
+2026-10-18T22:03:25.0192939Z + react-hook-form@7.71.1
+2026-10-18T22:03:25.0193177Z + react-markdown@10.1.0
+2026-10-18T22:03:25.0193638Z + react-resizable-panels@3.0.6
+2026-10-18T22:03:25.0193913Z + react-syntax-highlighter@15.6.6
+2026-10-18T22:03:25.0194168Z + recharts@2.15.4
+2026-10-18T22:03:25.0194467Z + sharp@0.34.5
+2026-10-18T22:03:25.0194755Z + socket.io@4.8.4
+2026-10-18T22:03:25.0195586Z + socket.io-client@4.8.4
+2026-10-18T22:03:25.0196094Z + sonner@2.0.7
+2026-10-18T22:03:25.0196574Z + tailwind-merge@3.4.0
+2026-10-18T22:03:25.0196965Z + tailwindcss-animate@1.0.7
+2026-10-18T22:03:25.0197347Z + uuid@11.1.0
+2026-10-18T22:03:25.0197641Z + vaul@1.1.2
+2026-10-18T22:03:25.0197974Z + z-ai-web-dev-sdk@0.0.18
+2026-10-18T22:03:25.0198220Z + zod@4.3.5
+2026-10-18T22:03:25.0198403Z + zustand@5.0.10
+2026-10-18T22:03:25.0200266Z 
+2026-10-18T22:03:25.0200398Z 867 packages installed [51.82s]
+2026-10-18T22:03:25.1625623Z ##[group]Run bunx prisma generate
+2026-10-18T22:03:25.1626166Z [36;1mbunx prisma generate[0m
+2026-10-18T22:03:25.1652232Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:03:25.1652881Z env:
+2026-10-18T22:03:25.1653166Z   VERSION: 1.2.0
+2026-10-18T22:03:25.1653484Z ##[endgroup]
+2026-10-18T22:03:31.2387663Z Prisma schema loaded from prisma\schema.prisma
+2026-10-18T22:03:31.8965571Z 
+2026-10-18T22:03:31.8966730Z ✔ Generated Prisma Client (v6.19.2) to .\node_modules\@prisma\client in 451ms
+2026-10-18T22:03:31.8967417Z 
+2026-10-18T22:03:31.8967926Z Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+2026-10-18T22:03:31.8968527Z 
+2026-10-18T22:03:31.8969197Z Tip: Need your database queries to be 1000x faster? Accelerate offers you that and more: https://pris.ly/tip-2-accelerate
+2026-10-18T22:03:31.8970067Z 
+2026-10-18T22:03:31.9425606Z ##[group]Run bunx next build
+2026-10-18T22:03:31.9425988Z [36;1mbunx next build[0m
+2026-10-18T22:03:31.9426306Z [36;1mcp -r .next/static .next/standalone/.next/[0m
+2026-10-18T22:03:31.9426667Z [36;1mcp -r public .next/standalone/[0m
+2026-10-18T22:03:31.9442672Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:03:31.9443116Z env:
+2026-10-18T22:03:31.9443737Z   VERSION: 1.2.0
+2026-10-18T22:03:31.9443970Z ##[endgroup]
+2026-10-18T22:03:33.3516838Z ⚠ No build cache found. Please configure build caching for faster rebuilds. Read more: https://nextjs.org/docs/messages/no-cache
+2026-10-18T22:03:33.3584270Z Attention: Next.js now collects completely anonymous telemetry regarding usage.
+2026-10-18T22:03:33.3585338Z This information is used to shape Next.js' roadmap and prioritize features.
+2026-10-18T22:03:33.3587262Z You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+2026-10-18T22:03:33.3588387Z https://nextjs.org/telemetry
+2026-10-18T22:03:33.3588689Z 
+2026-10-18T22:03:33.3754826Z ▲ Next.js 16.1.3 (Turbopack)
+2026-10-18T22:03:33.3756144Z 
+2026-10-18T22:03:33.5759798Z   Creating an optimized production build ...
+2026-10-18T22:03:51.6079394Z Turbopack build encountered 2 warnings:
+2026-10-18T22:03:51.6080635Z ./src/lib/nexus/fs-server.ts:118:18
+2026-10-18T22:03:51.6082707Z The file pattern (<dynamic> '/.' <dynamic> '/' <dynamic> | <dynamic> '.' <dynamic> '/' <dynamic> | <dynamic> '/.' <dynamic> | <dynamic> '.' <dynamic>) matches 15510 files in [project]/
+2026-10-18T22:03:51.6084427Z [0m [90m 116 |[39m   [36mfor[39m ([36mconst[39m d [36mof[39m dirents) {
+2026-10-18T22:03:51.6085748Z  [90m 117 |[39m     [36mif[39m (d[33m.[39mname[33m.[39mstartsWith([32m"."[39m)) [36mcontinue[39m
+2026-10-18T22:03:51.6087264Z [31m[1m>[22m[39m[90m 118 |[39m     [36mconst[39m full [33m=[39m path[33m.[39mjoin(abs[33m,[39m d[33m.[39mname)
+2026-10-18T22:03:51.6090319Z  [90m     |[39m                  [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+2026-10-18T22:03:51.6092556Z  [90m 119 |[39m     [36mtry[39m {
+2026-10-18T22:03:51.6093298Z  [90m 120 |[39m       [36mconst[39m st [33m=[39m [36mawait[39m fs[33m.[39mstat(full)
+2026-10-18T22:03:51.6094072Z  [90m 121 |[39m       out[33m.[39mpush({[0m
+2026-10-18T22:03:51.6094432Z 
+2026-10-18T22:03:51.6094801Z Overly broad patterns can lead to build performance issues and over bundling.
+2026-10-18T22:03:51.6095339Z 
+2026-10-18T22:03:51.6095471Z Import traces:
+2026-10-18T22:03:51.6096230Z   #1 [App Route]:
+2026-10-18T22:03:51.6096587Z     ./src/lib/nexus/fs-server.ts
+2026-10-18T22:03:51.6097014Z     ./src/app/api/fs/realpath/route.ts
+2026-10-18T22:03:51.6097303Z 
+2026-10-18T22:03:51.6097436Z   #2 [App Route]:
+2026-10-18T22:03:51.6097767Z     ./src/lib/nexus/fs-server.ts
+2026-10-18T22:03:51.6098166Z     ./src/lib/nexus/fs-server.ts
+2026-10-18T22:03:51.6098570Z     ./src/app/api/fs/route.ts
+2026-10-18T22:03:51.6098826Z 
+2026-10-18T22:03:51.6098831Z 
+2026-10-18T22:03:51.6098992Z ./src/lib/nexus/fs-server.ts:156:18
+2026-10-18T22:03:51.6100094Z The file pattern (<dynamic> '/.' <dynamic> '/' <dynamic> | <dynamic> '.' <dynamic> '/' <dynamic> | <dynamic> '/.' <dynamic> | <dynamic> '.' <dynamic>) matches 15510 files in [project]/
+2026-10-18T22:03:51.6102032Z [0m [90m 154 |[39m   [36mfor[39m ([36mconst[39m d [36mof[39m items) {
+2026-10-18T22:03:51.6103031Z  [90m 155 |[39m     [36mif[39m (d[33m.[39mname[33m.[39mstartsWith([32m"."[39m)) [36mcontinue[39m
+2026-10-18T22:03:51.6107417Z [31m[1m>[22m[39m[90m 156 |[39m     [36mconst[39m full [33m=[39m path[33m.[39mjoin(abs[33m,[39m d[33m.[39mname)
+2026-10-18T22:03:51.6109203Z  [90m     |[39m                  [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+2026-10-18T22:03:51.6110567Z  [90m 157 |[39m     [36mconst[39m vp [33m=[39m joinV(vpath[33m,[39m d[33m.[39mname)
+2026-10-18T22:03:51.6111062Z  [90m 158 |[39m     [36mif[39m (d[33m.[39misDirectory()) {
+2026-10-18T22:03:51.6111409Z  [90m 159 |[39m       cb({[0m
+2026-10-18T22:03:51.6111565Z 
+2026-10-18T22:03:51.6111793Z Overly broad patterns can lead to build performance issues and over bundling.
+2026-10-18T22:03:51.6112105Z 
+2026-10-18T22:03:51.6112185Z Import traces:
+2026-10-18T22:03:51.6112375Z   #1 [App Route]:
+2026-10-18T22:03:51.6112576Z     ./src/lib/nexus/fs-server.ts
+2026-10-18T22:03:51.6112831Z     ./src/app/api/fs/realpath/route.ts
+2026-10-18T22:03:51.6112998Z 
+2026-10-18T22:03:51.6113077Z   #2 [App Route]:
+2026-10-18T22:03:51.6113272Z     ./src/lib/nexus/fs-server.ts
+2026-10-18T22:03:51.6113497Z     ./src/lib/nexus/fs-server.ts
+2026-10-18T22:03:51.6113730Z     ./src/app/api/fs/route.ts
+2026-10-18T22:03:51.6113871Z 
+2026-10-18T22:03:51.6113874Z 
+2026-10-18T22:03:51.6835727Z ✓ Compiled successfully in 17.2s
+2026-10-18T22:03:51.6883726Z   Skipping validation of types
+2026-10-18T22:03:51.9389457Z   Collecting page data using 3 workers ...
+2026-10-18T22:03:52.6747531Z [db] ensureUpgradeSchema: 
+2026-10-18T22:03:52.6748336Z Invalid `prisma.$executeRawUnsafe()` invocation:
+2026-10-18T22:03:52.6752204Z 
+2026-10-18T22:03:52.6752347Z 
+2026-10-18T22:03:52.6752742Z error: Environment variable not found: DATABASE_URL.
+2026-10-18T22:03:52.6753428Z   -->  schema.prisma:13
+2026-10-18T22:03:52.6753894Z    | 
+2026-10-18T22:03:52.6754264Z 12 |   provider = "sqlite"
+2026-10-18T22:03:52.6754744Z 13 |   url      = env("DATABASE_URL")
+2026-10-18T22:03:52.6755210Z    | 
+2026-10-18T22:03:52.6755440Z 
+2026-10-18T22:03:52.6755647Z Validation Error Count: 1
+2026-10-18T22:03:52.6756189Z [db] ensureUpgradeSchema: 
+2026-10-18T22:03:52.6756731Z Invalid `prisma.$executeRawUnsafe()` invocation:
+2026-10-18T22:03:52.6757182Z 
+2026-10-18T22:03:52.6757257Z 
+2026-10-18T22:03:52.6757548Z error: Environment variable not found: DATABASE_URL.
+2026-10-18T22:03:52.6758150Z   -->  schema.prisma:13
+2026-10-18T22:03:52.6758559Z    | 
+2026-10-18T22:03:52.6758919Z 12 |   provider = "sqlite"
+2026-10-18T22:03:52.6759380Z 13 |   url      = env("DATABASE_URL")
+2026-10-18T22:03:52.6760117Z    | 
+2026-10-18T22:03:52.6760395Z 
+2026-10-18T22:03:52.6761027Z Validation Error Count: 1
+2026-10-18T22:03:52.7251027Z [db] ensureUpgradeSchema: 
+2026-10-18T22:03:52.7259146Z Invalid `prisma.$executeRawUnsafe()` invocation:
+2026-10-18T22:03:52.7259734Z 
+2026-10-18T22:03:52.7259827Z 
+2026-10-18T22:03:52.7260202Z error: Environment variable not found: DATABASE_URL.
+2026-10-18T22:03:52.7260902Z   -->  schema.prisma:13
+2026-10-18T22:03:52.7261465Z    | 
+2026-10-18T22:03:52.7261884Z 12 |   provider = "sqlite"
+2026-10-18T22:03:52.7262393Z 13 |   url      = env("DATABASE_URL")
+2026-10-18T22:03:52.7262898Z    | 
+2026-10-18T22:03:52.7263156Z 
+2026-10-18T22:03:52.7263395Z Validation Error Count: 1
+2026-10-18T22:03:52.8798757Z   Generating static pages using 3 workers (0/12) ...
+2026-10-18T22:03:52.9053339Z   Generating static pages using 3 workers (3/12) 
+2026-10-18T22:03:53.0784131Z   Generating static pages using 3 workers (6/12) 
+2026-10-18T22:03:53.2016148Z   Generating static pages using 3 workers (9/12) 
+2026-10-18T22:03:53.2817076Z ✓ Generating static pages using 3 workers (12/12) in 401.6ms
+2026-10-18T22:03:53.3112050Z   Finalizing page optimization ...
+2026-10-18T22:03:55.2805227Z 
+2026-10-18T22:03:55.2836042Z Route (app)
+2026-10-18T22:03:55.2836853Z ┌ ƒ /
+2026-10-18T22:03:55.2837314Z ├ ○ /_not-found
+2026-10-18T22:03:55.2837783Z ├ ƒ /api
+2026-10-18T22:03:55.2838257Z ├ ƒ /api/apk
+2026-10-18T22:03:55.2838683Z ├ ƒ /api/automation/boot
+2026-10-18T22:03:55.2839104Z ├ ƒ /api/comms/bootstrap
+2026-10-18T22:03:55.2839443Z ├ ƒ /api/comms/calls
+2026-10-18T22:03:55.2839691Z ├ ƒ /api/comms/contacts
+2026-10-18T22:03:55.2839922Z ├ ƒ /api/comms/filter
+2026-10-18T22:03:55.2840180Z ├ ƒ /api/comms/notifications
+2026-10-18T22:03:55.2840469Z ├ ƒ /api/comms/notifications/action
+2026-10-18T22:03:55.2840749Z ├ ƒ /api/comms/phone
+2026-10-18T22:03:55.2840991Z ├ ƒ /api/comms/sms
+2026-10-18T22:03:55.2841214Z ├ ƒ /api/desktop/audit
+2026-10-18T22:03:55.2841452Z ├ ƒ /api/desktop/settings
+2026-10-18T22:03:55.2841701Z ├ ƒ /api/desktop/shortcuts
+2026-10-18T22:03:55.2842015Z ├ ƒ /api/desktop/status
+2026-10-18T22:03:55.2842237Z ├ ƒ /api/devices
+2026-10-18T22:03:55.2842448Z ├ ƒ /api/devices/health
+2026-10-18T22:03:55.2842668Z ├ ƒ /api/devices/qr
+2026-10-18T22:03:55.2842884Z ├ ƒ /api/fs
+2026-10-18T22:03:55.2843085Z ├ ƒ /api/fs/realpath
+2026-10-18T22:03:55.2843312Z ├ ƒ /api/guard/backup-apk
+2026-10-18T22:03:55.2843543Z ├ ƒ /api/guard/boot
+2026-10-18T22:03:55.2843752Z ├ ƒ /api/health
+2026-10-18T22:03:55.2843966Z ├ ƒ /api/media/boot
+2026-10-18T22:03:55.2844176Z ├ ƒ /api/media/capture
+2026-10-18T22:03:55.2844393Z ├ ƒ /api/preview
+2026-10-18T22:03:55.2844603Z ├ ƒ /api/prod/backup
+2026-10-18T22:03:55.2844822Z ├ ƒ /api/prod/boot
+2026-10-18T22:03:55.2845041Z ├ ƒ /api/prod/clipboard
+2026-10-18T22:03:55.2845269Z ├ ƒ /api/prod/handoff
+2026-10-18T22:03:55.2845487Z ├ ƒ /api/prod/network
+2026-10-18T22:03:55.2845718Z ├ ƒ /api/prod/pairs
+2026-10-18T22:03:55.2845948Z ├ ƒ /api/prod/pairs/run
+2026-10-18T22:03:55.2846174Z ├ ƒ /api/prod/photos
+2026-10-18T22:03:55.2846418Z ├ ƒ /api/prod/profiles
+2026-10-18T22:03:55.2847060Z ├ ƒ /api/prod/state
+2026-10-18T22:03:55.2847290Z ├ ƒ /api/remote/boot
+2026-10-18T22:03:55.2847512Z ├ ƒ /api/security/audit
+2026-10-18T22:03:55.2847754Z ├ ƒ /api/security/boot
+2026-10-18T22:03:55.2847980Z ├ ƒ /api/security/pcap
+2026-10-18T22:03:55.2848205Z ├ ƒ /api/security/recv
+2026-10-18T22:03:55.2848442Z ├ ƒ /api/security/wipe
+2026-10-18T22:03:55.2848660Z ├ ƒ /api/storage
+2026-10-18T22:03:55.2848858Z ├ ƒ /api/thumb
+2026-10-18T22:03:55.2849054Z ├ ƒ /api/tools/diag
+2026-10-18T22:03:55.2849269Z ├ ƒ /api/tools/ping
+2026-10-18T22:03:55.2849483Z ├ ƒ /api/tools/speedtest
+2026-10-18T22:03:55.2849709Z ├ ƒ /api/transfer
+2026-10-18T22:03:55.2849908Z ├ ƒ /api/version
+2026-10-18T22:03:55.2850189Z ├ ○ /controller
+2026-10-18T22:03:55.2850536Z ├ ○ /download
+2026-10-18T22:03:55.2850739Z ├ ○ /phone
+2026-10-18T22:03:55.2851080Z └ ○ /tv
+2026-10-18T22:03:55.2851262Z 
+2026-10-18T22:03:55.2851279Z 
+2026-10-18T22:03:55.2851555Z ○  (Static)   prerendered as static content
+2026-10-18T22:03:55.2852644Z ƒ  (Dynamic)  server-rendered on demand
+2026-10-18T22:03:55.2852964Z 
+2026-10-18T22:03:55.4545792Z ##[group]Run bash apps/desktop/build-resources.sh
+2026-10-18T22:03:55.4546265Z [36;1mbash apps/desktop/build-resources.sh[0m
+2026-10-18T22:03:55.4562406Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:03:55.4573747Z env:
+2026-10-18T22:03:55.4574063Z   VERSION: 1.2.0
+2026-10-18T22:03:55.4574409Z ##[endgroup]
+2026-10-18T22:03:55.5705981Z == [1/4] Next standalone → apps/desktop/src-tauri/resources/server ==
+2026-10-18T22:03:57.8970588Z == [2/4] comms-service → apps/desktop/src-tauri/resources/comms/comms.cjs ==
+2026-10-18T22:03:57.8972275Z    تبعيات comms-service غائبة — bun install (lockfile ملتزم)…
+2026-10-18T22:03:57.9173584Z bun install v1.4.3 (c6da4a4d3)
+2026-10-18T22:03:58.1594189Z 
+2026-10-18T22:03:58.1595083Z + bonjour-service@1.4.4
+2026-10-18T22:03:58.1596368Z + socket.io@4.8.4
+2026-10-18T22:03:58.1596670Z 
+2026-10-18T22:03:58.1596841Z 27 packages installed [243.00ms]
+2026-10-18T22:03:58.2780758Z == [3/4] gateway → apps/desktop/src-tauri/resources/gateway/gateway.cjs ==
+2026-10-18T22:03:58.3235297Z == [4/4] sidecar node placeholder ==
+2026-10-18T22:03:58.3431161Z DONE — resources:
+2026-10-18T22:03:58.5051517Z 208M	apps/desktop/src-tauri/resources/server
+2026-10-18T22:03:58.5054065Z 808K	apps/desktop/src-tauri/resources/comms
+2026-10-18T22:03:58.5056842Z 8.0K	apps/desktop/src-tauri/resources/gateway
+2026-10-18T22:03:58.5285951Z ##[group]Run NODE_VERSION=v20.18.1
+2026-10-18T22:03:58.5286348Z [36;1mNODE_VERSION=v20.18.1[0m
+2026-10-18T22:03:58.5286653Z [36;1mmkdir -p apps/desktop/src-tauri/binaries[0m
+2026-10-18T22:03:58.5286990Z [36;1mif [[ "$RUNNER_OS" == "Windows" ]]; then[0m
+2026-10-18T22:03:58.5287537Z [36;1m  curl -fL -o node-pkg.zip "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-win-x64.zip"[0m
+2026-10-18T22:03:58.5288196Z [36;1m  powershell.exe -NoProfile -Command "Expand-Archive -Force node-pkg.zip ."[0m
+2026-10-18T22:03:58.5288910Z [36;1m  cp "node-${NODE_VERSION}-win-x64/node.exe" "apps/desktop/src-tauri/binaries/node-x86_64-pc-windows-msvc.exe"[0m
+2026-10-18T22:03:58.5289441Z [36;1melse[0m
+2026-10-18T22:03:58.5289872Z [36;1m  curl -fL -o node-pkg.tar.xz "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-win-x64.tar.xz"[0m
+2026-10-18T22:03:58.5290393Z [36;1m  tar -xJf node-pkg.tar.xz[0m
+2026-10-18T22:03:58.5290911Z [36;1m  cp "node-${NODE_VERSION}-win-x64/bin/node" "apps/desktop/src-tauri/binaries/node-x86_64-pc-windows-msvc"[0m
+2026-10-18T22:03:58.5291389Z [36;1mfi[0m
+2026-10-18T22:03:58.5291607Z [36;1mls -la apps/desktop/src-tauri/binaries/[0m
+2026-10-18T22:03:58.5307653Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:03:58.5308049Z env:
+2026-10-18T22:03:58.5308221Z   VERSION: 1.2.0
+2026-10-18T22:03:58.5308409Z ##[endgroup]
+2026-10-18T22:03:58.7122972Z   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+2026-10-18T22:03:58.7123909Z                                  Dload  Upload  Total   Spent   Left   Speed
+2026-10-18T22:03:58.7124419Z 
+2026-10-18T22:03:59.1620597Z   0      0   0      0   0      0      0      0                              0
+2026-10-18T22:03:59.1621584Z 100 28.23M 100 28.23M   0      0 53.80M      0                              0
+2026-10-18T22:03:59.1623965Z 100 28.23M 100 28.23M   0      0 53.78M      0                              0
+2026-10-18T22:03:59.1624730Z 100 28.23M 100 28.23M   0      0 53.77M      0                              0
+2026-10-18T22:04:45.6769222Z total 68185
+2026-10-18T22:04:45.6769840Z drwxr-xr-x 1 runneradmin 197121        0 Oct 18 22:04 .
+2026-10-18T22:04:45.6770543Z drwxr-xr-x 1 runneradmin 197121        0 Oct 18 22:03 ..
+2026-10-18T22:04:45.6771519Z -rw-r--r-- 1 runneradmin 197121       21 Oct 18 22:02 .gitignore
+2026-10-18T22:04:45.6772459Z -rw-r--r-- 1 runneradmin 197121        0 Oct 18 22:02 .gitkeep
+2026-10-18T22:04:45.6775327Z -rwxr-xr-x 1 runneradmin 197121 69812368 Oct 18 22:04 node-x86_64-pc-windows-msvc.exe
+2026-10-18T22:04:45.7139169Z ##[group]Run dtolnay/rust-toolchain@stable
+2026-10-18T22:04:45.7139557Z with:
+2026-10-18T22:04:45.7139765Z   toolchain: stable
+2026-10-18T22:04:45.7139984Z env:
+2026-10-18T22:04:45.7140166Z   VERSION: 1.2.0
+2026-10-18T22:04:45.7140371Z ##[endgroup]
+2026-10-18T22:04:45.7219831Z ##[start-action display=Parse toolchain version;id=__dtolnay_rust-toolchain.parse]
+2026-10-18T22:04:45.7383580Z ##[group]Run if [[ -z $toolchain ]]; then
+2026-10-18T22:04:45.7383926Z [36;1mif [[ -z $toolchain ]]; then[0m
+2026-10-18T22:04:45.7384435Z [36;1m  # GitHub does not enforce `required: true` inputs itself. https://github.com/actions/runner/issues/1070[0m
+2026-10-18T22:04:45.7385417Z [36;1m  echo "'toolchain' is a required input" >&2[0m
+2026-10-18T22:04:45.7385715Z [36;1m  exit 1[0m
+2026-10-18T22:04:45.7386040Z [36;1melif [[ $toolchain =~ ^stable' '[0-9]+' '(year|month|week|day)s?' 'ago$ ]]; then[0m
+2026-10-18T22:04:45.7386469Z [36;1m  if [[ Windows == macOS ]]; then[0m
+2026-10-18T22:04:45.7387032Z [36;1m    echo "toolchain=1.$((($(date -v-$(sed 's/stable \([0-9]*\) \(.\).*/\1\2/' <<< $toolchain) +%s)/60/60/24-16569)/7/6))" >> $GITHUB_OUTPUT[0m
+2026-10-18T22:04:45.7387538Z [36;1m  else[0m
+2026-10-18T22:04:45.7387928Z [36;1m    echo "toolchain=1.$((($(date --date "${toolchain#stable }" +%s)/60/60/24-16569)/7/6))" >> $GITHUB_OUTPUT[0m
+2026-10-18T22:04:45.7388384Z [36;1m  fi[0m
+2026-10-18T22:04:45.7388675Z [36;1melif [[ $toolchain =~ ^stable' 'minus' '[0-9]+' 'releases?$ ]]; then[0m
+2026-10-18T22:04:45.7389199Z [36;1m  echo "toolchain=1.$((($(date +%s)/60/60/24-16569)/7/6-${toolchain//[^0-9]/}))" >> $GITHUB_OUTPUT[0m
+2026-10-18T22:04:45.7389655Z [36;1melif [[ $toolchain =~ ^1\.[0-9]+$ ]]; then[0m
+2026-10-18T22:04:45.7390177Z [36;1m  echo "toolchain=1.$((i=${toolchain#1.}, c=($(date +%s)/60/60/24-16569)/7/6, i+9*i*(10*i<=c)+90*i*(100*i<=c)))" >> $GITHUB_OUTPUT[0m
+2026-10-18T22:04:45.7390668Z [36;1melse[0m
+2026-10-18T22:04:45.7390856Z [36;1m  delimiter=EOF[0m
+2026-10-18T22:04:45.7391156Z [36;1m  while [[ $toolchain == *$delimiter* ]]; do delimiter+=_; done[0m
+2026-10-18T22:04:45.7391650Z [36;1m  printf 'toolchain<<%s\n%s\n%s\n' "$delimiter" "$toolchain" "$delimiter" >> $GITHUB_OUTPUT[0m
+2026-10-18T22:04:45.7392060Z [36;1mfi[0m
+2026-10-18T22:04:45.7408648Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:04:45.7409045Z env:
+2026-10-18T22:04:45.7409220Z   VERSION: 1.2.0
+2026-10-18T22:04:45.7409417Z   toolchain: stable
+2026-10-18T22:04:45.7409621Z ##[endgroup]
+2026-10-18T22:04:45.7870204Z ##[end-action id=__dtolnay_rust-toolchain.parse;outcome=success;conclusion=success;duration_ms=64]
+2026-10-18T22:04:45.7875021Z ##[start-action display=Set $CARGO_HOME;id=__dtolnay_rust-toolchain.__run]
+2026-10-18T22:04:45.8016729Z ##[group]Run echo CARGO_HOME=${CARGO_HOME:-"$USERPROFILE\.cargo"} >> $GITHUB_ENV
+2026-10-18T22:04:45.8017270Z [36;1mecho CARGO_HOME=${CARGO_HOME:-"$USERPROFILE\.cargo"} >> $GITHUB_ENV[0m
+2026-10-18T22:04:45.8033888Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:04:45.8034287Z env:
+2026-10-18T22:04:45.8034463Z   VERSION: 1.2.0
+2026-10-18T22:04:45.8034661Z ##[endgroup]
+2026-10-18T22:04:45.8466879Z ##[end-action id=__dtolnay_rust-toolchain.__run;outcome=success;conclusion=success;duration_ms=59]
+2026-10-18T22:04:45.8469790Z ##[start-action display=Install rustup if needed;id=__dtolnay_rust-toolchain.__run_2]
+2026-10-18T22:04:45.8480095Z ##[end-action id=__dtolnay_rust-toolchain.__run_2;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-10-18T22:04:45.8482431Z ##[start-action display=Install rustup if needed on windows;id=__dtolnay_rust-toolchain.__run_3]
+2026-10-18T22:04:45.8627150Z ##[group]Run if ! command -v rustup &>/dev/null; then
+2026-10-18T22:04:45.8627637Z [36;1mif ! command -v rustup &>/dev/null; then[0m
+2026-10-18T22:04:45.8712989Z [36;1m  curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused --location --silent --show-error --fail https://win.rustup.rs/x86_64 --output 'D:\a\_temp\rustup-init.exe'[0m
+2026-10-18T22:04:45.8714022Z [36;1m  'D:\a\_temp\rustup-init.exe' --default-toolchain none --no-modify-path -y[0m
+2026-10-18T22:04:45.8714468Z [36;1m  echo "$CARGO_HOME\bin" >> $GITHUB_PATH[0m
+2026-10-18T22:04:45.8714754Z [36;1mfi[0m
+2026-10-18T22:04:45.8732694Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:04:45.8733095Z env:
+2026-10-18T22:04:45.8733268Z   VERSION: 1.2.0
+2026-10-18T22:04:45.8733482Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-10-18T22:04:45.8733746Z ##[endgroup]
+2026-10-18T22:04:45.9503902Z ##[end-action id=__dtolnay_rust-toolchain.__run_3;outcome=success;conclusion=success;duration_ms=102]
+2026-10-18T22:04:45.9510559Z ##[start-action display=rustup toolchain install stable;id=__dtolnay_rust-toolchain.__run_4]
+2026-10-18T22:04:45.9670177Z ##[group]Run set -f  # split targets and components on commas and whitespace, without glob expansion
+2026-10-18T22:04:45.9670902Z [36;1mset -f  # split targets and components on commas and whitespace, without glob expansion[0m
+2026-10-18T22:04:45.9671366Z [36;1mflags=()[0m
+2026-10-18T22:04:45.9671633Z [36;1mfor t in ${targets//,/ }; do flags+=(--target "$t"); done[0m
+2026-10-18T22:04:45.9672052Z [36;1mfor c in ${components//,/ }; do flags+=(--component "$c"); done[0m
+2026-10-18T22:04:45.9672565Z [36;1mif [[ $toolchain == nightly && -n $components ]]; then flags+=(--allow-downgrade); fi[0m
+2026-10-18T22:04:45.9672993Z [36;1mlog=$(mktemp)[0m
+2026-10-18T22:04:45.9673221Z [36;1mtrap 'rm -f "$log"' EXIT[0m
+2026-10-18T22:04:45.9673525Z [36;1mfor attempt in 1 2 3 4 5; do[0m
+2026-10-18T22:04:45.9674110Z [36;1m  if rustup toolchain install "$toolchain" "${flags[@]}" --profile minimal --no-self-update --force-non-host 2>&1 | tee "$log"; then[0m
+2026-10-18T22:04:45.9674675Z [36;1m    break[0m
+2026-10-18T22:04:45.9674871Z [36;1m  else[0m
+2026-10-18T22:04:45.9675066Z [36;1m    status=$?[0m
+2026-10-18T22:04:45.9675258Z [36;1m  fi[0m
+2026-10-18T22:04:45.9675529Z [36;1m  if [[ $attempt == 5 ]] || ! grep -Fq 'checksum failed for ' "$log" \[0m
+2026-10-18T22:04:45.9676069Z [36;1m      || ! grep -Fq 'this is likely due to an ongoing update of the official release server' "$log"; then[0m
+2026-10-18T22:04:45.9676518Z [36;1m    exit "$status"[0m
+2026-10-18T22:04:45.9676722Z [36;1m  fi[0m
+2026-10-18T22:04:45.9677057Z [36;1m  echo "Retrying rustup toolchain install in 30 seconds (retry $attempt of 4)" >&2[0m
+2026-10-18T22:04:45.9677466Z [36;1m  sleep 30[0m
+2026-10-18T22:04:45.9677654Z [36;1mdone[0m
+2026-10-18T22:04:45.9698898Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:04:45.9699305Z env:
+2026-10-18T22:04:45.9699478Z   VERSION: 1.2.0
+2026-10-18T22:04:45.9699687Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-10-18T22:04:45.9699957Z   toolchain: stable
+2026-10-18T22:04:45.9700146Z   targets: 
+2026-10-18T22:04:45.9700781Z   components: 
+2026-10-18T22:04:45.9700984Z   RUSTUP_PERMIT_COPY_RENAME: 1
+2026-10-18T22:04:45.9701207Z ##[endgroup]
+2026-10-18T22:04:49.3079759Z info: syncing channel updates for stable-x86_64-pc-windows-msvc
+2026-10-18T22:04:49.7684574Z info: latest update on 2026-10-15 for version 1.99.1 (58cf8f9c3 2026-10-13)
+2026-10-18T22:04:49.8139531Z info: removing previous version of component rustfmt
+2026-10-18T22:04:49.8297380Z info: removing previous version of component clippy
+2026-10-18T22:04:49.8455317Z info: removing previous version of component rust-std for target x86_64-pc-windows-gnu
+2026-10-18T22:04:49.9885383Z info: removing previous version of component rust-std for target i686-pc-windows-msvc
+2026-10-18T22:04:50.0834619Z info: removing previous version of component cargo
+2026-10-18T22:04:50.1783867Z info: removing previous version of component rust-std
+2026-10-18T22:04:50.2568755Z info: removing previous version of component rustc
+2026-10-18T22:04:50.3679450Z info: downloading 7 components
+2026-10-18T22:05:02.2657950Z 
+2026-10-18T22:05:03.6586230Z   stable-x86_64-pc-windows-msvc updated - rustc 1.99.1 (58cf8f9c3 2026-10-13) (from rustc 1.99.0 (b940084d7 2026-09-28))
+2026-10-18T22:05:03.6587395Z 
+2026-10-18T22:05:03.6888440Z ##[end-action id=__dtolnay_rust-toolchain.__run_4;outcome=success;conclusion=success;duration_ms=17737]
+2026-10-18T22:05:03.6896731Z ##[start-action display=rustup default stable;id=__dtolnay_rust-toolchain.__run_5]
+2026-10-18T22:05:03.7071173Z ##[group]Run rustup default "$toolchain" --force-non-host
+2026-10-18T22:05:03.7071589Z [36;1mrustup default "$toolchain" --force-non-host[0m
+2026-10-18T22:05:03.7088363Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:05:03.7088749Z env:
+2026-10-18T22:05:03.7088918Z   VERSION: 1.2.0
+2026-10-18T22:05:03.7089122Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-10-18T22:05:03.7089402Z   toolchain: stable
+2026-10-18T22:05:03.7089586Z ##[endgroup]
+2026-10-18T22:05:03.7816831Z info: using existing install for stable-x86_64-pc-windows-msvc
+2026-10-18T22:05:03.8359527Z info: default toolchain set to stable-x86_64-pc-windows-msvc
+2026-10-18T22:05:03.8360134Z 
+2026-10-18T22:05:03.8584470Z   stable-x86_64-pc-windows-msvc unchanged - rustc 1.99.1 (58cf8f9c3 2026-10-13)
+2026-10-18T22:05:03.8584861Z 
+2026-10-18T22:05:03.8669212Z ##[end-action id=__dtolnay_rust-toolchain.__run_5;outcome=success;conclusion=success;duration_ms=177]
+2026-10-18T22:05:03.8673533Z ##[start-action display=Create cachekey;id=__dtolnay_rust-toolchain.rustc-version]
+2026-10-18T22:05:03.8807416Z ##[group]Run DATE=$(rustc +"$toolchain" --version --verbose | sed -ne 's/^commit-date: \(20[0-9][0-9]\)-\([01][0-9]\)-\([0-3][0-9]\)$/\1\2\3/p')
+2026-10-18T22:05:03.8808286Z [36;1mDATE=$(rustc +"$toolchain" --version --verbose | sed -ne 's/^commit-date: \(20[0-9][0-9]\)-\([01][0-9]\)-\([0-3][0-9]\)$/\1\2\3/p')[0m
+2026-10-18T22:05:03.8808975Z [36;1mHASH=$(rustc +"$toolchain" --version --verbose | sed -ne 's/^commit-hash: //p')[0m
+2026-10-18T22:05:03.8809481Z [36;1mecho "cachekey=$(echo $DATE$HASH | head -c12)" >> $GITHUB_OUTPUT[0m
+2026-10-18T22:05:03.8825867Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:05:03.8826341Z env:
+2026-10-18T22:05:03.8826510Z   VERSION: 1.2.0
+2026-10-18T22:05:03.8826720Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-10-18T22:05:03.8826969Z   toolchain: stable
+2026-10-18T22:05:03.8827155Z ##[endgroup]
+2026-10-18T22:05:04.5876875Z ##[end-action id=__dtolnay_rust-toolchain.rustc-version;outcome=success;conclusion=success;duration_ms=720]
+2026-10-18T22:05:04.5879576Z ##[start-action display=Disable incremental compilation;id=__dtolnay_rust-toolchain.__run_6]
+2026-10-18T22:05:04.6021113Z ##[group]Run if [ -z "${CARGO_INCREMENTAL+set}" ]; then
+2026-10-18T22:05:04.6021620Z [36;1mif [ -z "${CARGO_INCREMENTAL+set}" ]; then[0m
+2026-10-18T22:05:04.6022073Z [36;1m  echo CARGO_INCREMENTAL=0 >> $GITHUB_ENV[0m
+2026-10-18T22:05:04.6022431Z [36;1mfi[0m
+2026-10-18T22:05:04.6038846Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:05:04.6039258Z env:
+2026-10-18T22:05:04.6039433Z   VERSION: 1.2.0
+2026-10-18T22:05:04.6039656Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-10-18T22:05:04.6039928Z ##[endgroup]
+2026-10-18T22:05:04.6554034Z ##[end-action id=__dtolnay_rust-toolchain.__run_6;outcome=success;conclusion=success;duration_ms=67]
+2026-10-18T22:05:04.6556805Z ##[start-action display=Enable colors in Cargo output;id=__dtolnay_rust-toolchain.__run_7]
+2026-10-18T22:05:04.6693005Z ##[group]Run if [ -z "${CARGO_TERM_COLOR+set}" ]; then
+2026-10-18T22:05:04.6693375Z [36;1mif [ -z "${CARGO_TERM_COLOR+set}" ]; then[0m
+2026-10-18T22:05:04.6693696Z [36;1m  echo CARGO_TERM_COLOR=always >> $GITHUB_ENV[0m
+2026-10-18T22:05:04.6693971Z [36;1mfi[0m
+2026-10-18T22:05:04.6709117Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:05:04.6710539Z env:
+2026-10-18T22:05:04.6711024Z   VERSION: 1.2.0
+2026-10-18T22:05:04.6711391Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-10-18T22:05:04.6711847Z   CARGO_INCREMENTAL: 0
+2026-10-18T22:05:04.6712216Z ##[endgroup]
+2026-10-18T22:05:04.7126255Z ##[end-action id=__dtolnay_rust-toolchain.__run_7;outcome=success;conclusion=success;duration_ms=56]
+2026-10-18T22:05:04.7130546Z ##[start-action display=Enable Cargo sparse registry;id=__dtolnay_rust-toolchain.__run_8]
+2026-10-18T22:05:04.7269290Z ##[group]Run # implemented in 1.66, stabilized in 1.68, made default in 1.70
+2026-10-18T22:05:04.7269826Z [36;1m# implemented in 1.66, stabilized in 1.68, made default in 1.70[0m
+2026-10-18T22:05:04.7270501Z [36;1mif [ -z "${CARGO_REGISTRIES_CRATES_IO_PROTOCOL+set}" -o -f "D:\a\_temp"/.implicit_cargo_registries_crates_io_protocol ]; then[0m
+2026-10-18T22:05:04.7271225Z [36;1m  if rustc +"$toolchain" --version --verbose | grep -q '^release: 1\.6[89]\.'; then[0m
+2026-10-18T22:05:04.7271799Z [36;1m    touch "D:\a\_temp"/.implicit_cargo_registries_crates_io_protocol || true[0m
+2026-10-18T22:05:04.7272300Z [36;1m    echo CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse >> $GITHUB_ENV[0m
+2026-10-18T22:05:04.7272875Z [36;1m  elif rustc +"$toolchain" --version --verbose | grep -q '^release: 1\.6[67]\.'; then[0m
+2026-10-18T22:05:04.7273421Z [36;1m    touch "D:\a\_temp"/.implicit_cargo_registries_crates_io_protocol || true[0m
+2026-10-18T22:05:04.7273900Z [36;1m    echo CARGO_REGISTRIES_CRATES_IO_PROTOCOL=git >> $GITHUB_ENV[0m
+2026-10-18T22:05:04.7274252Z [36;1m  fi[0m
+2026-10-18T22:05:04.7274432Z [36;1mfi[0m
+2026-10-18T22:05:04.7291029Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:05:04.7291413Z env:
+2026-10-18T22:05:04.7291590Z   VERSION: 1.2.0
+2026-10-18T22:05:04.7291798Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-10-18T22:05:04.7292060Z   CARGO_INCREMENTAL: 0
+2026-10-18T22:05:04.7292277Z   CARGO_TERM_COLOR: always
+2026-10-18T22:05:04.7292496Z   toolchain: stable
+2026-10-18T22:05:04.7292693Z ##[endgroup]
+2026-10-18T22:05:04.9150544Z ##[end-action id=__dtolnay_rust-toolchain.__run_8;outcome=success;conclusion=success;duration_ms=201]
+2026-10-18T22:05:04.9154285Z ##[start-action display=Work around spurious network errors in curl 8.0;id=__dtolnay_rust-toolchain.__run_9]
+2026-10-18T22:05:04.9287636Z ##[group]Run # https://rust-lang.zulipchat.com/#narrow/stream/246057-t-cargo/topic/timeout.20investigation
+2026-10-18T22:05:04.9288518Z [36;1m# https://rust-lang.zulipchat.com/#narrow/stream/246057-t-cargo/topic/timeout.20investigation[0m
+2026-10-18T22:05:04.9289267Z [36;1mif rustc +"$toolchain" --version --verbose | grep -q '^release: 1\.7[01]\.'; then[0m
+2026-10-18T22:05:04.9289835Z [36;1m  echo CARGO_HTTP_MULTIPLEXING=false >> $GITHUB_ENV[0m
+2026-10-18T22:05:04.9290192Z [36;1mfi[0m
+2026-10-18T22:05:04.9306261Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:05:04.9306723Z env:
+2026-10-18T22:05:04.9306943Z   VERSION: 1.2.0
+2026-10-18T22:05:04.9307175Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-10-18T22:05:04.9307468Z   CARGO_INCREMENTAL: 0
+2026-10-18T22:05:04.9307699Z   CARGO_TERM_COLOR: always
+2026-10-18T22:05:04.9307942Z   toolchain: stable
+2026-10-18T22:05:04.9308152Z ##[endgroup]
+2026-10-18T22:05:05.0433833Z ##[end-action id=__dtolnay_rust-toolchain.__run_9;outcome=success;conclusion=success;duration_ms=127]
+2026-10-18T22:05:05.0440892Z ##[start-action display=rustc +stable --version --verbose;id=__dtolnay_rust-toolchain.__run_10]
+2026-10-18T22:05:05.0572716Z ##[group]Run rustc +"$toolchain" --version --verbose
+2026-10-18T22:05:05.0573111Z [36;1mrustc +"$toolchain" --version --verbose[0m
+2026-10-18T22:05:05.0589726Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:05:05.0590130Z env:
+2026-10-18T22:05:05.0590298Z   VERSION: 1.2.0
+2026-10-18T22:05:05.0590687Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-10-18T22:05:05.0590956Z   CARGO_INCREMENTAL: 0
+2026-10-18T22:05:05.0591309Z   CARGO_TERM_COLOR: always
+2026-10-18T22:05:05.0591533Z   toolchain: stable
+2026-10-18T22:05:05.0591721Z ##[endgroup]
+2026-10-18T22:05:05.1468374Z rustc 1.99.1 (58cf8f9c3 2026-10-13)
+2026-10-18T22:05:05.1468919Z binary: rustc
+2026-10-18T22:05:05.1469357Z commit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67
+2026-10-18T22:05:05.1469893Z commit-date: 2026-10-13
+2026-10-18T22:05:05.1470278Z host: x86_64-pc-windows-msvc
+2026-10-18T22:05:05.1470746Z release: 1.99.1
+2026-10-18T22:05:05.1471205Z LLVM version: 23.1.1
+2026-10-18T22:05:05.1600422Z ##[end-action id=__dtolnay_rust-toolchain.__run_10;outcome=success;conclusion=success;duration_ms=115]
+2026-10-18T22:05:05.1786935Z ##[group]Run $cap = Get-WindowsCapability -Online | Where-Object Name -like 'VBSCRIPT*'
+2026-10-18T22:05:05.1787682Z [36;1m$cap = Get-WindowsCapability -Online | Where-Object Name -like 'VBSCRIPT*'[0m
+2026-10-18T22:05:05.1788335Z [36;1mif ($cap -and $cap.State -ne 'Installed') { Add-WindowsCapability -Online -Name $cap.Name }[0m
+2026-10-18T22:05:05.1788952Z [36;1m(Get-WindowsCapability -Online | Where-Object Name -like 'VBSCRIPT*').State[0m
+2026-10-18T22:05:05.1869043Z shell: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE -command ". '{0}'"
+2026-10-18T22:05:05.1869532Z env:
+2026-10-18T22:05:05.1869731Z   VERSION: 1.2.0
+2026-10-18T22:05:05.1870012Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-10-18T22:05:05.1870326Z   CARGO_INCREMENTAL: 0
+2026-10-18T22:05:05.1870566Z   CARGO_TERM_COLOR: always
+2026-10-18T22:05:05.1870810Z ##[endgroup]
+2026-10-18T22:05:08.9306179Z Installed
+2026-10-18T22:05:09.0593175Z ##[group]Run Swatinem/rust-cache@v2
+2026-10-18T22:05:09.0593494Z with:
+2026-10-18T22:05:09.0593695Z   workspaces: apps/desktop/src-tauri
+2026-10-18T22:05:09.0593954Z   prefix-key: v0-rust
+2026-10-18T22:05:09.0594169Z   add-job-id-key: true
+2026-10-18T22:05:09.0594408Z   add-rust-environment-hash-key: true
+2026-10-18T22:05:09.0594658Z   cache-targets: true
+2026-10-18T22:05:09.0594862Z   cache-all-crates: false
+2026-10-18T22:05:09.0595082Z   cache-workspace-crates: false
+2026-10-18T22:05:09.0595309Z   save-if: true
+2026-10-18T22:05:09.0595493Z   cache-provider: github
+2026-10-18T22:05:09.0595696Z   cache-bin: true
+2026-10-18T22:05:09.0595877Z   lookup-only: false
+2026-10-18T22:05:09.0596068Z   cmd-format: {0}
+2026-10-18T22:05:09.0596237Z env:
+2026-10-18T22:05:09.0596409Z   VERSION: 1.2.0
+2026-10-18T22:05:09.0596615Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-10-18T22:05:09.0596869Z   CARGO_INCREMENTAL: 0
+2026-10-18T22:05:09.0597065Z   CARGO_TERM_COLOR: always
+2026-10-18T22:05:09.0597297Z ##[endgroup]
+2026-10-18T22:05:10.7165816Z ##[group]Cache Configuration
+2026-10-18T22:05:10.7166556Z Cache Provider:
+2026-10-18T22:05:10.7166873Z     github
+2026-10-18T22:05:10.7167171Z Workspaces:
+2026-10-18T22:05:10.7167546Z     D:\a\NexusLink\NexusLink\apps\desktop\src-tauri
+2026-10-18T22:05:10.7168807Z Cache Paths:
+2026-10-18T22:05:10.7169208Z     C:\Users\runneradmin\.cargo\bin
+2026-10-18T22:05:10.7169700Z     C:\Users\runneradmin\.cargo\.crates.toml
+2026-10-18T22:05:10.7170228Z     C:\Users\runneradmin\.cargo\.crates2.json
+2026-10-18T22:05:10.7170721Z     C:\Users\runneradmin\.cargo\registry
+2026-10-18T22:05:10.7171128Z     C:\Users\runneradmin\.cargo\git
+2026-10-18T22:05:10.7171638Z     D:\a\NexusLink\NexusLink\apps\desktop\src-tauri\target
+2026-10-18T22:05:10.7172182Z Restore Key:
+2026-10-18T22:05:10.7172541Z     v0-rust-desktop-Windows_NT-x64-e70cdc14
+2026-10-18T22:05:10.7173003Z Cache Key:
+2026-10-18T22:05:10.7173433Z     v0-rust-desktop-Windows_NT-x64-e70cdc14-ec776326
+2026-10-18T22:05:10.7173968Z .. Prefix:
+2026-10-18T22:05:10.7174300Z   - v0-rust-desktop-Windows_NT-x64
+2026-10-18T22:05:10.7174720Z .. Environment considered:
+2026-10-18T22:05:10.7175089Z   - Rust Versions:
+2026-10-18T22:05:10.7175593Z     - 1.99.1 x86_64-pc-windows-msvc 58cf8f9c35b355199727627d07ae34a4e2846d67
+2026-10-18T22:05:10.7176658Z   - CARGO_HOME
+2026-10-18T22:05:10.7176960Z   - CARGO_INCREMENTAL
+2026-10-18T22:05:10.7177292Z   - CARGO_TERM_COLOR
+2026-10-18T22:05:10.7177655Z .. Lockfiles considered:
+2026-10-18T22:05:10.7178422Z   - D:\a\NexusLink\NexusLink\apps\desktop\src-tauri\Cargo.lock
+2026-10-18T22:05:10.7179129Z   - D:\a\NexusLink\NexusLink\apps\desktop\src-tauri\Cargo.toml
+2026-10-18T22:05:10.7179972Z ##[endgroup]
+2026-10-18T22:05:10.7180153Z 
+2026-10-18T22:05:10.7180288Z ... Restoring cache ...
+2026-10-18T22:05:10.9132110Z Cache hit for: v0-rust-desktop-Windows_NT-x64-e70cdc14-ec776326
+2026-10-18T22:05:11.9631412Z Received 176160768 of 710068716 (24.8%), 164.9 MBs/sec
+2026-10-18T22:05:13.1233866Z Received 402653184 of 710068716 (56.7%), 176.2 MBs/sec
+2026-10-18T22:05:14.1430449Z Received 599785472 of 710068716 (84.5%), 178.8 MBs/sec
+2026-10-18T22:05:14.7714069Z Received 710068716 of 710068716 (100.0%), 176.9 MBs/sec
+2026-10-18T22:05:14.7719406Z Cache Size: ~677 MB (710068716 B)
+2026-10-18T22:05:14.7767845Z [command]"C:\Program Files\Git\usr\bin\tar.exe" -xf D:/a/_temp/9f6d03ba-40f7-403e-af1a-d5f54aced08e/cache.tzst -P -C D:/a/NexusLink/NexusLink --force-local --use-compress-program "zstd -d"
+2026-10-18T22:05:28.8823853Z Cache restored successfully
+2026-10-18T22:05:28.9352022Z Restored from cache key "v0-rust-desktop-Windows_NT-x64-e70cdc14-ec776326" full match: true.
+2026-10-18T22:05:28.9712645Z ##[group]Run if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+2026-10-18T22:05:28.9713418Z [36;1mif [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then[0m
+2026-10-18T22:05:28.9714214Z [36;1m  echo "UPDATER_SIGN=true" >> "$GITHUB_ENV"[0m
+2026-10-18T22:05:28.9714710Z [36;1melse[0m
+2026-10-18T22:05:28.9715108Z [36;1m  echo "UPDATER_SIGN=false" >> "$GITHUB_ENV"[0m
+2026-10-18T22:05:28.9715777Z [36;1m  echo "⚠️ لا مفتاح توقيع updater — سيُبنى بلا updater artifacts"[0m
+2026-10-18T22:05:28.9716370Z [36;1mfi[0m
+2026-10-18T22:05:28.9742052Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:05:28.9742747Z env:
+2026-10-18T22:05:28.9743045Z   VERSION: 1.2.0
+2026-10-18T22:05:28.9743428Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-10-18T22:05:28.9744172Z   CARGO_INCREMENTAL: 0
+2026-10-18T22:05:28.9744548Z   CARGO_TERM_COLOR: always
+2026-10-18T22:05:28.9745042Z   CACHE_ON_FAILURE: false
+2026-10-18T22:05:28.9750852Z   TAURI_SIGNING_PRIVATE_KEY: ***
+2026-10-18T22:05:28.9751316Z ##[endgroup]
+2026-10-18T22:05:29.0366223Z ##[group]Run if [ "$UPDATER_SIGN" = "true" ]; then
+2026-10-18T22:05:29.0366683Z [36;1mif [ "$UPDATER_SIGN" = "true" ]; then[0m
+2026-10-18T22:05:29.0367051Z [36;1m  CONFIG='{"bundle":{"externalBin":["binaries/node"]}}'[0m
+2026-10-18T22:05:29.0367371Z [36;1melse[0m
+2026-10-18T22:05:29.0367678Z [36;1m  # بلا مفتاح: عطّل updater artifacts وإلا فشل البناء (pubkey بلا مفتاح خاص)[0m
+2026-10-18T22:05:29.0368239Z [36;1m  CONFIG='{"bundle":{"externalBin":["binaries/node"],"createUpdaterArtifacts":false}}'[0m
+2026-10-18T22:05:29.0368688Z [36;1mfi[0m
+2026-10-18T22:05:29.0369075Z [36;1mbunx @tauri-apps/cli@^2 build -v \[0m
+2026-10-18T22:05:29.0369387Z [36;1m  --bundles nsis msi \[0m
+2026-10-18T22:05:29.0369645Z [36;1m  --config "$CONFIG"[0m
+2026-10-18T22:05:29.0386900Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-18T22:05:29.0387296Z env:
+2026-10-18T22:05:29.0387473Z   VERSION: 1.2.0
+2026-10-18T22:05:29.0387728Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-10-18T22:05:29.0388005Z   CARGO_INCREMENTAL: 0
+2026-10-18T22:05:29.0388226Z   CARGO_TERM_COLOR: always
+2026-10-18T22:05:29.0388451Z   CACHE_ON_FAILURE: false
+2026-10-18T22:05:29.0388665Z   UPDATER_SIGN: true
+2026-10-18T22:05:29.0388874Z   APPIMAGE_EXTRACT_AND_RUN: 1
+2026-10-18T22:05:29.0389318Z   NO_STRIP: true
+2026-10-18T22:05:29.0389518Z   CMAKE_POLICY_VERSION_MINIMUM: 3.5
+2026-10-18T22:05:29.0392312Z   TAURI_SIGNING_PRIVATE_KEY: ***
+2026-10-18T22:05:29.0392631Z   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ***
+2026-10-18T22:05:29.0393113Z ##[endgroup]
+2026-10-18T22:05:29.1209878Z Resolving dependencies
+2026-10-18T22:05:29.4158684Z Resolved, downloaded and extracted [27]
+2026-10-18T22:05:29.4668536Z Saved lockfile
+2026-10-18T22:05:29.6659160Z        Debug [tauri_cli::helpers::app_paths] Found Tauri project inside D:\a\NexusLink\NexusLink\apps\desktop\src-tauri on early lookup
+2026-10-18T22:05:29.6660544Z        Debug [tauri_cli::helpers::app_paths] resolving frontend directory from D:\a\NexusLink\NexusLink\apps\desktop
+2026-10-18T22:05:29.6661672Z        Debug [globset] built glob set; 0 literals, 3 basenames, 0 extensions, 0 prefixes, 0 suffixes, 0 required extensions, 0 regexes
+2026-10-18T22:05:29.6665376Z        Debug [ignore::gitignore] opened gitignore file: \\?\D:\a\NexusLink\NexusLink\.gitignore
+2026-10-18T22:05:29.6668652Z        Debug [globset] glob `Glob("**/.env*")` converted to regex: `"(?-u)^(?:/?|.*/)\\.env[^/]*$"`
+2026-10-18T22:05:29.6669800Z        Debug [globset] glob `Glob("**/.pnp.*")` converted to regex: `"(?-u)^(?:/?|.*/)\\.pnp\\.[^/]*$"`
+2026-10-18T22:05:29.6670950Z        Debug [globset] glob `Glob("**/.pnpm-debug.log*")` converted to regex: `"(?-u)^(?:/?|.*/)\\.pnpm\\-debug\\.log[^/]*$"`
+2026-10-18T22:05:29.6672008Z        Debug [globset] glob `Glob(".yarn/*")` converted to regex: `"(?-u)^\\.yarn/[^/]*$"`
+2026-10-18T22:05:29.6673010Z        Debug [globset] glob `Glob("apps/desktop/src-tauri/binaries/node-*")` converted to regex: `"(?-u)^apps/desktop/src\\-tauri/binaries/node\\-[^/]*$"`
+2026-10-18T22:05:29.6674016Z        Debug [globset] glob `Glob("**/local-*")` converted to regex: `"(?-u)^(?:/?|.*/)local\\-[^/]*$"`
+2026-10-18T22:05:29.6674837Z        Debug [globset] glob `Glob("**/npm-debug.log*")` converted to regex: `"(?-u)^(?:/?|.*/)npm\\-debug\\.log[^/]*$"`
+2026-10-18T22:05:29.6675821Z        Debug [globset] glob `Glob("**/yarn-debug.log*")` converted to regex: `"(?-u)^(?:/?|.*/)yarn\\-debug\\.log[^/]*$"`
+2026-10-18T22:05:29.6677157Z        Debug [globset] glob `Glob("**/yarn-error.log*")` converted to regex: `"(?-u)^(?:/?|.*/)yarn\\-error\\.log[^/]*$"`
+2026-10-18T22:05:29.6678175Z        Debug [globset] built glob set; 26 literals, 14 basenames, 7 extensions, 0 prefixes, 0 suffixes, 0 required extensions, 9 regexes
+2026-10-18T22:05:29.6679013Z        Debug [ignore::gitignore] opened gitignore file: \\?\D:\a\NexusLink\NexusLink\.git\info\exclude
+2026-10-18T22:05:29.6686250Z        Debug [ignore::gitignore] opened gitignore file: D:\a\NexusLink\NexusLink\apps\desktop\src-tauri\binaries\.gitignore
+2026-10-18T22:05:29.6687164Z        Debug [globset] glob `Glob("**/node-*")` converted to regex: `"(?-u)^(?:/?|.*/)node\\-[^/]*$"`
+2026-10-18T22:05:29.6687958Z        Debug [globset] built glob set; 0 literals, 1 basenames, 0 extensions, 0 prefixes, 0 suffixes, 0 required extensions, 1 regexes
+2026-10-18T22:05:29.6690252Z        Debug [ignore::walk] ignoring D:\a\NexusLink\NexusLink\apps\desktop\src-tauri\binaries\node-x86_64-pc-windows-msvc.exe: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("D:\\a\\NexusLink\\NexusLink\\apps\\desktop\\src-tauri\\binaries\\.gitignore"), original: "node-*", actual: "**/node-*", is_whitelist: false, is_only_dir: false })))
+2026-10-18T22:05:29.6693092Z        Debug [ignore::walk] whitelisting D:\a\NexusLink\NexusLink\apps\desktop\src-tauri\binaries\.gitignore: Whitelist(IgnoreMatch(Gitignore(Glob { from: Some("D:\\a\\NexusLink\\NexusLink\\apps\\desktop\\src-tauri\\binaries\\.gitignore"), original: "!.gitignore", actual: "**/.gitignore", is_whitelist: true, is_only_dir: false })))
+2026-10-18T22:05:29.6694782Z        Debug [ignore::walk] ignoring D:\a\NexusLink\NexusLink\apps\desktop\src-tauri\binaries\.gitkeep: Ignore(IgnoreMatch(Hidden))
+2026-10-18T22:05:29.7713071Z         Info [tauri_cli::build] Looking up installed tauri packages to check mismatched versions...
+2026-10-18T22:05:34.2643829Z      Running [tauri_cli] Command `cargo build --bins --features tauri/custom-protocol --release`
+2026-10-18T22:05:34.3749918Z [1m[92m    Updating[0m crates.io index
+2026-10-18T22:06:08.1773791Z [1m[92m   Compiling[0m nexuslink-desktop v1.2.0 (D:\a\NexusLink\NexusLink\apps\desktop\src-tauri)
+2026-10-18T22:06:12.9760469Z [1m[93mwarning[0m[1m[97m: unused imports: `OpenDecision` and `open_decision`[0m
+2026-10-18T22:06:12.9761618Z   [1m[96m--> [0msrc\files_menu.rs:18:36
+2026-10-18T22:06:12.9762137Z    [1m[96m|[0m
+2026-10-18T22:06:12.9763210Z [1m[96m18[0m [1m[96m|[0m     collect_send_paths, menu_spec, open_decision, parse_content_range, range_header,
+2026-10-18T22:06:12.9764633Z    [1m[96m|[0m                                    [1m[93m^^^^^^^^^^^^^[0m
+2026-10-18T22:06:12.9766174Z [1m[96m19[0m [1m[96m|[0m     sanitize_stream_name, OpenDecision, DEFAULT_THRESHOLD,
+2026-10-18T22:06:12.9767085Z    [1m[96m|[0m                           [1m[93m^^^^^^^^^^^^[0m
+2026-10-18T22:06:12.9767575Z    [1m[96m|[0m
+2026-10-18T22:06:12.9768221Z    [1m[96m= [0m[1m[97mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+2026-10-18T22:06:12.9768780Z 
+2026-10-18T22:06:12.9782324Z [1m[93mwarning[0m[1m[97m: unused import: `Emitter`[0m
+2026-10-18T22:06:12.9782904Z   [1m[96m--> [0msrc\lock.rs:12:24
+2026-10-18T22:06:12.9783223Z    [1m[96m|[0m
+2026-10-18T22:06:12.9784316Z [1m[96m12[0m [1m[96m|[0m use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+2026-10-18T22:06:12.9785020Z    [1m[96m|[0m                        [1m[93m^^^^^^^[0m
+2026-10-18T22:06:12.9785641Z 
+2026-10-18T22:06:12.9806494Z [1m[93mwarning[0m[1m[97m: unused import: `serde_json::json`[0m
+2026-10-18T22:06:12.9807116Z  [1m[96m--> [0msrc\sync.rs:9:5
+2026-10-18T22:06:12.9807481Z   [1m[96m|[0m
+2026-10-18T22:06:12.9807959Z [1m[96m9[0m [1m[96m|[0m use serde_json::json;
+2026-10-18T22:06:12.9808403Z   [1m[96m|[0m     [1m[93m^^^^^^^^^^^^^^^^[0m
+2026-10-18T22:06:12.9808647Z 
+2026-10-18T22:06:12.9812898Z [1m[93mwarning[0m[1m[97m: unused import: `Manager`[0m
+2026-10-18T22:06:12.9813588Z   [1m[96m--> [0msrc\updater.rs:14:33
+2026-10-18T22:06:12.9814047Z    [1m[96m|[0m
+2026-10-18T22:06:12.9814698Z [1m[96m14[0m [1m[96m|[0m use tauri::{AppHandle, Emitter, Manager};
+2026-10-18T22:06:12.9815427Z    [1m[96m|[0m                                 [1m[93m^^^^^^^[0m
+2026-10-18T22:06:12.9815816Z 
+2026-10-18T22:06:13.2133785Z [1m[91merror[E0596][0m[1m[97m: cannot borrow `g` as mutable, as it is not declared as mutable[0m
+2026-10-18T22:06:13.2136518Z     [1m[96m--> [0msrc\media.rs:1510:11
+2026-10-18T22:06:13.2137042Z      [1m[96m|[0m
+2026-10-18T22:06:13.2137511Z [1m[96m1510[0m [1m[96m|[0m     match g.as_mut() {
+2026-10-18T22:06:13.2138189Z      [1m[96m|[0m           [1m[91m^[0m [1m[91mcannot borrow as mutable[0m
+2026-10-18T22:06:13.2138746Z      [1m[96m|[0m
+2026-10-18T22:06:13.2139292Z [1m[96mhelp[0m: consider changing this to be mutable
+2026-10-18T22:06:13.2139829Z      [1m[96m|[0m
+2026-10-18T22:06:13.2140352Z [1m[96m1509[0m [1m[96m| [0m    let [92mmut [0mg = SCREEN.lock().unwrap();
+2026-10-18T22:06:13.2140992Z      [1m[96m|[0m         [92m+++[0m
+2026-10-18T22:06:13.2141264Z 
+2026-10-18T22:06:14.0858631Z [1m[93mwarning[0m[1m[97m: unused variable: `s`[0m
+2026-10-18T22:06:14.0859965Z   [1m[96m--> [0msrc\diag.rs:33:12
+2026-10-18T22:06:14.0860701Z    [1m[96m|[0m
+2026-10-18T22:06:14.0861618Z [1m[96m33[0m [1m[96m|[0m         Ok(s) => (true, t0.elapsed().as_millis()),
+2026-10-18T22:06:14.0863400Z    [1m[96m|[0m            [1m[93m^[0m [1m[93mhelp: if this is intentional, prefix it with an underscore: `_s`[0m
+2026-10-18T22:06:14.0864800Z    [1m[96m|[0m
+2026-10-18T22:06:14.0866084Z    [1m[96m= [0m[1m[97mnote[0m: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+2026-10-18T22:06:14.0867056Z 
+2026-10-18T22:06:14.1533475Z [1m[93mwarning[0m[1m[97m: unused variable: `app`[0m
+2026-10-18T22:06:14.1534260Z   [1m[96m--> [0msrc\input.rs:59:17
+2026-10-18T22:06:14.1536446Z    [1m[96m|[0m
+2026-10-18T22:06:14.1537754Z [1m[96m59[0m [1m[96m|[0m fn exec_channel(app: &tauri::AppHandle) -> mpsc::Sender<InputMsg> {
+2026-10-18T22:06:14.1539044Z    [1m[96m|[0m                 [1m[93m^^^[0m [1m[93mhelp: if this is intentional, prefix it with an underscore: `_app`[0m
+2026-10-18T22:06:14.1539737Z 
+2026-10-18T22:06:14.3379232Z [1m[93mwarning[0m[1m[97m: unused variable: `target`[0m
+2026-10-18T22:06:14.3380098Z    [1m[96m--> [0msrc\media.rs:707:14
+2026-10-18T22:06:14.3380586Z     [1m[96m|[0m
+2026-10-18T22:06:14.3381580Z [1m[96m707[0m [1m[96m|[0m fn full_dims(target: &str, tinfo: &Option<TargetInfo>) -> Result<(u32, u32, (i32, i32)), String> {
+2026-10-18T22:06:14.3382984Z     [1m[96m|[0m              [1m[93m^^^^^^[0m [1m[93mhelp: if this is intentional, prefix it with an underscore: `_target`[0m
+2026-10-18T22:06:14.3383653Z 
+2026-10-18T22:06:14.3543272Z [1m[93mwarning[0m[1m[97m: unused variable: `w`[0m
+2026-10-18T22:06:14.3544100Z     [1m[96m--> [0msrc\media.rs:1315:10
+2026-10-18T22:06:14.3545030Z      [1m[96m|[0m
+2026-10-18T22:06:14.3546106Z [1m[96m1315[0m [1m[96m|[0m     let (w, h) = core::scaled_dims(full_w, full_h, preset.scale);
+2026-10-18T22:06:14.3547175Z      [1m[96m|[0m          [1m[93m^[0m [1m[93mhelp: if this is intentional, prefix it with an underscore: `_w`[0m
+2026-10-18T22:06:14.3547767Z 
+2026-10-18T22:06:14.3548054Z [1m[93mwarning[0m[1m[97m: unused variable: `h`[0m
+2026-10-18T22:06:14.3548588Z     [1m[96m--> [0msrc\media.rs:1315:13
+2026-10-18T22:06:14.3549008Z      [1m[96m|[0m
+2026-10-18T22:06:14.3549663Z [1m[96m1315[0m [1m[96m|[0m     let (w, h) = core::scaled_dims(full_w, full_h, preset.scale);
+2026-10-18T22:06:14.3550680Z      [1m[96m|[0m             [1m[93m^[0m [1m[93mhelp: if this is intentional, prefix it with an underscore: `_h`[0m
+2026-10-18T22:06:14.3551266Z 
+2026-10-18T22:06:14.4213932Z [1m[93mwarning[0m[1m[97m: variable does not need to be mutable[0m
+2026-10-18T22:06:14.4214797Z     [1m[96m--> [0msrc\media.rs:2364:9
+2026-10-18T22:06:14.4215228Z      [1m[96m|[0m
+2026-10-18T22:06:14.4215726Z [1m[96m2364[0m [1m[96m|[0m     let mut rx = match vcam_take_rx() {
+2026-10-18T22:06:14.4216366Z      [1m[96m|[0m         [1m[96m----[0m[1m[93m^^[0m
+2026-10-18T22:06:14.4216867Z      [1m[96m|[0m         [1m[96m|[0m
+2026-10-18T22:06:14.4217676Z      [1m[96m|[0m         [1m[96mhelp: remove this `mut`[0m
+2026-10-18T22:06:14.4218164Z      [1m[96m|[0m
+2026-10-18T22:06:14.4218804Z      [1m[96m= [0m[1m[97mnote[0m: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+2026-10-18T22:06:14.4219351Z 
+2026-10-18T22:06:14.4286827Z [1m[93mwarning[0m[1m[97m: variable does not need to be mutable[0m
+2026-10-18T22:06:14.4287637Z     [1m[96m--> [0msrc\media.rs:2513:9
+2026-10-18T22:06:14.4288136Z      [1m[96m|[0m
+2026-10-18T22:06:14.4288735Z [1m[96m2513[0m [1m[96m|[0m     let mut vmic_rx = match vmic_take_rx() {
+2026-10-18T22:06:14.4289561Z      [1m[96m|[0m         [1m[96m----[0m[1m[93m^^^^^^^[0m
+2026-10-18T22:06:14.4290176Z      [1m[96m|[0m         [1m[96m|[0m
+2026-10-18T22:06:14.4290796Z      [1m[96m|[0m         [1m[96mhelp: remove this `mut`[0m
+2026-10-18T22:06:14.4291174Z 
+2026-10-18T22:06:14.5082544Z [1m[93mwarning[0m[1m[97m: unused variable: `app2`[0m
+2026-10-18T22:06:14.5083270Z    [1m[96m--> [0msrc\procman.rs:821:25
+2026-10-18T22:06:14.5083981Z     [1m[96m|[0m
+2026-10-18T22:06:14.5084544Z [1m[96m821[0m [1m[96m|[0m                     let app2 = app.clone();
+2026-10-18T22:06:14.5085639Z     [1m[96m|[0m                         [1m[93m^^^^[0m [1m[93mhelp: if this is intentional, prefix it with an underscore: `_app2`[0m
+2026-10-18T22:06:14.5086332Z 
+2026-10-18T22:06:14.5506102Z [1m[93mwarning[0m[1m[97m: unused variable: `app2`[0m
+2026-10-18T22:06:14.5506886Z   [1m[96m--> [0msrc\shortcuts.rs:94:17
+2026-10-18T22:06:14.5507943Z    [1m[96m|[0m
+2026-10-18T22:06:14.5508522Z [1m[96m94[0m [1m[96m|[0m             let app2 = app.clone();
+2026-10-18T22:06:14.5509646Z    [1m[96m|[0m                 [1m[93m^^^^[0m [1m[93mhelp: if this is intentional, prefix it with an underscore: `_app2`[0m
+2026-10-18T22:06:14.5510350Z 
+2026-10-18T22:06:14.6136195Z [1m[93mwarning[0m[1m[97m: unused variable: `app`[0m
+2026-10-18T22:06:14.6136960Z    [1m[96m--> [0msrc\updater.rs:108:22
+2026-10-18T22:06:14.6137524Z     [1m[96m|[0m
+2026-10-18T22:06:14.6138444Z [1m[96m108[0m [1m[96m|[0m pub fn updater_state(app: AppHandle) -> serde_json::Value {
+2026-10-18T22:06:14.6139728Z     [1m[96m|[0m                      [1m[93m^^^[0m [1m[93mhelp: if this is intentional, prefix it with an underscore: `_app`[0m
+2026-10-18T22:06:14.6140501Z 
+2026-10-18T22:06:14.6530177Z [1m[93mwarning[0m[1m[97m: unused variable: `w`[0m
+2026-10-18T22:06:14.6531256Z    [1m[96m--> [0msrc\vdisplay.rs:808:34
+2026-10-18T22:06:14.6532056Z     [1m[96m|[0m
+2026-10-18T22:06:14.6533409Z [1m[96m808[0m [1m[96m|[0m fn finish_enable(device: String, w: u32, h: u32) -> Result<EnabledInfo, String> {
+2026-10-18T22:06:14.6535600Z     [1m[96m|[0m                                  [1m[93m^[0m [1m[93mhelp: if this is intentional, prefix it with an underscore: `_w`[0m
+2026-10-18T22:06:14.6536981Z 
+2026-10-18T22:06:14.6537536Z [1m[93mwarning[0m[1m[97m: unused variable: `h`[0m
+2026-10-18T22:06:14.6538640Z    [1m[96m--> [0msrc\vdisplay.rs:808:42
+2026-10-18T22:06:14.6539514Z     [1m[96m|[0m
+2026-10-18T22:06:14.6540881Z [1m[96m808[0m [1m[96m|[0m fn finish_enable(device: String, w: u32, h: u32) -> Result<EnabledInfo, String> {
+2026-10-18T22:06:14.6543293Z     [1m[96m|[0m                                          [1m[93m^[0m [1m[93mhelp: if this is intentional, prefix it with an underscore: `_h`[0m
+2026-10-18T22:06:14.6544583Z 
+2026-10-18T22:06:14.9958673Z [1m[97mFor more information about this error, try `rustc --explain E0596`.[0m
+2026-10-18T22:06:15.0194578Z [1m[93mwarning[0m: `nexuslink-desktop` (bin "nexuslink-desktop") generated 16 warnings
+2026-10-18T22:06:15.0196835Z [1m[91merror[0m: could not compile `nexuslink-desktop` (bin "nexuslink-desktop") due to 1 previous error; 16 warnings emitted
+2026-10-18T22:06:15.0727175Z failed to build app: failed to build app
+2026-10-18T22:06:15.0729973Z        Error [tauri_cli_node] failed to build app: failed to build app
+2026-10-18T22:06:15.0895199Z ##[error]Process completed with exit code 1.
+2026-10-18T22:06:15.1173606Z Post job cleanup.
+2026-10-18T22:06:15.3131516Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-10-18T22:06:15.3497461Z git version 2.56.0.windows.2
+2026-10-18T22:06:15.3567947Z Temporarily overriding HOME='D:\a\_temp\ba4c4369-9ddc-47be-aedc-8fdd4bdcb99b' before making global git config changes
+2026-10-18T22:06:15.3568852Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-18T22:06:15.3578846Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\NexusLink\NexusLink
+2026-10-18T22:06:15.3980881Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-10-18T22:06:15.4378256Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-10-18T22:06:16.0150560Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-18T22:06:16.0508477Z http.https://github.com/.extraheader
+2026-10-18T22:06:16.0558013Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all http.https://github.com/.extraheader
+2026-10-18T22:06:16.0960060Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-10-18T22:06:16.7038678Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-18T22:06:16.7438020Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-10-18T22:06:17.3364963Z Cleaning up orphan processes
+2026-10-18T22:06:17.4002657Z Terminate orphan process: pid (1392) (vctip)
+2026-10-18T22:06:17.4017661Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
