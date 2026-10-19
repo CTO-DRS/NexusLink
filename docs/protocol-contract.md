@@ -194,11 +194,13 @@ interface TransferJob {
 - تقارير الهاتف: `dev:state {...}` (relay) · `dev:sync-request` · `dev:acked {text}`
 
 ### 4.5 جسر 3007 — الإنتاجية
-**Server → Client:** `prod:hello {at}` · `prod:log {id,text,kind,at}` · `clip:new {id, deviceId, deviceName, kind, content, fileName?, filePath?, size, mode, received, createdAt(ms)}` · `clip:cleared {at}` · `hand:new {id, deviceId, deviceName, kind, title, url, position, status, createdAt}` · `hand:opened {id, openedOn, at}` · `photo:new {name, bytes, device, at}` · `net:changed {network, profile, auto, at}`
+**Server → Client:** `prod:hello {at, lastSeq?}` (§28: رأس سجل العمليات) · `prod:replay {ops, lastSeq, truncated, local}` (§28: دفعة استئناف) · `prod:log {id,text,kind,at}` · `clip:new {id, deviceId, deviceName, kind, content, fileName?, filePath?, size, mode, received, createdAt(ms)}` · `clip:cleared {at}` · `hand:new {id, deviceId, deviceName, kind, title, url, position, status, createdAt}` · `hand:opened {id, openedOn, at}` · `photo:new {name, bytes, device, at}` · `net:changed {network, profile, auto, at}`
 **Client → Server:**
-- `clip:push {deviceId, deviceName, kind: "text"|"image"|"file", content (نص أو dataURL مصغر للصور ≤4MB), fileName?, filePath?, size?, mode: "auto"|"manual"}` → يُخزن في Prisma ويبث `clip:new` للجميع — **هذه هي الحافظة الموحدة؛ الهاتف يراقب نظام الحافظة (mode=auto) ويدفع هنا**
-- `clip:clear`
-- `hand:push {id?, deviceId, deviceName, kind: "link"|"video"|"article", title, url, position?}` → `hand:new`؛ الفتح على الكمبيوتر: `hand:opened {id, openedOn}`
+- `clip:push {deviceId, deviceName, kind: "text"|"image"|"file", content (نص أو dataURL مصغر للصور ≤4MB), fileName?, filePath?, size?, mode: "auto"|"manual"}` → يُخزن في Prisma ويُرسّخ في سجل العمليات (§28) ويبث `clip:new` — **هذه هي الحافظة الموحدة؛ الهاتف يراقب نظام الحافظة (mode=auto) ويدفع هنا**
+- `clip:clear` → يُرسّخ `clip:cleared` (§28)
+- `hand:push {id?, deviceId, deviceName, kind: "link"|"video"|"article", title, url, position?}` → `hand:new`؛ الإنشاء الجديد يُرسَّخ في السجل (§28) — إعادة الدفع بمعرف قائم = بث بلا عملية. الفتح على الكمبيوتر: `hand:opened {id, openedOn}` → يُرسَّخ `opened-<id>` (idempotent)
+- `prod:resume {since}` (§28) → `prod:replay` بالعمليات بعد المؤشر بترتيبها (≤200/دفعة؛ `truncated:true` = استأنف من آخر عملية)
+- `prod:ack {upto}` (§28) → قصّ ما قُرئ فوق أرضية الاحتفاظ (400) حصرًا
 - `photo:new-request` — يولّد صورة على "الهاتف" (محاكاة) ويزامنها
 - `net:set {network}` — تغيير الشبكة وتطبيق ملف التعريف
 
@@ -1301,3 +1303,74 @@ interface TransferJob {
   مفتوحة» السابقة صارت دائمة، والوكيل الحقيقي يتجاوز المحاكاة عبر `report`؛
   (3) النبض يعني تكة قياس كل 4ث لكل الأجهزة المتصلة — حمل CPU مهمل (حلقة على
   5 أجهزة) وكتابة SQLite كما كانت مع واجهة مفتوحة (عينة/جهاز/30ث + تنقية 24h).
+
+## 28. offline-first — سجل العمليات القابل للاستئناف (M1.2 — مصدر: src/lib/nexus/oplog.ts + clip-outbox.ts + productivity-bridge.ts + use-prod-bridge.ts + use-sec-bridge.ts + signaling.dart + protocol.dart + db.ts (§23))
+
+> بند M1.2 من الخارطة: «مزامنة تستأنف بلا فقد بعد أي انقطاع». المشكلة القبلية:
+> الحافظة الموحدة وتسليم الروابط على 3007 بثّ حي حصرًا — أي عميل منقطع لحظة
+> الدفع يفقدها للأبد (الويب كان يعوّض بسحب REST كامل عند العودة — بلا مؤشر
+> ولا ترتيب ولا قر؛ والهاتف لا يعوّض إطلاقًا).
+
+### 28.أ الجدول — ProdOpLog (نمط الترقية الآمنة §23)
+- `seq INTEGER PRIMARY KEY AUTOINCREMENT` — تسلسل رتيب صاعد (منظم الحالة).
+- `opId TEXT UNIQUE` — معرّف العملية؛ **إعادة الترسيخ بنفس opId = تجاهل صامت** —
+  العمليات idempotent بذاتها (فتح رابط مرتين = عملية `opened-<id>` واحدة).
+- `kind`: `clip:new` | `clip:cleared` | `hand:new` | `hand:opened`.
+- `payload TEXT (JSON)` — **نفس شكل حدث البث الحي الموسع حرفيًا** (createdAt رقماً).
+- `at DATETIME`. يُنشأ `CREATE TABLE IF NOT EXISTS` عند الإقلاع (db.ts) وموثق
+  في schema.prisma؛ الوصول raw SQL (لا regenerate للعميل).
+- **حدود النمو**: قر العميل يقصّ فوق أرضية الاحتفاظ `KEEP_FLOOR = 400` حصرًا
+  (لا يُحذف أحدث من الرأس−400) + سقف صلب `HARD_CAP = 2000` بعد كل ترسيخ —
+  السجل محدود النمو عبر الجلسات بلا خيار تشغيل.
+
+### 28.ب بروتوكول الاستئناف (على 3007)
+| الحدث | الاتجاه | الشكل | الدلالة |
+|-------|---------|-------|---------|
+| `prod:hello` | S→C | `{at, lastSeq}` | رأس السجل عند الاتصال — العميل الجديد يبدأ من هنا |
+| `prod:resume` | C→S | `{since}` | «ما فاتني كل ما بعد هذا المؤشر» |
+| `prod:replay` | S→C | `{ops:[{seq,opId,kind,deviceId,payload,at}], lastSeq, truncated, local}` | دفعة ≤ `REPLAY_LIMIT=200` بترتيب صاعد؛ `truncated:true` = استأنف من آخر عملية وصلت |
+| `prod:ack` | C→S | `{upto}` | قر — يُقصّ فوق الأرضية حصرًا |
+- **تطبيق العميل idempotent بالتصميم**: المؤشر المحفوظ لا يتقدم مع البث الحي —
+  فالاستئناف بعد إعادة اتصال يُعيد نافذة يملك العميل جزءًا منها → يزيل التكرار
+  بالمعرفات (`clip.id`/`hand.id`) → لا مضاعفة أبدًا، ثم يثبّت المؤشر على
+  `lastSeq` ويقرّ. التطبيق **هادئ حصرًا**: يملأ الحالة (قوائم الحافظة/التسليم)
+  بلا توستات ولا كتابة حافظة نظام ولا إرحال — المسار الحي يبقى مالك التجربة.
+- عملاء الويب: مؤشر `localStorage["nl-prod-cursor"]` + استئناف تلقائي عند كل
+  `connect` (use-prod-bridge.ts). الهاتف: `shared_preferences["nl-prod-cursor"]`
+  + `prod:resume` في `onConnect` + ربط `prod:replay` بنفس تدفقات
+  `clip:new/hand:new` القائمة (signaling.dart — بلا تغيير واجهة).
+
+### 28.ج حرس F6 على الاستئناف (السرية تمتد للتاريخ)
+- `prod:resume` يطبق **نفس قواعد هوية §11/F6** على الحمولات: عميل محلي
+  (`isLocalSocket` — loopback أو عبر البوابة المحلية بترويسة
+  `x-gw-client-ip`) يستلم حمولات `clip:new` **كاملة المحتوى** (نفس سطح ثقة
+  `GET /api/prod/clipboard`)؛ عميل شبكي يستلم بيانات وصفية حصرًا
+  (`content:""` + `encrypted:true` + `delivery:"e2ee"`) — **سجل التاريخ لا
+  يفتح ثغرة استرجاع ما لا يعطيه البث الحي**: سوكِت استطلاع شبكي يستأنف
+  فيجد التواريخ بلا نصوص، والمحتوى يصل عبر قناة 3009 المشفرة كما هو.
+
+### 28.د الطريق المشفر — صندوق صادر المرسل (clip-outbox.ts)
+- **لماذا لا يخزن المرحّل الإطارات؟** عصور 3009 رجيعية بتصميم PFS: العميل عند
+  العودة يمسح حلقة مفاتيحه ويولد مفاتيح رجيعية جديدة — أي إطار قديم محفوظ
+  يصير غير قابل للفك عند العائد **متعمّدًا**. إعادة تشغيل عمياء للإطارات =
+  بلا قيمة وبلا أمان إضافي.
+- **التصميم الصحيح**: الصندوق عند **المرسل** — `sendSecureClip` عند فشل
+  الإرسال (لا جلسة/مفاتيح، أو `sec:nack peer-offline` ظاهر للمرسل) يخزن النص
+  (`enqueueClipOutbox` — سقف 20، إزالة تكرار للمتتالي المطابق) وعند اكتمال
+  أول مصافحة تالية (`deriveEpoch` → kexDone) يُصرَّف الصندوق تلقائيًا
+  (`flushClipOutbox` — إعادة ختم بعصر حي، فاشل التسليم يبقى بترتيبه).
+- عقد §9 كما هو حرفيًا: الإطار المعاد بعصر جديد وseq جديد يمر بحماية الإعادة
+  لدى المستقبل بشكل سليم (seq أعلى من آخر مُرى = عملية جديدة حقيقية).
+
+### 28.هـ حدود صادقة
+1. سجل 3007 يغطي الحافظة/التسليم (أحداث الرسائل)؛ مزامنة المجلدات/الصور
+   (§14) تلتقط بالنبض الدوري أصلًا (LWW) — بلا علاقة بهذا السجل.
+2. الاستئناف على 3007 يعمل أثناء حياة الواجهة (الهاتف) — الخدمة الخلفية
+   Kotlin لا تستأنف السجل بعد (حد موثق — متابعة محتملة).
+3. الصندوق المشفر نصوص على قرية العميل (localStorage) بلا تشفير أثناء
+   الراحة — نفس سطح كشف مقاطع الحافظة القائم في الواجهة؛ يمحو مع بيانات
+   التطبيق. سقف 20 مقطعًا.
+4. `payload` الحافظة على قرص الخادم نص صريح — نفس سلفه `ProdClip.content`
+   حرفيًا (سطح ثقة الجهاز المحلي §13) — لا تغيير في نموذج الثقة.
+5. القر لا يسترجع ما قُصّ فوق الأرضية: عميل غائب أطول من 400 عملية يعود
+   ليجد نافذة مقصوصة — `truncated` + قصّ `HARD_CAP` يحدّان التاريخ المتاح.
