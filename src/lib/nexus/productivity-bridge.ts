@@ -8,6 +8,7 @@ import { db } from "@/lib/db"
 import { runPairSync, photoSyncTick, generatePhonePhoto, syncDeviceName } from "./sync-engine"
 import { emitAutomationFact } from "./automation-facts"
 import { socketCors, isLocalSocket } from "./socket-security" // SEC (M0.3 F4) + F6
+import { appendOp, headSeq, opsSince, ackUpto, REPLAY_LIMIT } from "./oplog" // M1.2 §28
 
 const PORT = 3007
 
@@ -73,6 +74,24 @@ export function prodEmitClip(item: ClipBroadcastItem): boolean {
   }
 }
 
+/** M1.2 §28 — شكل عملية الحافظة في السجل: نفس حدث البث الموسع (createdAt رقماً) */
+function clipOpPayload(item: ClipBroadcastItem): Record<string, unknown> {
+  const createdAt = item.createdAt instanceof Date ? item.createdAt.getTime() : item.createdAt
+  return { ...item, createdAt }
+}
+
+/** M1.2 §28 — حرس F6 على الاستئناف: عميل شبكي (بلا محلية) يستلم بيانات وصفية
+ * حصرًا — المحتوى يصل عبر قناة 3009 المشفرة كما في البث الحي حرفيًا */
+function opForClient(
+  op: { seq: number; opId: string; kind: string; deviceId: string; payload: Record<string, unknown>; at: number },
+  local: boolean,
+) {
+  if (op.kind === "clip:new" && !local) {
+    return { ...op, payload: { ...op.payload, content: "", encrypted: true, delivery: "e2ee" } }
+  }
+  return op
+}
+
 export function ensureProdBridge() {
   if (g[BOOT_KEY]) return prodBridgeStatus()
   g[BOOT_KEY] = true
@@ -88,7 +107,11 @@ export function ensureProdBridge() {
     io = io2
 
     io2.on("connection", (socket) => {
-      socket.emit("prod:hello", { at: Date.now() })
+      // M1.2 §28: الترحيب يحمل رأس السجل — العميل الجديد يبدأ من هنا، والعميل العائد
+      // يتجاهله ويستأنف من مؤشره المحفوظ (prod:resume)
+      void headSeq()
+        .then((lastSeq) => socket.emit("prod:hello", { at: Date.now(), lastSeq }))
+        .catch(() => socket.emit("prod:hello", { at: Date.now() }))
 
       // ==== الحافظة الموحدة ====
       socket.on("clip:push", async (d: {
@@ -109,6 +132,7 @@ export function ensureProdBridge() {
             },
           })
           const netClients = broadcastClip(io2, item) // SEC F6: المحتوى الكامل للجهاز المحلي حصرًا
+          void appendOp("clip:new", item.id, item.deviceId, clipOpPayload(item)) // M1.2 §28: ترسيخ قابل للاستئناف
           // §26 — نشر الحقيقة لمحرك الروتينات (ناقل داخل العملية — بلا تغيير سلكي)
           emitAutomationFact({ kind: "clip.received", deviceId: item.deviceId, deviceName: item.deviceName, clipKind: item.kind, at: Date.now() })
           log(io2, `حافظة موحدة: ${d?.kind === "image" ? "صورة" : d?.kind === "file" ? `ملف ${d?.fileName ?? ""}` : "نص"} من ${item.deviceName}${d?.mode === "auto" ? " (تلقائي)" : ""}${netClients > 0 ? ` — محتوى ${netClients} عميل شبكة يُسلّم مشفرًا عبر قناة 3009` : ""}`, "in")
@@ -116,7 +140,10 @@ export function ensureProdBridge() {
       })
 
       socket.on("clip:clear", () => {
-        void db.prodClip.deleteMany({}).then(() => io2.emit("clip:cleared", { at: Date.now() }))
+        void db.prodClip.deleteMany({}).then(() => {
+          void appendOp("clip:cleared", `clear-${Date.now().toString(36)}`, "server", { at: Date.now() }) // §28
+          io2.emit("clip:cleared", { at: Date.now() })
+        })
       })
 
       // ==== تسليم الروابط (أكمل من حيث توقفت) ====
@@ -128,6 +155,7 @@ export function ensureProdBridge() {
           let item = d?.id
             ? await db.handoffItem.findUnique({ where: { id: d.id } }).catch(() => null)
             : null
+          let created = false
           if (!item) {
             item = await db.handoffItem.create({
               data: {
@@ -139,8 +167,13 @@ export function ensureProdBridge() {
                 position: d?.position || 0,
               },
             })
+            created = true
           }
           io2.emit("hand:new", { ...item, createdAt: item.createdAt.getTime() })
+          // M1.2 §28: ترسيخ الإنشاء حصرًا — إعادة دفع بمعرف قائم = بث بلا عملية جديدة
+          if (created) {
+            void appendOp("hand:new", item.id, item.deviceId, { ...item, createdAt: item.createdAt.getTime() })
+          }
           log(io2, `تسليم: «${item.title.slice(0, 40)}» من ${item.deviceName} — جاهز للفتح على الكمبيوتر`, "in")
         } catch { /* ignore */ }
       })
@@ -153,6 +186,8 @@ export function ensureProdBridge() {
             data: { status: "opened", openedOn: d.openedOn || "PC-OFFICE", openedAt: new Date() },
           })
           io2.emit("hand:opened", { id: item.id, openedOn: item.openedOn, at: Date.now() })
+          // M1.2 §28: opId مشتق من معرف العنصر — إعادة فتح نفس الرابط = idempotent بالتصميم
+          void appendOp("hand:opened", `opened-${item.id}`, item.deviceId, { id: item.id, openedOn: item.openedOn, at: Date.now() })
           log(io2, `أُكمل على ${item.openedOn}: «${item.title.slice(0, 36)}»`, "ok")
         } catch { /* ignore */ }
       })
@@ -180,6 +215,27 @@ export function ensureProdBridge() {
         try {
           const st = await applyNetwork(d.network)
           io2.emit("net:changed", { network: st.network, profile: st.profile, auto: st.auto, at: Date.now() })
+        } catch { /* ignore */ }
+      })
+
+      // ==== M1.2 §28 — الاستئناف بعد الانقطاع ====
+      // العميل العائد يرسل مؤشره الأخير — يرد عليه ما فاته بترتيب صاعد:
+      // عميل محلي (loopback/عبر البوابة المحلية) = حمولات كاملة (سطح ثقة الجهاز)،
+      // عميل شبكي = بيانات وصفية حصرًا (حرس F6 نفسه) والمحتوى عبر 3009 المشفرة.
+      socket.on("prod:resume", async (d: { since?: number }) => {
+        try {
+          const since = Math.max(0, Math.floor(Number(d?.since ?? 0)) || 0)
+          const local = isLocalSocket(socket.handshake)
+          const rows = await opsSince(since, REPLAY_LIMIT)
+          const ops = rows.map((o) => opForClient(o, local))
+          socket.emit("prod:replay", { ops, lastSeq: await headSeq(), truncated: rows.length >= REPLAY_LIMIT, local })
+        } catch { /* ignore */ }
+      })
+
+      // قر العميل — يُقصّ ما قُرئ فوق أرضية الاحتفاظ حصرًا (أرضية 400)
+      socket.on("prod:ack", async (d: { upto?: number }) => {
+        try {
+          await ackUpto(Math.max(0, Math.floor(Number(d?.upto ?? 0)) || 0))
         } catch { /* ignore */ }
       })
     })

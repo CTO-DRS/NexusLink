@@ -219,6 +219,10 @@ class ProdEvents {
   static const String handNew = 'hand:new';
   static const String handOpened = 'hand:opened';
   static const String photoNew = 'photo:new';
+  // M1.2 §28 — استئناف سجل العمليات بعد الانقطاع (offline-first)
+  static const String resume = 'prod:resume';
+  static const String replay = 'prod:replay';
+  static const String ack = 'prod:ack';
 }
 
 /// أحداث جسر الاتصالات 3003 (سيلزمها المرحلة القادمة — محفوظة هنا كعقد).

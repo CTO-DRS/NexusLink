@@ -7,6 +7,17 @@ import { useProd } from "@/lib/prod-store"
 import { getProdSocket } from "@/lib/prod-socket"
 
 const LS_CLIP_MODE = "nexus-clip-mode"
+const LS_PROD_CURSOR = "nl-prod-cursor" // M1.2 §28 — مؤشر الاستئناف المحلي
+
+/** عملية سجل الاستئناف (عقد §28) */
+interface ProdOpT {
+  seq: number
+  opId: string
+  kind: string
+  deviceId: string
+  payload: Record<string, unknown>
+  at: number
+}
 
 /** آخر نص وصل من جهاز آخر — يستخدم لاختبار Ctrl+V المباشر */
 export function lastPhoneText(): string {
@@ -51,8 +62,54 @@ export function useProdBridge() {
         if (saved === "manual" || saved === "auto") st().setState({ clipMode: saved })
       } catch { /* ignore */ }
       void refreshAll()
+      // M1.2 §28: استئناف سجل العمليات من المؤشر المحفوظ — ما فاته أثناء الانقطاع يعود
+      // بترتيبه (prod:replay) ويُقرّ فيُقصّ من سجل السيرفر. الصفر = عميل جديد (يبدأ من الرأس).
+      try {
+        const cur = Number(localStorage.getItem(LS_PROD_CURSOR) || 0)
+        socket.emit("prod:resume", { since: Number.isFinite(cur) && cur > 0 ? Math.floor(cur) : 0 })
+      } catch {
+        socket.emit("prod:resume", { since: 0 })
+      }
     })
     socket.on("disconnect", () => st().setBridgeOnline(false))
+
+    // ==== M1.2 §28 — تطبيق عمليات الاستئناف (idempotent: إزالة التكرار بالمعرفات) ====
+    // هادئ حصرًا: لا توستات ولا كتابة حافظة ولا إرحال — الاستئناف يملأ الحالة (التاريخ)،
+    // والمسار الحي يبقى مالك تجربة المستخدم.
+    socket.on("prod:replay", (d: { ops?: ProdOpT[]; lastSeq?: number; truncated?: boolean; local?: boolean }) => {
+      const ops = Array.isArray(d?.ops) ? d!.ops : []
+      for (const op of ops) {
+        try {
+          const s = st()
+          if (op.kind === "clip:new") {
+            const p = op.payload as unknown as import("@/lib/prod-store").ProdClipItem
+            if (!p?.id) continue
+            if (!s.clips.some((c) => c.id === p.id)) st().addClip(p)
+          } else if (op.kind === "hand:new") {
+            const p = op.payload as unknown as import("@/lib/prod-store").HandoffItemT
+            if (!p?.id) continue
+            if (!s.handoff.some((h) => h.id === p.id)) st().setHandoff([p, ...s.handoff])
+          } else if (op.kind === "hand:opened") {
+            const p = op.payload as { id?: string; openedOn?: string }
+            if (p?.id) st().patchHandoff(p.id, { status: "opened", openedOn: p.openedOn ?? null })
+          } else if (op.kind === "clip:cleared") {
+            st().setClips([])
+          }
+        } catch { /* عملية فاسدة واحدة لا تُسقط الدفعة */ }
+      }
+      // تقطيع؟ استمر بالسحب من آخر عملية وصلت. اكتمال؟ ثبّت المؤشر واقرّ ليُقصّ السجل.
+      if (d?.truncated && ops.length) {
+        socket.emit("prod:resume", { since: ops[ops.length - 1].seq })
+        return
+      }
+      const head = Math.max(Number(d?.lastSeq ?? 0), ops.length ? ops[ops.length - 1].seq : 0)
+      if (head > 0) {
+        try {
+          localStorage.setItem(LS_PROD_CURSOR, String(head))
+        } catch { /* ignore */ }
+        socket.emit("prod:ack", { upto: head })
+      }
+    })
 
     // ==== الحافظة الموحدة — القلب ====
     socket.on("clip:new", async (raw: import("@/lib/prod-store").ProdClipItem & { encrypted?: boolean; delivery?: string }) => {

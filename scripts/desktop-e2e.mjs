@@ -4657,6 +4657,234 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
       contractLc.includes("G-2"), "contract G-2")
   }
 
+  // [SYNC] M1.2 — offline-first: سجل العمليات القابل للاستئناف (عقد §28)
+  {
+    console.log("== [SYNC] M1.2 offline-first ops log ==")
+    const fsModSync = await import("node:fs")
+    const pathModSync = await import("node:path")
+    const readSync = (p) => fsModSync.readFileSync(pathModSync.join(ROOT, p), "utf8")
+
+    // ---- (أ) فحوص مصدر ----
+    const oplogSrc = readSync("src/lib/nexus/oplog.ts")
+    check("SYNC/source: وحدة السجل — ترسيخ/رأس/استئناف/قر + سقفا الدفعة والأرضية",
+      oplogSrc.includes("export async function appendOp") && oplogSrc.includes("export async function headSeq")
+      && oplogSrc.includes("export async function opsSince") && oplogSrc.includes("export async function ackUpto")
+      && oplogSrc.includes("REPLAY_LIMIT = 200") && oplogSrc.includes("KEEP_FLOOR = 400"), "oplog.ts")
+    const dbSyncSrc = readSync("src/lib/db.ts")
+    check("SYNC/source: جدول ProdOpLog بنمط الترقية الآمنة §23 — seq رتيب + تفرد opId بفهرس مسمّى بتوقيع Prisma (idempotent)",
+      dbSyncSrc.includes(`CREATE TABLE IF NOT EXISTS "ProdOpLog"`)
+      && dbSyncSrc.includes(`CREATE UNIQUE INDEX IF NOT EXISTS "ProdOpLog_opId_key" ON "ProdOpLog"("opId")`), "db.ts")
+    const schemaSyncSrc = readSync("prisma/schema.prisma")
+    check("SYNC/source: النموذج موثق بالمخطط — ProdOpLog بمفتاح رتيب ومعرّف وحيد (بلا فهرس زائد فوق القيد)",
+      schemaSyncSrc.includes("model ProdOpLog") && schemaSyncSrc.includes("seq      Int      @id @default(autoincrement())")
+      && schemaSyncSrc.includes("opId     String   @unique"), "schema.prisma")
+    const pbSyncSrc = readSync("src/lib/nexus/productivity-bridge.ts")
+    check("SYNC/source: الجسر يُرسّخ العمليات الأربع (clip:new/cleared + hand:new/opened)",
+      (pbSyncSrc.match(/appendOp\(/g) || []).length >= 4 && pbSyncSrc.includes('"clip:new"')
+      && pbSyncSrc.includes('"clip:cleared"') && pbSyncSrc.includes('"hand:new"') && pbSyncSrc.includes('"hand:opened"'),
+      `appendOp=${(pbSyncSrc.match(/appendOp\(/g) || []).length}`)
+    check("SYNC/source: prod:resume + prod:ack على الجسر + رأس السجل في prod:hello",
+      pbSyncSrc.includes('socket.on("prod:resume"') && pbSyncSrc.includes('socket.on("prod:ack"')
+      && pbSyncSrc.includes('{ at: Date.now(), lastSeq }'), "handlers")
+    check("SYNC/source: حرس F6 على الاستئناف — عميل شبكي بيانات وصفية حصرًا (content:\"\" + e2ee)",
+      pbSyncSrc.includes('op.kind === "clip:new" && !local') && pbSyncSrc.includes('content: ""'), "F6 guard on replay")
+    const upbSyncSrc = readSync("src/hooks/use-prod-bridge.ts")
+    check("SYNC/source: عميل الويب — مؤشر محفوظ + استئناف عند الاتصال + تطبيق idempotent بالمعرف + قر",
+      upbSyncSrc.includes("nl-prod-cursor") && upbSyncSrc.includes('socket.emit("prod:resume"')
+      && upbSyncSrc.includes('socket.on("prod:replay"') && upbSyncSrc.includes('socket.emit("prod:ack"')
+      && upbSyncSrc.includes("c.id === p.id"), "use-prod-bridge.ts")
+    const outboxSyncSrc = readSync("src/lib/nexus/clip-outbox.ts")
+    const usbSyncSrc = readSync("src/hooks/use-sec-bridge.ts")
+    check("SYNC/source: صندوق الصادر المشفر — إدراج عند فشل sendSecureClip + تصريف فور اكتمال المصافحة",
+      outboxSyncSrc.includes("export function enqueueClipOutbox") && outboxSyncSrc.includes("export async function flushClipOutbox")
+      && usbSyncSrc.includes("enqueueClipOutbox(text)") && usbSyncSrc.includes("flushClipOutbox(async (t) => sendFrame"), "clip-outbox wiring")
+    const protoSyncDart = readSync("nexuslink_mobile/lib/core/protocol.dart")
+    const sigSyncDart = readSync("nexuslink_mobile/lib/data/signaling.dart")
+    check("SYNC/source: الهاتف — أحداث العقد الثلاثة + استئناف بمؤشر shared_preferences + قر يثبّت المؤشر",
+      protoSyncDart.includes("resume = 'prod:resume'") && protoSyncDart.includes("replay = 'prod:replay'")
+      && protoSyncDart.includes("ack = 'prod:ack'") && sigSyncDart.includes("_resumeProd")
+      && sigSyncDart.includes("nl-prod-cursor") && sigSyncDart.includes("ProdEvents.ack"), "flutter wiring")
+
+    // ---- (ب) حي: انقطاع → دفع → عودة → استئناف بلا فقد ----
+    const { io: ioSync } = await import("socket.io-client")
+    const needleA = `SYNC-CLIP-A-${Date.now()}`
+    const needleB = `SYNC-CLIP-B-${Date.now()}`
+    const needleC = `SYNC-CLIP-C-${Date.now()}`
+    const handUrl = `https://example.com/sync-${Date.now()}`
+
+    const mkProdSync = (url, opts = {}) => {
+      const s = ioSync(url, { path: "/", transports: ["polling"], reconnection: false, timeout: 10000, ...opts })
+      return new Promise((res, rej) => {
+        s.once("connect", () => res(s))
+        s.once("connect_error", (e) => rej(new Error(e.message)))
+        setTimeout(() => rej(new Error("timeout prod socket")), 12000)
+      })
+    }
+
+    // 1) عميل محلي — يقرأ رأس السجل ثم ينقطع (محاكاة الانقطاع)
+    const cur1 = await mkProdSync("http://127.0.0.1:3007")
+    const hello1 = await new Promise((res) => { cur1.once("prod:hello", (d) => res(d)); setTimeout(() => res(null), 6000) })
+    const head0 = Number(hello1?.lastSeq ?? -1)
+    check("SYNC/live: prod:hello يحمل رأس السجل lastSeq (عدد صحيح ≥ 0)", head0 >= 0, `head0=${head0}`)
+    cur1.disconnect()
+
+    // 2) الدافع — 3 حافظات + رابط + فتحه أثناء انقطاع العميل الأول
+    const pusher = await mkProdSync("http://127.0.0.1:3007")
+    const handIdP = new Promise((res) => { pusher.once("hand:new", (d) => res(d?.id ?? null)); setTimeout(() => res(null), 6000) })
+    for (const n of [needleA, needleB, needleC]) {
+      pusher.emit("clip:push", { deviceId: "galaxy-s24", deviceName: "Galaxy-S24", kind: "text", content: n, mode: "manual" })
+      await sleep(180)
+    }
+    pusher.emit("hand:push", { deviceId: "galaxy-s24", deviceName: "Galaxy-S24", kind: "link", title: "SYNC مقطوعة", url: handUrl })
+    const handId = await handIdP
+    await sleep(400)
+    if (handId) { pusher.emit("hand:opened", { id: handId, openedOn: "PC-OFFICE" }); await sleep(400) }
+
+    // 3) العائد — استئناف من مؤشره (head0) → يستلم ما فاته بالترتيب وبمحتواه الكامل
+    const cur2 = await mkProdSync("http://127.0.0.1:3007")
+    const replayP = new Promise((res) => { cur2.once("prod:replay", (d) => res(d)); setTimeout(() => res(null), 8000); cur2.emit("prod:resume", { since: head0 }) })
+    const replay = await replayP
+    const ops = Array.isArray(replay?.ops) ? replay.ops : []
+    const clipOps = ops.filter((o) => o.kind === "clip:new")
+    const handOps = ops.filter((o) => o.kind === "hand:new")
+    const openedOps = ops.filter((o) => o.kind === "hand:opened")
+    const seqs = ops.map((o) => Number(o.seq))
+    const ascending = seqs.every((v, i) => i === 0 || v > seqs[i - 1])
+    check("SYNC/live: العائد يستلم ما فاته كاملًا — 3 حافظات + رابط + فتحه (صفر فقد بعد الانقطاع)",
+      clipOps.length >= 3 && handOps.length >= 1 && openedOps.length >= 1,
+      `ops=${ops.length} clips=${clipOps.length} hands=${handOps.length} opened=${openedOps.length}`)
+    check("SYNC/live: المحتوى الكامل للعميل المحلي — الإبر الثلاث حرفيًا (سطح ثقة الجهاز كما في REST)",
+      clipOps.some((o) => o.payload?.content === needleA) && clipOps.some((o) => o.payload?.content === needleB)
+      && clipOps.some((o) => o.payload?.content === needleC), "full payload")
+    check("SYNC/live: الترتيب صاعد بالتسلسل الرتيب (منظم على الحالة)", ascending && seqs.length >= 5, seqs.slice(0, 8).join("<"))
+    check("SYNC/live: الفتح idempotent — opened-<id> عملية واحدة بمعرّف الرابط الصحيح",
+      openedOps.length === 1 && openedOps[0]?.payload?.id === handId, `id=${String(handId ?? "—").slice(0, 10)}`)
+
+    // 4) استطلاع LAN — بيانات وصفية حصرًا حتى في الاستئناف (حرس F6 يمتد للمسار الجديد)
+    const osSync = await import("node:os")
+    const lanIpSync = Object.values(osSync.networkInterfaces()).flat().find((i) => i && !i.internal && i.family === "IPv4")?.address || ""
+    if (lanIpSync) {
+      const lanS = await mkProdSync(`http://${lanIpSync}:3007`)
+      const lanReplayP = new Promise((res) => { lanS.once("prod:replay", (d) => res(d)); setTimeout(() => res(null), 8000); lanS.emit("prod:resume", { since: head0 }) })
+      const lanReplay = await lanReplayP
+      const lanOps = Array.isArray(lanReplay?.ops) ? lanReplay.ops : []
+      const lanClip = lanOps.filter((o) => o.kind === "clip:new")
+      const stripped = lanClip.length > 0 && lanClip.every((o) => o.payload?.content === "" && o.payload?.encrypted === true && o.payload?.delivery === "e2ee")
+      const noLeak = !JSON.stringify(lanOps).includes(needleA) && !JSON.stringify(lanOps).includes(needleB) && !JSON.stringify(lanOps).includes(needleC)
+      check("SYNC/live: استئناف LAN بيانات وصفية حصرًا — content:\"\" + encrypted + e2ee (حرس F6 على المسار الجديد)",
+        stripped, `lanOps=${lanOps.length} clips=${lanClip.length}`)
+      check("SYNC/live: صفر تسريب في سجل الاستئناف — الإبر لا تعبر للشبكة بأي شكل",
+        noLeak, "wire truth")
+      try { lanS.disconnect() } catch {}
+    } else {
+      check("SYNC/live: لا عنوان شبكة — فحص استئناف LAN تجاوز صادق", true, "no lan ip")
+      check("SYNC/live: لا عنوان شبكة — فحص التسريب تجاوز صادق", true, "no lan ip")
+    }
+
+    // 5) idempotency + مؤشر متقدم
+    const replay2P = new Promise((res) => { cur2.once("prod:replay", (d) => res(d)); setTimeout(() => res(null), 8000); cur2.emit("prod:resume", { since: head0 }) })
+    const replay2 = await replay2P
+    const ops2 = Array.isArray(replay2?.ops) ? replay2.ops : []
+    check("SYNC/live: الاستئناف قابل للتكرار — نفس النافذة تُعاد حرفيًا والعميل يزيل التكرار بالمعرفات",
+      ops2.length === ops.length, `again=${ops2.length} first=${ops.length}`)
+    const headFromReplay = Number(replay?.lastSeq ?? 0)
+    const replay3P = new Promise((res) => { cur2.once("prod:replay", (d) => res(d)); setTimeout(() => res(null), 8000); cur2.emit("prod:resume", { since: headFromReplay }) })
+    const replay3 = await replay3P
+    check("SYNC/live: مؤشر عند الرأس = صفر عمليات (لا إعادة تشغيل تاريخًا مقروءًا)",
+      Array.isArray(replay3?.ops) && replay3.ops.length === 0, `head=${headFromReplay}`)
+
+    // 6) القر + أرضية الاحتفاظ
+    cur2.emit("prod:ack", { upto: headFromReplay })
+    await sleep(600)
+    const replay4P = new Promise((res) => { cur2.once("prod:replay", (d) => res(d)); setTimeout(() => res(null), 8000); cur2.emit("prod:resume", { since: 0 }) })
+    const replay4 = await replay4P
+    const ops4 = Array.isArray(replay4?.ops) ? replay4.ops : []
+    check("SYNC/live: القر يحترم أرضية الاحتفاظ — since=0 يعيد ≤ 200 بترتيب صاعد (سجل محدود النمو)",
+      ops4.length <= 200 && ops4.every((o, i) => i === 0 || Number(o.seq) > Number(ops4[i - 1].seq)),
+      `tail=${ops4.length}`)
+
+    // 7) E2EE: عودة الهاتف — إعادة الإرسال من المرسل بعصر حي (فلسفة §28: العصور الرجيعية
+    // تمحو مفاتيح ماضية فالاستئناف الصحيح على 3009 = صندوق صادر المرسل، لا إعادة تشغيل عمياء)
+    try {
+      const [{ x25519 }, { hkdf }, { sha256: nshaS }] = await Promise.all([
+        import("@noble/curves/ed25519"), import("@noble/hashes/hkdf"), import("@noble/hashes/sha256"),
+      ])
+      const subtleS = globalThis.crypto.subtle
+      const b64eS = (u8) => Buffer.from(u8).toString("base64")
+      const b64dS = (s) => new Uint8Array(Buffer.from(s, "base64"))
+      const utf8S = (s) => new TextEncoder().encode(s)
+      const mkSecS = async (deviceId, name, role) => {
+        const s = ioSync(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3009" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+        await new Promise((res, rej) => { s.once("connect", res); s.once("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("timeout 3009")), 10000) })
+        return { s, deviceId, name, role, priv: x25519.utils.randomPrivateKey(), eph: x25519.utils.randomPrivateKey() }
+      }
+      const announceS = (p) => p.s.emit("sec:announce", { role: p.role, deviceId: p.deviceId, name: p.name, pub: b64eS(x25519.getPublicKey(p.priv)), eph: b64eS(x25519.getPublicKey(p.eph)) })
+      const deriveKeyS = async (myEphPriv, peerEphPubB64, myId, peerId) => {
+        const shared = x25519.getSharedSecret(myEphPriv, b64dS(peerEphPubB64))
+        const [s1, s2] = [myId, peerId].sort()
+        const raw = hkdf(nshaS, shared, utf8S(`nexuslink-v1|${s1}|${s2}`), utf8S("nexuslink-e2e-session"), 32)
+        return subtleS.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"])
+      }
+      const needleE2EE = `SYNC-E2EE-${needleA}`
+      // المصافحة 1: pc ثم الهاتف
+      const syncPc = await mkSecS("pc-office", "PC-OFFICE", "desktop")
+      announceS(syncPc)
+      await sleep(700)
+      const syncPh = await mkSecS("galaxy-s24", "Galaxy-S24", "phone")
+      const pcKex1P = new Promise((res) => { syncPc.s.once("kex:peer", (d) => res(d)); setTimeout(() => res(null), 8000) })
+      const phKex1P = new Promise((res) => { syncPh.s.once("kex:peer", (d) => res(d)); setTimeout(() => res(null), 8000) })
+      announceS(syncPh)
+      const pcKex1 = await pcKex1P
+      const phKex1 = await phKex1P
+      const key1Pc = pcKex1 ? await deriveKeyS(syncPc.eph, pcKex1.eph, "pc-office", "galaxy-s24") : null
+      const key1Ph = phKex1 ? await deriveKeyS(syncPh.eph, phKex1.eph, "galaxy-s24", "pc-office") : null
+      // الهاتف ينقطع — الكمبيوتر يدفع حافظة مشفرة → sec:nack (peer-offline) = مشغل الصندوق
+      syncPh.s.disconnect()
+      await sleep(500)
+      const nackP = new Promise((res) => { syncPc.s.once("sec:nack", (d) => res(d)); setTimeout(() => res(null), 6000) })
+      const iv1 = globalThis.crypto.getRandomValues(new Uint8Array(12))
+      const ct1 = key1Pc ? await subtleS.encrypt(
+        { name: "AES-GCM", iv: iv1, additionalData: utf8S(`pc-office|galaxy-s24|clip|e1|1`), tagLength: 128 },
+        key1Pc, utf8S(JSON.stringify({ text: needleE2EE, at: Date.now() })),
+      ) : null
+      if (ct1) syncPc.s.emit("sec:frame", { to: "galaxy-s24", from: "pc-office", kind: "clip", e: 1, iv: b64eS(iv1), ct: b64eS(new Uint8Array(ct1)), seq: 1 })
+      const nack = await nackP
+      check("SYNC/live: دفع مشفر لهدف منقطع → sec:nack «peer-offline» — مشغل صندوق صادر المرسل (§28)",
+        nack?.reason === "peer-offline" && Number(nack?.seq) === 1, `reason=${nack?.reason ?? "—"}`)
+      // الهاتف يعود — مصافحة 2 (عصر حي جديد: مفاتيح الهاتف الرجيعية جديدة)
+      const syncPh2 = await mkSecS("galaxy-s24", "Galaxy-S24", "phone")
+      const pcKex2P = new Promise((res) => { syncPc.s.once("kex:peer", (d) => res(d)); setTimeout(() => res(null), 8000) })
+      const phKex2P = new Promise((res) => { syncPh2.s.once("kex:peer", (d) => res(d)); setTimeout(() => res(null), 8000) })
+      announceS(syncPh2)
+      const pcKex2 = await pcKex2P
+      const phKex2 = await phKex2P
+      check("SYNC/live: عودة الهاتف — المصافحة تُعاد تلقائيًا بمفاتيح رجيعية جديدة (PFS محفوظ)",
+        !!pcKex2?.eph && !!phKex2?.eph && pcKex2.eph !== pcKex1?.eph, "fresh ephemerals")
+      const key2Pc = pcKex2 ? await deriveKeyS(syncPc.eph, pcKex2.eph, "pc-office", "galaxy-s24") : null
+      const key2Ph = phKex2 ? await deriveKeyS(syncPh2.eph, phKex2.eph, "galaxy-s24", "pc-office") : null
+      // صندوق الصادر يصرّف: إعادة الختم بعصر حي (نفس العقد حرفيًا — seq جديد)
+      const phFrame2P = new Promise((res) => { syncPh2.s.once("sec:frame", (d) => res(d)); setTimeout(() => res(null), 8000) })
+      const iv2 = globalThis.crypto.getRandomValues(new Uint8Array(12))
+      const ct2 = key2Pc ? await subtleS.encrypt(
+        { name: "AES-GCM", iv: iv2, additionalData: utf8S(`pc-office|galaxy-s24|clip|e1|2`), tagLength: 128 },
+        key2Pc, utf8S(JSON.stringify({ text: needleE2EE, at: Date.now() })),
+      ) : null
+      if (ct2) syncPc.s.emit("sec:frame", { to: "galaxy-s24", from: "pc-office", kind: "clip", e: 1, iv: b64eS(iv2), ct: b64eS(new Uint8Array(ct2)), seq: 2 })
+      const fr2 = await phFrame2P
+      const pt2 = fr2 && key2Ph ? await subtleS.decrypt(
+        { name: "AES-GCM", iv: b64dS(String(fr2?.iv)), additionalData: utf8S(`${fr2?.from}|${fr2?.to}|${fr2?.kind}|e${fr2?.e}|${Number(fr2?.seq)}`), tagLength: 128 },
+        key2Ph, b64dS(String(fr2?.ct)),
+      ).then((b) => JSON.parse(new TextDecoder().decode(new Uint8Array(b)))).catch(() => null) : null
+      check("SYNC/live: إعادة الإرسال بعصر حي — الهاتف العائد يفكّ ويستلم النص الفائت (بلا فقد عبر الانقطاع المشفر)",
+        pt2?.text === needleE2EE, `match=${pt2?.text === needleE2EE}`)
+      for (const s of [syncPc.s, syncPh2.s]) { try { s.disconnect() } catch {} }
+    } catch (eSyncE2EE) {
+      check("SYNC/live: E2EE عودة الهاتف — إعادة الإرسال بعصر حي", false, eSyncE2EE instanceof Error ? eSyncE2EE.message : String(eSyncE2EE))
+    }
+
+    for (const s of [cur1, cur2, pusher]) { try { s?.disconnect() } catch {} }
+  }
+
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {

@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { getSecSocket } from "@/lib/sec-socket"
 import { useSec, type PermRow } from "@/lib/sec-store"
+import { enqueueClipOutbox, flushClipOutbox } from "@/lib/nexus/clip-outbox" // M1.2 §28
 import {
   generateIdentity, ecdh, deriveSessionKey, importSessionKey, seal, open,
   sasOf, fingerprintOf, toB64, fromB64, utf8ToBytes, bytesToUtf8, zeroize, sha256Hex,
@@ -106,6 +107,9 @@ async function deriveEpoch(myEph: Identity, peerEphB64: string, peerPubB64: stri
     kexDone: true,
     sas,
   })
+  // M1.2 §28: مصافحة مكتملة = قناة حية — صندوق صادر الحافظة المشفرة يُصرَّف فورًا
+  // (ما فشل تسليمه والهاتف منقطع يُعاد الآن بعصر حي جديد — بلا تدخل مستخدم)
+  void flushClipOutbox(async (t) => sendFrame("clip", { text: t, at: Date.now() }, { quiet: true })).catch(() => {})
 }
 
 // ---------- استقبال إطار مشفر ----------
@@ -480,7 +484,12 @@ export async function sendWipeCmd(passes: number) {
 
 /** لصق آمن (نص مشفر) — quiet: بلا توست فشل (مُرحّل الخلفية F6 يستخدمه حصريًا) */
 export async function sendSecureClip(text: string, opts?: { quiet?: boolean }) {
-  return sendFrame("clip", { text, at: Date.now() }, opts)
+  const ok = await sendFrame("clip", { text, at: Date.now() }, opts)
+  if (!ok) {
+    // M1.2 §28: بلا جلسة/مفاتيح الآن — يُخزَّن بالصندوق ويُدفع تلقائيًا فور أول مصافحة تالية
+    enqueueClipOutbox(text)
+  }
+  return ok
 }
 
 /** إعلام بأن قفل الهاتف تغيّر (من هوك الهاتف) */

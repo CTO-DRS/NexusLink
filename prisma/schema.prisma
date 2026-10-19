@@ -206,6 +206,23 @@ model ProdBackup {
 
   @@index([createdAt])
 }
+
+// ============ M1.2 offline-first — سجل العمليات القابل للاستئناف (عقد §28) ============
+// seq رتيب صاعد + opId وحيد (إعادة الترسيخ idempotent) — الاستئناف: prod:resume {since}
+// → prod:replay {ops} → prod:ack {upto} يقصّ ما فوق أرضية الاحتفاظ (400).
+// الوصول عبر raw SQL (نمط §23 — db.ts يضمن الجدول عند الإقلاع).
+model ProdOpLog {
+  seq      Int      @id @default(autoincrement())
+  opId     String   @unique
+  kind     String   // clip:new | clip:cleared | hand:new | hand:opened
+  deviceId String
+  payload  String   // JSON — شكل حدث البث الحي نفسه (clip:new الموسع)
+  at       DateTime
+
+  // ملاحظة: بلا @@index([seq]) — عمود seq هو المفتاح الأولي نفسه وفهرسه
+  // يخدم استعلامات النطاق (WHERE seq > ? ORDER BY seq)؛ فهرس إضافي فوق
+  // قيد PRIMARY KEY يكسر prisma db push على SQLite (لا يُسقط فهرس قيد).
+}
 // ============ المرحلة 10 — تقوية الأمان ============
 
 model AuditEvent {
