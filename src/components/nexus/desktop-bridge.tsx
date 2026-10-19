@@ -169,10 +169,16 @@ export function DesktopBridge() {
       rcSock.emit("desktop:state", { power: "on" })
     }
     rcSock.on("connect", registerDesktop)
-    const onRcPower = (d: { action?: string }) => {
+    const onRcPower = (d: { action?: string; __src?: string }) => {
+      // SEC (M0.3 F1 — طبقة صيانة ثانية): الجسر يبوّب المصدر (desktop/controller)
+      // حصرًا، والبوابة هنا أمان إضافي بنفس دلالات onRcInput حرفيًا: desktop
+      // يُنفّذ دائمًا، controller خلال جلسة نشطة فقط، والمجهول يُتجاهل صامتًا.
+      const src = String(d?.__src ?? "unknown")
+      if (src !== "desktop" && src !== "controller") return
+      if (src === "controller" && !sessionActive) return
       const action = String(d?.action ?? "").trim()
       if (!action) return
-      void tauriInvoke("power_request", { action, source: "phone" }).catch((e) => {
+      void tauriInvoke("power_request", { action, source: src === "desktop" ? "desktop-local" : "phone" }).catch((e) => {
         console.warn("[desktop-bridge] power_request:", e)
       })
     }

@@ -18,16 +18,41 @@ const REST_PORT = Number(process.env.REST_PORT || 3000)
 const STARTED_AT = Date.now()
 let BOUND_PORT = GATEWAY_PORT
 
+// SEC (M0.3 — docs/security-audit.md F2): قائمة سماح منافذ التحويل.
+// البوابة هي مدخل الشبكة المحلية — كان XTransformPort يقفز إلى أي منفذ
+// 1024..65535 فيتحول إلى نفق مسح/SSRF نحو خدمات الجهاز المحلية الأخرى.
+// العقد: جسور Nexus حصرًا (3003..3009) + REST الافتراضي 3000.
+// GATEWAY_ALLOW يسمح بالتوسيع (مثال: "3003-3009,3011") — للتجارب حصرًا.
+const ALLOW = new Set()
+for (const part of (process.env.GATEWAY_ALLOW || "3003-3009").split(",")) {
+  const m = part.trim().match(/^(\d{2,5})-(\d{2,5})$/)
+  if (m) {
+    for (let p = Number(m[1]); p <= Number(m[2]); p++) ALLOW.add(p)
+  } else if (/^\d{2,5}$/.test(part.trim())) {
+    ALLOW.add(Number(part.trim()))
+  }
+}
+
+/** null = لا بارامتر (يذهب لـ REST) · -1 = بارامتر خارج القائمة (يرفض 403) */
 function targetPort(reqUrl) {
   try {
     const q = new URL(reqUrl, "http://gw").searchParams.get("XTransformPort")
-    if (!q || !/^\d{2,5}$/.test(q)) return null
+    if (!q) return null
+    if (!/^\d{2,5}$/.test(q)) return -1
     const p = Number(q)
-    if (p < 1024 || p > 65535) return null
+    if (p < 1024 || p > 65535) return -1
+    if (!ALLOW.has(p)) return -1
     return p
   } catch {
-    return null
+    return -1
   }
+}
+
+/** IP العميل الحقيقي: البوابة محلية — الواصل من loopback عبر البوابة يحمل
+ * x-gw-client-ip (نستبدله حرفيًا فلا يُثق بترويسة من عميل مباشر)، والواصل
+ * مباشرة من الشبكة يبقى بعنوانه الحقيقي. تقرؤه الجسور لبوابة desktop:register. */
+function clientIp(req) {
+  return req.socket?.remoteAddress || ""
 }
 
 function hopByHop(headers) {
@@ -44,10 +69,20 @@ function hopByHop(headers) {
   return h
 }
 
+function rejectDisallowed(req, res, port) {
+  res.writeHead(403, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" })
+  res.end(JSON.stringify({ ok: false, gateway: true, error: "port-not-allowed", port, allow: [...ALLOW].sort((a, b) => a - b) }))
+}
+
 function proxyHttp(req, res) {
-  const port = targetPort(req.url) ?? REST_PORT
+  const t = targetPort(req.url)
+  if (t === -1) return rejectDisallowed(req, res, t)
+  const port = t ?? REST_PORT
+  // SEC: تمرير IP العميل الحقيقي للجسور (يستبدل دائمًا — لا يُثق بترويسة عميل)
+  const headers = hopByHop(req.headers)
+  headers["x-gw-client-ip"] = clientIp(req)
   const up = http.request(
-    { host: "127.0.0.1", port, method: req.method, path: req.url, headers: hopByHop(req.headers) },
+    { host: "127.0.0.1", port, method: req.method, path: req.url, headers },
     (ures) => {
       res.writeHead(ures.statusCode || 502, ures.headers)
       ures.pipe(res)
@@ -67,10 +102,21 @@ function proxyHttp(req, res) {
 
 // WS upgrade: نفق TCP خام — نعيد كتابة رأس الطلب حرفيًا ثم أنبوب ثنائي بالاتجاهين
 function proxyUpgrade(req, socket, head) {
-  const port = targetPort(req.url) ?? REST_PORT
+  const t = targetPort(req.url)
+  if (t === -1) {
+    try { socket.end("HTTP/1.1 403 Forbidden\r\n\r\n") } catch {}
+    return
+  }
+  const port = t ?? REST_PORT
   const up = net.connect(port, "127.0.0.1", () => {
     let raw = `${req.method} ${req.url} HTTP/1.1\r\n`
-    for (let i = 0; i < req.rawHeaders.length; i += 2) raw += `${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}\r\n`
+    for (let i = 0; i < req.rawHeaders.length; i += 2) {
+      const k = req.rawHeaders[i]
+      // SEC: استبدال أي x-gw-client-ip وارد من العميل — البوابة مصدر الحقيقة
+      if (k.toLowerCase() === "x-gw-client-ip") continue
+      raw += `${k}: ${req.rawHeaders[i + 1]}\r\n`
+    }
+    raw += `x-gw-client-ip: ${clientIp(req)}\r\n`
     raw += "\r\n"
     up.write(raw)
     if (head && head.length) up.write(head)

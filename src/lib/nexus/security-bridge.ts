@@ -15,6 +15,7 @@ import { db } from "@/lib/db"
 import { store as deviceStore } from "./devices"
 import { secureWipe, wipableFiles } from "./secure-wipe"
 import { nexusStorageRoot } from "./data-root"
+import { socketCors } from "./socket-security" // SEC (M0.3 F4)
 
 const PORT = 3009
 export const SUITE = "X25519 · HKDF-SHA256 · AES-256-GCM · PBKDF2(150k)"
@@ -137,7 +138,7 @@ export function ensureSecurityBridge() {
     const httpServer = createServer()
     const io2 = new SocketServer(httpServer, {
       path: "/",
-      cors: { origin: "*", methods: ["GET", "POST"] },
+      cors: socketCors(), // SEC (M0.3 F4): بديل السماح المفتوح — Origin خارجي يُرفض عند المصافحة
       pingTimeout: 60000,
       pingInterval: 25000,
       maxHttpBufferSize: 3e6,

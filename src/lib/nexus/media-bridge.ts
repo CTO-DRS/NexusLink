@@ -6,6 +6,7 @@
 // تنبيهات الحركة والبكاء، أوامر البث وعرض الشرائح.
 import { createServer } from "http"
 import { Server as SocketServer } from "socket.io"
+import { socketCors } from "./socket-security" // SEC (M0.3 F4)
 
 const PORT = 3005
 
@@ -181,7 +182,7 @@ export function ensureMediaBridge() {
     const httpServer = createServer()
     const io2 = new SocketServer(httpServer, {
       path: "/",
-      cors: { origin: "*", methods: ["GET", "POST"] },
+      cors: socketCors(), // SEC (M0.3 F4): بديل السماح المفتوح — Origin خارجي يُرفض عند المصافحة
       pingTimeout: 60000,
       pingInterval: 25000,
     })

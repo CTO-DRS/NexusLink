@@ -13,6 +13,7 @@ import { createSocket, Socket as UdpSocket, RemoteInfo } from "dgram"
 import { randomBytes } from "crypto"
 import { Server as SocketServer } from "socket.io"
 import { store as deviceStore } from "./devices"
+import { socketCors, realClientIp, isLocalSocket } from "./socket-security"
 
 const PORT = 3004
 
@@ -355,7 +356,7 @@ export function ensureRemoteBridge() {
     let bindAttempts = 0
     const io2 = new SocketServer(httpServer, {
       path: "/",
-      cors: { origin: "*", methods: ["GET", "POST"] },
+      cors: socketCors(), // SEC (M0.3 F4): بديل السماح المفتوح — Origin خارجي يُرفض عند المصافحة
       pingTimeout: 60000,
       pingInterval: 25000,
     })
@@ -386,6 +387,14 @@ export function ensureRemoteBridge() {
       })
 
       socket.on("desktop:register", (data: { name?: string; mac?: string }) => {
+        // SEC (M0.3 F8): دور الكمبيوتر صاحب الجهاز — أحداثه تُنفّذ دائمًا في
+        // الطبقة الأصلية — فلا يُمنح إلا لعميل من الجهاز نفسه (loopback عبر
+        // البوابة المحلية أو مباشر). سوكِت شبكة ينتحل الدور → رفض مسجّل.
+        if (!isLocalSocket(socket.handshake)) {
+          socket.emit("rc:rejected", { reason: "local-only", ev: "desktop:register" })
+          io2.emit("rc:log", { id: uid(), text: `رفض تسجيل دور الكمبيوتر: العميل من ${realClientIp(socket.handshake)} وليس من الجهاز نفسه`, kind: "err", at: Date.now() })
+          return
+        }
         if (data?.name) desktop.name = data.name
         if (data?.mac) desktop.mac = data.mac
         // FA-input — سوكِت واجهة الكمبيوتر نفسها (صاحب الجهاز — أحداثه أصلية دائمًا)
@@ -430,11 +439,17 @@ export function ensureRemoteBridge() {
       })
 
       socket.on("desktop:state", (report: { power?: string }) => {
+        // SEC (M0.3 F8): حالة الطاقة تُصدر من دور الكمبيوتر حصرًا — انتحالها
+        // من سوكِت شبكة يعطّل الإدخال كله (بوابة gateInput) = حرمان بلا سبب.
+        if (!desktopSocks.has(socket.id)) return
         if (report?.power && report.power !== desktop.power) desktop.power = report.power
         socket.broadcast.emit("desktop:state", report)
       })
 
       socket.on("desktop:clipboard", (data: { text: string; at?: number }) => {
+        // SEC (M0.3 F8): دفع الحافظة من دور الكمبيوتر حصرًا — وإلا صار
+        // حقن حافظة (نص يظهر على الهاتف كأنه من الكمبيوتر) متاحًا لأي سوكِت.
+        if (!desktopSocks.has(socket.id)) return
         io2.emit("rc:log", { id: uid(), text: "تم دفع الحافظة من الكمبيوتر إلى الهاتف", kind: "ok", at: Date.now() })
         socket.broadcast.emit("desktop:clipboard", data)
       })
@@ -651,6 +666,20 @@ export function ensureRemoteBridge() {
       })
 
       socket.on("rc:power", (data: { action: string }) => {
+        // SEC (M0.3 F1): أوامر النظام/الطاقة تُنفّذ فعليًا في الطبقة الأصلية —
+        // كانت تُرحّل بلا بوابة (بلا __src) فيكفي سوكِت شبكة واحد لإغلاق
+        // الكمبيوتر. العقد الجديد: desktop (صاحب الجهاز) أو controller
+        // (هاتف موثوق — نفس بوابة RC_INPUT §13) — المجهول يُرفض هنا ولا يُرحّل.
+        const src = desktopSocks.has(socket.id)
+          ? "desktop"
+          : controllerTrust.has(socket.id)
+            ? "controller"
+            : "unknown"
+        if (src === "unknown") {
+          socket.emit("rc:rejected", { reason: "untrusted", ev: "rc:power" })
+          io2.emit("rc:log", { id: uid(), text: "رفض أمر نظام: المصدر غير موثوق (يتطلب هاتف مقترن أو واجهة الكمبيوتر)", kind: "err", at: Date.now() })
+          return
+        }
         const action = data?.action
         const label = POWER_AR_ACTION[action] ?? action
         if (desktop.power === "off" && action !== "unlock") {
@@ -658,7 +687,7 @@ export function ensureRemoteBridge() {
           return
         }
         io2.emit("rc:log", { id: uid(), text: `أمر نظام من الهاتف: ${label}`, kind: "in", at: Date.now() })
-        io2.emit("rc:power", data)
+        io2.emit("rc:power", { ...(data ?? {}), __src: src })
         if (action === "shutdown" || action === "restart") desktop.power = "shutting-down"
         else if (action === "sleep") desktop.power = "sleeping"
         else if (action === "hibernate") desktop.power = "shutting-down"
@@ -668,6 +697,18 @@ export function ensureRemoteBridge() {
       })
 
       socket.on("rc:wol", (data: { mac: string }) => {
+        // SEC (M0.3 F1): إيقاظ الكمبيوتر من هاتف موثوق/واجهة الكمبيوتر حصرًا
+        // (نفس بوابة rc:power) — وإلا صار إرسال حزم broadcast من أداة شبكية.
+        const src = desktopSocks.has(socket.id)
+          ? "desktop"
+          : controllerTrust.has(socket.id)
+            ? "controller"
+            : "unknown"
+        if (src === "unknown") {
+          socket.emit("rc:rejected", { reason: "untrusted", ev: "rc:wol" })
+          io2.emit("rc:log", { id: uid(), text: "رفض Wake-on-LAN: المصدر غير موثوق (يتطلب هاتف مقترن أو واجهة الكمبيوتر)", kind: "err", at: Date.now() })
+          return
+        }
         const raw = String(data?.mac ?? "").trim()
         const norm = raw.replace(/-/g, ":").toUpperCase()
         const valid = /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(norm)
@@ -699,11 +740,19 @@ export function ensureRemoteBridge() {
             at: Date.now(),
           })
         })
-        io2.emit("desktop:wake", { source: "wol", mac: norm, packet: hex })
+        io2.emit("desktop:wake", { source: "wol", mac: norm, packet: hex, __src: src })
       })
 
       // ==== FA-9: "أكمل من حيث توقفت" — رابط من الهاتف يُفتح على الكمبيوتر ====
       socket.on("rc:handoff", (data: { url?: string; title?: string }) => {
+        // SEC (M0.3 F1): فتح روابط على كمبيوتر المستخدم من هاتف مقترن أو
+        // واجهة الكمبيوتر حصرًا — وإلا صار متاحًا كأداة تصيّد من أي سوكِت شبكة.
+        const trusted = desktopSocks.has(socket.id) || controllerTrust.has(socket.id)
+        if (!trusted) {
+          socket.emit("rc:rejected", { reason: "untrusted", ev: "rc:handoff" })
+          io2.emit("rc:log", { id: uid(), text: "رفض تسليم رابط: المصدر غير موثوق (يتطلب هاتف مقترن أو واجهة الكمبيوتر)", kind: "err", at: Date.now() })
+          return
+        }
         const raw = String(data?.url ?? "").trim()
         let parsed: URL
         try {
