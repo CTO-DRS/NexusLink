@@ -78,6 +78,9 @@ interface RcSession {
 const session: RcSession = { active: false, deviceId: null, name: null, socketId: null, at: 0, lastHb: 0 }
 const controllerTrust = new Map<string, { deviceId: string; name: string }>()
 const desktopSocks = new Set<string>()
+// SEC (M1 F9): غرفة جمهور الحافظة الموجّه (مطابقة للجسر المدمج) — محليون
+// وموثوقون بهوية حصرًا؛ سوكِت شبكي بلا هوية لا ينضم فلا يسمع نص الحافظة.
+const CLIP_AUD = 'rc:clip-aud'
 
 function endSession(reason: string) {
   if (!session.active) return
@@ -360,6 +363,8 @@ io.on('connection', (socket) => {
     desktop: { name: desktop.name, mac: desktop.mac, power: desktop.power },
     at: Date.now(),
   })
+  // SEC (M1 F9): المحليون في جمهور الحافظة الموجّه — بالمحلية أو الهوية فقط
+  if (isLocalSocket(socket.handshake as unknown as GwHandshake)) socket.join(CLIP_AUD)
 
   // ==== تسجيل الطرفين ====
   socket.on('rc:hello-controller', (data: { name?: string; deviceId?: string }) => {
@@ -368,6 +373,7 @@ io.on('connection', (socket) => {
     const deviceId = String(data?.deviceId ?? '').trim()
     if (deviceId && TRUSTED.has(deviceId)) {
       controllerTrust.set(socket.id, { deviceId, name })
+      socket.join(CLIP_AUD) // SEC (M1 F9): هوية مقترنة → جمهور الحافظة الموجّه
       rcLog(`هاتف تحكم موثوق متصل: ${name} — مسموح له بجلسة التحكم`, 'ok')
     } else {
       rcLog(`هاتف تحكم متصل: ${name}${deviceId ? ' — الهوية غير موثوقة (لا جلسة تحكم)' : ''}`, deviceId ? 'info' : 'ok')
@@ -438,8 +444,14 @@ io.on('connection', (socket) => {
   socket.on('desktop:clipboard', (data: { text: string; at?: number }) => {
     // SEC (M0.3 F8): من دور الكمبيوتر حصرًا — منع حقن الحافظة من الشبكة
     if (!desktopSocks.has(socket.id)) return
+    // SEC (M1 F9): تسليم موجّه — أثناء جلسة نشطة للمقترن حصرًا، وإلا
+    // لجمهور المحليين/الموثوقين فقط — سوكِت شبكي بلا هوية لا يسمعه
+    if (session.active && session.socketId) {
+      io.to(session.socketId).emit('desktop:clipboard', data)
+    } else {
+      io.to(CLIP_AUD).emit('desktop:clipboard', data)
+    }
     rcLog('تم دفع الحافظة من الكمبيوتر إلى الهاتف', 'ok')
-    socket.broadcast.emit('desktop:clipboard', data)
   })
 
   // ==== قناة أخبار قياس زمن الاستجابة ====
