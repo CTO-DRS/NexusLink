@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as sio;
 
 import '../core/protocol.dart';
@@ -82,6 +83,12 @@ class AgentSignaling implements TxSignaling {
     bind(GuardEvents.txCancel);
     bind(ProdEvents.clipNew);
     bind(ProdEvents.handNew);
+    if (bridgePort == NexusPorts.prod) {
+      // M1.2 §28 — عند كل اتصال: استئناف سجل العمليات من المؤشر المحفوظ
+      // (صفر = أول تشغيل: يُقرأ الرأس من prod:hello ولا يُسحب تاريخ قديم)
+      socket.onConnect((_) => _resumeProd(socket));
+      bind(ProdEvents.replay);
+    }
     socket.connect();
     return socket;
   }
@@ -112,6 +119,63 @@ class AgentSignaling implements TxSignaling {
       case ProdEvents.handNew:
         final hand = HandItem.tryParse(m);
         if (hand != null) _hands.add(hand);
+      case ProdEvents.replay:
+        _onProdReplay(m);
+    }
+  }
+
+  // ---- M1.2 §28: الاستئناف بعد الانقطاع (offline-first) ----
+  // المؤشر محفوظ محليًا (shared_preferences) — عند العودة يُرسل prod:resume
+  // ويرد prod:replay بالعمليات الفائتة بترتيبها؛ الحمولات للهاتف بيانات وصفية
+  // حصرًا (حرس F6 نفسه) والمحتوى الكامل يصل عبر قناة 3009 المشفرة.
+  Future<void> _resumeProd(sio.Socket socket) async {
+    int since = 0;
+    try {
+      final sp = await SharedPreferences.getInstance();
+      since = sp.getInt('nl-prod-cursor') ?? 0;
+    } catch (_) {/* بلا مؤشر — يبدأ من الصفر */}
+    try {
+      socket.emit(ProdEvents.resume, {'since': since});
+    } catch (_) {/* القناة منقطعة — الاتصال القادم يعيد المحاولة */}
+  }
+
+  void _onProdReplay(Map<Object?, Object?> m) {
+    final ops = m['ops'];
+    if (ops is! List) return;
+    for (final raw in ops) {
+      if (raw is! Map) continue;
+      final op = raw.cast<Object?, Object?>();
+      final kind = '${op['kind'] ?? ''}';
+      final payload = op['payload'];
+      if (payload is! Map) continue;
+      final p = payload.cast<Object?, Object?>();
+      switch (kind) {
+        case 'clip:new':
+          final clip = ClipItem.tryParse(p);
+          if (clip != null) _clips.add(clip);
+        case 'hand:new':
+          final hand = HandItem.tryParse(p);
+          if (hand != null) _hands.add(hand);
+      }
+    }
+    if (m['truncated'] == true) {
+      // دفعة مقطوعة — استمر من آخر عملية وصلت
+      int lastSeq = 0;
+      final lastRaw = ops.isNotEmpty && ops.last is Map ? (ops.last as Map).cast<Object?, Object?>() : null;
+      if (lastRaw != null) lastSeq = (lastRaw['seq'] as num?)?.toInt() ?? 0;
+      try {
+        _prod?.emit(ProdEvents.resume, {'since': lastSeq});
+      } catch (_) {}
+      return;
+    }
+    final lastSeq = (m['lastSeq'] as num?)?.toInt() ?? 0;
+    if (lastSeq > 0) {
+      try {
+        _prod?.emit(ProdEvents.ack, {'upto': lastSeq});
+      } catch (_) {}
+      SharedPreferences.getInstance()
+          .then((sp) => sp.setInt('nl-prod-cursor', lastSeq))
+          .catchError((_) => false);
     }
   }
 
