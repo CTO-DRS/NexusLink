@@ -4,7 +4,7 @@ import { promises as fs } from "fs"
 import path from "path"
 import { db } from "@/lib/db"
 import { resolveSafe } from "@/lib/nexus/fs-server"
-import { prodEmit } from "@/lib/nexus/productivity-bridge"
+import { prodEmit, prodEmitClip } from "@/lib/nexus/productivity-bridge"
 import { syncDeviceName } from "@/lib/nexus/sync-engine"
 import { writeServerAudit } from "@/lib/nexus/desktop-hardening"
 
@@ -34,7 +34,9 @@ export async function POST(req: Request) {
       mode: d.mode || "manual",
     },
   })
-  prodEmit("clip:new", { ...item, createdAt: item.createdAt.getTime() })
+  // SEC (F6): بث الحافظة بقواعد الهوية — المحتوى الكامل للجهاز المحلي حصرًا،
+  // وعملاء الشبكة بيانات وصفية والمحتوى يصلهم مشفرًا عبر قناة 3009
+  prodEmitClip({ ...item, createdAt: item.createdAt.getTime() })
   // FA-harden (عقد §16) — تدقيق الحافظة (أصل: هاتف/ويب/المراقب الأصلي)
   void writeServerAudit({
     action: "clipboard",
