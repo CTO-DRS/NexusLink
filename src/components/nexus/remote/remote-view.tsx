@@ -11,6 +11,7 @@ import { useDesktop } from "@/lib/remote-store"
 import { VirtualDesktop } from "./desktop/virtual-desktop"
 import { HandoffBar } from "./desktop/handoff-bar"
 import { ControllerShell } from "./controller/controller-shell"
+import { PerfBadge } from "./controller/perf-panel"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -77,6 +78,8 @@ export function RemoteView() {
             <Signal className="w-3 h-3" /> <span dir="ltr">{latency}ms</span>
           </Badge>
         )}
+        {/* PERF (عقد §29) — لوحة الأداء الحية على واجهة الكمبيوتر أيضًا */}
+        <PerfBadge />
         <Dialog open={qrOpen} onOpenChange={setQrOpen}>
           <Button size="sm" className="rounded-xl h-8 gap-1.5" onClick={openQr}>
             <QrCode className="w-3.5 h-3.5" /> افتح التحكم على هاتفك

@@ -3,7 +3,8 @@
 import { useEffect } from "react"
 import { toast } from "sonner"
 import { useRcMirror } from "@/lib/remote-store"
-import { getRemoteSocket, rcPing } from "@/lib/remote-socket"
+import { usePerf } from "@/lib/perf-store"
+import { getRemoteSocket, rcPing, consumeAck } from "@/lib/remote-socket"
 import type { DesktopStateReport } from "@/lib/remote-types"
 
 const REJECT_AR: Record<string, string> = {
@@ -48,10 +49,22 @@ export function useControllerBridge(controllerName = "هاتف التحكم") {
       }
     })
 
-    // قياس زمن الاستجابة
+    // قياس زمن الاستجابة — PERF (عقد §29):
+    //  · rc:ack — إقرار جسر الكمبيوتر لأمر مقيس: RTT من ساعة المرسل عبر المسار كاملًا
+    //  · rc:pong — نبض صحة القناة (صدى الخدمة بلا كمبيوتر) — سلسلة ثانوية
     let pingT = 0
+    socket.on("rc:ack", (d: { mid?: string }) => {
+      const mid = String(d?.mid ?? "")
+      if (!mid) return
+      const p = consumeAck(mid)
+      if (p) usePerf.getState().recordControl(Date.now() - p.t0, p.ev)
+    })
     socket.on("rc:pong", (d: { t: number }) => {
-      if (d.t === pingT) m().setLatency(Date.now() - d.t)
+      if (d.t === pingT) {
+        const rtt = Date.now() - d.t
+        m().setLatency(rtt)
+        usePerf.getState().recordPing(rtt)
+      }
     })
     const pv = setInterval(() => {
       pingT = Date.now()

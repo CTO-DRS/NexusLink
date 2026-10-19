@@ -207,6 +207,9 @@ class _SessionBar extends StatelessWidget {
             // الجولة 4 (عقد §18) — رقاقة القناة الحية: UDP جاهز (RTT حي) /
             // جارٍ الفتح / فوق socket.io (رجوع TCP الافتراضي)
             _LiveChip(st: st),
+            const SizedBox(width: 4),
+            // PERF (عقد §29) — رقاقة الأداء الحي: p95 تحكم بلون العتبة 80ms
+            _PerfChip(st: st),
             const SizedBox(width: 6),
             TextButton.icon(
               onPressed: () => ctl.stopSession(),
@@ -276,6 +279,45 @@ class _LiveChip extends StatelessWidget {
           Icon(st.liveReady ? Icons.bolt_rounded : Icons.timeline_rounded, size: 11, color: fg),
           const SizedBox(width: 4),
           Text(label, style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: fg)),
+        ],
+      ),
+    );
+  }
+}
+
+/// PERF (عقد §29) — رقاقة أداء التحكم المقيس:
+/// أخضر = p95 أقل من العتبة 80ms (M1.3 مستوفى) · كهرماني = تجاوز ·
+/// رمادي = بلا عينات كافية — القياس ذهاب-إياب حقيقي عبر إقرارات الجسر.
+class _PerfChip extends StatelessWidget {
+  final RcUiState st;
+  const _PerfChip({required this.st});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSamples = st.ctrlSamples >= 5 && st.ctrlP95Ms > 0;
+    final (Color bg, Color fg) = !hasSamples
+        ? (Colors.white.withOpacity(0.12), Colors.white70)
+        : st.ctrlP95Ms < 80
+            ? (const Color(0xFF064E3B), const Color(0xFF6EE7B7))
+            : (const Color(0xFF78350F), const Color(0xFFFCD34D));
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: fg.withOpacity(0.45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.speed_rounded, size: 11, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            hasSamples
+                ? 'rctl.perf.p95'.tr(namedArgs: {'v': '${st.ctrlP95Ms}', 'n': '${st.ctrlSamples}'})
+                : 'rctl.perf.wait'.tr(),
+            style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: fg),
+          ),
         ],
       ),
     );

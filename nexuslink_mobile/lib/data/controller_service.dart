@@ -46,6 +46,13 @@ class RcUiState {
   final int liveRttMs; // EMA لزمن الذهاب والعودة
   final int liveSent; // حزم أُرسلت فوق UDP
 
+  // PERF (عقد §29) — أداء التحكم المقيس: نافذة إقرارات الأوامر المتقطعة
+  final int ctrlP95Ms; // الشريط المئيني 95 لأزمنة التحكم (ذهاب-إياب عبر المسار كاملًا)
+  final int ctrlP50Ms; // الوسيط
+  final int ctrlSamples; // حجم النافذة الحالية (سقف 240)
+  final int ctrlLastMs; // آخر قياس
+  final int pingP95Ms; // p95 نبض القناة (صدى الخدمة بلا كمبيوتر)
+
   // الجولة 4 مرحلة ② (عقد §20) — لوحة الرسم: حالة الكمبيوتر (rc:tablet:state)
   final Map<String, dynamic>? tabletState;
 
@@ -79,6 +86,11 @@ class RcUiState {
     this.liveReady = false,
     this.liveRttMs = 0,
     this.liveSent = 0,
+    this.ctrlP95Ms = 0,
+    this.ctrlP50Ms = 0,
+    this.ctrlSamples = 0,
+    this.ctrlLastMs = 0,
+    this.pingP95Ms = 0,
   });
 
   RcUiState copyWith({
@@ -110,6 +122,11 @@ class RcUiState {
     bool? liveReady,
     int? liveRttMs,
     int? liveSent,
+    int? ctrlP95Ms,
+    int? ctrlP50Ms,
+    int? ctrlSamples,
+    int? ctrlLastMs,
+    int? pingP95Ms,
   }) =>
       RcUiState(
         phase: phase ?? this.phase,
@@ -173,6 +190,53 @@ class ControllerService {
   Timer? _pingTimer;
   Timer? _hbTimer; // نبض جلسة التحكم (FA-input)
   bool _sessionWanted = false; // الشاشة تريد جلسة نشطة (بدء تلقائي عند الاتصال)
+
+  // PERF (عقد §29) — نافذة القياس: إقرارات الأوامر المتقطعة + نبض القناة
+  static const int _perfWindow = 240; // سقف العينات (مطابق للويب)
+  static const int _perfTargetMs = 80; // العتبة التعاقدية M1.3
+  final List<int> _ctrlWindow = [];
+  final List<int> _pingWindow = [];
+  final Map<String, int> _pendingAck = {}; // mid → t0
+  int _midSeq = 0;
+
+  /// ختم قياس لأمر متقطع + تسجيله بانتظار الإقرار (سقف المعلّق 64 — الأقدم يُطرح)
+  Map<String, dynamic> _stampMid(String ev) {
+    final mid = 'm-${DateNow.now().toRadixString(36)}-${(++_midSeq).toRadixString(36)}';
+    if (_pendingAck.length >= 64) {
+      _pendingAck.remove(_pendingAck.keys.first);
+    }
+    _pendingAck[mid] = DateNow.now();
+    return {'mid': mid, 'mt': DateNow.now(), 'ev': ev};
+  }
+
+  /// مئين بأقرب رتبة (nearest-rank) — مرآة للويب (عقد §29)
+  static int? _pct(List<int> samples, int p) {
+    if (samples.isEmpty) return null;
+    final s = [...samples]..sort();
+    final rank = ((p / 100) * s.length).ceil().clamp(1, s.length);
+    return s[rank - 1];
+  }
+
+  void _recordCtrl(int dt) {
+    if (dt < 0 || dt >= 60000) return;
+    _ctrlWindow.add(dt);
+    if (_ctrlWindow.length > _perfWindow) _ctrlWindow.removeAt(0);
+    _patch((s) => s.copyWith(
+          ctrlLastMs: dt,
+          ctrlP50Ms: _pct(_ctrlWindow, 50) ?? 0,
+          ctrlP95Ms: _pct(_ctrlWindow, 95) ?? 0,
+          ctrlSamples: _ctrlWindow.length,
+        ));
+  }
+
+  void _onAck(dynamic raw) {
+    final m = _map(raw);
+    final mid = '${m?['mid'] ?? ''}';
+    if (mid.isEmpty) return;
+    final t0 = _pendingAck.remove(mid);
+    if (t0 == null) return;
+    _recordCtrl(DateNow.now() - t0);
+  }
   // الجولة 4 (عقد §18) — القناة الحية: مضيف الكمبيوتر (UDP مباشر) + العميل
   String? _host;
   late final LiveChannel live;
@@ -255,12 +319,17 @@ class ControllerService {
     final sk = _socket;
     if (sk == null || !sk.connected) return;
     if (ch.length != 1) return;
-    sk.emit(RcEvents.key, {'ch': ch, 'modifiers': modifiers});
+    sk.emit(RcEvents.key, {'ch': ch, 'modifiers': modifiers, '__m': _stampMid('rc:key')});
   }
 
   final _state = StreamController<RcUiState>.broadcast();
   RcUiState _cur = const RcUiState();
   RcUiState get state => _cur;
+
+  /// PERF (عقد §29) — هل العتبة التعاقدية مستوفاة حاليًا؟
+  /// (p95 تحكم أقل من 80ms بعدد عينات كافٍ — التوقيع نفسه للويب)
+  bool get ctrlTargetOk =>
+      _cur.ctrlSamples >= 5 && _cur.ctrlP95Ms > 0 && _cur.ctrlP95Ms < _perfTargetMs;
 
   /// تدفق الحالة للواجهة.
   Stream<RcUiState> get stateStream => _state.stream;
@@ -334,6 +403,8 @@ class ControllerService {
       bind(RcEvents.desktopClipboard, _onDesktopClipboard);
       bind(RcEvents.rejected, _onRejected);
       bind(RcEvents.pong, _onPong);
+      // PERF (عقد §29) — إقرارات قياس استجابة التحكم
+      bind(RcEvents.ack, _onAck);
       bind(RcEvents.session, _onSession);
       // الجولة 4 (عقد §18) — دورة حياة القناة الحية
       bind(RcEvents.liveReady, _onLiveReady);
@@ -408,7 +479,15 @@ class ControllerService {
     final t = (m?['t'] as num?)?.toInt();
     if (t == null) return;
     final dt = DateNow.now() - t;
-    if (dt >= 0 && dt < 60000) _patch((s) => s.copyWith(latencyMs: dt));
+    if (dt >= 0 && dt < 60000) {
+      // PERF (عقد §29) — نبض القناة يغذي سلسلته الثانوية أيضًا
+      _pingWindow.add(dt);
+      if (_pingWindow.length > _perfWindow) _pingWindow.removeAt(0);
+      _patch((s) => s.copyWith(
+            latencyMs: dt,
+            pingP95Ms: _pct(_pingWindow, 95) ?? 0,
+          ));
+    }
   }
 
   // ------------------------------------------------------------------
@@ -509,7 +588,7 @@ class ControllerService {
   void click({String button = 'left', String type = 'tap'}) {
     final sk = _socket;
     if (sk == null || !sk.connected) return;
-    sk.emit(RcEvents.click, {'button': button, 'type': type});
+    sk.emit(RcEvents.click, {'button': button, 'type': type, '__m': _stampMid('rc:click')});
   }
 
   void scroll(double dy) {
@@ -557,7 +636,7 @@ class ControllerService {
     final sk = _socket;
     if (sk == null || !sk.connected) return;
     if (ch.isEmpty) return;
-    sk.emit(RcEvents.key, {'ch': ch});
+    sk.emit(RcEvents.key, {'ch': ch, '__m': _stampMid('rc:key')});
   }
 
   void keySpecial(String special) {
@@ -565,7 +644,7 @@ class ControllerService {
     if (sk == null || !sk.connected) return;
     const allowed = {'backspace', 'enter', 'space', 'up', 'down', 'left', 'right', 'esc', 'tab'};
     if (!allowed.contains(special)) return;
-    sk.emit(RcEvents.key, {'special': special});
+    sk.emit(RcEvents.key, {'special': special, '__m': _stampMid('rc:key')});
   }
 
   /// FA-input (عقد §13) — العرض التقديمي: تقليب شرائح PowerPoint/Keynote/Google
@@ -576,13 +655,13 @@ class ControllerService {
     if (sk == null || !sk.connected) return;
     const allowed = {'next', 'prev', 'start', 'stop', 'black'};
     if (!allowed.contains(action)) return;
-    sk.emit(RcEvents.presenter, {'action': action});
+    sk.emit(RcEvents.presenter, {'action': action, '__m': _stampMid('rc:presenter')});
   }
 
   void media(String action, {double? value}) {
     final sk = _socket;
     if (sk == null || !sk.connected) return;
-    final data = <String, dynamic>{'action': action};
+    final data = <String, dynamic>{'action': action, '__m': _stampMid('rc:media')};
     if (value != null) data['value'] = _clamp(value, hi: 100);
     sk.emit(RcEvents.media, data);
   }
@@ -593,7 +672,7 @@ class ControllerService {
     // FA-power (عقد §12): logout أمر نظام معتمد (تأكيد أمان 10ث في الطبقة الأصلية)
     const allowed = {'shutdown', 'restart', 'sleep', 'hibernate', 'lock', 'unlock', 'logout'};
     if (!allowed.contains(action)) return;
-    sk.emit(RcEvents.power, {'action': action});
+    sk.emit(RcEvents.power, {'action': action, '__m': _stampMid('rc:power')});
   }
 
   void wakeLan(String mac) {
@@ -617,7 +696,7 @@ class ControllerService {
     }
     if (text == null || text.isEmpty) return;
     _lastPhoneClip = text;
-    sk.emit(RcEvents.clipboard, {'direction': 'toPc', 'text': text});
+    sk.emit(RcEvents.clipboard, {'direction': 'toPc', 'text': text, '__m': _stampMid('rc:clipboard')});
     _patch((s) => s.copyWith(clipPushes: s.clipPushes + 1));
   }
 
@@ -625,7 +704,7 @@ class ControllerService {
   void pullPcClipboard() {
     final sk = _socket;
     if (sk == null || !sk.connected) return;
-    sk.emit(RcEvents.clipboard, {'direction': 'pull'});
+    sk.emit(RcEvents.clipboard, {'direction': 'pull', '__m': _stampMid('rc:clipboard')});
   }
 
   /// FA-clipboard-sync — نص خارجي وضعه غيرنا في حافظة الهاتف (من الكمبيوتر عبر
@@ -650,7 +729,7 @@ class ControllerService {
       _patch((s) => s.copyWith(lastError: 'الرابط أطول من الحد (2048)'));
       return;
     }
-    sk.emit(RcEvents.handoff, {'url': u, 'title': title?.trim()});
+    sk.emit(RcEvents.handoff, {'url': u, 'title': title?.trim(), '__m': _stampMid('rc:handoff')});
     _patch((s) => s.copyWith(handoffSent: s.handoffSent + 1, clearError: true));
   }
 
