@@ -7,6 +7,7 @@ import { Server as SocketServer } from "socket.io"
 import { db } from "@/lib/db"
 import { runPairSync, photoSyncTick, generatePhonePhoto, syncDeviceName } from "./sync-engine"
 import { emitAutomationFact } from "./automation-facts"
+import { socketCors } from "./socket-security" // SEC (M0.3 F4)
 
 const PORT = 3007
 
@@ -43,7 +44,7 @@ export function ensureProdBridge() {
     const httpServer = createServer()
     const io2 = new SocketServer(httpServer, {
       path: "/",
-      cors: { origin: "*", methods: ["GET", "POST"] },
+      cors: socketCors(), // SEC (M0.3 F4): بديل السماح المفتوح — Origin خارجي يُرفض عند المصافحة
       pingTimeout: 60000,
       pingInterval: 25000,
     })

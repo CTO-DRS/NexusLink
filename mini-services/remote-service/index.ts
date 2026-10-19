@@ -11,6 +11,45 @@ import { Server } from 'socket.io'
 
 const PORT = 3004
 
+// ---------------------------------------------------------------------------
+// SEC (M0.3 — docs/security-audit.md) — حارس المآخذ: CORS + IP العميل الحقيقي
+// (مرآة src/lib/nexus/socket-security.ts — الخدمة المستقلة بلا استيراد من src)
+// ---------------------------------------------------------------------------
+const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"])
+function originAllowed(origin: string | undefined): boolean {
+  const o = String(origin ?? "").trim()
+  if (!o) return true // عميل أصلي (Flutter/Node/E2E) — بلا ترويسة Origin
+  let u: URL
+  try { u = new URL(o) } catch { return false }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return false
+  const host = u.hostname.toLowerCase()
+  if (LOOPBACK.has(host) || host.endsWith(".local")) return true
+  const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])]
+    if (a === 10 || a === 192) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+  }
+  if (host.startsWith("::ffff:")) return true
+  return false
+}
+const CORS_ALLOWED = {
+  origin: (o: string | undefined, cb: (e: Error | null, ok: boolean) => void) => cb(null, originAllowed(o)),
+  methods: ["GET", "POST"],
+}
+interface GwHandshake { address?: string; headers?: Record<string, string | string[] | undefined> }
+function realClientIp(hs: GwHandshake): string {
+  const remote = String(hs?.address ?? "").replace(/^::ffff:/, "")
+  if (LOOPBACK.has(remote)) {
+    const fwd = String(hs?.headers?.["x-gw-client-ip"] ?? "").trim().replace(/^::ffff:/, "")
+    return fwd || "127.0.0.1"
+  }
+  return remote
+}
+function isLocalSocket(hs: GwHandshake): boolean {
+  return LOOPBACK.has(realClientIp(hs))
+}
+
 // ---------- حالة الكمبيوتر المسجلة ----------
 const desktop = {
   name: 'NEXUS-PC',
@@ -308,7 +347,7 @@ function gateInput(socket: { emit: (ev: string, d?: unknown) => void }, data: { 
 const httpServer = createServer()
 io = new Server(httpServer, {
   path: '/',
-  cors: { origin: '*', methods: ['GET', 'POST'] },
+  cors: CORS_ALLOWED, // SEC (M0.3 F4): بديل السماح المفتوح — Origin خارجي يُرفض عند المصافحة
   pingTimeout: 60000,
   pingInterval: 25000,
 })
@@ -337,6 +376,12 @@ io.on('connection', (socket) => {
   })
 
   socket.on('desktop:register', (data: { name?: string; mac?: string }) => {
+    // SEC (M0.3 F8): دور الكمبيوتر (أحداثه تُنفّذ دائمًا) — لعميل محلي حصرًا
+    if (!isLocalSocket(socket.handshake as unknown as GwHandshake)) {
+      socket.emit('rc:rejected', { reason: 'local-only', ev: 'desktop:register' })
+      rcLog(`رفض تسجيل دور الكمبيوتر: العميل من ${realClientIp(socket.handshake as unknown as GwHandshake)} وليس من الجهاز نفسه`, 'info')
+      return
+    }
     if (data?.name) desktop.name = data.name
     if (data?.mac) desktop.mac = data.mac
     desktopSocks.add(socket.id) // FA-input — واجهة الكمبيوتر نفسها
@@ -380,6 +425,8 @@ io.on('connection', (socket) => {
 
   // ==== تقارير حالة الكمبيوتر → بث للهواتف ====
   socket.on('desktop:state', (report: { power?: string }) => {
+    // SEC (M0.3 F8): من دور الكمبيوتر حصرًا — انتحالها يعطّل الإدخال كله
+    if (!desktopSocks.has(socket.id)) return
     if (report?.power && report.power !== desktop.power) {
       desktop.power = report.power
       console.log('desktop power:', desktop.power)
@@ -389,6 +436,8 @@ io.on('connection', (socket) => {
 
   // ==== دفع الحافظة من الكمبيوتر إلى الهاتف ====
   socket.on('desktop:clipboard', (data: { text: string; at?: number }) => {
+    // SEC (M0.3 F8): من دور الكمبيوتر حصرًا — منع حقن الحافظة من الشبكة
+    if (!desktopSocks.has(socket.id)) return
     rcLog('تم دفع الحافظة من الكمبيوتر إلى الهاتف', 'ok')
     socket.broadcast.emit('desktop:clipboard', data)
   })
@@ -591,6 +640,17 @@ io.on('connection', (socket) => {
 
   // ==== أوامر النظام ====
   socket.on('rc:power', (data: { action: string }) => {
+    // SEC (M0.3 F1): desktop أو controller (هاتف موثوق) حصرًا — المجهول يُرفض
+    const src = desktopSocks.has(socket.id)
+      ? 'desktop'
+      : controllerTrust.has(socket.id)
+        ? 'controller'
+        : 'unknown'
+    if (src === 'unknown') {
+      socket.emit('rc:rejected', { reason: 'untrusted', ev: 'rc:power' })
+      rcLog('رفض أمر نظام: المصدر غير موثوق (يتطلب هاتف مقترن أو واجهة الكمبيوتر)', 'info')
+      return
+    }
     const action = data?.action
     const label = POWER_AR_ACTION[action] ?? action
     if (desktop.power === 'off' && action !== 'unlock') {
@@ -598,7 +658,7 @@ io.on('connection', (socket) => {
       return
     }
     rcLog(`أمر نظام من الهاتف: ${label}`, 'in')
-    io?.emit('rc:power', data)
+    io?.emit('rc:power', { ...(data ?? {}), __src: src })
     if (action === 'shutdown') desktop.power = 'shutting-down'
     else if (action === 'restart') desktop.power = 'shutting-down'
     else if (action === 'sleep') desktop.power = 'sleeping'
@@ -610,6 +670,17 @@ io.on('connection', (socket) => {
 
   // ==== Wake-on-LAN ====
   socket.on('rc:wol', (data: { mac: string }) => {
+    // SEC (M0.3 F1): إيقاظ من هاتف موثوق/واجهة الكمبيوتر حصرًا
+    const src = desktopSocks.has(socket.id)
+      ? 'desktop'
+      : controllerTrust.has(socket.id)
+        ? 'controller'
+        : 'unknown'
+    if (src === 'unknown') {
+      socket.emit('rc:rejected', { reason: 'untrusted', ev: 'rc:wol' })
+      rcLog('رفض Wake-on-LAN: المصدر غير موثوق (يتطلب هاتف مقترن أو واجهة الكمبيوتر)', 'info')
+      return
+    }
     const raw = String(data?.mac ?? '').trim()
     const norm = raw.replace(/-/g, ':').toUpperCase()
     const valid = /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(norm)
@@ -636,7 +707,7 @@ io.on('connection', (socket) => {
         ? `حزمة Wake-on-LAN السحرية أُرسلت فعليًا إلى ${norm} — ${detail}`
         : `فشل إرسال حزمة Wake-on-LAN (${detail})`, ok ? 'in' : 'info')
     })
-    io?.emit('desktop:wake', { source: 'wol', mac: norm, packet: hex })
+    io?.emit('desktop:wake', { source: 'wol', mac: norm, packet: hex, __src: src })
   })
 
   socket.on('disconnect', () => {

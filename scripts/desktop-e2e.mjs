@@ -356,13 +356,21 @@ try {
   })
   check("FA-power: إعلان MAC عبر desktop:register → rc:hello للأجهزة اللاحقة", helloMac === E2E_MAC, `mac=${helloMac}`)
 
-  // (ب) rc:power logout يُرحّل للكمبيوتر (الطبقة الأصلية تنفذه فعليًا في التطبيق)
+  // (أ2) SEC (M0.3 F1): الهاتف هنا يجب أن يكون موثوقًا قبل أوامر الطاقة —
+  // نفس ما يفعله الوكيل الحقيقي (rc:hello-controller بهوية مقترنة) —
+  // فبوابة rc:power/rc:wol ترفض المجهول حصرًا (فحصها في قسم SEC أدناه).
+  rcPhone.emit("rc:hello-controller", { name: "Galaxy S24", deviceId: "galaxy-s24" })
+  await sleep(600)
+
+  // (ب) rc:power logout من هاتف موثوق يُرحّل للكمبيوتر مع __src=controller
+  //     (الطبقة الأصلية تنفذه فعليًا في التطبيق)
   const powerCmd = await new Promise((res) => {
     rcDesk.on("rc:power", (d) => res(d))
     rcPhone.emit("rc:power", { action: "logout" })
     setTimeout(() => res(null), 6000)
   })
-  check("FA-power: rc:power logout يُرحّل للكمبيوتر", powerCmd?.action === "logout", `got=${JSON.stringify(powerCmd)}`)
+  check("FA-power: rc:power logout من هاتف موثوق يُرحّل للكمبيوتر مع __src=controller",
+    powerCmd?.action === "logout" && String(powerCmd?.__src ?? "") === "controller", `got=${JSON.stringify(powerCmd)}`)
   // استعادة الحالة على الجسر (logout وضعها locked)
   rcDesk.emit("desktop:state", { power: "on" })
   await sleep(600)
@@ -2446,11 +2454,12 @@ check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms 
       st?.ok === true && st?.desktop?.hardening?.appLock && st?.desktop?.hardening?.idle && st?.desktop?.hardening?.updater,
       JSON.stringify(st?.desktop?.hardening ?? {}).slice(0, 120))
 
-    // (د) /api/version — الإصدار المقفول 1.0.0 + سجل إصدارات حقيقي (بند 2)
+    // (د) /api/version — الإصدار الموحّد (package.json مصدر الحقيقة) + سجل إصدارات حقيقي (بند 2)
     const ver = await fetch(`${base}/api/version`).then((r) => r.json()).catch(() => null)
-    check("§16: /api/version — current=1.1.0 موحّد + سجل إصدارات",
-      ver?.current === "1.1.0" && Array.isArray(ver?.changelog) && ver.changelog.some((c) => String(c.version).replace(/^v/, "") === "1.0.0"),
-      JSON.stringify({ current: ver?.current, entries: ver?.changelog?.length }).slice(0, 90))
+    const pkgVer16 = JSON.parse((await import("node:fs")).default.readFileSync(pathMod.join(ROOT, "package.json"), "utf8"))?.version
+    check("§16: /api/version — current موحّد مع package.json + سجل إصدارات حقيقي",
+      !!pkgVer16 && ver?.current === pkgVer16 && Array.isArray(ver?.changelog) && ver.changelog.some((c) => String(c.version).replace(/^v/, "") !== pkgVer16),
+      JSON.stringify({ current: ver?.current, pkg: pkgVer16, entries: ver?.changelog?.length }).slice(0, 90))
 
     // (هـ) التشخيص (بند 5): /api/tools/diag يفحص منافذ §1 الثمانية
     const diag = await fetch(`${base}/api/tools/diag`).then((r) => r.json()).catch(() => null)
@@ -2464,12 +2473,13 @@ check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms 
     // (و) أصول المحدّث + lock.html + حصرية native-
     const fsSync = (await import("node:fs")).default
     const conf = JSON.parse(fsSync.readFileSync(pathMod.join(ROOT, "apps/desktop/src-tauri/tauri.conf.json"), "utf8"))
-    check("§16: tauri.conf — updater endpoints+pubkey+createUpdaterArtifacts+إصدار 1.1.0",
+    const pkgVer16b = JSON.parse(fsSync.readFileSync(pathMod.join(ROOT, "package.json"), "utf8"))?.version
+    check("§16: tauri.conf — updater endpoints+pubkey+createUpdaterArtifacts+إصدار موحّد مع package.json",
       Array.isArray(conf?.plugins?.updater?.endpoints) && conf.plugins.updater.endpoints.some((e) => String(e).endsWith("/latest/download/latest.json"))
       && String(conf?.plugins?.updater?.pubkey ?? "").length > 100
       && conf?.bundle?.createUpdaterArtifacts === true
-      && conf?.version === "1.1.0",
-      "tauri.conf.json")
+      && conf?.version === pkgVer16b,
+      `tauri=${conf?.version} pkg=${pkgVer16b}`)
     const lockPath = pathMod.join(ROOT, "apps/desktop/splash/lock.html")
     check("§16: lock.html ضمن frontendDist ويستدعي أوامر القفل",
       fsSync.existsSync(lockPath) && fsSync.readFileSync(lockPath, "utf8").includes("lock_verify_pin"),
@@ -2529,11 +2539,12 @@ check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms 
     check("§17: release.yml — env لينكس المجرّبة (APPIMAGE_EXTRACT_AND_RUN + CMAKE_POLICY_VERSION_MINIMUM=3.5)",
       rel.includes("APPIMAGE_EXTRACT_AND_RUN") && rel.includes("CMAKE_POLICY_VERSION_MINIMUM"))
 
-    // (ب) tauri.conf — الصيغ الخمسة
+    // (ب) tauri.conf — الصيغ الخمسة + إصدار موحّد مع package.json
     const targets = conf3?.bundle?.targets ?? []
-    check("§17: tauri.conf targets الخمسة (deb nsis msi appimage dmg) + إصدار 1.1.0",
-      ["deb", "nsis", "msi", "appimage", "dmg"].every((t) => targets.includes(t)) && conf3?.version === "1.1.0",
-      targets.join(","))
+    const pkgVer17 = JSON.parse(rd("package.json"))?.version
+    check("§17: tauri.conf targets الخمسة (deb nsis msi appimage dmg) + إصدار موحّد مع package.json",
+      ["deb", "nsis", "msi", "appimage", "dmg"].every((t) => targets.includes(t)) && conf3?.version === pkgVer17,
+      `${targets.join(",")} tauri=${conf3?.version} pkg=${pkgVer17}`)
 
     // (ج) الإصلاح الحرج: resolve_resources يفحص تخطيط الحزم المدمج بالبادئة أولًا
     const procman = rd("apps/desktop/src-tauri/src/procman.rs")
@@ -2571,12 +2582,12 @@ check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms 
       && checklist.includes("التحكم اللمسي") && checklist.includes("الوسائط الأصلية")
       && checklist.includes("صلابة الإصدار") && checklist.includes("☐"))
 
-    // (ح) توحيد الإصدار — الملفات الأربعة 1.1.0
+    // (ح) توحيد الإصدار — الملفات الأربعة على إصدار package.json (مصدر الحقيقة)
     const pkgJson = JSON.parse(rd("package.json"))
     const cargoVer = (rd("apps/desktop/src-tauri/Cargo.toml").match(/^version\s*=\s*"([^"]+)"/m) ?? [])[1]
     const pubspecVer = (rd("nexuslink_mobile/pubspec.yaml").match(/^version:\s*([^\s+]+)/m) ?? [])[1]
-    check("§17: توحيد الإصدار 1.1.0 — tauri.conf + Cargo.toml + pubspec + package.json",
-      conf3?.version === "1.1.0" && cargoVer === "1.1.0" && pubspecVer === "1.1.0" && pkgJson?.version === "1.1.0",
+    check("§17: توحيد الإصدار — tauri.conf + Cargo.toml + pubspec + package.json على إصدار واحد",
+      conf3?.version === pkgJson?.version && cargoVer === pkgJson?.version && pubspecVer === pkgJson?.version,
       `tauri=${conf3?.version} cargo=${cargoVer} pubspec=${pubspecVer} pkg=${pkgJson?.version}`)
 
     // (ط) العقد §17 موثق
@@ -2591,8 +2602,9 @@ check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms 
     const fsp23 = (await import("node:fs")).default
     const rd23 = (p) => { try { return fsp23.readFileSync(pathMod.join(ROOT, p), "utf8") } catch { return "" } }
 
-    // (أ) توحيد الإصدار — الملفات الستة 1.1.0
+    // (أ) توحيد الإصدار — الملفات الستة على إصدار package.json (مصدر الحقيقة)
     const pkg23 = JSON.parse(rd23("package.json"))
+    const ver23 = pkg23?.version
     const conf23 = JSON.parse(rd23("apps/desktop/src-tauri/tauri.conf.json"))
     const cargo23 = rd23("apps/desktop/src-tauri/Cargo.toml")
     const cargoVer23 = (cargo23.match(/^version\s*=\s*"([^"]+)"/m) ?? [])[1]
@@ -2602,15 +2614,16 @@ check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms 
     const pubspecCode23 = (pubspec23.match(/^version:\s*\d+\.\d+\.\d+\+(\d+)/m) ?? [])[1]
     const gradle23 = rd23("nexuslink_mobile/android/app/build.gradle")
     const routeTs23 = rd23("src/app/api/version/route.ts")
-    check("§23: توحيد الإصدار 1.1.0 — package.json + tauri.conf + Cargo.toml + Cargo.lock + pubspec + gradle fallback",
-      pkg23?.version === "1.1.0" && conf23?.version === "1.1.0" && cargoVer23 === "1.1.0" && lockVer23 === "1.1.0"
-      && pubspecVer23 === "1.1.0" && gradle23.includes('?: "1.1.0"'),
+    check("§23: توحيد الإصدار — package.json + tauri.conf + Cargo.toml + Cargo.lock + pubspec + gradle fallback على إصدار واحد",
+      pkg23?.version && conf23?.version === ver23 && cargoVer23 === ver23 && lockVer23 === ver23
+      && pubspecVer23 === ver23 && gradle23.includes(`?: "${ver23}"`),
       `pkg=${pkg23?.version} tauri=${conf23?.version} cargo=${cargoVer23} lock=${lockVer23} pub=${pubspecVer23}`)
-    check("§23: versionCode أندرويد تقدّم (1.0.0+1 → 1.1.0+2) — مسار ترقية APK صحيح",
-      pubspecCode23 === "2" && pubspec23.includes("1.1.0+2"), `code=${pubspecCode23}`)
-    check("§23: /api/version — CURRENT=1.1.0 + سجل محلي يحوي v1.1.0 وv1.0.0",
-      routeTs23.includes('const CURRENT = "1.1.0"') && routeTs23.includes('tag: "v1.1.0"') && routeTs23.includes('tag: "v1.0.0"'),
-      "version route")
+    check("§23: versionCode أندرويد تقدّم مع الإصدار (pubspec يحمل VER+code بترقية صحيحة)",
+      Number(pubspecCode23) >= 2 && pubspec23.includes(`${ver23}+${pubspecCode23}`), `code=${pubspecCode23} ver=${ver23}`)
+    check("§23: /api/version — CURRENT مطابق للإصدار الموحّد + سجل محلي يحوي الإصدار الحالي وأقدم منه",
+      routeTs23.includes(`const CURRENT = "${ver23}"`) && routeTs23.includes(`tag: "v${ver23}"`)
+      && (routeTs23.match(/tag: "v/g) ?? []).length >= 2,
+      `ver=${ver23} tags=${(routeTs23.match(/tag: "v([^"]+)/g) ?? []).join(",")}`)
     check("§23: updater.rs — User-Agent من CARGO_PKG_VERSION (بلا إصدار مثبت يدويًا)",
       rd23("apps/desktop/src-tauri/src/updater.rs").includes('concat!("NexusLink-Desktop/", env!("CARGO_PKG_VERSION"))'),
       "updater UA")
@@ -2623,8 +2636,8 @@ check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms 
     check("§23: ملاحظات الإصدار توثق مسار الترقية 1.0.0 → 1.1.0 وحفظ الإعدادات",
       notes23.includes("1.0.0 → 1.1.0") && notes23.includes("SQLite"), "release notes upgrade")
     const rel23 = rd23(".github/workflows/release.yml")
-    check("§23: release.yml — VERSION=1.1.0 + وسم الإرفاق اليدوي v1.1.0",
-      rel23.includes('VERSION: "1.1.0"') && rel23.includes('default: "v1.1.0"'), "release.yml version")
+    check("§23: release.yml — VERSION مطابق للإصدار الموحّد + وسم الإرفاق اليدوي عليه",
+      rel23.includes(`VERSION: "${ver23}"`) && rel23.includes(`default: "v${ver23}"`), `ver=${ver23}`)
     check("§23: release.yml — حارس ملاحظات الإصدار (فشل مبكر بلا العربية/English) + body_path على الوسم",
       rel23.includes("Verify release notes exist (AR/EN)") && rel23.includes("body_path: docs/releases/${{ github.ref_name }}.md"),
       "release.yml notes")
@@ -4017,6 +4030,123 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
       try { sockTT2.disconnect() } catch { /* ignore */ }
     }
 
+  }
+
+  // ============================================================
+  // [SEC] M0.3 — التدقيق الأمني الداخلي (docs/security-audit.md)
+  // بوابة rc:power/rc:wol/rc:handoff (__src) · desktop:register محلي حصرًا ·
+  // قائمة سماح البوابة · CORS بلا "*" · تمرير IP العميل الحقيقي
+  // ============================================================
+  {
+    console.log("== [SEC] security hardening: gateway allowlist + trust gates + CORS ==")
+    const fsMod = await import("node:fs")
+    const pathMod = await import("node:path")
+    const read = (p) => fsMod.readFileSync(pathMod.join(ROOT, p), "utf8")
+
+    // ---- (أ) فحوص المصدر ----
+    const gwSrc = read("mini-services/gateway/index.cjs")
+    check("SEC/source: البوابة بقائمة سماح (GATEWAY_ALLOW + ALLOW.has — لا قفز لأي منفذ)",
+      gwSrc.includes("GATEWAY_ALLOW") && gwSrc.includes("ALLOW.has"), "mini-services/gateway/index.cjs")
+    check("SEC/source: البوابة تمرر x-gw-client-ip في HTTP وWS upgrade (استبدال حرفيًا — لا ثقة بترويسة عميل)",
+      (gwSrc.match(/x-gw-client-ip/g) || []).length >= 4, "proxyHttp + proxyUpgrade")
+    const rbSrc = read("src/lib/nexus/remote-bridge.ts")
+    check("SEC/source: الجسر المدمج — desktop:register لعميل محلي حصرًا (isLocalSocket → local-only)",
+      rbSrc.includes("isLocalSocket(socket.handshake)") && rbSrc.includes('"local-only"'), "remote-bridge.ts")
+    check("SEC/source: الجسر المدمج — rc:power/rc:wol يحقنان __src ويرفضان المجهول (نمط §13)",
+      rbSrc.includes("__src: src") && (rbSrc.match(/reason: "untrusted", ev: "rc:power"/g) || []).length === 1 && rbSrc.includes('ev: "rc:wol"'), "remote-bridge.ts")
+    check("SEC/source: الجسر المدمج — rc:handoff بوابة ثقة (مقترن/واجهة الكمبيوتر حصرًا)",
+      rbSrc.includes('ev: "rc:handoff"'), "remote-bridge.ts")
+    const rsSrc = read("mini-services/remote-service/index.ts")
+    check("SEC/source: المرآة المستقلة — نفس البوابات (local-only + __src + originAllowed بلا *)",
+      /['"]local-only['"]/.test(rsSrc) && rsSrc.includes("__src: src") && rsSrc.includes("originAllowed") && !rsSrc.includes('origin: \'*\''), "remote-service/index.ts")
+    const dbSrc = read("src/components/nexus/desktop-bridge.tsx")
+    check("SEC/source: نقطة التنفيذ (webview) — onRcPower يبوّب __src بنفس دلالات onRcInput",
+      dbSrc.includes('if (src !== "desktop" && src !== "controller") return') && dbSrc.includes('if (src === "controller" && !sessionActive) return'), "desktop-bridge.tsx")
+    let starCount = 0
+    for (const p of ["src/lib/nexus/remote-bridge.ts", "src/lib/nexus/guard-bridge.ts", "src/lib/nexus/automation-bridge.ts", "src/lib/nexus/productivity-bridge.ts", "src/lib/nexus/media-bridge.ts", "src/lib/nexus/security-bridge.ts", "mini-services/comms-service/index.ts", "mini-services/remote-service/index.ts"]) {
+      if (read(p).match(/origin:\s*["']\*["']/)) starCount++
+    }
+    check("SEC/source: صفر origin:\"*\" في الجسور الثمانية (socketCors/allowlist في كلها)", starCount === 0, `remaining=${starCount}`)
+
+    // ---- (ب) فحوص حية عبر البوابة ----
+    // قائمة السماح: منفذ خارجها → 403 صادق
+    const deny1 = await fetch(`http://127.0.0.1:${gwPort}/?XTransformPort=22`).then(async (r) => ({ code: r.status, j: await r.json().catch(() => null) })).catch((e) => ({ code: 0, j: null }))
+    check("SEC/live: البوابة ترفض XTransformPort=22 (خارج قائمة السماح) بـ 403 port-not-allowed",
+      deny1?.code === 403 && deny1?.j?.error === "port-not-allowed", `code=${deny1?.code}`)
+    const deny2 = await fetch(`http://127.0.0.1:${gwPort}/?XTransformPort=9300`).then((r) => r.status).catch(() => 0)
+    check("SEC/live: البوابة ترفض منفذًا اعتباطيًا آخر (9300) — لا نفق مسح شبكة", deny2 === 403, `code=${deny2}`)
+    const allow1 = await fetch(`http://127.0.0.1:${gwPort}/status?XTransformPort=3003`).then((r) => r.json()).catch(() => null)
+    check("SEC/live: المسار المشروع سالم — XTransformPort=3003/status → role=comms", allow1?.role === "comms", `role=${allow1?.role ?? "—"}`)
+
+    // CORS: Origin خارجي بلا ترويسة سماح · Origin محلي مسموح
+    const hs = (origin) => fetch(`http://127.0.0.1:3003/?EIO=4&transport=polling&XTransformPort=none`, { headers: origin ? { Origin: origin } : {} }).then((r) => ({ code: r.status, acao: r.headers.get("access-control-allow-origin") })).catch(() => null)
+    const evil = await hs("https://evil.example")
+    check("SEC/live: مصافحة comms بـ Origin خارجي — لا ترويسة سماح له (المتصفح يحجب)", !!evil && evil.acao !== "https://evil.example", `acao=${evil?.acao ?? "null"} code=${evil?.code}`)
+    const own = await hs("http://127.0.0.1:8180")
+    check("SEC/live: مصافحة comms بـ Origin محلي — مسموحة بترويسة صريحة", !!own && own.acao === "http://127.0.0.1:8180", `acao=${own?.acao ?? "null"}`)
+
+    // بوابة الثقة الحية: سوكِت مجهول → rc:power مرفوض ولا يصل لدور الكمبيوتر
+    const { io: ioSec } = await import("socket.io-client")
+    const mkSock = () => io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3004" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+    const waitConnect = (s) => new Promise((res, rej) => { s.once("connect", res); s.once("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("timeout")), 10000) })
+    const secDesk = mkSock(); await waitConnect(secDesk)
+    secDesk.emit("desktop:register", { name: "NEXUS-SEC", mac: "AA:BB:CC:11:22:33" })
+    await sleep(600)
+    const secRogue = mkSock(); await waitConnect(secRogue)
+    // المستمعان قبل الإصدار — أي ترحيل (لو رجع الانحدار) يُلتقط لا يُفوَّت
+    let leaked = false
+    secDesk.on("rc:power", () => { leaked = true })
+    const rejected = await new Promise((res) => {
+      secRogue.on("rc:rejected", (d) => res(d))
+      secRogue.emit("rc:power", { action: "shutdown" })
+      setTimeout(() => res(null), 5000)
+    })
+    await sleep(1600) // نافذة سماح الترحيل تنقضي
+    check("SEC/live: سوكِت مجهول → rc:power {shutdown} → rc:rejected(untrusted) حصرًا له",
+      rejected?.reason === "untrusted" && rejected?.ev === "rc:power", JSON.stringify(rejected) || "no rejection")
+    check("SEC/live: صفر ترحيل — دور الكمبيوتر المسجل لا يستقبل rc:power من المجهول إطلاقًا", leaked === false, leaked ? "LEAKED" : "no relay")
+    // انتحال حالة الطاقة من المجهول يُتجاهل — المستمع يُربط قبل الاتصال (rc:hello عند الصلة مباشرة)
+    secRogue.emit("desktop:state", { power: "off" })
+    await sleep(700)
+    const probe = mkSock()
+    const helloP = new Promise((res) => {
+      probe.on("rc:hello", (d) => res(String(d?.desktop?.power ?? "")))
+      setTimeout(() => res(""), 6000)
+    })
+    await waitConnect(probe)
+    const helloPower = await helloP
+    check("SEC/live: انتحال desktop:state {power:off} من المجهول يُتجاهل — الحالة تبقى on", helloPower === "on", `power=${helloPower}`)
+
+    // محاكاة LAN حقيقية: الاتصال بعنوان الشبكة المحلي للحاوية (لا loopback)
+    const os = await import("node:os")
+    const lanIp = Object.values(os.networkInterfaces()).flat().find((i) => i && !i.internal && i.family === "IPv4")?.address || ""
+    if (lanIp) {
+      const lanSock = io(`http://${lanIp}:3004`, { transports: ["polling"], reconnection: false, timeout: 10000 })
+      const lanConnected = await waitConnect(lanSock).then(() => true).catch(() => false)
+      const lanReg = await new Promise((res) => {
+        lanSock.on("rc:rejected", (d) => res(d))
+        lanSock.emit("desktop:register", { name: "SPOOF-ATTEMPT", mac: "AA:BB:CC:DD:EE:01" })
+        setTimeout(() => res(null), 4000)
+      })
+      check("SEC/live: سوكِت من عنوان الشبكة (محاكاة LAN) → desktop:register → رفض local-only",
+        lanConnected && lanReg?.reason === "local-only" && lanReg?.ev === "desktop:register", `ip=${lanIp} got=${JSON.stringify(lanReg)}`)
+      // تزييف ترويسة البوابة من سوكِت شبكي (عبر البوابة من عنوان الشبكة) —
+      // البوابة تستبدل الترويسة بعنوان العميل الحقيقي فالرفض local-only قائم
+      const lanSock2 = io(`http://${lanIp}:${gwPort}`, { query: { XTransformPort: "3004" }, transports: ["polling"], reconnection: false, timeout: 10000, extraHeaders: { "x-gw-client-ip": "127.0.0.1" } })
+      const lan2Connected = await waitConnect(lanSock2).then(() => true).catch(() => false)
+      const lan2Reg = await new Promise((res) => {
+        lanSock2.on("rc:rejected", (d) => res(d))
+        lanSock2.emit("desktop:register", { name: "SPOOF-HEADER", mac: "AA:BB:CC:DD:EE:02" })
+        setTimeout(() => res(null), 4000)
+      })
+      check("SEC/live: تزييف x-gw-client-ip عبر البوابة من عميل شبكي — البوابة تستبدلها فالرفض local-only قائم",
+        lan2Connected && lan2Reg?.reason === "local-only", `got=${JSON.stringify(lan2Reg)}`)
+      try { lanSock.disconnect() } catch {}
+      try { lanSock2.disconnect() } catch {}
+    } else {
+      check("SEC/live: لا عنوان شبكة محلي متاح في هذه البيئة — فحص LAN تجاوز صادق", true, "no lan ip")
+    }
+    for (const s of [secDesk, secRogue, probe]) { try { s.disconnect() } catch {} }
   }
 
 } catch (e) {
