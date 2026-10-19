@@ -359,6 +359,10 @@
       "ready": "Live UDP · {rtt}ms",
       "opening": "Opening live channel…",
       "tcp": "TCP channel"
+    },
+    "perf": {
+      "p95": "p95 {v}ms · {n} samples",
+      "wait": "perf: waiting for samples"
     }
   },
   "common": {

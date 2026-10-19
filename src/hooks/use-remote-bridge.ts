@@ -2,7 +2,16 @@
 // NexusLink — خطاف جهة الكمبيوتر: استقبال أوامر الهاتف وتطبيقها + بث الحالة
 import { useEffect } from "react"
 import { useDesktop, useRcMirror } from "@/lib/remote-store"
-import { getRemoteSocket, desktopRegister, pushDesktopState, pushDesktopClipboard, rcPing } from "@/lib/remote-socket"
+import { usePerf } from "@/lib/perf-store"
+import {
+  getRemoteSocket, desktopRegister, pushDesktopState, pushDesktopClipboard, rcPing, rcAck,
+} from "@/lib/remote-socket"
+
+/** PERF (عقد §29): إقرار أمر مقيس وصل بختم `__m` — يُرد بعد التطبيق بلا محتوى */
+function ackFrom(d: unknown, ev: string) {
+  const m = (d as { __m?: { mid?: string; mt?: number } } | null)?.__m
+  if (m?.mid) rcAck(String(m.mid), Number(m.mt) || 0, ev)
+}
 
 export function useRemoteBridge() {
   useEffect(() => {
@@ -33,29 +42,41 @@ export function useRemoteBridge() {
     })
     socket.on("rc:click", (d: { button: "left" | "right"; type?: "tap" | "double" }) => {
       st().applyClick(d.button ?? "left", d.type ?? "tap")
+      ackFrom(d, "rc:click")
     })
     socket.on("rc:scroll", (d: { dy: number }) => st().applyScroll(d.dy ?? 0))
     socket.on("rc:pinch", (d: { scale: number }) => st().applyPinch(d.scale ?? 1))
-    socket.on("rc:key", (d: { ch?: string; special?: string }) => st().applyKey(d))
+    socket.on("rc:key", (d: { ch?: string; special?: string }) => {
+      st().applyKey(d)
+      ackFrom(d, "rc:key")
+    })
     socket.on("rc:gamepad", (d: { kind: string; x?: number; y?: number; button?: string; action?: string }) => {
       st().applyGamepad(d)
+      if (d?.kind === "button") ackFrom(d, "rc:gamepad")
     })
     socket.on("rc:presenter", (d: { action: string; value?: boolean; x?: number; y?: number }) => {
       st().applyPresenter(d)
+      if (d?.action !== "laser-move") ackFrom(d, "rc:presenter")
     })
-    socket.on("rc:media", (d: { action: string; value?: number; target?: string }) => st().applyMedia(d))
+    socket.on("rc:media", (d: { action: string; value?: number; target?: string }) => {
+      st().applyMedia(d)
+      ackFrom(d, "rc:media")
+    })
     socket.on("rc:power", (d: { action: "shutdown" | "restart" | "sleep" | "hibernate" | "lock" | "unlock" }) => {
       st().applyPower(d.action)
+      ackFrom(d, "rc:power")
     })
     socket.on("rc:clipboard", (d: { direction: "toPc" | "pull"; text?: string }) => {
       if (d.direction === "toPc") st().applyClipboardToPc(d.text ?? "")
       else pushDesktopClipboard(useDesktop.getState().clipboard?.text ?? "")
+      ackFrom(d, "rc:clipboard")
     })
     socket.on("desktop:wake", (d: { source: string }) => st().applyWake(d.source))
 
     // ==== FA-9: تسليم رابط "أكمل من حيث توقفت" ====
     socket.on("rc:handoff", (d: { url?: string; title?: string }) => {
       st().pushHandoff(d.url ?? "", d.title)
+      ackFrom(d, "rc:handoff")
     })
 
     // ==== سجل + هاتف متصل ====
@@ -82,12 +103,14 @@ export function useRemoteBridge() {
     // ==== تقدم الوسائط ====
     const iv = setInterval(() => st().tickMedia(), 1000)
 
-    // ==== قياس زمن الاستجابة ====
+    // ==== قياس زمن الاستجابة — PERF (عقد §29): نبض الكمبيوتر يسجل كسلسلة ping ====
     let pingT = 0
     socket.on("rc:pong", (d: { t: number }) => {
       if (d.t === pingT) {
-        st().setLatency(Date.now() - d.t)
-        useRcMirror.getState().setLatency(Date.now() - d.t)
+        const rtt = Date.now() - d.t
+        st().setLatency(rtt)
+        useRcMirror.getState().setLatency(rtt)
+        usePerf.getState().recordPing(rtt)
       }
     })
     const pv = setInterval(() => {

@@ -4885,6 +4885,159 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     for (const s of [cur1, cur2, pusher]) { try { s?.disconnect() } catch {} }
   }
 
+  // [PERF] M1.3 — أداء التحكم المقيس: p95 + لوحة حية (عقد §29)
+  {
+    console.log("== [PERF] M1.3 control latency p95 ==")
+    const fsModPerf = await import("node:fs")
+    const pathModPerf = await import("node:path")
+    const readPerf = (p) => fsModPerf.readFileSync(pathModPerf.join(ROOT, p), "utf8")
+
+    // ---- (أ) فحوص مصدر ----
+    const perfSrc = readPerf("src/lib/perf-store.ts")
+    check("PERF/source: مخزن الأداء — نافذة 240 + عتبة 80 + مئين أقرب-رتبة دالٍّ نقي + لقطة موحدة",
+      perfSrc.includes("PERF_WINDOW = 240") && perfSrc.includes("PERF_TARGET_MS = 80")
+      && perfSrc.includes("export function pct(") && perfSrc.includes("export function perfStats(")
+      && perfSrc.includes("Math.ceil((p / 100) * n)"), "perf-store.ts")
+    const rsPerfSrc = readPerf("src/lib/remote-socket.ts")
+    check("PERF/source: الأوامر المتقطعة تحمل ختم __m — وعالية التردد (move/scroll/pinch) بلا ختم عمدًا",
+      (rsPerfSrc.match(/__m: stampMid\(/g) || []).length >= 7
+      && rsPerfSrc.includes('emit("rc:move", { dx, dy, source })')
+      && rsPerfSrc.includes('emit("rc:scroll", { dy })') && rsPerfSrc.includes('emit("rc:pinch", { scale })'),
+      `stamps=${(rsPerfSrc.match(/__m: stampMid\(/g) || []).length}`)
+    check("PERF/source: تمديدات القياس — سقف المعلق 64 (الأقدم يُطرح) + استهلاك بالمعرف + rcAck للمُقرِّر",
+      rsPerfSrc.includes("PENDING_CAP = 64") && rsPerfSrc.includes("export function consumeAck")
+      && rsPerfSrc.includes("export function rcAck"), "measurement plumbing")
+    const ucbPerfSrc = readPerf("src/hooks/use-controller-bridge.ts")
+    check("PERF/source: وحدة التحكم — rc:ack → عينة تحكم بساعة المرسل (consumeAck) + rc:pong → سلسلة النبض",
+      ucbPerfSrc.includes('socket.on("rc:ack"') && ucbPerfSrc.includes("consumeAck(")
+      && ucbPerfSrc.includes("recordControl(Date.now() - p.t0") && ucbPerfSrc.includes("recordPing(rtt)"),
+      "use-controller-bridge.ts")
+    const urbPerfSrc = readPerf("src/hooks/use-remote-bridge.ts")
+    check("PERF/source: جسر الكمبيوتر يُقرّ بعد التطبيق — المتقطعة ثمانيًا وعالية التردد بلا إقرار",
+      urbPerfSrc.includes("function ackFrom(d: unknown, ev: string)")
+      && (urbPerfSrc.match(/ackFrom\(d, "rc:/g) || []).length === 8
+      && urbPerfSrc.includes('if (d?.kind === "button") ackFrom')
+      && urbPerfSrc.includes('if (d?.action !== "laser-move") ackFrom'),
+      `acks=${(urbPerfSrc.match(/ackFrom\(d, "rc:/g) || []).length}`)
+    const svcPerfSrc = readPerf("mini-services/remote-service/index.ts")
+    const embPerfSrc = readPerf("src/lib/nexus/remote-bridge.ts")
+    check("PERF/source: المرحّل — rc:ack من دور الكمبيوتر حصرًا (حرس F8) + قصّ mid إلى 64 وev إلى 32 — في النسختين المتطابقتين تعاقديًا (المصغّرة + المدمجة)",
+      svcPerfSrc.includes("socket.on('rc:ack'") && svcPerfSrc.includes("if (!desktopSocks.has(socket.id)) return")
+      && svcPerfSrc.includes("slice(0, 64)") && svcPerfSrc.includes("slice(0, 32)")
+      && embPerfSrc.includes('socket.on("rc:ack"') && embPerfSrc.includes("if (!desktopSocks.has(socket.id)) return")
+      && embPerfSrc.includes('io2?.emit("rc:ack"'), "remote-service + remote-bridge mirrors")
+    const panelPerfSrc = readPerf("src/components/nexus/remote/controller/perf-panel.tsx")
+    const shellPerfSrc = readPerf("src/components/nexus/remote/controller/controller-shell.tsx")
+    const viewPerfSrc = readPerf("src/components/nexus/remote/remote-view.tsx")
+    check("PERF/source: اللوحة الحية — شارة p95 بحالة العتبة + جدول موسع (الآن/p50/p95/الأقصى × سلسلتين) مدموجة بوحدة التحكم وواجهة الكمبيوتر",
+      panelPerfSrc.includes("PERF_TARGET_MS") && panelPerfSrc.includes("perfStats(samples)")
+      && panelPerfSrc.includes("p50") && shellPerfSrc.includes("<PerfBadge") && viewPerfSrc.includes("<PerfBadge />"),
+      "perf-panel + shell + remote-view")
+    const protoPerfSrc = readPerf("nexuslink_mobile/lib/core/protocol.dart")
+    const csPerfSrc = readPerf("nexuslink_mobile/lib/data/controller_service.dart")
+    const screenPerfSrc = readPerf("nexuslink_mobile/lib/presentation/controller_screen.dart")
+    check("PERF/source: الهاتف — حدث rc:ack موثق + أختام __m على كل المتقطعة + نافذة 240 بمئين أقرب-رتبة + رقاقة p95",
+      protoPerfSrc.includes("ack = 'rc:ack'") && (csPerfSrc.match(/_stampMid\('rc:/g) || []).length >= 8
+      && csPerfSrc.includes("_perfWindow = 240") && csPerfSrc.includes("static int? _pct(")
+      && screenPerfSrc.includes("_PerfChip"), `stamps=${(csPerfSrc.match(/_stampMid\('rc:/g) || []).length}`)
+    const contractPerfSrc = readPerf("docs/protocol-contract.md")
+    check("PERF/source: العقد §29 — البروتوكول وحرس F8 والنافذة والعتبة والحدود الصادقة موثقة",
+      contractPerfSrc.includes("## 29. أداء التحكم المقيس") && contractPerfSrc.includes("### 29.هـ حدود صادقة")
+      && contractPerfSrc.includes("rc:ack"), "contract §29")
+
+    // ---- (ب) حي: RTT حقيقي عبر البوابة + حرس الإقرارات + النبض ----
+    const { io: ioPerf } = await import("socket.io-client")
+    const nrP95 = (arr) => {
+      const s = [...arr].sort((a, b) => a - b)
+      const r = Math.max(1, Math.ceil(0.95 * s.length))
+      return s[Math.min(r, s.length) - 1]
+    }
+    try {
+      const mkPerfSock = () => io(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3004" }, transports: ["websocket"], reconnection: false, timeout: 10000 })
+      const perfDesk = mkPerfSock()
+      const perfCtl = mkPerfSock()
+      const perfCtl2 = mkPerfSock()
+      await Promise.all([perfDesk, perfCtl, perfCtl2].map((s) =>
+        new Promise((res, rej) => { s.on("connect", res); s.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("perf 3004 timeout")), 10000) })))
+      check("PERF/live: مصافحة 3004 عبر البوابة — كمبيوتر + وحدتا تحكم (websocket)", true, "3 sockets")
+      perfDesk.emit("desktop:register", { name: "PERF-PC", mac: "A4:5E:60:C1:2D:9F" })
+      perfCtl.emit("rc:hello-controller", { name: "perf-controller" })
+      await sleep(300)
+
+      // (1) 40 أمر مقيس ذهاب-إياب كامل: هاتف→بوابة→مرحّل→جسر(إقرار)→عودة
+      const rtts = []
+      perfCtl.on("rc:ack", (d) => {
+        const idx = rtts.findIndex((x) => x.mid === d?.mid && x.rtt === null)
+        if (idx >= 0) rtts[idx].rtt = Date.now() - rtts[idx].t0
+      })
+      // جسر الكمبيوتر (محاكاة حرفية لرد فعل hook — ackFrom بعد التطبيق): معالج دائم بلا سباق
+      perfDesk.on("rc:click", (d) => {
+        if (d?.__m?.mid) perfDesk.emit("rc:ack", { mid: d.__m.mid, mt: d.__m.mt, ev: "rc:click", at: Date.now() })
+      })
+      for (let i = 0; i < 40; i++) {
+        const mid = `pm-${i}-${Date.now().toString(36)}`
+        const t0 = Date.now()
+        rtts.push({ mid, t0, rtt: null })
+        perfCtl.emit("rc:click", { button: "left", type: "tap", __m: { mid, mt: t0 } })
+        await sleep(12)
+      }
+      await sleep(1500)
+      const doneRtts = rtts.filter((x) => x.rtt != null).map((x) => x.rtt)
+      check("PERF/live: 40 أمرًا مقيسًا ذهاب-إياب كاملًا عبر المسار (هاتف→بوابة→مرحّل→جسر→عودة) — كلها مُقرَّة",
+        doneRtts.length === 40, `acked=${doneRtts.length}/40`)
+
+      // (2) عتبة M1.3: p95 (أقرب-رتبة) أقل من 80ms داخل الشبكة المحلية
+      const p95 = doneRtts.length === 40 ? nrP95(doneRtts) : Infinity
+      check("PERF/live: p95 استجابة التحكم أقل من 80ms (عتبة M1.3 — أقرب-رتبة على 40 عينة حية)",
+        p95 < 80, `p95=${Number.isFinite(p95) ? `${p95}ms` : "—"} max=${doneRtts.length ? Math.max(...doneRtts) : "—"}ms`)
+
+      // (3) صحة رياضية: p50 ≤ p95 ≤ الأقصى
+      const sorted = [...doneRtts].sort((a, b) => a - b)
+      const p50m = sorted.length ? sorted[Math.max(1, Math.ceil(0.5 * sorted.length)) - 1] : null
+      check("PERF/live: صحة المئين — p50 ≤ p95 ≤ الأقصى (أقرب-رتبة متسقة على العينات الحية)",
+        p50m != null && p50m <= p95 && p95 <= Math.max(...doneRtts), `p50=${p50m}ms p95=${Number.isFinite(p95) ? p95 : "—"}ms`)
+
+      // (4) حرس F8: إقرار من دور وحدة تحكم لا يمر أبدًا
+      const ghostSeen = { ctl2: false }
+      perfCtl2.on("rc:ack", () => { ghostSeen.ctl2 = true })
+      const ghostMid = `ghost-${Date.now().toString(36)}`
+      perfCtl.emit("rc:ack", { mid: ghostMid, mt: 1, ev: "rc:click", at: Date.now() })
+      await sleep(900)
+      check("PERF/live: حرس F8 على الإقرارات — rc:ack من دور وحدة تحكم (غير كمبيوتر) لا يُمرَّر إطلاقًا",
+        ghostSeen.ctl2 === false, "ghost ack dropped")
+
+      // (5) إقرار الكمبيوتر يبث للجميع (قناة أخبار) + قصّ mid إلى 64 + حمولة بلا محتوى
+      const bigMid = `big-${"x".repeat(300)}-${Date.now().toString(36)}`
+      const ackCtlP = new Promise((res) => { perfCtl.once("rc:ack", (d) => res(d)); setTimeout(() => res(null), 4000) })
+      const ackCtl2P = new Promise((res) => { perfCtl2.once("rc:ack", (d) => res(d)); setTimeout(() => res(null), 4000) })
+      perfDesk.emit("rc:ack", { mid: bigMid, mt: 12345, ev: "rc:media", at: Date.now(), leaked: "should-not-pass" })
+      const [ackCtl, ackCtl2] = await Promise.all([ackCtlP, ackCtl2P])
+      check("PERF/live: إقرار الكمبيوتر يبث لكل العملاء (قناة أخبار) — وmid يُقص إلى 64",
+        !!ackCtl && !!ackCtl2 && String(ackCtl.mid).length === 64 && String(ackCtl2.mid).length === 64,
+        `midLen=${ackCtl ? String(ackCtl.mid).length : "—"}`)
+      check("PERF/live: الحمولة بلا محتوى — مفاتيحها {mid, mt, ev, at} حصرًا (F6 متوافق — لا تسريب بحقل إضافي)",
+        !!ackCtl && Object.keys(ackCtl).every((k) => ["mid", "mt", "ev", "at"].includes(k)) && !("leaked" in (ackCtl ?? {})),
+        `keys=${ackCtl ? Object.keys(ackCtl).join(",") : "—"}`)
+
+      // (6) نبض القناة: 5×rc:ping/pong — سلسلة ثانوية كلها أقل من 80ms
+      const pings = []
+      for (let i = 0; i < 5; i++) {
+        const t = Date.now()
+        const pongP = new Promise((res) => { perfCtl.once("rc:pong", (d) => res(d)); setTimeout(() => res(null), 4000) })
+        perfCtl.emit("rc:ping", { t })
+        const pong = await pongP
+        if (pong?.t === t) pings.push(Date.now() - t)
+        await sleep(60)
+      }
+      check("PERF/live: نبض القناة — 5/5 صدى rc:pong والكل أقل من 80ms (سلسلة ping الثانوية)",
+        pings.length === 5 && Math.max(...pings) < 80, `n=${pings.length} max=${pings.length ? Math.max(...pings) : "—"}ms`)
+
+      for (const s of [perfDesk, perfCtl, perfCtl2]) { try { s.disconnect() } catch {} }
+    } catch (ePerf) {
+      check("PERF/live: دورة القياس الحية عبر البوابة", false, ePerf instanceof Error ? ePerf.message : String(ePerf))
+    }
+  }
+
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {
