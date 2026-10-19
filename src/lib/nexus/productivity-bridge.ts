@@ -7,7 +7,7 @@ import { Server as SocketServer } from "socket.io"
 import { db } from "@/lib/db"
 import { runPairSync, photoSyncTick, generatePhonePhoto, syncDeviceName } from "./sync-engine"
 import { emitAutomationFact } from "./automation-facts"
-import { socketCors } from "./socket-security" // SEC (M0.3 F4)
+import { socketCors, isLocalSocket } from "./socket-security" // SEC (M0.3 F4) + F6
 
 const PORT = 3007
 
@@ -34,6 +34,43 @@ export function prodEmit(event: string, payload: Record<string, unknown>) {
 
 export function prodBridgeStatus() {
   return { booted: !!g[BOOT_KEY], port: PORT }
+}
+
+// SEC (M0.3 F6 → M1): الحافظة الموحدة فوق القناة المشفرة —
+// بث clip:new لكل سوكِت حسب هويته: عميل الجهاز نفسه (loopback فعليًا — عبر
+// البوابة المحلية أو مباشرة) يستلم المحتوى الكامل (ثقة الجهاز المحلي — حد §13
+// الصادق)، وعملاء الشبكة يستلمون البيانات الوصفية حصرًا والمحتوى يصلهم عبر
+// قناة 3009 المشفرة (sec:frame kind:"clip" مربوطة بهوية الاقتران + صلاحية
+// "clipboard") — سوكِت استطلاع صامت على الشبكة لم يعد يجمع شيئًا.
+export interface ClipBroadcastItem extends Record<string, unknown> {
+  content?: string | null
+  createdAt: Date | number
+}
+
+export function broadcastClip(io2: SocketServer, item: ClipBroadcastItem): number {
+  const createdAt = item.createdAt instanceof Date ? item.createdAt.getTime() : item.createdAt
+  const full = { ...item, createdAt }
+  let netClients = 0
+  for (const [, s] of io2.sockets.sockets) {
+    if (isLocalSocket(s.handshake)) {
+      s.emit("clip:new", full)
+    } else {
+      s.emit("clip:new", { ...full, content: "", encrypted: true, delivery: "e2ee" })
+      netClients++
+    }
+  }
+  return netClients
+}
+
+/** F6: بث الحافظة من مسارات السيرفر (API/أتمتة) — نفس قواعد broadcastClip حرفيًا */
+export function prodEmitClip(item: ClipBroadcastItem): boolean {
+  try {
+    if (!io) return false
+    broadcastClip(io, item)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function ensureProdBridge() {
@@ -71,11 +108,10 @@ export function ensureProdBridge() {
               mode: d?.mode || "manual",
             },
           })
-          const payload = { ...item, createdAt: item.createdAt.getTime() }
-          io2.emit("clip:new", payload)
+          const netClients = broadcastClip(io2, item) // SEC F6: المحتوى الكامل للجهاز المحلي حصرًا
           // §26 — نشر الحقيقة لمحرك الروتينات (ناقل داخل العملية — بلا تغيير سلكي)
-          emitAutomationFact({ kind: "clip.received", deviceId: payload.deviceId, deviceName: payload.deviceName, clipKind: payload.kind, at: Date.now() })
-          log(io2, `حافظة موحدة: ${d?.kind === "image" ? "صورة" : d?.kind === "file" ? `ملف ${d?.fileName ?? ""}` : "نص"} من ${payload.deviceName}${d?.mode === "auto" ? " (تلقائي)" : ""}`, "in")
+          emitAutomationFact({ kind: "clip.received", deviceId: item.deviceId, deviceName: item.deviceName, clipKind: item.kind, at: Date.now() })
+          log(io2, `حافظة موحدة: ${d?.kind === "image" ? "صورة" : d?.kind === "file" ? `ملف ${d?.fileName ?? ""}` : "نص"} من ${item.deviceName}${d?.mode === "auto" ? " (تلقائي)" : ""}${netClients > 0 ? ` — محتوى ${netClients} عميل شبكة يُسلّم مشفرًا عبر قناة 3009` : ""}`, "in")
         } catch { /* ignore */ }
       })
 
@@ -196,7 +232,8 @@ function emitBridge(io2: SocketServer) {
   }
 }
 
-/** §26 — دفع نص إلى الحافظة الموحدة من محرك الروتينات (نفس قناة clip:new القائمة حرفيًا). */
+/** §26 — دفع نص إلى الحافظة الموحدة من محرك الروتينات (نفس قناة clip:new —
+ *  بث F6 نفسه: المحتوى للجهاز المحلي حصرًا والشبكة عبر القناة المشفرة). */
 export async function prodInjectClip(content: string, deviceName = "PC-OFFICE"): Promise<boolean> {
   try {
     const item = await db.prodClip.create({
@@ -211,7 +248,7 @@ export async function prodInjectClip(content: string, deviceName = "PC-OFFICE"):
         mode: "auto",
       },
     })
-    io?.emit("clip:new", { ...item, createdAt: item.createdAt.getTime() })
+    if (io) broadcastClip(io, item)
     return true
   } catch {
     return false

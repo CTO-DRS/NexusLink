@@ -250,6 +250,15 @@ async function handleDecrypted(kind: string, msg: Record<string, unknown>, from:
   }
 
   if (kind === "clip") {
+    // SEC (F6 → M1): تسليم الحافظة المشفر مربوط بهوية الاقتران — وبوابة الصلاحية
+    // نفسها (ميزة "clipboard" في SEC_FEATURES) إن وُجد قرار للمستخدم
+    const feature = "clipboard"
+    const rule = st.perms.find((p) => p.feature === feature && p.deviceId === S.deviceId)
+    if (rule && !rule.enabled) {
+      await sendFrame("perm-denied", { feature, op: "clip", reason: "الحافظة الآمنة موقوفة من صلاحيات هذا الجهاز" }, { quiet: true })
+      st.addAudit({ id: `denied-${Date.now()}`, at: Date.now(), actor: S.name, action: "perm-denied", detail: "رفض إطار حافظة مشفر — صلاحية «clipboard» موقوفة", severity: "warn", stealth: false })
+      return
+    }
     st.setReceivedClip({ text: String(msg.text), from, at: Date.now() })
     st.setCheck("clip", true)
     toast.success("نص مشفر وصل من الهاتف — جاهز للصق", { description: "قناة الحافظة الآمنة" })
@@ -469,9 +478,9 @@ export async function sendWipeCmd(passes: number) {
   getSecSocket()?.emit("sec:wipe-cmd", { passes, at: Date.now() })
 }
 
-/** لصق آمن (نص مشفر) */
-export async function sendSecureClip(text: string) {
-  return sendFrame("clip", { text, at: Date.now() })
+/** لصق آمن (نص مشفر) — quiet: بلا توست فشل (مُرحّل الخلفية F6 يستخدمه حصريًا) */
+export async function sendSecureClip(text: string, opts?: { quiet?: boolean }) {
+  return sendFrame("clip", { text, at: Date.now() }, opts)
 }
 
 /** إعلام بأن قفل الهاتف تغيّر (من هوك الهاتف) */

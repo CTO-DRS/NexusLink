@@ -4149,6 +4149,136 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     for (const s of [secDesk, secRogue, probe]) { try { s.disconnect() } catch {} }
   }
 
+  // [SEC-F6] M1 — الحافظة الموحدة فوق القناة المشفرة (docs/security-audit.md F6)
+  {
+    console.log("== [SEC-F6] unified clipboard over the E2EE channel ==")
+    const fsModF6 = await import("node:fs")
+    const pathModF6 = await import("node:path")
+    const read = (p) => fsModF6.readFileSync(pathModF6.join(ROOT, p), "utf8")
+    // ---- (أ) فحوص مصدر ----
+    const pbSrc = read("src/lib/nexus/productivity-bridge.ts")
+    check("SEC-F6/source: بث الحافظة بقواعد هوية — broadcastClip تفرّق isLocalSocket (كامل للجهاز المحلي / بيانات وصفية للشبكة)",
+      pbSrc.includes("export function broadcastClip") && pbSrc.includes("isLocalSocket(s.handshake)") && pbSrc.includes('content: "", encrypted: true, delivery: "e2ee"'), "productivity-bridge.ts")
+    check("SEC-F6/source: المسارات الثلاثة عبر البث الموحد — clip:push وprodInjectClip وprodEmitClip (لا io.emit خام للحافظة)",
+      (pbSrc.match(/broadcastClip\(io2, item\)/g) || []).length >= 1 && pbSrc.includes("broadcastClip(io, item)") && pbSrc.includes("export function prodEmitClip"), "productivity-bridge.ts")
+    const clipRoute = read("src/app/api/prod/clipboard/route.ts")
+    check("SEC-F6/source: REST POST لا يبث clip:new خامًا — prodEmitClip في المسار",
+      clipRoute.includes("prodEmitClip(") && !/prodEmit\(\s*["']clip:new["']/.test(clipRoute), "api/prod/clipboard/route.ts")
+    const upbSrc = read("src/hooks/use-prod-bridge.ts")
+    check("SEC-F6/source: مُرحّل الإرسال المشفر — مقاطع pc-office النصية → sendSecureClip هادئًا (لا تمرير لما أصله الهاتف)",
+      upbSrc.includes("sendSecureClip") && upbSrc.includes("{ quiet: true }") && upbSrc.includes('item.deviceId === "pc-office" && item.kind === "text"'), "use-prod-bridge.ts")
+    const usbSrc = read("src/hooks/use-sec-bridge.ts")
+    check("SEC-F6/source: مستقبل clip ببوابة صلاحية clipboard — رفض perm-denied + تدقيق",
+      usbSrc.includes('const feature = "clipboard"') && usbSrc.includes("perm-denied"), "use-sec-bridge.ts")
+    const secKt = read("nexuslink_mobile/android/app/src/main/kotlin/com/nexuslink/mobile/SecChannel.kt")
+    check("SEC-F6/source: الهاتف الحقيقي — SecChannel يكتب الحافظة المشفرة فورًا + حرس الحلقة clipLastFromPc + applied",
+      secKt.includes("setPrimaryClip") && secKt.includes("AgentForegroundService.clipLastFromPc = text") && secKt.includes('"applied" to applied'), "SecChannel.kt")
+
+    // ---- (ب) حي: اختبار التسريب — loopback مقابل LAN على 3007 ----
+    const osF6 = await import("node:os")
+    const lanIpF6 = Object.values(osF6.networkInterfaces()).flat().find((i) => i && !i.internal && i.family === "IPv4")?.address || ""
+    const { io: ioF6 } = await import("socket.io-client")
+    const needle = `F6-SEC-NEEDLE-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const f6Local = ioF6("http://127.0.0.1:3007", { transports: ["polling"], reconnection: false, timeout: 10000 })
+    await new Promise((res, rej) => { f6Local.once("connect", res); f6Local.once("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("timeout local 3007")), 10000) })
+    const localClipP = new Promise((res) => { f6Local.once("clip:new", (d) => res(d)); setTimeout(() => res(null), 6000) })
+    let f6Lan = null, lanClipP = null
+    if (lanIpF6) {
+      f6Lan = ioF6(`http://${lanIpF6}:3007`, { transports: ["polling"], reconnection: false, timeout: 10000 })
+      await new Promise((res, rej) => { f6Lan.once("connect", res); f6Lan.once("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("timeout lan 3007")), 10000) })
+      lanClipP = new Promise((res) => { f6Lan.once("clip:new", (d) => res(d)); setTimeout(() => res(null), 6000) })
+    }
+    const pushRes = await fetch("http://127.0.0.1:3000/api/prod/clipboard", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceId: "pc-office", deviceName: "PC-OFFICE", kind: "text", content: needle, mode: "auto" }),
+    }).then((r) => r.json()).catch(() => null)
+    const localClip = await localClipP
+    const lanClip = lanClipP ? await lanClipP : null
+    check("SEC-F6/live: دفع REST سليم (المسار الموحد prodEmitClip)", pushRes?.ok === true && !!localClip, `id=${pushRes?.item?.id ?? "—"}`)
+    check("SEC-F6/live: العميل المحلي (loopback) يستلم المحتوى الكامل — سلوك الحافظة الموحدة سليم",
+      localClip?.content === needle, `len=${String(localClip?.content ?? "").length}`)
+    if (lanIpF6) {
+      check("SEC-F6/live: سوكِت الشبكة (LAN) بيانات وصفية حصرًا — content:\"\" + encrypted:true + delivery:\"e2ee\"",
+        !!lanClip && lanClip?.content === "" && lanClip?.encrypted === true && lanClip?.delivery === "e2ee",
+        JSON.stringify({ content: lanClip?.content, encrypted: lanClip?.encrypted, delivery: lanClip?.delivery }))
+      check("SEC-F6/live: صفر تسريب — الإطار الواصل للشبكة لا يحمل الإبرة بأي شكل",
+        !!lanClip && !JSON.stringify(lanClip).includes(needle), "wire truth")
+    } else {
+      check("SEC-F6/live: لا عنوان شبكة محلي متاح — فحص LAN تجاوز صادق", true, "no lan ip")
+    }
+
+    // ---- (ج) حي: المصافحة الكاملة X25519 + الإطار المشفر عبر البوابة ----
+    try {
+      const [{ x25519 }, { hkdf }, { sha256: nsha }] = await Promise.all([
+        import("@noble/curves/ed25519"), import("@noble/hashes/hkdf"), import("@noble/hashes/sha256"),
+      ])
+      const subtle = globalThis.crypto.subtle
+      const b64e = (u8) => Buffer.from(u8).toString("base64")
+      const b64d = (s) => new Uint8Array(Buffer.from(s, "base64"))
+      const utf8 = (s) => new TextEncoder().encode(s)
+      const mkSec = async (deviceId, name, role) => {
+        const s = ioF6(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3009" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+        await new Promise((res, rej) => { s.once("connect", res); s.once("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("timeout 3009")), 10000) })
+        return { s, deviceId, name, role, priv: x25519.utils.randomPrivateKey(), eph: x25519.utils.randomPrivateKey() }
+      }
+      const announce = (p) => p.s.emit("sec:announce", { role: p.role, deviceId: p.deviceId, name: p.name, pub: b64e(x25519.getPublicKey(p.priv)), eph: b64e(x25519.getPublicKey(p.eph)) })
+      const deriveKey = async (myEphPriv, peerEphPubB64, myId, peerId) => {
+        const shared = x25519.getSharedSecret(myEphPriv, b64d(peerEphPubB64))
+        const [s1, s2] = [myId, peerId].sort()
+        const raw = hkdf(nsha, shared, utf8(`nexuslink-v1|${s1}|${s2}`), utf8("nexuslink-e2e-session"), 32)
+        return subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"])
+      }
+      // PC أولًا (تسجيل) ثم الهاتف — المصافحة تُرحّل مفاتيح كلٍّ للآخر
+      const f6Pc = await mkSec("pc-office", "PC-OFFICE", "desktop")
+      announce(f6Pc)
+      await sleep(800)
+      const f6Ph = await mkSec("galaxy-s24", "Galaxy-S24", "phone")
+      const pcKexP = new Promise((res) => { f6Pc.s.once("kex:peer", (d) => res(d)); setTimeout(() => res(null), 8000) })
+      const phKexP = new Promise((res) => { f6Ph.s.once("kex:peer", (d) => res(d)); setTimeout(() => res(null), 8000) })
+      announce(f6Ph)
+      const pcKex = await pcKexP
+      const phKex = await phKexP
+      check("SEC-F6/live: مصافحة X25519 عبر البوابة — المفاتيح رُحّلت للطرفين الموثوقين حصرًا",
+        pcKex?.deviceId === "galaxy-s24" && !!pcKex?.eph && phKex?.deviceId === "pc-office" && !!phKex?.eph,
+        `pc↔${pcKex?.deviceId ?? "؟"} · ph↔${phKex?.deviceId ?? "؟"}`)
+      // pcKex = ما استلمه الكمبيوتر (مفاتيح الهاتف) · phKex = ما استلمه الهاتف (مفاتيح الكمبيوتر)
+      const pcKey = await deriveKey(f6Pc.eph, pcKex.eph, "pc-office", "galaxy-s24")
+      const phKey = await deriveKey(f6Ph.eph, phKex.eph, "galaxy-s24", "pc-office")
+      // سوكِت استطلاع ثالث على 3009 — بلا إعلان: لا يسمع شيئًا
+      const f6Recon = ioF6(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3009" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+      await new Promise((res) => { f6Recon.once("connect", res); setTimeout(res, 6000) })
+      const reconP = new Promise((res) => { f6Recon.once("sec:frame", (d) => res(d)); setTimeout(() => res(null), 2500) })
+      // إطار الحافظة المشفر: نفس عقد §9 حرفيًا (AAD = from|to|kind|e{epoch}|seq)
+      const needle2 = `F6-E2EE-${needle}`
+      const seq = 1
+      const iv = globalThis.crypto.getRandomValues(new Uint8Array(12))
+      const pt = utf8(JSON.stringify({ text: needle2, at: Date.now() }))
+      const ct = await subtle.encrypt(
+        { name: "AES-GCM", iv, additionalData: utf8(`pc-office|galaxy-s24|clip|e1|${seq}`), tagLength: 128 },
+        pcKey, pt,
+      )
+      const phFrameP = new Promise((res) => { f6Ph.s.once("sec:frame", (d) => res(d)); setTimeout(() => res(null), 8000) })
+      f6Pc.s.emit("sec:frame", { to: "galaxy-s24", from: "pc-office", kind: "clip", e: 1, iv: b64e(iv), ct: b64e(new Uint8Array(ct)), seq })
+      const fr = await phFrameP
+      check("SEC-F6/live: الإطار المشفر رُحّل للهدف المقترن حصرًا (to=galaxy-s24)",
+        !!fr && fr?.from === "pc-office" && fr?.kind === "clip", `from=${fr?.from ?? "—"} kind=${fr?.kind ?? "—"}`)
+      const ptOut = await subtle.decrypt(
+        { name: "AES-GCM", iv: b64d(String(fr?.iv)), additionalData: utf8(`${fr?.from}|${fr?.to}|${fr?.kind}|e${fr?.e}|${Number(fr?.seq)}`), tagLength: 128 },
+        phKey, b64d(String(fr?.ct)),
+      )
+      const msg = JSON.parse(new TextDecoder().decode(new Uint8Array(ptOut)))
+      check("SEC-F6/live: فك التشفير على المستقبل — النص مطابق (X25519+HKDF+AES-256-GCM حية عبر السلك)",
+        msg?.text === needle2, `len=${String(msg?.text ?? "").length}`)
+      const reconGot = await reconP
+      check("SEC-F6/live: سوكِت استطلاع بلا إعلان على 3009 لا يسمع الإطارات إطلاقًا",
+        reconGot === null, reconGot ? "RECON HEARD A FRAME" : "silence")
+      for (const s of [f6Pc.s, f6Ph.s, f6Recon]) { try { s.disconnect() } catch {} }
+    } catch (eF6) {
+      check("SEC-F6/live: مصافحة X25519 + الإطار المشفر", false, eF6 instanceof Error ? eF6.message : String(eF6))
+    }
+    for (const s of [f6Local, f6Lan]) { if (s) { try { s.disconnect() } catch {} } }
+  }
+
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {

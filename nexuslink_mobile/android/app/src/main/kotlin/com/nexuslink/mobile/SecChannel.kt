@@ -361,8 +361,22 @@ class SecChannel(
                 )
             }
             "clip" -> {
+                // SEC (F6 → M1): تسليم الحافظة المشفر — نفس دلالات §11.ب لكن فوق
+                // القناة المشفرة: الكتابة في الحافظة مسموحة دائمًا من الخدمة (قيود
+                // Android 10+ على القراءة فقط) + حرس الحلقة clipLastFromPc كي لا
+                // تعيدها مراقبة الإتاحة إلى الكمبيوتر (لا صدى).
                 val text = msg.optString("text")
-                MainActivity.pushDataEvent("secclip", mapOf("text" to text, "from" to from))
+                var applied = false
+                if (text.isNotEmpty()) {
+                    try {
+                        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("NexusLink", text))
+                        AgentForegroundService.clipLastFromPc = text
+                        applied = true
+                    } catch (_: Exception) {
+                    }
+                }
+                MainActivity.pushDataEvent("secclip", mapOf("text" to text, "from" to from, "applied" to applied))
                 if (!AgentForegroundService.uiAlive) {
                     AgentForegroundService.liveInstance?.let { svc ->
                         svc.notifySecClip(text)

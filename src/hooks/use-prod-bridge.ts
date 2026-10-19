@@ -55,8 +55,28 @@ export function useProdBridge() {
     socket.on("disconnect", () => st().setBridgeOnline(false))
 
     // ==== الحافظة الموحدة — القلب ====
-    socket.on("clip:new", (item: import("@/lib/prod-store").ProdClipItem) => {
+    socket.on("clip:new", async (raw: import("@/lib/prod-store").ProdClipItem & { encrypted?: boolean; delivery?: string }) => {
+      // SEC (F6 → M1): عملاء الشبكة يصلكم بيانات وصفية حصرًا — عميل الجهاز المحلي
+      // (loopback) يستلم المحتوى كاملًا؛ إن وصل إطار بلا محتوى (حافة إعادة اتصال
+      // عبر البوابة) نجيبه من API السيرفر نفسه (سطح الجهاز المحلي)
+      let item = raw
+      if (item.encrypted && !item.content) {
+        try {
+          const j = await fetch("/api/prod/clipboard").then((r) => r.json())
+          const full = (j.items as import("@/lib/prod-store").ProdClipItem[] | undefined)?.find((c) => c.id === item.id)
+          if (full) item = full
+        } catch { /* ignore — الحافظة تبقى بلا محتوى في هذه الحالة */ }
+      }
       st().addClip(item)
+
+      // SEC (F6): مُرحّل التسليم المشفر — مقاطع الكمبيوتر (pc-office) النصية
+      // تُدفع للهاتف المقترن عبر قناة 3009 المشفرة (kind:"clip" — SecChannel
+      // يكتبها في حافظة الهاتف بنفس دلالات §11.ب). هادئ: التزامن خلفي بلا إزعاج،
+      // وبلا تمرير لما أصله الهاتف (الهاتف يمتلك محتواه أصلاً — لا حلقات).
+      if (item.deviceId === "pc-office" && item.kind === "text" && item.content) {
+        void import("@/hooks/use-sec-bridge").then((m) => m.sendSecureClip(item.content as string, { quiet: true })).catch(() => { /* ignore */ })
+      }
+
       const mine = item.deviceId === "pc-office"
       if (mine) return
 
