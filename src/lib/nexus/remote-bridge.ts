@@ -17,6 +17,11 @@ import { socketCors, realClientIp, isLocalSocket } from "./socket-security"
 
 const PORT = 3004
 
+// SEC (M1 F9): غرفة جمهور الحافظة الموجّه — ينضم إليها العملاء المحليون
+// (حد §13 الصادق: الجهاز نفسه) والهواتف الموثوقة بهوية مقترنة حصرًا؛
+// سوكِت استطلاع شبكي بلا هوية لا ينضم أبدًا فلا يسمع نص الحافظة.
+const CLIP_AUD = "rc:clip-aud"
+
 // ---------------------------------------------------------------------------
 // الجولة 4 (عقد §18) — NexusLive: قناة UDP عالية التردد للإدخال الحي
 // ---------------------------------------------------------------------------
@@ -371,6 +376,9 @@ export function ensureRemoteBridge() {
         desktop: { name: desktop.name, mac: desktop.mac, power: desktop.power },
         at: Date.now(),
       })
+      // SEC (M1 F9): المحليون في جمهور الحافظة الموجّه — الانضمام بمحلية
+      // الجهاز أو هوية موثوقة فقط (عقد §13.ج أدناه للموثوق بهويته).
+      if (isLocalSocket(socket.handshake)) socket.join(CLIP_AUD)
 
       socket.on("rc:hello-controller", (data: { name?: string; deviceId?: string }) => {
         const name = data?.name || "هاتف التحكم"
@@ -379,6 +387,7 @@ export function ensureRemoteBridge() {
         const deviceId = String(data?.deviceId ?? "").trim()
         if (deviceId && isTrustedDevice(deviceId)) {
           controllerTrust.set(socket.id, { deviceId, name })
+          socket.join(CLIP_AUD) // SEC (M1 F9): هوية مقترنة → جمهور الحافظة الموجّه
           io2.emit("rc:log", { id: uid(), text: `هاتف تحكم موثوق متصل: ${name} — مسموح له بجلسة التحكم`, kind: "ok", at: Date.now() })
         } else {
           io2.emit("rc:log", { id: uid(), text: `هاتف تحكم متصل: ${name}${deviceId ? " — الهوية غير موثوقة (لا جلسة تحكم)" : ""}`, kind: deviceId ? "err" : "ok", at: Date.now() })
@@ -450,8 +459,15 @@ export function ensureRemoteBridge() {
         // SEC (M0.3 F8): دفع الحافظة من دور الكمبيوتر حصرًا — وإلا صار
         // حقن حافظة (نص يظهر على الهاتف كأنه من الكمبيوتر) متاحًا لأي سوكِت.
         if (!desktopSocks.has(socket.id)) return
+        // SEC (M1 F9): التسليم موجّه لا عام — نص الحافظة حساس. أثناء جلسة
+        // نشطة يصل لوحدة التحكم المقترنة حصرًا (زوج §13)، وإلا لجمهور
+        // المحليين/الموثوقين فقط — سوكِت شبكي بلا هوية لا يسمعه إطلاقًا.
+        if (session.active && session.socketId) {
+          io2.to(session.socketId).emit("desktop:clipboard", data)
+        } else {
+          io2.to(CLIP_AUD).emit("desktop:clipboard", data)
+        }
         io2.emit("rc:log", { id: uid(), text: "تم دفع الحافظة من الكمبيوتر إلى الهاتف", kind: "ok", at: Date.now() })
-        socket.broadcast.emit("desktop:clipboard", data)
       })
 
       socket.on("rc:ping", (data: { t: number }) => {
