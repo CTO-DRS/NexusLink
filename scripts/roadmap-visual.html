@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --text: #111827;
+    --text-sub: #6B7280;
+    --text-muted: #9CA3AF;
+    --bg: #FFFFFF;
+    --border: #E5E7EB;
+    --accent: #D4875A;
+    --accent-dark: #B4633A;
+    --accent-bg: #F8F0EB;
+    --connector: #94A3B8;
+  }
+
+  body {
+    font-family: 'Cairo', 'Tajawal', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #root { width: fit-content; min-width: 1240px; margin: 0 auto; padding: 48px 44px 40px; background: #FFFFFF; }
+
+  /* ── Hero header ── */
+  .hero {
+    background: linear-gradient(135deg, #1A2330 0%, #111827 100%);
+    border-radius: 16px; padding: 34px 40px 30px; color: #FFFFFF; margin-bottom: 24px;
+  }
+  .hero-badge {
+    display: inline-block; background: rgba(212,135,90,0.18); color: #E9A97E;
+    font-size: 13px; font-weight: 700; padding: 4px 14px; border-radius: 20px; margin-bottom: 12px;
+  }
+  .hero h1 { font-size: 30px; font-weight: 800; line-height: 1.35; margin-bottom: 8px; }
+  .hero p { font-size: 15px; color: #AEB6C2; line-height: 1.7; max-width: 980px; }
+
+  /* ── KPI strip (real facts only) ── */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 30px; }
+  .kpi-card {
+    background: #F8FAFC; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 20px; text-align: center;
+  }
+  .kpi-value { font-size: 26px; font-weight: 800; color: #1A2330; font-variant-numeric: tabular-nums; }
+  .kpi-label { font-size: 13px; color: var(--text-sub); margin-top: 2px; }
+
+  /* ── Phased roadmap (Layout C, RTL) ── */
+  .phase-group { background: #F8FAFC; border-radius: 12px; padding: 18px 22px 16px; }
+  .phase-title {
+    font-size: 17px; font-weight: 800; padding: 10px 16px;
+    border-radius: 8px; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .phase-title .p-span {
+    font-size: 12.5px; font-weight: 700; color: #FFFFFF;
+    border-radius: 14px; padding: 2px 12px; flex-shrink: 0; font-variant-numeric: tabular-nums;
+  }
+  .phase-title .p-goal { font-size: 13px; font-weight: 600; margin-inline-start: auto; opacity: 0.85; }
+  .phase-sub { font-size: 13px; color: var(--text-sub); margin: 0 4px 12px; line-height: 1.6; }
+
+  .phase-steps { display: flex; flex-direction: column; gap: 7px; padding-right: 10px; }
+  .phase-step {
+    font-size: 14px; font-weight: 500; color: var(--text);
+    padding: 8px 14px; background: #FFFFFF; border-radius: 6px;
+    border: 1px solid var(--border); line-height: 1.55;
+    display: flex; align-items: baseline;
+  }
+  .phase-step .step-num {
+    display: inline-block; min-width: 22px; height: 22px; line-height: 22px;
+    text-align: center; border-radius: 50%; font-size: 12px; font-weight: 700;
+    margin-left: 10px; flex-shrink: 0; align-self: center;
+  }
+  .phase-step b { font-weight: 700; }
+
+  .exit-chip {
+    margin-top: 10px; font-size: 12.5px; font-weight: 700; color: var(--accent-dark);
+    background: var(--accent-bg); border-right: 3px solid var(--accent);
+    border-radius: 6px; padding: 6px 12px; display: inline-block;
+  }
+
+  /* Same-hue graphite progression (5 phases) */
+  .phase-1 .phase-title { background: #F0F4F8; color: #334155; border-right: 4px solid #7C8DA0; }
+  .phase-1 .p-span { background: #7C8DA0; }
+  .phase-1 .step-num { background: #E2E8F0; color: #475569; }
+  .phase-2 .phase-title { background: #E9EEF4; color: #27405C; border-right: 4px solid #5B7A99; }
+  .phase-2 .p-span { background: #5B7A99; }
+  .phase-2 .step-num { background: #D8E2EC; color: #27405C; }
+  .phase-3 .phase-title { background: #E2E9F0; color: #1E3350; border-right: 4px solid #4A6B8A; }
+  .phase-3 .p-span { background: #4A6B8A; }
+  .phase-3 .step-num { background: #CFDCE8; color: #1E3350; }
+  .phase-4 .phase-title { background: #DBE4EE; color: #182A42; border-right: 4px solid #3A5C7A; }
+  .phase-4 .p-span { background: #3A5C7A; }
+  .phase-4 .step-num { background: #C5D4E3; color: #182A42; }
+  .phase-5 .phase-title { background: #D4DFEA; color: #122238; border-right: 4px solid #2B5473; }
+  .phase-5 .p-span { background: #2B5473; }
+  .phase-5 .step-num { background: #BCCCDD; color: #122238; }
+
+  .arrow { text-align: center; color: var(--connector); font-size: 24px; line-height: 1; margin: 10px 0; }
+
+  /* ── Doctrine footer ── */
+  .doctrine {
+    margin-top: 26px; background: #1A2330; color: #DCE2EA;
+    border-radius: 12px; padding: 16px 24px; font-size: 14px; font-weight: 600;
+    display: flex; align-items: center; gap: 14px; line-height: 1.6;
+  }
+  .doctrine .d-chip {
+    background: var(--accent); color: #FFFFFF; font-size: 12px; font-weight: 800;
+    border-radius: 14px; padding: 3px 12px; flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="hero">
+    <div class="hero-badge">NEXUSLINK · خارطة الطريق الشاملة · 2026&ndash;2029</div>
+    <h1>خمس مراحل نحو منظومة تقارب أجهزة لا يُنافَس عليها</h1>
+    <p>من منصة ربط أجهزة محلية بلا سحابة وبلا حسابات إلى منظومة كاملة: ثقة موقّعة قابلة للتدقيق، تجربة اقتران فورية، ذكاء محلي استباقي، منظومة مفتوحة، ثم ثقل مؤسسي — كل مرحلة تعمّق خندقًا تنافسيًا لا يستطيع الخصم السحابي تقليده.</p>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-value">5</div><div class="kpi-label">منصات إصدار حي: Windows · macOS · Linux · Android · Web</div></div>
+    <div class="kpi-card"><div class="kpi-value">9</div><div class="kpi-label">محاور قدرة قائمة (مراسلات · تحكم · وسائط · حماية · أمن · نقل · إنتاجية · أتمتة · أدوات)</div></div>
+    <div class="kpi-card"><div class="kpi-value">585</div><div class="kpi-label">اختبار E2E أخضر على CI الخماسي</div></div>
+    <div class="kpi-card"><div class="kpi-value">17</div><div class="kpi-label">أصلًا في الإصدار المرجعي v1.2.0-fix2</div></div>
+  </div>
+
+  <div class="phase-group phase-1">
+    <div class="phase-title"><span class="p-span">M0 · الشهور 0–3</span> التأسيس المرصود <span class="p-goal">الهدف: ثقة لا تُناقش</span></div>
+    <div class="phase-sub">أي منصة ستُنافَس على الأمان أولًا — التوقيع والتدقيق قبل أي ميزة جديدة.</div>
+    <div class="phase-steps">
+      <div class="phase-step"><span class="step-num">1</span><span><b>توقيع الحزم ونشرها:</b> Windows codesign + macOS notarization + دفع أولي إلى Flathub</span></div>
+      <div class="phase-step"><span class="step-num">2</span><span><b>تحديث ذاتي صامت:</b> updater موثوق يعتمد latest.json الحي مع تحقق بصمات SHA256SUMS</span></div>
+      <div class="phase-step"><span class="step-num">3</span><span><b>تدقيق أمني داخلي شامل:</b> قنوات E2EE، البوابة الموحدة، أذونات أندرويد الحساسة</span></div>
+      <div class="phase-step"><span class="step-num">4</span><span><b>رفع عتبة الجودة:</b> E2E من 585 إلى 700 مع باب أمان إلزامي لكل إصدار</span></div>
+    </div>
+    <span class="exit-chip">معيار الخروج: تثبيت بلا تحذيرات أمنية على المنصات الثلاث لسطح المكتب</span>
+  </div>
+  <div class="arrow">↓</div>
+
+  <div class="phase-group phase-2">
+    <div class="phase-title"><span class="p-span">M1 · الشهور 3–9</span> التجربة التي لا تُنسى <span class="p-goal">الهدف: القيمة في 30 ثانية</span></div>
+    <div class="phase-sub">الخصم يخسر هنا: لا حساب ولا سحابة ولا انتظار — الاقتران والموثوقية هما الواجهة.</div>
+    <div class="phase-steps">
+      <div class="phase-step"><span class="step-num">5</span><span><b>اقتران فوري:</b> من مسح QR إلى أول قيمة في أقل من 30 ثانية على أي منصة</span></div>
+      <div class="phase-step"><span class="step-num">6</span><span><b>offline-first:</b> مزامنة تستأنف بلا فقد بعد أي انقطاع شبكة (سجل عمليات قابل للاستئناف)</span></div>
+      <div class="phase-step"><span class="step-num">7</span><span><b>أداء مقيس:</b> استجابة تحكم p95 أقل من 80ms داخل الشبكة المحلية مع لوحة قياس حية</span></div>
+      <div class="phase-step"><span class="step-num">8</span><span><b>وصول ولغات:</b> إمكانية وصول كاملة وتوسيع الواجهات من لغتين راسختين إلى ست</span></div>
+    </div>
+    <span class="exit-chip">معيار الخروج: موثوقية مزامنة 99.9% أسبوعيًا لكل جهاز نشط</span>
+  </div>
+  <div class="arrow">↓</div>
+
+  <div class="phase-group phase-3">
+    <div class="phase-title"><span class="p-span">M2 · الشهور 9–15</span> الذكاء المحلي <span class="p-goal">الهدف: استباق لا تقليد</span></div>
+    <div class="phase-sub">بناء محرك الأتمتة التاريخية (§26–§27) حتى يصبح ذكاءً استباقيًا لا يملكه أي منافس محلي.</div>
+    <div class="phase-steps">
+      <div class="phase-step"><span class="step-num">9</span><span><b>مساعد على الجهاز:</b> LLM محلي يفهرس الأجهزة والملفات والروتينات ويجيب بلا مغادرة أي بايت</span></div>
+      <div class="phase-step"><span class="step-num">10</span><span><b>روتينات استباقية أعمق:</b> مشغلات تاريخية مركّبة وتنبيهات تفسيرية بذليل مسبب</span></div>
+      <div class="phase-step"><span class="step-num">11</span><span><b>بحث موحد:</b> شريط واحد يجد الملف والصورة والمقطع عبر الهاتف والحاسوب معًا</span></div>
+      <div class="phase-step"><span class="step-num">12</span><span><b>لوحة رؤى محلية بالكامل:</b> أنماط استخدام وصحة أجهزة تُحسب وتُعرض داخل الشبكة حصرًا</span></div>
+    </div>
+    <span class="exit-chip">معيار الخروج: 50% من المستخدمين النشطين لديهم روتين ذكي واحد على الأقل</span>
+  </div>
+  <div class="arrow">↓</div>
+
+  <div class="phase-group phase-4">
+    <div class="phase-title"><span class="p-span">M3 · الشهور 15–21</span> المنظومة المفتوحة <span class="p-goal">الهدف: تأثير الشبكة</span></div>
+    <div class="phase-sub">تحويل المنتج إلى منصة: مطورون وتكاملات ومجتمع يرفعون قيمة NexusLink بلا فريق أكبر.</div>
+    <div class="phase-steps">
+      <div class="phase-step"><span class="step-num">13</span><span><b>SDK وAPI عام:</b> عقد موثّق ومستقر بإصدار 2.0 يغطي الأجهزة والنقل والأتمتة</span></div>
+      <div class="phase-step"><span class="step-num">14</span><span><b>سوق تكاملات:</b> قناة إضافات موقّعة محليًا تُثبَّت بضغطة وبلا كسر الخصوصية</span></div>
+      <div class="phase-step"><span class="step-num">15</span><span><b>CLI موسّع:</b> أتمتة كل العمليات من الطرفية للمتقدمين ومشغّلي الأنظمة</span></div>
+      <div class="phase-step"><span class="step-num">16</span><span><b>مجتمع مفتوح جزئيًا:</b> نشر مكونات مختارة مفتوحة المصدر لجذب المساهمين</span></div>
+    </div>
+    <span class="exit-chip">معيار الخروج: 10 تكاملات طرف ثالث عاملة في السوق</span>
+  </div>
+  <div class="arrow">↓</div>
+
+  <div class="phase-group phase-5">
+    <div class="phase-title"><span class="p-span">M4 · الشهور 21–30</span> الثقل المؤسسي <span class="p-goal">الهدف: منتج لا يستبدل</span></div>
+    <div class="phase-sub">حين يدخل NexusLink سير عمل المؤسسات، تصبح كلفة الاستبدال أعلى من كلفة البقاء معه.</div>
+    <div class="phase-steps">
+      <div class="phase-step"><span class="step-num">17</span><span><b>نشر مؤسسي:</b> حزم MDM وسياسات مركزية وتقارير امتثال لبيئة محكومة</span></div>
+      <div class="phase-step"><span class="step-num">18</span><span><b>شهادات الثقة:</b> SOC 2 Type I ثم ISO 27001 على البنية المحلية</span></div>
+      <div class="phase-step"><span class="step-num">19</span><span><b>شراكات OEM:</b> تحميل مسبق على أجهزة مختارة بوضع «خصوصية افتراضية»</span></div>
+      <div class="phase-step"><span class="step-num">20</span><span><b>عمق منصي:</b> عميل ويب مستقل كامل وتوسيع دعم التلفاز واللوحات</span></div>
+    </div>
+    <span class="exit-chip">معيار الخروج: أول عقد مؤسسي موقّع وشهادة SOC 2 Type I</span>
+  </div>
+
+  <div class="doctrine">
+    <span class="d-chip">عقيدة الخارطة</span>
+    كل ميزة جديدة يجب أن تعمّق خندقًا تنافسيًا واحدًا على الأقل — وما لا يفعله يُرفض مهما بدت جاذبية.
+  </div>
+</div>
+</body>
+</html>
