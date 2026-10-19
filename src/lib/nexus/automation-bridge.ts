@@ -17,6 +17,7 @@ import { ensureProdBridge, prodInjectClip } from "./productivity-bridge"
 import { onAutomationFact } from "./automation-facts"
 import { evalSustainedTrigger, MIN_DURATION_MIN, MAX_DURATION_MIN } from "./automation-health"
 import { loadPersistedRules, persistRuleUpsert, persistRuleDelete, persistFire, loadPersistedFires, markFiresSeenDb } from "./automation-persist"
+import { socketCors } from "./socket-security" // SEC (M0.3 F4)
 import {
   TRIGGER_KINDS, ACTION_KINDS, isSustainedTrigger,
   type AutoRule, type AutoRunEntry, type AutoStatePayload, type AutoFiredPayload, type AutoFireEntry, type AutoTrigger,
@@ -467,7 +468,7 @@ export function ensureAutomationBridge() {
     const httpServer = createServer()
     const io2 = new SocketServer(httpServer, {
       path: "/",
-      cors: { origin: "*", methods: ["GET", "POST"] },
+      cors: socketCors(), // SEC (M0.3 F4): بديل السماح المفتوح — Origin خارجي يُرفض عند المصافحة
       pingTimeout: 60000,
       pingInterval: 25000,
     })

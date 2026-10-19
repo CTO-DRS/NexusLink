@@ -169,10 +169,35 @@ function scheduleAuto() {
 }
 
 // ---------- socket server ----------
+// SEC (M0.3 — docs/security-audit.md F4): بديل السماح المفتوح — متصفح من الإنترنت
+// (Origin خارجي) يُرفض عند المصافحة؛ العملاء الأصليون (بلا Origin) والواجهة
+// عبر البوابة/نفس الأصل (localhost أو نطاق خاص) مسموحون.
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1', 'localhost'])
+function originAllowed(origin: string | undefined): boolean {
+  const o = String(origin ?? '').trim()
+  if (!o) return true
+  let u: URL
+  try { u = new URL(o) } catch { return false }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false
+  const host = u.hostname.toLowerCase()
+  if (LOOPBACK.has(host) || host.endsWith('.local')) return true
+  const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])]
+    if (a === 10 || a === 192) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+  }
+  if (host.startsWith('::ffff:')) return true
+  return false
+}
+
 const httpServer = createServer()
 io = new Server(httpServer, {
   path: '/',
-  cors: { origin: '*', methods: ['GET', 'POST'] },
+  cors: {
+    origin: (o: string | undefined, cb: (e: Error | null, ok: boolean) => void) => cb(null, originAllowed(o)),
+    methods: ['GET', 'POST'],
+  },
   pingTimeout: 60000,
   pingInterval: 25000,
 })
