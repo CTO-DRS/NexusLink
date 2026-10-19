@@ -4279,6 +4279,91 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     for (const s of [f6Local, f6Lan]) { if (s) { try { s.disconnect() } catch {} } }
   }
 
+  // [SEC-F9] M1 — التسليم الموجّه لحافظة قناة التحكم 3004 (docs/security-audit.md F9)
+  {
+    console.log("== [SEC-F9] directed delivery of control-channel clipboard ==")
+    const fsModF9 = await import("node:fs")
+    const pathModF9 = await import("node:path")
+    const readF9 = (p) => fsModF9.readFileSync(pathModF9.join(ROOT, p), "utf8")
+    // ---- (أ) فحوص مصدر ----
+    const rbSrc = readF9("src/lib/nexus/remote-bridge.ts")
+    const msSrc = readF9("mini-services/remote-service/index.ts")
+    check("SEC-F9/source: الجسر المدمج — توجيه مزدوج (الجلسة النشطة حصرًا ثم جمهور المحليين/الموثوقين)",
+      rbSrc.includes('io2.to(session.socketId).emit("desktop:clipboard"') && rbSrc.includes("io2.to(CLIP_AUD).emit"), "remote-bridge.ts")
+    check("SEC-F9/source: الجسر المدمج — الانضمام للجمهور بالمحلية أو الهوية الموثوقة (موضعان)",
+      (rbSrc.match(/socket\.join\(CLIP_AUD\)/g) || []).length >= 2, `joins=${(rbSrc.match(/socket\.join\(CLIP_AUD\)/g) || []).length}`)
+    check("SEC-F9/source: المرآة المستقلة — نفس التوجيه المزدوج ونفس شرط الانضمام",
+      msSrc.includes("io.to(session.socketId).emit('desktop:clipboard'") && msSrc.includes("io.to(CLIP_AUD).emit") && (msSrc.match(/socket\.join\(CLIP_AUD\)/g) || []).length >= 2, "remote-service/index.ts")
+    check("SEC-F9/source: صفر توجيه عام للحافظة في الجسرين (لا إذاعتها للكل أبدًا)",
+      !rbSrc.includes('broadcast.emit("desktop:clipboard"') && !msSrc.includes("broadcast.emit('desktop:clipboard'"), "no fan-out")
+
+    // ---- (ب) حي: استطلاع LAN لا يسمع النص — والجمهور الموثوق يسمعه (بلا جلسة) ----
+    const osF9 = await import("node:os")
+    const lanIpF9 = Object.values(osF9.networkInterfaces()).flat().find((i) => i && !i.internal && i.family === "IPv4")?.address || ""
+    const { io: ioF9 } = await import("socket.io-client")
+    const needleF9 = `F9-CLIP-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const mkGw = () => ioF9(`http://127.0.0.1:${gwPort}`, { query: { XTransformPort: "3004" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+    const connF9 = (s) => new Promise((res, rej) => { s.once("connect", res); s.once("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("timeout 3004")), 10000) })
+    try {
+      const f9Desk = mkGw(); await connF9(f9Desk)
+      f9Desk.emit("desktop:register", { name: "NEXUS-F9", mac: "AA:BB:CC:11:22:44" })
+      // إيقاف أي جلسة متبقية من أقسام سابقة — دلالة هذه المرحلة: بلا جلسة نشطة
+      f9Desk.emit("rc:session", { action: "stop" })
+      await sleep(600)
+      const f9Probe = mkGw(); await connF9(f9Probe) // محلي بلا أدوار → في الجمهور الموثوق
+      const reconHits = []
+      let f9Recon = null
+      if (lanIpF9) {
+        f9Recon = ioF9(`http://${lanIpF9}:3004`, { transports: ["polling"], reconnection: false, timeout: 10000 })
+        await connF9(f9Recon)
+        f9Recon.on("desktop:clipboard", (d) => reconHits.push(d)) // المستمع قبل أي دفع
+      }
+      let probeGot = null
+      f9Probe.once("desktop:clipboard", (d) => { probeGot = d })
+      f9Desk.emit("desktop:clipboard", { text: needleF9, at: Date.now() })
+      await sleep(1500) // نافذة عدل: أي إذاعة ارتدادية تُلتقط هنا
+      check("SEC-F9/live: بلا جلسة — العميل المحلي (جمهور موثوق) يستلم النص كاملًا",
+        probeGot?.text === needleF9, `len=${String(probeGot?.text ?? "").length}`)
+      if (lanIpF9) {
+        check("SEC-F9/live: استطلاع LAN على 3004 لا يسمع النص إطلاقًا (بلا هوية ولا محلية)",
+          reconHits.length === 0, reconHits.length ? `RECON HEARD ×${reconHits.length}` : "silence")
+      } else {
+        check("SEC-F9/live: لا عنوان شبكة متاح — فحص استطلاع LAN تجاوز صادق", true, "no lan ip")
+      }
+
+      // ---- (ج) حي: أثناء جلسة نشطة — المقترن حصرًا (حتى المحلي الآخر لا يسمع) ----
+      const needleF9b = `${needleF9}-paired`
+      const f9Ctl = mkGw(); await connF9(f9Ctl)
+      f9Ctl.emit("rc:hello-controller", { name: "Galaxy S24", deviceId: "galaxy-s24" })
+      await sleep(500)
+      const sessionOn = new Promise((res) => { f9Ctl.once("rc:session", (d) => { if (d?.active === true) res(d) }); setTimeout(() => res(null), 6000) })
+      f9Ctl.emit("rc:session", { action: "start", deviceId: "galaxy-s24", name: "Galaxy S24" })
+      const sess = await sessionOn
+      f9Ctl.emit("rc:session", { action: "hb" }) // تأمين ضد watchdog أثناء الفحص
+      let ctlGot = null
+      f9Ctl.once("desktop:clipboard", (d) => { ctlGot = d })
+      let probeGot2 = null
+      f9Probe.once("desktop:clipboard", (d) => { probeGot2 = d })
+      f9Desk.emit("desktop:clipboard", { text: needleF9b, at: Date.now() })
+      await sleep(1500)
+      f9Ctl.emit("rc:session", { action: "hb" })
+      await sleep(600)
+      check("SEC-F9/live: أثناء الجلسة — النص يصل لوحدة التحكم المقترنة حصرًا (galaxy-s24)",
+        !!sess && ctlGot?.text === needleF9b, `paired=${ctlGot?.text === needleF9b ? "ok" : "miss"}`)
+      check("SEC-F9/live: أثناء الجلسة — المحلي الآخر (جمهور بلا اقتران) لا يسمع النص",
+        probeGot2 === null, probeGot2 ? "LOCAL NON-PAIRED HEARD" : "silence")
+      if (lanIpF9) {
+        check("SEC-F9/live: أثناء الجلسة — استطلاع LAN صامت تمامًا (التوجيه للزوج حصرًا)",
+          reconHits.length === 0, reconHits.length ? `RECON HEARD ×${reconHits.length}` : "silence")
+      }
+      f9Ctl.emit("rc:session", { action: "stop" })
+      await sleep(400)
+      for (const s of [f9Desk, f9Probe, f9Ctl, f9Recon]) { if (s) { try { s.disconnect() } catch {} } }
+    } catch (eF9) {
+      check("SEC-F9/live: الثلاثية الحية على 3004", false, eF9 instanceof Error ? eF9.message : String(eF9))
+    }
+  }
+
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {
