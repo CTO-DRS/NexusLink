@@ -407,7 +407,7 @@ interface TransferJob {
 
 ### 9.2 عميل 3009 داخل الخدمة (يعمل بلا واجهة)
 - سوكِت رابع socket.io (بوابة 81 عبر `XTransformPort=3009` أو مباشر) — `sec:announce {role:"phone", deviceId, name, pub, eph}` عند كل اتصال، مع `sec:lock-state` فورًا بعده.
-- معالجات مشفرة: `cmd` (op: `ring` → أين هاتفي + ack، `lock-phone` → وضع الفقدان + ack)، `clip` → بث للواجهة + إشعار عند غيابها، `file-*` → سطر تدقيق (نقل الملفات المشفرة مسار ويب/مستقبلات).
+- معالجات مشفرة: `cmd` (op: `ring` → أين هاتفي + ack، `lock-phone` → وضع الفقدان + ack)، `clip` → **كتابة نص الحافظة المشفرة في حافظة الهاتف فورًا (F6 — نفس دلالات §11.ب) + حرس الحلقة `clipLastFromPc` + بث `secclip {text, from, applied}` للواجهة** + إشعار عند غيابها، `file-*` → سطر تدقيق (نقل الملفات المشفرة مسار ويب/مستقبلات).
 - أوامر بث غير مشفرة: `sec:lost-cmd` و`sec:wipe-cmd` و`sec:lock-cmd` (احتياطي) — تُنفَّذ في الخدمة مباشرة.
 - تدقيق: `sec:audit {actor: <اسم الجهاز>, action, detail, severity}` عند kex/قفل/فتح/مسح.
 - السياسة الصارمة: جهاز غير موثوق → `sec:pending-trust` ولا اشتقاق ولا إطارات؛ محظور → `sec:rejected` + قطع.
@@ -453,15 +453,18 @@ interface TransferJob {
 
 «انسخ في أي طرف → الصق في الآخر فورًا» — حافظة نظام حقيقية في الاتجاهين، بلا حلقات.
 
+**SEC (M0.3 F6 → M1): التسليم مربوط بهوية الاقتران فوق القناة المشفرة** — بث `clip:new` على 3007 بقواعد هوية لكل سوكِت (`broadcastClip`): عميل **الجهاز نفسه** (loopback فعليًا — مباشر أو عبر البوابة المحلية، فحص `isLocalSocket` مع ترويسة `x-gw-client-ip` المستبدلة) يستلم المحتوى الكامل (ثقة الجهاز المحلي — نفس حد §13 الصادق)، وعملاء **الشبكة** يستلمون البيانات الوصفية حصرًا (`content:""` + `encrypted:true` + `delivery:"e2ee"`) — والمحتوى يصلهم عبر **قناة 3009 المشفرة** بإطار `sec:frame kind:"clip"` (§9: X25519+AES-256-GCM+حماية إعادة) الموجّه لمعرّف الجهاز المقترن مع بوابة صلاحية `clipboard` (§4.6). سوكِت استطلاع صامت على الشبكة لم يعد يجمع شيئًا من الحافظة — نفس المسار للثلاثة: `clip:push` (جسر) · `POST /api/prod/clipboard` (REST) · `prodInjectClip` (أتمتة §26) عبر `prodEmitClip` الموحدة. مُرحّل الإرسال: عميل الكمبيوتر (الويبفيو — صاحب جلسة 3009) يمرر مقاطع `pc-office` النصية للمقترن تلقائيًا (`sendSecureClip` هادئًا) — بلا تمرير لما أصله الهاتف (لا حلقات).
+
 ### 11.أ الكمبيوتر → الهاتف (مراقب Rust خلفي — `clipboard.rs`)
 - استقصاء كل 1 ثانية عبر arboard بالأولوية: **ملفات** (`get().file_list()`: CF_HDROP/NSPasteboard/text-uri-list) ← **نص** (`get().text()`) ← **صورة** (`get().image()` RGBA).
-- **نص**: في الوضع `auto` وحده وبشرط `len ≤ maxAutoBytes` → `POST /api/prod/clipboard {deviceId:"pc-office", kind:"text", content, mode:"auto"}` → `prodEmit("clip:new")` → الهاتف يكتب حافظته (§11.ب).
+- **نص**: في الوضع `auto` وحده وبشرط `len ≤ maxAutoBytes` → `POST /api/prod/clipboard {deviceId:"pc-office", kind:"text", content, mode:"auto"}` → `prodEmitClip("clip:new")` (بث F6: كامل للجهاز المحلي — بيانات وصفية للشبكة) → الهاتف يكتب حافظته (§11.ب — عبر القناة المشفرة لعملاء الشبكة).
 - **صورة**: ترميز PNG (image 0.25) → ملف في `pc-fs/Inbox/clipboard-<ts>.png` → `POST /api/devices send-file` (عقد §10 — tx:offer للوكيل الحقيقي) + عنصر سجل `kind:"image"` بـ dataURL إن سَع (≤300KB).
 - **ملفات (Ctrl+C على ملف)**: حتى 10 ملفات/حدث → نسخ إلى `pc-fs/Inbox/` → send-file (اقتراح نقل) + عنصر سجل `kind:"file"`.
 - **الوضع اليدوي**: كل التدفقات التلقائية متوقفة — الإرسال صراحة فقط (Ctrl+Shift+N / زر «إرسال الحافظة الحالية» عبر أمر `clip_send_now`، بلا حد الحجم).
 
-### 11.ب استقبال الهاتف (Kotlin `AgentForegroundService` — يعمل والواجهة ميتة)
-- على `clip:new` بـ `deviceId ≠ هويتي` و`kind="text"`: `ClipboardManager.setPrimaryClip()` **فورًا من الخدمة** (الكتابة مسموحة دائمًا على Android 10+ — القيد على القراءة فقط) + `pushDataEvent("clip")` للواجهة + إشعار «جاهز للّصق» إن كانت الواجهة ميتة.
+### 11.ب استقبال الهاتف (Kotlin `AgentForegroundService` + `SecChannel` — يعمل والواجهة ميتة)
+- **عميل شبكة (المسار التعاقدي)**: الإطار يصل مشفرًا عبر قناة 3009 — `SecChannel` يفك `kind:"clip"` (§9.1) → `ClipboardManager.setPrimaryClip()` **فورًا من الخدمة** (الكتابة مسموحة دائمًا على Android 10+ — القيد على القراءة فقط) + `clipLastFromPc` حرس حلقة + `pushDataEvent("secclip", {applied})` للواجهة + إشعار «جاهز للّصق» إن كانت الواجهة ميتة.
+- **عميل الجهاز نفسه**: على `clip:new` كامل المحتوى بـ `deviceId ≠ هويتي` و`kind="text"` — نفس الكتابة حرفيًا (مسار 3007 المحلي، بقايا توافق الويبفيو/المحاكي).
 - الصور/الملفات تصل عبر مسار النقل الحقيقي (tx:offer قائم) — لا تُكتب في الحافظة.
 
 ### 11.ج الهاتف → الكمبيوتر (حرس الحلقة في الطرفين)

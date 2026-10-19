@@ -292,10 +292,17 @@ class SignalingController extends Notifier<AgentSignaling?> {
         // FA-10 — تقدم/نتيجة المسح الآمن
         ref.read(wipeProvider.notifier).ingest(detail);
       } else if (kind == 'secclip') {
-        // FA-10 — نص مشفر وصل عبر 3009 (لا يتم حفظه في الحافظة إلا بقرار المستخدم)
+        // SEC (F6 → M1) — نص مشفر وصل عبر 3009: الخدمة (SecChannel) كتبته في
+        // حافظة الهاتف بنفس دلالات §11.ب (applied=true) — لا يبقى في السجل إلا الإشعار
         final text = '${detail?['text'] ?? ''}';
+        final applied = '${detail?['applied'] ?? ''}' == 'true';
         if (text.isNotEmpty) {
-          ref.read(activityLogProvider.notifier).add('وصل نص مشفر عبر القناة الآمنة (${text.length} حرفًا)', kind: 'ok');
+          ref.read(activityLogProvider.notifier).add(
+            applied
+                ? 'وصل نص مشفر عبر القناة الآمنة ووُضع في حافظتك (${text.length} حرفًا)'
+                : 'وصل نص مشفر عبر القناة الآمنة (${text.length} حرفًا)',
+            kind: 'ok',
+          );
         }
       }
     });
