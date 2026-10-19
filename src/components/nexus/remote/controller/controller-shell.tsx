@@ -7,6 +7,7 @@ import {
 } from "lucide-react"
 import { useRcMirror } from "@/lib/remote-store"
 import { TouchpadMode } from "./touchpad"
+import { PerfBadge } from "./perf-panel"
 import { KeyboardMode } from "./keyboard"
 import { AirMouseMode } from "./airmouse"
 import { GamepadMode } from "./gamepad"
@@ -65,6 +66,8 @@ export function ControllerShell({ standalone = false }: { standalone?: boolean }
           {online ? <Wifi className="w-3 h-3 text-emerald-500" /> : <WifiOff className="w-3 h-3 text-red-400" />}
           {latency != null && <span className="tabular-nums" dir="ltr">{latency}ms</span>}
         </span>
+        {/* PERF (عقد §29) — شارة الأداء الحية: p95 تحكم + لوحة موسّعة عند اللمس */}
+        <PerfBadge compact />
       </div>
 
       {/* المحتوى */}
