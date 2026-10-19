@@ -4364,6 +4364,299 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     }
   }
 
+  // [UPD] M1 — التحديث الذاتي وسجل الإصدارات (بند 2 من بنود الـ30 يومًا — رفع E2E نحو 700)
+  // السطح: /api/version (الخادم) · updater.rs (المحدّث الموقّع Tauri) · build-latest-json.sh
+  // (بيان التحديث الموقّع) · settings-view/tools-view (المستهلكون)
+  {
+    console.log("== [UPD] self-update & version registry ==")
+    const fsUpd = (await import("node:fs")).default
+    const rdUpd = (p) => { try { return fsUpd.readFileSync(pathMod.join(ROOT, p), "utf8") } catch { return "" } }
+    const baseUpd = "http://127.0.0.1:3000"
+    const pkgVer = JSON.parse(fsUpd.readFileSync(pathMod.join(ROOT, "package.json"), "utf8"))?.version
+
+    // ---- (أ) حي: /api/version بنية الاستجابة القياسية ----
+    const verRes = await fetch(`${baseUpd}/api/version`)
+    const ver = await verRes.json().catch(() => null)
+    check("UPD/live: channel=stable + portable=true (سير الإصدار القياسي)",
+      ver?.channel === "stable" && ver?.portable === true, `channel=${ver?.channel}`)
+    check("UPD/live: التوقيع موثق — minisign (Ed25519) عبر tauri-plugin-updater",
+      String(ver?.signature || "").includes("minisign") && String(ver?.signature || "").includes("Ed25519"),
+      String(ver?.signature || "").slice(0, 40))
+    const semverRe = /^\d+\.\d+\.\d+(-[\w.]+)?$/ // semver كامل يشمل لاحقات pre-release (v1.2.0-fix2 حقيقي في السجل)
+    const coreOf = (s) => String(s).split("-")[0]
+    const cmpVer = (a, b) => { const [x, y] = [coreOf(a), coreOf(b)].map((s) => s.split(".").map(Number)); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0) } return 0 }
+    check("UPD/live: latest إصدار صالح دلاليًا ولا يتخلف عن الحالي",
+      semverRe.test(String(ver?.latest)) && cmpVer(ver?.latest, ver?.current) >= 0,
+      `latest=${ver?.latest} current=${ver?.current}`)
+    check("UPD/live: updatedAt بصيغة تاريخ ISO قصير (YYYY-MM-DD)",
+      /^\d{4}-\d{2}-\d{2}$/.test(String(ver?.updatedAt || "")), ver?.updatedAt)
+    const cl = Array.isArray(ver?.changelog) ? ver.changelog : []
+    check("UPD/live: سجل الإصدارات ≥3 مدخلات (تاريخ ترقية حقيقي 1.0→1.1→1.2)",
+      cl.length >= 3, `entries=${cl.length}`)
+    check("UPD/live: أول مدخل = latest (الترتيب تنازلي)",
+      cl[0]?.version === ver?.latest, `${cl[0]?.version} vs ${ver?.latest}`)
+    check("UPD/live: كل مدخل مكتمل — version+tag+date حرفيًا",
+      cl.length > 0 && cl.every((c) => String(c?.version || "").length > 0 && String(c?.tag || "").length > 0 && String(c?.date || "").length > 0),
+      "all fields")
+    check("UPD/live: ملاحظات كل إصدار قائمة نصوص غير فارغة ≤10 (عقد العرض)",
+      cl.every((c) => Array.isArray(c?.items) && c.items.length > 0 && c.items.length <= 10 && c.items.every((i) => typeof i === "string" && i.length > 0)),
+      cl.map((c) => c?.items?.length).join("/"))
+    check("UPD/live: كل إصدارات السجل صالحة دلاليًا (semver كامل بلا استثناء)",
+      cl.length > 0 && cl.every((c) => semverRe.test(String(c?.version))), cl.map((c) => c?.version).join(" · "))
+    check("UPD/live: سجل يضم الإصدار الحالي نفسه (الإصدار لا يختفي من سجلّه)",
+      cl.some((c) => c?.version === ver?.current), `current in log: ${cl.some((c) => c?.version === ver?.current)}`)
+    const verRes2 = await fetch(`${baseUpd}/api/version`)
+    const ver2 = await verRes2.json().catch(() => null)
+    check("UPD/live: كاش 10 دقائق حي — استدعاءان متتاليان سجل متطابق + no-store",
+      JSON.stringify(ver?.changelog) === JSON.stringify(ver2?.changelog) && (verRes.headers.get("cache-control") || "").includes("no-store"),
+      `cache-control=${verRes.headers.get("cache-control")}`)
+
+    // ---- (ب) مصدر: route الخادم + توحيد الإصدار عبر المنصات الخمس ----
+    const verRoute = rdUpd("src/app/api/version/route.ts")
+    check("UPD/source: route — كاش 10 دقائق + مهجرة 4ث (الصدق دون اتصال)",
+      verRoute.includes("CACHE_MS = 10 * 60 * 1000") && verRoute.includes("ctrl.abort(), 4000"), "route")
+    check("UPD/source: route — الفشل لا يُخزّن ويكفيه الإصدار المحلي بصدق",
+      verRoute.includes("return localHistory()") && verRoute.includes("لا نُخزّن الفشل"), "fallback")
+    check("UPD/source: route — المسودات drafts مفلترة + سقف 12 إصدارًا",
+      verRoute.includes("!rel.draft") && verRoute.includes("per_page=12") && verRoute.includes(".slice(0, 12)"), "filter")
+    check("UPD/source: route — التاريخ المحلي يضم 1.1.0 و1.0.0 (مسار الترقية موثق حتى بلا شبكة)",
+      verRoute.includes('version: "1.1.0"') && verRoute.includes('version: "1.0.0"') && verRoute.includes('tag: "v1.1.0"'), "local history")
+    check("UPD/source: route — ثابت CURRENT موحّد مع package.json (مصدر الحقيقة)",
+      (verRoute.match(/const CURRENT = "([\d.]+)"/) || [])[1] === pkgVer, `CURRENT=${(verRoute.match(/const CURRENT = "([\d.]+)"/) || [])[1]}`)
+    const tauriConf = JSON.parse(rdUpd("apps/desktop/src-tauri/tauri.conf.json") || "{}")
+    const cargoToml = rdUpd("apps/desktop/src-tauri/Cargo.toml")
+    const pubspec = rdUpd("nexuslink_mobile/pubspec.yaml")
+    const gradle = rdUpd("nexuslink_mobile/android/app/build.gradle.kts") || rdUpd("nexuslink_mobile/android/app/build.gradle")
+    check("UPD/source: توحيد الإصدار عبر المنصات — tauri.conf + Cargo.toml + pubspec + gradle == package.json",
+      tauriConf?.version === pkgVer
+      && cargoToml.includes(`version = "${pkgVer}"`)
+      && pubspec.includes(`version: ${pkgVer}+`)
+      && gradle.includes(`"${pkgVer}"`),
+      `all=${pkgVer}`)
+
+    // ---- (ج) مصدر: المحدّث الموقّع في Rust (updater.rs + main.rs) ----
+    const updRs = rdUpd("apps/desktop/src-tauri/src/updater.rs")
+    const mainRs = rdUpd("apps/desktop/src-tauri/src/main.rs")
+    check("UPD/source: updater_state — version+autoCheck+endpoint+history (قياسي قابل للتسلسل)",
+      updRs.includes('"version": env!("CARGO_PKG_VERSION")') && updRs.includes('"autoCheck": auto')
+      && updRs.includes("releases/latest/download/latest.json") && updRs.includes('"history": fetch_history()'), "state")
+    check("UPD/source: updater_check_now — تدقيق updater (warn عند توفر تحديث + info عند الأحدث) + بث desktop://update",
+      updRs.includes('crate::audit::audit(') && updRs.includes('"updater"') && updRs.includes('"warn"') && updRs.includes('"info"')
+      && updRs.includes('"desktop://update"') && updRs.includes('"available": available'), "check_now")
+    check("UPD/source: فشل الفحص بلا انكسار — {ok:false,error} بصدق",
+      updRs.includes('json!({ "ok": false, "error": e })') && updRs.includes("بلا انكسار"), "honest error")
+    check("UPD/source: updater_install — download_and_install والتوقيع يتحقق قبل التثبيت",
+      updRs.includes("download_and_install") && updRs.includes("يتحقق التوقيع قبل التثبيت") && updRs.includes("لا تحديث متاح"), "install")
+    check("UPD/source: سجل Rust — كاش 600ث + ureq 8ث + User-Agent من CARGO_PKG_VERSION",
+      updRs.includes("Duration::from_secs(600)") && updRs.includes("Duration::from_secs(8)")
+      && updRs.includes("env!(\"CARGO_PKG_VERSION\")"), "rust cache")
+    check("UPD/source: سجل Rust — حقول المدخل خمسة (tag+name+notes+date+prerelease) من Releases",
+      updRs.includes('"tag": rel.get("tag_name")') && updRs.includes('"notes": rel.get("body")')
+      && updRs.includes('"date": rel.get("published_at")'), "rust entry shape")
+    check("UPD/source: سجل Rust — المسودات متخطاة + سقف 12 + حقل prerelease",
+      (updRs.includes("draft") && updRs.includes("continue;")) && updRs.includes(".take(12)") && updRs.includes('"prerelease"'), "rust filter")
+    check("UPD/source: فحص الإقلاع — ينتظر جاهزية السيرفر (90ث) ثم يقرأ autoCheck والأوفلاين تخطٍ",
+      updRs.includes("90") && updRs.includes('u.get("autoCheck")'), "boot gate")
+    check("UPD/source: main.rs — البرنامج المساعد مسجل + الأوامر الثلاثة في المعالج + startup_check",
+      mainRs.includes("tauri_plugin_updater::Builder::new().build()")
+      && mainRs.includes("updater::updater_state") && mainRs.includes("updater::updater_check_now")
+      && mainRs.includes("updater::updater_install") && mainRs.includes("updater::startup_check"), "main.rs wiring")
+    const settingsRs = rdUpd("apps/desktop/src-tauri/src/settings.rs")
+    check("UPD/source: settings.rs — updater_auto_check في المخزن المشترك (SQLite — بند 6) بقيمة افتراضية true",
+      settingsRs.includes("pub updater_auto_check: bool") && settingsRs.includes("updater_auto_check: true"), "shared store")
+    check("UPD/source: tauri.conf.json — plugins.updater بpubkey وendpoints (تحقق minisign)",
+      !!tauriConf?.plugins?.updater?.pubkey && Array.isArray(tauriConf?.plugins?.updater?.endpoints) && tauriConf.plugins.updater.endpoints.length > 0,
+      `endpoints=${tauriConf?.plugins?.updater?.endpoints?.length ?? 0}`)
+
+    // ---- (د) مصدر: بيان التحديث الموقّع (build-latest-json.sh) ----
+    const latestSh = rdUpd("scripts/build-latest-json.sh")
+    check("UPD/source: بيان التحديث — توقيع minisign لكل أصل (signer sign + .sig)",
+      latestSh.includes("signer sign") && latestSh.includes(".sig"), "sign flow")
+    check("UPD/source: بيان التحديث — أصول المنصات المكتبية الثلاثة تُوقّع بالتتابع",
+      (latestSh.match(/sign_asset "/g) || []).length >= 3, `assets=${(latestSh.match(/sign_asset "/g) || []).length}`)
+    check("UPD/source: بيان التحديث — يُرفع إلى Release عبر uploads.github.com (نقطة الفحص releases/latest)",
+      latestSh.includes("uploads.github.com") && latestSh.includes("releases/latest/download/latest.json"), "upload target")
+    check("UPD/source: بيان التحديث — الإصدار مقفول في latest.json (لا حلقة ترقية/تخفيض)",
+      latestSh.includes("الإصدار مقفول") && latestSh.includes("latest.json"), "locked version")
+
+    // ---- (هـ) مصدر: المستهلكون في الواجهة ----
+    const settingsView = rdUpd("src/components/nexus/settings-view.tsx")
+    check("UPD/source: بطاقة الإعدادات — updater_check_now + updater_state (أصلي أولًا)",
+      settingsView.includes('"updater_check_now"') && settingsView.includes('"updater_state"'), "native first")
+    check("UPD/source: بطاقة الإعدادات — مسار ويب بديل: current===latest → «أنت على أحدث إصدار»",
+      settingsView.includes("r.current === r.latest") && settingsView.includes("أنت على أحدث إصدار"), "web fallback")
+    check("UPD/source: بطاقة الإصدار في الإعدادات — setVerInfo بمنطق latest===current (مسار ثانٍ مستقل)",
+      settingsView.includes("j.latest === j.current") && settingsView.includes("setVerInfo"), "version card")
+    check("UPD/source: مفتاح autoCheck يكتب عبر putHardening (roundtrip §16)",
+      settingsView.includes("updater: { autoCheck: v }"), "toggle")
+    const toolsView = rdUpd("src/components/nexus/tools/tools-view.tsx")
+    const cliTerm = rdUpd("src/components/nexus/tools/cli-terminal.tsx")
+    check("UPD/source: الأدوات — أمر الإصدار في الـCLI واللوحة يستهلكان /api/version",
+      toolsView.includes("/api/version") && cliTerm.includes("/api/version"), "tools consumers")
+  }
+
+  // [DEV-LC] M1 — الاقتران السريع عمقًا + دورة حياة الأجهزة (رفع E2E نحو 700)
+  // السطح: اشتقاق العنوان من ترويسة Host (G-2) · خريطة المنافذ §1 · نافذة الاقتران
+  // متعددة الأجهزة · سلسلة الثقة كاملة (pair → session §13) · connect/disconnect/forget
+  {
+    console.log("== [DEV-LC] pairing depth & device lifecycle ==")
+    const fsLc = (await import("node:fs")).default
+    const rdLc = (p) => { try { return fsLc.readFileSync(pathMod.join(ROOT, p), "utf8") } catch { return "" } }
+    const baseLc = "http://127.0.0.1:3000"
+
+    // ---- (أ) حي: اشتقاق العنوان الحقيقي من ترويسة Host (الإصلاح G-2) ----
+    // fetch (undici) يفرض Host فعليًا — curl هو القادر على تزييف الترويسة بصدق الفحص
+    const { execSync: execLc } = await import("node:child_process")
+    const qrA = await Promise.resolve((() => { try { return JSON.parse(execLc(`curl -s -H "Host: 192.168.7.7:81" ${baseLc}/api/devices/qr`, { timeout: 8000 }).toString()) } catch { return null } })())
+    check("DEV-LC/live: QR عبر البوابة (:81) — host يُشتق من ترويسة Host فعليًا (G-2 حي)",
+      qrA?.payload?.host === "192.168.7.7" && qrA?.payload?.port === 81,
+      `host=${qrA?.payload?.host}:${qrA?.payload?.port}`)
+    const qrB = await fetch(`${baseLc}/api/devices/qr`, { headers: { Host: "127.0.0.1:3000" } }).then((r) => r.json()).catch(() => null)
+    check("DEV-LC/live: QR مباشر (:3000) — المنفذ المشتق يطابق الواصل",
+      qrB?.payload?.host === "127.0.0.1" && qrB?.payload?.port === 3000,
+      `host=${qrB?.payload?.host}:${qrB?.payload?.port}`)
+    const PORTS_WANT = { rest: 3000, comms: 3003, remote: 3004, media: 3005, guard: 3006, prod: 3007, sec: 3009, gateway: 81 }
+    check("DEV-LC/live: خريطة منافذ §1 كاملة داخل الحمولة (الوكيل يعرف أين يتصل)",
+      JSON.stringify(qrB?.payload?.ports) === JSON.stringify(PORTS_WANT), "ports map")
+    check("DEV-LC/live: صورة QR حقيقية — data URL بترميز PNG",
+      String(qrB?.qr || "").startsWith("data:image/png;base64,"), "png data url")
+    check("DEV-LC/live: الرمز المختصر = أول 6 hex من السر بأحرف كبيرة",
+      qrB?.code === String(qrB?.payload?.secret || "").slice(0, 6).toUpperCase(), `code=${qrB?.code}`)
+    check("DEV-LC/live: الحمولة تحمل البروتوكول واسم الكمبيوتر (Nexus/1.2 — NEXUS-PC)",
+      qrB?.payload?.proto === "Nexus/1.2" && qrB?.payload?.name === "NEXUS-PC", "proto+name")
+    const qrC = await fetch(`${baseLc}/api/devices/qr`).then((r) => r.json()).catch(() => null)
+    check("DEV-LC/live: إعادة الإصدار تُقدّم نافذة الصلاحية (expiresAt يتقدم — تدوير حي)",
+      typeof qrC?.expiresAt === "number" && typeof qrB?.expiresAt === "number" && qrC.expiresAt > qrB.expiresAt,
+      `delta=${qrB && qrC ? qrC.expiresAt - qrB.expiresAt : "?"}ms`)
+    const lcNoSec = await fetch(`${baseLc}/api/devices`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "pair", name: "E2E-LC-NoSecret" }) }).catch(() => null)
+    const D1 = `e2e-lc-a-${Date.now().toString(36)}`
+    const pairA = await fetch(`${baseLc}/api/devices`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "pair", id: D1, name: "E2E-LC-A", kind: "phone", ip: "192.168.1.71", battery: 77, model: "Pixel-Test", secret: qrC?.payload?.secret }) }).then((r) => r.json()).catch(() => null)
+    check("DEV-LC/live: رفض بلا سر لا يستهلك النافذة — القبول بالسر الصحيح يعمل بعده",
+      lcNoSec?.status === 403 && pairA?.ok === true, `rejected=${lcNoSec?.status} then ok=${pairA?.ok}`)
+    const D2 = `e2e-lc-b-${Date.now().toString(36)}`
+    const pairB = await fetch(`${baseLc}/api/devices`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "pair", id: D2, name: "E2E-LC-B", kind: "phone", battery: 900, storageTotal: 256 * 1024 ** 3, storageUsed: 31 * 1024 ** 3, secret: qrC?.payload?.secret }) }).then((r) => r.json()).catch(() => null)
+    check("DEV-LC/live: جهازان في نفس النافذة — كلاهما مقبول (تعدد أجهزة سليم)",
+      pairA?.ok === true && pairB?.ok === true, `A=${pairA?.ok} B=${pairB?.ok}`)
+    check("DEV-LC/live: حقول الجهاز محفوظة كما أُرسلت — البطارية مشدودة 0-100 + mode=wifi + state=connected",
+      pairA?.device?.battery === 77 && pairA?.device?.mode === "wifi" && pairA?.device?.state === "connected"
+      && pairB?.device?.battery === 100 && pairB?.device?.storageTotal === 256 * 1024 ** 3,
+      `A.bat=${pairA?.device?.battery} B.bat=${pairB?.device?.battery}`)
+    const D3 = "E2E LC Three"
+    const pairC = await fetch(`${baseLc}/api/devices`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "pair", name: D3, secret: qrC?.payload?.secret }) }).then((r) => r.json()).catch(() => null)
+    check("DEV-LC/live: pair بلا id — معرف slug من الاسم + بطارية افتراضية في النطاق (60-99)",
+      pairC?.ok === true && pairC?.device?.id === "e2e-lc-three" && pairC?.device?.battery >= 60 && pairC?.device?.battery <= 99,
+      `id=${pairC?.device?.id} bat=${pairC?.device?.battery}`)
+    const D4 = `e2e-lc-t-${Date.now().toString(36)}`
+    const pairD = await fetch(`${baseLc}/api/devices`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "pair", id: D4, name: "E2E-LC-Tab", kind: "tablet", secret: qrC?.payload?.secret }) }).then((r) => r.json()).catch(() => null)
+    check("DEV-LC/live: نوع حر مقبول ومحفوظ (kind=tablet — لا انحصار في phone)",
+      pairD?.ok === true && pairD?.device?.kind === "tablet", `kind=${pairD?.device?.kind}`)
+    const lcForget = async (id) => fetch(`${baseLc}/api/devices`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "forget", id }) }).catch(() => null)
+    await lcForget("e2e-lc-three"); await lcForget(D4) // نظافة فورية — لا بقايا
+    const listLc = await fetch(`${baseLc}/api/devices`).then((r) => r.json()).catch(() => null)
+    const lcA = (listLc?.devices ?? listLc ?? []).find?.((d) => d?.id === D1)
+    const lcB = (listLc?.devices ?? listLc ?? []).find?.((d) => d?.id === D2)
+    check("DEV-LC/live: القائمة تعرض الجهازين الجديدين trusted:true (سلسلة الثقة §6→§13)",
+      !!lcA && lcA?.trusted === true && !!lcB && lcB?.trusted === true, `A=${!!lcA} B=${!!lcB}`)
+
+    // ---- (ب) حي: سلسلة الثقة كاملة — مقترَح حديثًا يفتح جلسة تحكم (G-1 → §13) ----
+    const { io: ioLc } = await import("socket.io-client")
+    const mkLc = () => ioLc(`http://127.0.0.1:8180`, { query: { XTransformPort: "3004" }, transports: ["polling"], reconnection: false, timeout: 10000 })
+    const connLc = (s) => new Promise((res, rej) => { s.once("connect", res); s.once("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("timeout")), 10000) })
+    try {
+      const lcCtl = mkLc(); await connLc(lcCtl)
+      lcCtl.emit("rc:hello-controller", { name: "E2E-LC-A", deviceId: D1 })
+      await sleep(500)
+      const sessOn = new Promise((res) => { lcCtl.once("rc:session", (d) => { if (d?.active === true) res(d) }); setTimeout(() => res(null), 6000) })
+      lcCtl.emit("rc:session", { action: "start", deviceId: D1, name: "E2E-LC-A" })
+      const sessLc = await sessOn
+      check("DEV-LC/live: سلسلة الثقة كاملة — جهاز اقترن للتو بسر QR يفتح جلسة تحكم (G-1→§13 حي)",
+        !!sessLc && sessLc?.controller?.deviceId === D1, `deviceId=${sessLc?.controller?.deviceId ?? "—"}`)
+      const lcCtl2 = mkLc(); await connLc(lcCtl2)
+      lcCtl2.emit("rc:hello-controller", { name: "E2E-LC-B", deviceId: D2 })
+      await sleep(400)
+      const busyP = new Promise((res) => { lcCtl2.once("rc:rejected", (d) => res(d)); setTimeout(() => res(null), 5000) })
+      lcCtl2.emit("rc:session", { action: "start", deviceId: D2, name: "E2E-LC-B" })
+      const busy = await busyP
+      check("DEV-LC/live: جهاز ثانٍ موثوق يُرفض busy (جلسة واحدة حصرًا — عقد §13)",
+        busy?.reason === "busy", JSON.stringify(busy) || "no rejection")
+      const stopP = new Promise((res) => { lcCtl.once("rc:session", (d) => { if (d?.active === false) res(d) }); setTimeout(() => res(null), 5000) })
+      lcCtl.emit("rc:session", { action: "stop" })
+      const stopped = await stopP
+      check("DEV-LC/live: الإنهاء من وحدة التحكم — active:false (نظافة السلسلة)",
+        stopped?.active === false, "clean stop")
+      lcCtl.disconnect(); lcCtl2.disconnect()
+    } catch (eLc) {
+      check("DEV-LC/live: سلسلة الثقة كاملة", false, eLc instanceof Error ? eLc.message : String(eLc))
+    }
+
+    // ---- (ج) حي: دورة حياة الأجهزة — connect/disconnect/forget ----
+    const postLc = (body) => fetch(`${baseLc}/api/devices`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null)
+    const connA = await postLc({ action: "connect", id: D1 })
+    const connAJson = await connA?.json().catch(() => null)
+    check("DEV-LC/live: connect → 200 + state=connected",
+      connA?.status === 200 && connAJson?.device?.state === "connected", `HTTP ${connA?.status}`)
+    const connGhost = await postLc({ action: "connect", id: "e2e-lc-ghost" })
+    const connGhostJson = await connGhost?.json().catch(() => null)
+    check("DEV-LC/live: connect لجهاز غير موجود → 404 برسالة عربية",
+      connGhost?.status === 404 && connGhostJson?.error === "الجهاز غير موجود", `HTTP ${connGhost?.status}`)
+    const discA = await postLc({ action: "disconnect", id: D1 })
+    const discAJson = await discA?.json().catch(() => null)
+    check("DEV-LC/live: disconnect → 200 + state=offline",
+      discA?.status === 200 && discAJson?.device?.state === "offline", `HTTP ${discA?.status}`)
+    const discGhost = await postLc({ action: "disconnect", id: "e2e-lc-ghost" })
+    check("DEV-LC/live: disconnect لجهاز غير موجود → 404",
+      discGhost?.status === 404, `HTTP ${discGhost?.status}`)
+    const forgetB = await postLc({ action: "forget", id: D2 })
+    check("DEV-LC/live: forget → 200 والجهاز يزول من القائمة",
+      forgetB?.status === 200, `HTTP ${forgetB?.status}`)
+    const listAfter = await fetch(`${baseLc}/api/devices`).then((r) => r.json()).catch(() => null)
+    check("DEV-LC/live: القائمة بعد forget خالية من الجهاز المحذوف (D2 زال وD1 بقي)",
+      !((listAfter?.devices ?? listAfter ?? []).some?.((d) => d?.id === D2)) && (listAfter?.devices ?? listAfter ?? []).some?.((d) => d?.id === D1) === true,
+      "D2 removed, D1 kept")
+    const forgetB2 = await postLc({ action: "forget", id: D2 })
+    check("DEV-LC/live: forget مكرر → 200 idempotent (بلا انكسار)",
+      forgetB2?.status === 200, `HTTP ${forgetB2?.status}`)
+    const connAfterForget = await postLc({ action: "connect", id: D2 })
+    check("DEV-LC/live: connect للمحذوف → 404 (الحذف نهائي)",
+      connAfterForget?.status === 404, `HTTP ${connAfterForget?.status}`)
+    await postLc({ action: "forget", id: D1 }) // نظافة القسم — لا بقايا أجهزة E2E
+
+    // ---- (د) مصدر: مسارات الأجهزة والعقد ----
+    const devRoute = rdLc("src/app/api/devices/route.ts")
+    check("DEV-LC/source: الأفعال الثلاثة كلها تُجبر موجة صحة (forceHealthTick)",
+      (devRoute.match(/forceHealthTick\(\)/g) || []).length >= 5, `ticks=${(devRoute.match(/forceHealthTick\(\)/g) || []).length}`)
+    check("DEV-LC/source: connect/disconnect ترد 404 برسالة «الجهاز غير موجود»",
+      (devRoute.match(/الجهاز غير موجود/g) || []).length >= 2, "404 arabic")
+    check("DEV-LC/source: pair يبني الجهاز — mode wifi + state connected + trusted true + شدّ البطارية",
+      devRoute.includes('mode: "wifi"') && devRoute.includes('state: "connected"') && devRoute.includes("trusted: true")
+      && devRoute.includes("Math.min(100, body.battery)"), "device shape")
+    check("DEV-LC/source: معرف ثابت مطبَّع (slug) لجعل إعادة التسجيل idempotent",
+      devRoute.includes("toLowerCase().replace(/[^a-z0-9-]+/g, \"-\")") && devRoute.includes("stableId"), "slug id")
+    const qrRoute = rdLc("src/app/api/devices/qr/route.ts")
+    check("DEV-LC/source: اشتقاق Host — lastIndexOf(':') + حراسة sep>0 + سقوط إلى 81 (G-2)",
+      qrRoute.includes("lastIndexOf(\":\")") && qrRoute.includes("sep > 0") && qrRoute.includes("|| 81"), "host derive")
+    check("DEV-LC/source: NEXUS_PORTS مطابق لعقد §1 حرفيًا (8 جسور)",
+      qrRoute.includes("rest: 3000, comms: 3003, remote: 3004, media: 3005,\n  guard: 3006, prod: 3007, sec: 3009, gateway: 81,"), "§1 map")
+    const devicesLib = rdLc("src/lib/nexus/devices.ts")
+    check("DEV-LC/source: المخزن — بذور أجهزة موثوقة + نافذة اقتران null عند الإقلاع النظيف",
+      devicesLib.includes("trusted: true") && devicesLib.includes("pairingSecret: null"), "store seeds")
+    const devView = rdLc("src/components/nexus/devices-view.tsx")
+    check("DEV-LC/source: نوع الجهاز يضم pairedAt وlastSeen (عمر الاقتران والرؤية في الواجهة)",
+      devicesLib.includes("pairedAt:") && devicesLib.includes("lastSeen:"), "device type")
+    check("DEV-LC/source: qr route — اسم الكمبيوتر ثابت DESKTOP_NAME=NEXUS-PC (متسق مع الجسر)",
+      qrRoute.includes('const DESKTOP_NAME = "NEXUS-PC"'), "desktop name")
+    check("DEV-LC/source: واجهة الأجهزة — رسائل تأكيد الأفعال الثلاثة (توستات عربية)",
+      devView.includes("تم قطع الاتصال") && devView.includes("جارٍ إعادة الاتصال") && devView.includes("تم حذف الاقتران"), "toasts")
+    check("DEV-LC/source: واجهة الأجهزة — أفعال الحياة في الـUI (connect/disconnect/forget)",
+      devView.includes('"connect"') && devView.includes('"disconnect"') && devView.includes('"forget"'), "ui actions")
+    const flutterApi = rdLc("nexuslink_mobile/lib/data/nexus_api.dart")
+    check("DEV-LC/source: Flutter api — الوكيل يقرأ قائمة الأجهزة (GET /api/devices → devices)",
+      flutterApi.includes("Future<List<NexusDevice>> devices()") && flutterApi.includes("/api/devices"), "flutter api")
+    const contractLc = rdLc("docs/protocol-contract.md")
+    check("DEV-LC/source: العقد §6 — G-2 (العنوان الحقيقي في QR) موثقة كمُصلحة",
+      contractLc.includes("G-2"), "contract G-2")
+  }
+
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {
