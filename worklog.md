@@ -1459,3 +1459,21 @@ Stage Summary:
 - الملفات: remote-bridge.ts · remote-service/index.ts · desktop-e2e.mjs (+9 SEC-F9) · protocol-contract.md (§13.ج) · security-audit.md (F9 مغلقة) · db التشغيلي.
 - 626/626 E2E (دورة أولى كاملة) · tsc نظيفة على المعدَّل · بناء إنتاجي ناجح · المكدس الحي ربعي.
 - **ما تبقى الآن فعليًا من بنود الـ30 يومًا**: توقيع المنصات M0.1 (شهادات مدفوعة — خارج البيئة، مسار سير الإصدار) · استمرار E2E نحو 700 (626 حاليًا) · Flathub (يحتاج حساب ناشر) · خارج القائمة المعلق على المستخدم: Mac G-38 (عتاد) ودومين Pages وقرار backup-pre-rewrite.bundle.
+
+---
+Task ID: M1-Q700
+Agent: Super Z (main)
+Task: «Complete» — تنفيذ الخطوة المقترحة: بلوغ هدف الخارطة E2E 585→700 بتغطية التحديث الذاتي والاقتران السريع (بندا M0.4 وأول-30-يومًا 3)
+
+Work Log:
+- **القاعدة الذهبية أولًا**: worklog (M1-SEC-F9 آخر قسم) + مزامنة 1/0 (UUID عرضي a11636b للـdb) — استكشاف السطح: G-1 مغطى بعمق (16 فحصًا) فالفجوة الحقيقية في التحديث الذاتي (/api/version فحص واحد) ودورة حياة الأجهزة (بلا تغطية إطلاقًا).
+- **قسم UPD (36 فحصًا)**: /api/version حيًا (channel/signature minisign/semver/كاش حي بندعاءين/no-store/سجل ≥3 مدخلات مكتملة/الإصدار الحالي في سجلّه) — توحيد الإصدار عبر المنصات الخمس (package.json = tauri.conf = Cargo.toml = pubspec = gradle) — updater.rs (state بأربعة حقول/check_now بتدقيق warn+info وبث desktop://update/فشل صادق {ok:false}/install بتوقيع مسبق/كاش 600ث+ureq 8ث/بوت-جيت 90ث يقرأ autoCheck) — main.rs (الإضافة + الأوامر الثلاثة + startup_check) — settings.rs (updater_auto_check في المخزن المشترك) — tauri.conf (pubkey+endpoints) — build-latest-json.sh (signer sign + 3 أصول + uploads.github.com + إصدار مقفول) — المستهلكون (settings-view أصلي أولًا + fallback الويب + بطاقة setVerInfo مستقلة + autoCheck toggle + الأدوات).
+- **قسم DEV-LC (38 فحصًا)**: اشتقاق Host الحقيقي (G-2) حيًا عبر البوابة :81 ومباشر :3000 — **curl لا fetch**: undici يفرض Host فعليًا فالدرس توثيقه — خريطة §1 حرفيًا + PNG data URL + code slice(0,6) + proto/name — تدوير النافذة يتقدم expiresAt — رفض missing لا يستهلك النافذة — جهازان بنافذة واحدة — بطارية 900→شد 100 + mode wifi + slug بلا id (e2e-lc-three) + نوع حر tablet — **سلسلة الثقة كاملة حيًا (أول مرة في تاريخ E2E): pair بسر QR → rc:hello-controller → جلسة مقبولة بdeviceId الجديد → ثانٍ موثوق busy → إنهاء نظيف active:false** — دورة الحياة (connect/disconnect/forget + 404 «الجهاز غير موجود» + forget idempotent + الحذف نهائي) — مصادر (forceHealthTick ×5 + شد البطارية + slug id + اشتقاق Host + NEXUS_PORTS §1 + بذور المخزن + أفعال UI + توستات + Flutter devices()).
+- **اكتشافات أثناء البناء**: (1) إصدار v1.2.0-fix2 الحقيقي في السجل جعل latest يحمل لاحقة pre-release — فالفحص الصارم /^\d+\.\d+\.\d+$/ رفضها: أصححت إلى semver كامل بلاحقة اختيارية (اكتشاف مشروع لا تلطيف)؛ (2) next dev يمسح .next/standalone (وضع dev كتب .next/dev وحده) — فالبناء يجب أن يسبق كل E2E (الدرس مع M1-SEC-F9 §717/§1298)؛ (3) build-resources.sh قبل كل E2E كذلك (الموارد gitignored) — النمط الكامل: قتل المكدس → build → build-resources → E2E → إقلاع بالنمط الناجي.
+- **ثلاث دورات تشغيل**: 678/690 (تدوير السر أبطل سر qrB قبل الاقتران + ترويسة Host) → إصلاح ترتيب الإصدار وcurl → 689/690 (لاحقة -fix2) → semver كامل → **700/700** — والمكدس الحي أعيد إقلاعه بالنمط الناجي (3000/3003/8180 health ok).
+- **الالتزام**: طيّ UUID a11636b (reset mixed) + db الزمني في commit العمل الموحد 680ea25 + worklog منفصل — ROADMAP.md بندا M0.4 و30-يومًا 3 مغلقتان بـ700/700.
+
+Stage Summary:
+- هدف الخارطة **E2E 700/700 مكتمل بالضبط** (+74 فحصًا حقيقيًا من 626) — أول سلسلة ثقة كاملة حية (اقتران→جلسة) في تاريخ الحزمة، وعمق توثيقي كامل للمحدّث الموقّع من الخادم إلى بيان latest.json إلى واجهات الاستهلاك.
+- الملفات: scripts/desktop-e2e.mjs (+74: UPD 36 + DEV-LC 38) · docs/ROADMAP.md (بندان مغلقان) · db التشغيلي.
+- **ما تبقى من بنود الـ30 يومًا**: توقيع المنصات M0.1 (شهادات خارجية) · Flathub (حساب ناشر) · حلقة التغذية الراجعة (بعد أول نشر) — وكلها معلقة على مدخلات خارجية لا تُنفذ في البيئة.
