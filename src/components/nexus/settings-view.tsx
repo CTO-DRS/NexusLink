@@ -18,7 +18,7 @@ import {
   Accessibility, Keyboard, Gauge, HardDriveDownload, Sparkles, RotateCcw,
   Ear, Volume2, CheckCircle2, AlertTriangle, Rocket, Package, Globe,
   FolderSync, Plus, Trash2, FolderOpen, MonitorPlay, Camera, Mic,
-  Lock, Fingerprint, ScrollText, History, Type,
+  Lock, Fingerprint, ScrollText, History, Type, Store, RefreshCw,
 } from "lucide-react"
 import { toast } from "sonner"
 import { pickFolder } from "@/lib/desktop-files"
@@ -428,6 +428,9 @@ export function SettingsView() {
           </div>
         </CardContent>
       </Card>
+
+      {/* سوق التكاملات (عقد §34.ب — M3.2) */}
+      <MarketCard />
 
       {/* اللغة */}
       <Card>
@@ -1003,5 +1006,127 @@ export function SettingsView() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+// ============================================================
+// سوق التكاملات (عقد §34.ب — M3.2): قناة موقعة محليًا + تثبيت بنقرة.
+// تكاملات تصريحية حصرًا (manifest بقدرات ضمن الكتالوج — بلا أي كود تنفيذي)،
+// والتوقيع HMAC-SHA256 يتحقق منه الخادم قبل كل تثبيت.
+// ============================================================
+type MarketChannelItem = { manifest: { id: string; name: string; description: string; version: string; capabilities: string[] }; sig: string; bundled: boolean }
+type MarketInstalled = { manifest: MarketChannelItem["manifest"]; sig: string; installedAt: number }
+
+function MarketCard() {
+  const { t } = useI18n()
+  const [chan, setChan] = useState<MarketChannelItem[]>([])
+  const [installed, setInstalled] = useState<MarketInstalled[]>([])
+  const [keyFp, setKeyFp] = useState("")
+  const [loaded, setLoaded] = useState(false)
+  const [busy, setBusy] = useState("")
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch("/api/marketplace")
+      const j = await r.json()
+      setChan(Array.isArray(j.channel) ? j.channel : [])
+      setInstalled(Array.isArray(j.installed) ? j.installed : [])
+      setKeyFp(String(j.keyFp ?? ""))
+    } catch { /* البقاء صامتًا — بطاقة إعدادات */ }
+    setLoaded(true)
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const doInstall = useCallback(async (item: MarketChannelItem) => {
+    setBusy(item.manifest.id)
+    try {
+      const r = await fetch("/api/marketplace", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "install", manifest: item.manifest, sig: item.sig }),
+      })
+      const j = await r.json()
+      if (r.ok && j.ok) { announce(t("تم تثبيت التكامل")); toast.success(t("تم تثبيت التكامل")); await load() }
+      else toast.error(String(j.error ?? t("تعذر تحميل السوق")))
+    } catch { toast.error(t("تعذر تحميل السوق")) }
+    setBusy("")
+  }, [t, load])
+
+  const doUninstall = useCallback(async (id: string) => {
+    setBusy(id)
+    try {
+      const r = await fetch("/api/marketplace", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "uninstall", id }),
+      })
+      if (r.ok) { announce(t("تمت إزالة التكامل")); toast.success(t("تمت إزالة التكامل")); await load() }
+    } catch { /* صمت */ }
+    setBusy("")
+  }, [t, load])
+
+  const installedIds = new Set(installed.map((p) => p.manifest.id))
+
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <SectionTitle
+            icon={Store}
+            title={t("سوق التكاملات")}
+            desc={t("قناة موقعة محليًا — تكاملات تصريحية بلا أي كود تنفيذي")}
+          />
+          <Button variant="ghost" size="sm" onClick={load} aria-label={t("تحديث")}>
+            <RefreshCw className="w-4 h-4" />
+          </Button>
+        </div>
+        {!loaded ? (
+          <p className="text-xs text-muted-foreground">{t("جارٍ التحميل...")}</p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="outline" className="gap-1"><Fingerprint className="w-3 h-3" />{t("بصمة مفتاح القناة")}: <span data-no-i18n>{keyFp}</span></Badge>
+              <Badge variant="outline">{t("قناة البداية")}: <span data-no-i18n>{chan.length}</span></Badge>
+            </div>
+            <Separator />
+            <div className="space-y-2.5">
+              {chan.map((item) => {
+                const isInstalled = installedIds.has(item.manifest.id)
+                return (
+                  <div key={item.manifest.id} className="flex items-start justify-between gap-3 rounded-lg border p-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium" data-no-i18n>{item.manifest.name}</span>
+                        <Badge variant="outline" className="text-[10px]" data-no-i18n>v{item.manifest.version}</Badge>
+                        {item.manifest.capabilities.map((c) => (
+                          <Badge key={c} variant="secondary" className="text-[10px]" data-no-i18n>{c}</Badge>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 leading-5">{t(item.manifest.description)}</p>
+                    </div>
+                    {isInstalled ? (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Badge variant="secondary" className="gap-1"><CheckCircle2 className="w-3 h-3" />{t("مثبت")}</Badge>
+                        <Button variant="ghost" size="sm" disabled={busy === item.manifest.id} onClick={() => doUninstall(item.manifest.id)} aria-label={t("إزالة")}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button size="sm" disabled={busy === item.manifest.id} onClick={() => doInstall(item)} aria-label={`${t("تثبيت")} ${item.manifest.name}`}>
+                        {t("تثبيت")}
+                      </Button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {installed.length > 0 && (
+              <>
+                <Separator />
+                <p className="text-xs text-muted-foreground">{t("التكاملات المثبتة")}: <span data-no-i18n>{installed.length}</span></p>
+              </>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }
