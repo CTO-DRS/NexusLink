@@ -3,7 +3,7 @@
 // التخزين المؤقت للصدفة حصرًا (ملفات /web-client/) — مسارات /api/*
 // تمر شبكيًا حصرًا بلا أي تخزين (البيانات حية دائمًا، ولا بقاء لآثار).
 // صفر طلبات خارجية: أي مصدر غير نفس الأصل يُرفض فورًا.
-const CACHE = "nexus-web-v1"
+const CACHE = "nexus-web-v2"
 const SHELL = [
   "/web-client/index.html",
   "/web-client/style.css",

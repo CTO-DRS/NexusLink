@@ -6,10 +6,22 @@
 //  - أي طلب يحمل ?XTransformPort=<port> يُحوَّل إلى 127.0.0.1:<port> (HTTP + WS upgrade)
 //  - غير ذلك → REST_TARGET (الواجهة + /api/* على 3000)
 //  - GET /__gw/health → فحص جاهزية البوابة نفسها (بلا تبعية للأعلى)
-// صفر تبعيات — node:http + node:net فقط. نفس سلوك header_up Host {host}:
-// نمرّر الترويسات كما هي (Host الأصلي مع المنفذ 81 يصل للأعلى).
+// صفر تبعيات — وحدات node مدمجة حصرًا (http/net/fs/crypto/path). نفس سلوك
+// header_up Host {host}: نمرّر الترويسات كما هي (Host الأصلي مع المنفذ 81 يصل للأعلى).
+//
+// §37 — رمز الوصول البعيد (إغلاق حد §36.هـ.1 — docs/protocol-contract.md):
+//  - OFF بالتصميم: بلا ملف رمز صالح فالسلوك حرفيًا كما كان (صفر تغيير أمني).
+//  - عند التمكين (POST /api/remote-access يكتب ملف JSON): كل واصل من خارج
+//    loopback يجب أن يحمل الرمز بترويسة x-pair-token أو بارامتر ?pair= —
+//    والإعفاء حصرًا: /__gw/health وواصل loopback (الجهاز هي الحدود).
+//  - مقارنة زمن-ثابت عبر sha256 (لا تسرّب طول) + حجب مؤقت لكل IP بعد 5 فشل.
+//  - نظافة: بارامتر pair يُجرَد من المسار قبل التحويل للأعلى (الرمز لا يصل
+//    لسجلات الخدمات الداخلية أبدًا) ولا يُطبع في أي سجل.
 const http = require("http")
 const net = require("net")
+const fs = require("fs")
+const crypto = require("crypto")
+const pathMod = require("path")
 
 const GATEWAY_PORT = Number(process.env.GATEWAY_PORT || 81)
 const FALLBACK_PORT = Number(process.env.GATEWAY_FALLBACK_PORT || 8180)
@@ -17,6 +29,116 @@ const REST_HOST = process.env.REST_HOST || "127.0.0.1"
 const REST_PORT = Number(process.env.REST_PORT || 3000)
 const STARTED_AT = Date.now()
 let BOUND_PORT = GATEWAY_PORT
+
+// §37 — مصدر الحقيقة الواحد للرمز: ملف JSON خارج المخطط (صفر-مخطط، صفر-db)
+// { token, fingerprint, createdAt } — تكتبه /api/remote-access وحذفه = تعطيل.
+const PAIR_FILE = process.env.NEXUSLINK_PAIR_FILE || pathMod.join(process.cwd(), ".zstate", "pair-token.json")
+let pairCache = { mtimeMs: -1, size: -1, data: null }
+
+function loadPair() {
+  try {
+    const st = fs.statSync(PAIR_FILE)
+    if (st.mtimeMs !== pairCache.mtimeMs || st.size !== pairCache.size) {
+      const j = JSON.parse(fs.readFileSync(PAIR_FILE, "utf8"))
+      pairCache = { mtimeMs: st.mtimeMs, size: st.size, data: j && typeof j.token === "string" && j.token.length >= 16 ? { token: j.token } : null }
+    }
+    return pairCache.data
+  } catch {
+    pairCache = { mtimeMs: -1, size: -1, data: null }
+    return null
+  }
+}
+
+function isLoopbackIp(ip) {
+  return ip === "::1" || ip === "::ffff:127.0.0.1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)
+}
+
+/** مقارنة زمن-ثابت عبر هضم ثابت الطول — لا تسرّب طول ولا بادئة */
+function tokenMatches(candidate, expected) {
+  const h = (s) => crypto.createHash("sha256").update(String(s)).digest()
+  return crypto.timingSafeEqual(h(candidate), h(expected))
+}
+
+// حجب تجريبي في الذاكرة حصرًا: 5 فشل متتالٍ من IP واحد → قفل 30 ثانية.
+// الرمز الصحيح ينجح ويصفّر العداد حتى أثناء القفل (المالك يعرف رمزه).
+const PAIR_MAX_FAILS = 5
+const PAIR_LOCK_MS = 30000
+const pairFails = new Map()
+
+function pairLockedMs(ip) {
+  const f = pairFails.get(ip)
+  if (!f || !f.until) return 0
+  return Date.now() < f.until ? f.until - Date.now() : 0
+}
+
+function pairFail(ip) {
+  const f = pairFails.get(ip) || { n: 0, until: 0 }
+  if (f.until && Date.now() >= f.until) f.n = 0
+  f.until = 0
+  f.n += 1
+  if (f.n >= PAIR_MAX_FAILS) { f.until = Date.now() + PAIR_LOCK_MS; f.n = 0 }
+  pairFails.set(ip, f)
+}
+
+function pairCandidate(req, u) {
+  const h = req.headers["x-pair-token"]
+  if (typeof h === "string" && h.length > 0) return h
+  const q = u.searchParams.get("pair")
+  return typeof q === "string" && q ? q : ""
+}
+
+/** حسم البوابة لطلب HTTP — false = رُفض وردّ 401/429 (المتصل loopback معفى دائمًا) */
+function pairGateHttp(req, res, reqUrl) {
+  const pair = loadPair()
+  if (!pair) return true // OFF — السلوك التاريخي حرفيًا
+  const ip = clientIp(req)
+  if (isLoopbackIp(ip)) return true
+  let u
+  try { u = new URL(reqUrl, "http://gw") } catch { u = new URL("/", "http://gw") }
+  const cand = pairCandidate(req, u)
+  if (cand && tokenMatches(cand, pair.token)) { pairFails.delete(ip); return true }
+  const lockMs = pairLockedMs(ip)
+  if (lockMs > 0) {
+    res.writeHead(429, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" })
+    res.end(JSON.stringify({ ok: false, gateway: true, error: "pair-locked", retryAfterMs: lockMs }))
+  } else {
+    pairFail(ip)
+    res.writeHead(401, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" })
+    res.end(JSON.stringify({ ok: false, gateway: true, error: "pair-token-required" }))
+  }
+  return false
+}
+
+/** حسم البوابة لترقية WS — نفس الحسم برد خام على المقبس */
+function pairGateRaw(req, socket, reqUrl) {
+  const pair = loadPair()
+  if (!pair) return true
+  const ip = clientIp(req)
+  if (isLoopbackIp(ip)) return true
+  let u
+  try { u = new URL(reqUrl, "http://gw") } catch { u = new URL("/", "http://gw") }
+  const cand = pairCandidate(req, u)
+  if (cand && tokenMatches(cand, pair.token)) { pairFails.delete(ip); return true }
+  try {
+    if (pairLockedMs(ip) > 0) {
+      socket.end("HTTP/1.1 429 Too Many Requests\r\ncontent-type: application/json\r\n\r\n" + JSON.stringify({ ok: false, gateway: true, error: "pair-locked" }))
+    } else {
+      pairFail(ip)
+      socket.end("HTTP/1.1 401 Unauthorized\r\ncontent-type: application/json\r\n\r\n" + JSON.stringify({ ok: false, gateway: true, error: "pair-token-required" }))
+    }
+  } catch { /* مقبس ميت */ }
+  return false
+}
+
+/** نظافة §37: إسقاط بارامتر pair قبل التحويل للأعلى — الرمز لا يغادر البوابة */
+function stripPair(u) {
+  if (!u || u.indexOf("pair=") === -1) return u
+  try {
+    const o = new URL(u, "http://gw")
+    o.searchParams.delete("pair")
+    return `${o.pathname}${o.search || ""}`
+  } catch { return u }
+}
 
 // SEC (M0.3 — docs/security-audit.md F2): قائمة سماح منافذ التحويل.
 // البوابة هي مدخل الشبكة المحلية — كان XTransformPort يقفز إلى أي منفذ
@@ -82,7 +204,7 @@ function proxyHttp(req, res) {
   const headers = hopByHop(req.headers)
   headers["x-gw-client-ip"] = clientIp(req)
   const up = http.request(
-    { host: "127.0.0.1", port, method: req.method, path: req.url, headers },
+    { host: "127.0.0.1", port, method: req.method, path: stripPair(req.url), headers },
     (ures) => {
       res.writeHead(ures.statusCode || 502, ures.headers)
       ures.pipe(res)
@@ -109,7 +231,7 @@ function proxyUpgrade(req, socket, head) {
   }
   const port = t ?? REST_PORT
   const up = net.connect(port, "127.0.0.1", () => {
-    let raw = `${req.method} ${req.url} HTTP/1.1\r\n`
+    let raw = `${req.method} ${stripPair(req.url)} HTTP/1.1\r\n`
     for (let i = 0; i < req.rawHeaders.length; i += 2) {
       const k = req.rawHeaders[i]
       // SEC: استبدال أي x-gw-client-ip وارد من العميل — البوابة مصدر الحقيقة
@@ -135,9 +257,10 @@ const server = http.createServer((req, res) => {
     const path = (req.url || "/").split("?")[0]
     if (path === "/__gw/health") {
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store", "access-control-allow-origin": "*" })
-      res.end(JSON.stringify({ ok: true, proto: "Nexus/1.2", role: "gateway", port: GATEWAY_PORT, rest: REST_PORT, uptimeMs: Date.now() - STARTED_AT }))
+      res.end(JSON.stringify({ ok: true, proto: "Nexus/1.2", role: "gateway", port: GATEWAY_PORT, rest: REST_PORT, uptimeMs: Date.now() - STARTED_AT, pair: !!loadPair() }))
       return
     }
+    if (!pairGateHttp(req, res, req.url)) return
     proxyHttp(req, res)
   } catch (e) {
     if (!res.headersSent) {
@@ -151,7 +274,10 @@ const server = http.createServer((req, res) => {
 server.requestTimeout = 0
 server.headersTimeout = 60000
 server.keepAliveTimeout = 120000
-server.on("upgrade", proxyUpgrade)
+server.on("upgrade", (req, socket, head) => {
+  if (!pairGateRaw(req, socket, req.url)) return
+  proxyUpgrade(req, socket, head)
+})
 server.on("clientError", (_err, socket) => { try { socket.end("HTTP/1.1 400 Bad Request\r\n\r\n") } catch {} })
 
 server.listen(GATEWAY_PORT, () => {

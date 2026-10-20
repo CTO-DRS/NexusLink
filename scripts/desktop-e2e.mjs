@@ -9,6 +9,7 @@
 // النجاح: كل الفحوص خضراء ثم نظافة المنافذ عند الخروج.
 import { spawn } from "node:child_process"
 import dgram from "node:dgram"
+import os from "node:os"
 import { setTimeout as sleep } from "node:timers/promises"
 
 const ROOT = new URL("..", import.meta.url).pathname
@@ -48,7 +49,16 @@ async function waitHttp(name, url, timeoutMs, okFn = (j) => j?.ok === true) {
   throw new Error(`timeout waiting ${name} at ${url}`)
 }
 
-async function killPorts(ports) {
+async function killPorts(ports, alsoByName = false) {
+  const { execSync } = await import("node:child_process")
+  // درس §37: الأيتام (SIGTERM بلا finally من مُشغّل خارجي) قد تعيش بلا مأخذ.
+  // القتل بالاسم خيار حصرًا (التجميع الابتدائي) — لا يدخل الاستدعاءات الجراحية
+  // (PERSIST يقتل :3000 وحده في اختبار الإقلاع فلا يجوز مسّ البوابة/الجسور)
+  if (alsoByName) {
+    for (const pat of ["my-project/.next/standalone/server.js", "resources/gateway/gateway.cjs", "resources/comms/comms.cjs", "next-server"]) {
+      try { execSync(`pkill -9 -f '${pat}' 2>/dev/null || true`, { shell: "/bin/bash" }) } catch { /* لا شيء */ }
+    }
+  }
   for (const port of ports) {
     try {
       const { execSync } = await import("node:child_process")
@@ -64,7 +74,7 @@ async function killPorts(ports) {
 
 // ============ 0) نظافة المنافذ (الدرس: لا fuser — ss فقط) ============
 console.log("== cleanup stale ports ==")
-await killPorts([3000, 3003, 81, 3004, 3005, 3006, 3007, 3009])
+await killPorts([3000, 3003, 81, 3004, 3005, 3006, 3007, 3009], true)
 await sleep(600)
 
 try {
@@ -72,10 +82,16 @@ try {
   // ============ 1) Next standalone (PORT=3000) ============
   console.log("== [1] next standalone on :3000 ==")
   nextProc = spawnProc("next", process.execPath, [`${ROOT}.next/standalone/server.js`],
-    { PORT: "3000", HOSTNAME: "127.0.0.1", NODE_ENV: "production", NEXUS_WOL_BROADCAST: "127.0.0.1", NEXUS_WOL_PORT: "9009" },
+    { PORT: "3000", HOSTNAME: "127.0.0.1", NODE_ENV: "production", NEXUS_WOL_BROADCAST: "127.0.0.1", NEXUS_WOL_PORT: "9009",
+      // §37: standalone يعمل chdir(__dirname) (سطر 202 أدناه) — نثبت مسار الرمز المطلق
+      // لكل الأطراف (المسار + البوابة + المقيّس) بمتغير النشر الموثق §37.هـ.4
+      NEXUSLINK_PAIR_FILE: `${ROOT}.zstate/pair-token.json` },
     (l) => { if (/ready|error|Error/i.test(l)) console.log("   " + l.slice(0, 160)) })
 
   const health = await waitHttp("next /api/health", "http://127.0.0.1:3000/api/health", 90000)
+  // درس §37: الزومبي على :3000 يجعل EADDRINUSE صامتًا — انتظرHttp يبلغه هو فيصدّ أخضر
+  // كاذب. إثبات الحياة: عملية next نفسها حيّة (لم تمت فورًا) وإلا فشل صريح
+  check("next: عملية الخادم حيّة (لا EADDRINUSE صامت من زومبي)", nextProc.exitCode === null && !nextProc.killed, `exit=${nextProc.exitCode}`)
   check("next: /api/health يعمل", health?.ok === true && health?.proto === "Nexus/1.2", `uptime=${Math.round(health?.uptime || 0)}s`)
 
   // ============ 2) إقلاع كل الجسور + إشارة الهاتف ============
@@ -94,7 +110,7 @@ try {
   console.log("== [3] gateway.cjs (81 أو fallback) ==")
   let gwPort = 0
   spawnProc("gateway", process.execPath, [`${RES}gateway/gateway.cjs`],
-    { GATEWAY_PORT: "81", REST_PORT: "3000" },
+    { GATEWAY_PORT: "81", REST_PORT: "3000", NEXUSLINK_PAIR_FILE: `${ROOT}.zstate/pair-token.json` },
     (l) => { console.log("   " + l.slice(0, 160)); const m = l.match(/PORT=(\d+)/); if (m) gwPort = Number(m[1]) })
   // انتظار ديناميكي — تسلسل التراجع 81→8180 (EACCES ثم إعادة استماع) قد يتجاوز
   // ثانية واحدة؛ ثابت زمني واحد سبّب فشل إقلاع كامل دون سبب حقيقي (درس موثق).
@@ -5498,7 +5514,8 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     if (nextProc) { try { nextProc.kill("SIGKILL") } catch {} }
     await killPorts([3000]); await sleep(1000)
     nextProc = spawnProc("next", process.execPath, [`${ROOT}.next/standalone/server.js`],
-      { PORT: "3000", HOSTNAME: "127.0.0.1", NODE_ENV: "production", NEXUS_WOL_BROADCAST: "127.0.0.1", NEXUS_WOL_PORT: "9009" },
+      { PORT: "3000", HOSTNAME: "127.0.0.1", NODE_ENV: "production", NEXUS_WOL_BROADCAST: "127.0.0.1", NEXUS_WOL_PORT: "9009",
+        NEXUSLINK_PAIR_FILE: `${ROOT}.zstate/pair-token.json` }, // §37: نفس مسار الرمز المطلق بعد الإقلاع الثاني
       (l) => { if (/error|Error/i.test(l)) console.log("   " + l.slice(0, 160)) })
     await waitHttp("next restart /api/health", "http://127.0.0.1:3000/api/health", 90000)
     check("PERSIST/reboot: الخادم عاد بعد الإيقاف العنيف (SIGKILL → standalone up)", true, "health ok")
@@ -6503,6 +6520,156 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
         viaGw?.status === 200 && (await viaGw.text()).includes("data-client=\"nexus-web\""), `gw=${gwWeb}`)
     } catch (e) {
       check("WEB/live: انسداد العميل اكتمل بلا خطأ غير متوقع", false, e.message?.slice(0, 120))
+    }
+  }
+
+  // =======================================================================
+  // GW — الوصول البعيد برمز اقتران (عقد §37 — إغلاق حد §36.هـ.1)
+  // =======================================================================
+  {
+    const fsGW = (await import("node:fs")).default
+    const pairFileDef = fsGW.readFileSync(new URL("../mini-services/gateway/index.cjs", import.meta.url), "utf8")
+    const routeP = fsGW.readFileSync(new URL("../src/app/api/remote-access/route.ts", import.meta.url), "utf8")
+    const setP = fsGW.readFileSync(new URL("../src/components/nexus/settings-view.tsx", import.meta.url), "utf8")
+    const wappP = fsGW.readFileSync(new URL("../public/web-client/app.js", import.meta.url), "utf8")
+    const swP = fsGW.readFileSync(new URL("../public/web-client/sw.js", import.meta.url), "utf8")
+    const contractP = fsGW.readFileSync(new URL("../docs/protocol-contract.md", import.meta.url), "utf8")
+    const auditP = fsGW.readFileSync(new URL("../docs/security-audit.md", import.meta.url), "utf8")
+    const roadP = fsGW.readFileSync(new URL("../docs/ROADMAP.md", import.meta.url), "utf8")
+    const i18nP = JSON.parse(fsGW.readFileSync(new URL("../src/lib/ar-en-map.json", import.meta.url), "utf8"))
+
+    // ---- (أ) مصدر: بوابة الرمز ----
+    check("GW/src: بوابة الرمز — مصدر الحقيقة ملف بمتغير تعديل + إعفاء loopback + مقارنة زمن-ثابت sha256",
+      pairFileDef.includes("NEXUSLINK_PAIR_FILE") && pairFileDef.includes("mtimeMs") && pairFileDef.includes("isLoopbackIp")
+      && pairFileDef.includes("timingSafeEqual") && pairFileDef.includes('createHash("sha256")'), "gateway/index.cjs")
+    check("GW/src: الحسم في المسارين — HTTP بعد health وWS برد خام + نظافة stripPair قبل التحويل",
+      pairFileDef.includes("if (!pairGateHttp(req, res, req.url)) return") && pairFileDef.includes("pairGateRaw(req, socket, req.url)")
+      && pairFileDef.includes("path: stripPair(req.url)") && pairFileDef.includes("${req.method} ${stripPair(req.url)}"), "http+ws+strip")
+    check("GW/src: الحجب التجريبي — 5 فشل → قفل 30ث (429 pair-locked) والرمز الصحيح ينجح ويصفّر",
+      pairFileDef.includes("PAIR_MAX_FAILS = 5") && pairFileDef.includes("PAIR_LOCK_MS = 30000")
+      && pairFileDef.includes('"pair-locked"') && pairFileDef.includes('"pair-token-required"')
+      && /if \(cand && tokenMatches\(cand, pair\.token\)\) \{ pairFails\.delete/.test(pairFileDef), "lockout")
+
+    // ---- (ب) مصدر: مسار الإدارة ----
+    check("GW/src: remote-access — ثلاثة أفعال بأخطاء 409 الصادقة وunknown-action 400",
+      routeP.includes('"enable"') && routeP.includes('"rotate"') && routeP.includes('"disable"')
+      && routeP.includes('"already-enabled"') && routeP.includes('"not-enabled"') && routeP.includes('"unknown-action"'), "actions")
+    check("GW/src: حرس loopback للإدارة — x-gw-client-ip من خارج الجهاز يُرفض 403 ولو برمز صحيح",
+      routeP.includes("x-gw-client-ip") && routeP.includes("pair-admin-loopback-only") && routeP.includes("isLoopbackIp"), "admin guard")
+    check("GW/src: الرمز الخام لا يعود في GET — يُسلّم مرة واحدة في enable/rotate حصرًا",
+      /export async function GET[\s\S]*?fingerprint[\s\S]*?return NextResponse\.json/.test(routeP)
+      && routeP.includes("urlQuery") && routeP.includes("الرمز الخام عمدًا غائب"), "no raw in GET")
+    check("GW/src: نظافة الملف — 0600 وكتابة ذرية tmp+rename وحذف Disable = تعطيل لحظي",
+      routeP.includes("0o600") && routeP.includes("renameSync") && routeP.includes("rmSync") && routeP.includes("randomBytes(32)"), "file hygiene")
+
+    // ---- (ج) مصدر: الواجهة والعميل الوِب والتوثيق ----
+    check("GW/src: بطاقة الإعدادات — حالة وبصمة وأزرار التدوير/التعطيل ورابط يُعرض مرة واحدة",
+      setP.includes("data-remote-access-card") && setP.includes("data-ra-status") && setP.includes("data-ra-fp")
+      && setP.includes("data-ra-rotate") && setP.includes("data-ra-disable") && setP.includes("data-ra-issued") && setP.includes("data-ra-url"), "settings card")
+    check("GW/src: العميل الوِب — الترميز يمرر ترويسة x-pair-token في السلك حصرًا والنواة المصدّرة سليمة",
+      wappP.includes('location.search).get("pair")') && wappP.includes('"x-pair-token"')
+      && wappP.indexOf("const PAIR") > wappP.indexOf('typeof document !== "undefined"')
+      && wappP.includes("export function makeGuardedFetch(impl, isTv)"), "wire-only")
+    check("GW/src: التوثيق — العقد §37 كاملاً + بند تدقيق 12 + ROADMAP GW + كاش v2 + مفاتيح i18n",
+      contractP.includes("§37 — الوصول البعيد برمز اقتران") && contractP.includes("37.هـ حدود صادقة")
+      && auditP.includes("12. الوصول البعيد برمز اقتران (§37)") && roadP.includes("GW — الوصول البعيد برمز اقتران (عقد §37)")
+      && swP.includes('nexus-web-v2') && i18nP["الوصول البعيد"] === "Remote access" && i18nP["تدوير الرمز"] === "Rotate token", "docs+i18n")
+
+    // ---- (د) حي: عبر عنوان LAN حقيقي ----
+    let LANIP = ""
+    for (const v of Object.values(os.networkInterfaces())) for (const a of v || []) if (!a.internal && a.family === "IPv4") { LANIP = LANIP || a.address; break }
+    let gwP = 0
+    for (const p of [8180, 81]) {
+      const h = await fetch(`http://127.0.0.1:${p}/__gw/health`).then((r) => r.json()).catch(() => null)
+      if (h?.ok === true && h?.role === "gateway") { gwP = p; break }
+    }
+    try {
+      if (!LANIP || !gwP) {
+        check("GW/live: البيئة بلا عنوان LAN/بوابة — فحوص الرمز الحية مستحيلة بصدق", false, `lan=${LANIP} gw=${gwP}`)
+      } else {
+        const LAN = `http://${LANIP}:${gwP}`
+        const LC = "http://127.0.0.1:3000"
+        const j = async (u, o) => { const r = await fetch(u, o); return { status: r.status, body: await r.json().catch(() => null) } }
+
+        // 1) البداية نظيفة: OFF والملف غائب
+        const pre = await j(`${LC}/api/remote-access`)
+        check("GW/live: البداية OFF — الحالة disabled والملف غائب (السلوك التاريخي حرفيًا)",
+          pre.status === 200 && pre.body?.enabled === false && !fsGW.existsSync(new URL("../.zstate/pair-token.json", import.meta.url)), `enabled=${pre.body?.enabled}`)
+
+        // 2) التمكين من loopback: رمز يُعرض مرة واحدة
+        const en = await j(`${LC}/api/remote-access`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "enable" }) })
+        const T1 = String(en.body?.token ?? "")
+        check("GW/live: تمكين → رمز base64url من 43 محرفًا وبصمة 16 وurlQuery — ويُسلّم مرة واحدة",
+          en.status === 200 && en.body?.ok === true && /^[A-Za-z0-9_-]{43}$/.test(T1)
+          && /^[0-9a-f]{16}$/.test(String(en.body?.fingerprint ?? "")) && String(en.body?.urlQuery) === `?pair=${T1}`, `fp=${en.body?.fingerprint ?? "-"}`)
+
+        // 3) الملف على القرص: token + صلاحية 0600
+        const pfPath = new URL("../.zstate/pair-token.json", import.meta.url).pathname
+        let pfOk = false, pfMode = 0
+        try { const pj = JSON.parse(fsGW.readFileSync(pfPath, "utf8")); pfMode = fsGW.statSync(pfPath).mode & 0o777; pfOk = pj.token === T1 && typeof pj.fingerprint === "string" } catch {}
+        check("GW/live: ملف المصدر الواحد على القرص — token مطابق وبصمة وبصلاحية 0600",
+          pfOk && pfMode === 0o600, `mode=${pfMode.toString(8)}`)
+
+        // 4) البوابة أعلنت التمكين لحظيًا (بلا إعادة تشغيل)
+        const hp = await j(`http://127.0.0.1:${gwP}/__gw/health`)
+        check("GW/live: health يعلن pair:true لحظيًا — الحسم من الملف بلا إعادة تشغيل",
+          hp.status === 200 && hp.body?.pair === true, `pair=${hp.body?.pair}`)
+
+        // 5-6) من LAN بلا رمز/برمز خاطئ → 401 مسبب
+        const noT = await j(`${LAN}/api/version`)
+        check("GW/live: LAN بلا رمز → 401 pair-token-required", noT.status === 401 && noT.body?.error === "pair-token-required", `HTTP ${noT.status}`)
+        const badT = await j(`${LAN}/api/version`, { headers: { "x-pair-token": "x".repeat(43) } })
+        check("GW/live: LAN برمز خاطئ → 401 (مقارنة زمن-ثابت رفضته)", badT.status === 401 && badT.body?.error === "pair-token-required", `HTTP ${badT.status}`)
+
+        // 7-8) الرمز الصحيح بالترويسة وبالبارامتر
+        const okH = await j(`${LAN}/api/version`, { headers: { "x-pair-token": T1 } })
+        check("GW/live: LAN بترويسة الرمز الصحيح → 200", okH.status === 200 && typeof okH.body?.current === "string", `HTTP ${okH.status}`)
+        const okQ = await j(`${LAN}/api/version?pair=${encodeURIComponent(T1)}`)
+        check("GW/live: LAN ببارامتر ?pair= الصحيح → 200 (رابط الفتح الأول يعمل)", okQ.status === 200 && typeof okQ.body?.current === "string", `HTTP ${okQ.status}`)
+
+        // 9-10) الإعفاءان: health من LAN + loopback رغم بقاء البوابة مفعلة
+        const hpLan = await j(`${LAN}/__gw/health`)
+        check("GW/live: /__gw/health معفى حتى من LAN — تشخيص بلا بيانات", hpLan.status === 200 && hpLan.body?.ok === true, `HTTP ${hpLan.status}`)
+        const lcWhileOn = await j(`${LC}/api/version`)
+        check("GW/live: loopback معفى والبوابة مفعّلة — الجهاز هي الحدود (عقد 2.0 صام)", lcWhileOn.status === 200 && typeof lcWhileOn.body?.current === "string", `HTTP ${lcWhileOn.status}`)
+
+        // 11-12) الحجب التجريبي: 6 أخطاء من LAN → 429، والرمز الصحيح ينجح أثناء القفل
+        const seq = []
+        for (let i = 0; i < 6; i++) seq.push((await fetch(`${LAN}/api/version?pair=guess${i}`, { headers: { "x-pair-token": `bad${i}` } })).status)
+        check("GW/live: خمسة فشل من LAN ثم السادس → 429 pair-locked", seq.slice(0, 5).every((s) => s === 401) && seq[5] === 429, seq.join(","))
+        const lockGood = await j(`${LAN}/api/version`, { headers: { "x-pair-token": T1 } })
+        check("GW/live: الرمز الصحيح ينجح ويصفّر حتى أثناء القفل — القفل لمن يخمّن حصرًا", lockGood.status === 200, `HTTP ${lockGood.status}`)
+
+        // 13) الإدارة من LAN مرفوضة ولو برمز صحيح
+        const admLan = await j(`${LAN}/api/remote-access`, { method: "POST", headers: { "content-type": "application/json", "x-pair-token": T1 }, body: JSON.stringify({ action: "enable" }) })
+        check("GW/live: إدارة الاقتران من LAN → 403 pair-admin-loopback-only حتى برمز صحيح", admLan.status === 403 && admLan.body?.error === "pair-admin-loopback-only", `HTTP ${admLan.status}`)
+
+        // 14-16) التدوير: القديم يموت والجديد يحيى
+        const rot = await j(`${LC}/api/remote-access`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "rotate" }) })
+        const T2 = String(rot.body?.token ?? "")
+        check("GW/live: تدوير → رمز جديد مختلف وبصمة مختلفة", rot.status === 200 && T2 && T2 !== T1 && rot.body?.fingerprint !== en.body?.fingerprint, `fp2=${rot.body?.fingerprint ?? "-"}`)
+        const oldT = await j(`${LAN}/api/version`, { headers: { "x-pair-token": T1 } })
+        check("GW/live: الرمز القديم ميت بعد التدوير → 401", oldT.status === 401, `HTTP ${oldT.status}`)
+        const newT = await j(`${LAN}/api/version`, { headers: { "x-pair-token": T2 } })
+        check("GW/live: الرمز الجديد حي → 200 (الإبطال لحظي من الملف)", newT.status === 200, `HTTP ${newT.status}`)
+
+        // 17) العميل الوِب من LAN: بلا رمز → 401 وبرمزه → 200
+        const wcNo = await fetch(`${LAN}/web-client/index.html`)
+        const wcOk = await fetch(`${LAN}/web-client/index.html?pair=${encodeURIComponent(T2)}`)
+        check("GW/live: العميل الوِب من LAN — بلا رمز 401 وبرمزه 200 بنواة العميل",
+          wcNo.status === 401 && wcOk.status === 200 && (await wcOk.text()).includes('data-client="nexus-web"'), `no=${wcNo.status} ok=${wcOk.status}`)
+
+        // 18) التعطيل: العودة للانفتاح التاريخي وبلا أثر
+        const off = await j(`${LC}/api/remote-access`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "disable" }) })
+        const afterOff = await j(`${LAN}/api/version`)
+        check("GW/live: تعطيل → enabled:false والملف محذوف وLAN يمر بلا رمز (السلوك التاريخي عاد)",
+          off.status === 200 && off.body?.enabled === false && !fsGW.existsSync(pfPath) && afterOff.status === 200, `HTTP ${afterOff.status}`)
+      }
+    } catch (e) {
+      check("GW/live: انسداد الرمز اكتمل بلا خطأ غير متوقع", false, e.message?.slice(0, 120))
+    } finally {
+      // GW/cleanup: بلا أثر — الملف محذوف حتى لو توقفت الفحوص مبكرًا
+      try { fsGW.rmSync(new URL("../.zstate/pair-token.json", import.meta.url).pathname, { force: true }) } catch {}
     }
   }
 
