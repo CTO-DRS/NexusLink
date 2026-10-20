@@ -425,3 +425,40 @@ final devicesProvider = StreamProvider<List<NexusDevice>>((ref) {
   });
   return ctrl.stream;
 });
+
+// ---------------------------------------------------------------------------
+// قياس الاقتران الفوري (عقد §30 — M1.1): نبض هادئ كل 6 ثوانٍ طالما أنا متصل
+// ---------------------------------------------------------------------------
+
+final pairMetricsProvider = StreamProvider<PairMetricsStats>((ref) {
+  final conn = ref.watch(connectionProvider).value;
+  final ep = conn?.endpoint;
+  if (ep == null || conn?.phase != ConnectPhase.online) {
+    return Stream.value(const PairMetricsStats());
+  }
+  final api = NexusApi(ep);
+  late StreamController<PairMetricsStats> ctrl;
+  Timer? timer;
+
+  Future<void> tick() async {
+    try {
+      final s = await api.pairMetrics();
+      if (!ctrl.isClosed) ctrl.add(s);
+    } catch (_) {/* الدورة التالية تحاول من جديد */}
+  }
+
+  ctrl = StreamController<PairMetricsStats>(
+    onListen: () {
+      tick();
+      timer = Timer.periodic(const Duration(seconds: 6), (_) => tick());
+    },
+    onCancel: () => timer?.cancel(),
+  );
+
+  ref.onDispose(() {
+    timer?.cancel();
+    ctrl.close();
+    api.close();
+  });
+  return ctrl.stream;
+});

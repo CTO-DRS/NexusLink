@@ -9,6 +9,7 @@ import { runPairSync, photoSyncTick, generatePhonePhoto, syncDeviceName } from "
 import { emitAutomationFact } from "./automation-facts"
 import { socketCors, isLocalSocket } from "./socket-security" // SEC (M0.3 F4) + F6
 import { appendOp, headSeq, opsSince, ackUpto, REPLAY_LIMIT } from "./oplog" // M1.2 §28
+import { markFirstValue } from "./pair-metrics" // M1.1 §30: ختم أول قيمة على التسييل
 
 const PORT = 3007
 
@@ -133,6 +134,7 @@ export function ensureProdBridge() {
           })
           const netClients = broadcastClip(io2, item) // SEC F6: المحتوى الكامل للجهاز المحلي حصرًا
           void appendOp("clip:new", item.id, item.deviceId, clipOpPayload(item)) // M1.2 §28: ترسيخ قابل للاستئناف
+          void markFirstValue(item.deviceId, "prod") // M1.1 §30: أول قيمة إنتاجية تُكمل التسييل
           // §26 — نشر الحقيقة لمحرك الروتينات (ناقل داخل العملية — بلا تغيير سلكي)
           emitAutomationFact({ kind: "clip.received", deviceId: item.deviceId, deviceName: item.deviceName, clipKind: item.kind, at: Date.now() })
           log(io2, `حافظة موحدة: ${d?.kind === "image" ? "صورة" : d?.kind === "file" ? `ملف ${d?.fileName ?? ""}` : "نص"} من ${item.deviceName}${d?.mode === "auto" ? " (تلقائي)" : ""}${netClients > 0 ? ` — محتوى ${netClients} عميل شبكة يُسلّم مشفرًا عبر قناة 3009` : ""}`, "in")
@@ -173,6 +175,7 @@ export function ensureProdBridge() {
           // M1.2 §28: ترسيخ الإنشاء حصرًا — إعادة دفع بمعرف قائم = بث بلا عملية جديدة
           if (created) {
             void appendOp("hand:new", item.id, item.deviceId, { ...item, createdAt: item.createdAt.getTime() })
+            void markFirstValue(item.deviceId, "prod") // M1.1 §30: أول قيمة إنتاجية تُكمل التسييل
           }
           log(io2, `تسليم: «${item.title.slice(0, 40)}» من ${item.deviceName} — جاهز للفتح على الكمبيوتر`, "in")
         } catch { /* ignore */ }

@@ -117,6 +117,18 @@ class NexusApi {
     );
   }
 
+  /// قياس الاقتران الفوري (عقد §30 — M1.1): GET /api/pair-metrics —
+  /// بيانات وصفية حصرًا (أرقام وأزمنة — لا محتوى).
+  Future<PairMetricsStats> pairMetrics() async {
+    final res = await _client
+        .get(endpoint.api('pair-metrics'), headers: {'Accept': 'application/json'})
+        .timeout(Timeouts.restCall);
+    if (res.statusCode != 200) throw ApiException('pair-metrics: HTTP ${res.statusCode}');
+    final j = jsonDecode(res.body) as Map<String, dynamic>;
+    final stats = (j['stats'] as Map?)?.cast<String, dynamic>() ?? const {};
+    return PairMetricsStats.fromJson(stats);
+  }
+
   void close() => _client.close();
 }
 

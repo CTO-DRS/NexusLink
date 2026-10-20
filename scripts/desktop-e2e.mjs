@@ -5038,6 +5038,151 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     }
   }
 
+  // [PAIR-MET] M1.1 — الاقتران المقيس: من QR إلى أول قيمة < 30ث (عقد §30)
+  {
+    console.log("== [PAIR-MET] M1.1 pairing speed metrics ==")
+    const fsModPair = await import("node:fs")
+    const pathModPair = await import("node:path")
+    const readPair = (p) => fsModPair.readFileSync(pathModPair.join(ROOT, p), "utf8")
+
+    // ---- (أ) فحوص مصدر ----
+    const mathSrc = readPair("src/lib/pair-math.ts")
+    check("PAIR-MET/source: رياضيات القياس — عتبة 30ث تعاقدية + مئين أقرب-رتبة دالٍّ نقي + لقطة موحدة (آخر زمنًا لا أكبر قيمة)",
+      mathSrc.includes("PAIR_TARGET_MS = 30_000") && mathSrc.includes("nearestRankPct") && mathSrc.includes("pairStats")
+      && mathSrc.includes("newest.totalMs") && mathSrc.includes("passRate"), "pair-math.ts")
+
+    const metricsSrc = readPair("src/lib/nexus/pair-metrics.ts")
+    check("PAIR-MET/source: سجل القياس — recordPairMetric (t1) + markFirstValue يكمل أحدث معلق داخل نافذة السر 10 دقائق + listPairMetrics",
+      metricsSrc.includes("recordPairMetric") && metricsSrc.includes("markFirstValue")
+      && metricsSrc.includes("PENDING_WINDOW_MS = 10 * 60_000") && metricsSrc.includes("pairToFirstValueMs: null")
+      && metricsSrc.includes("listPairMetrics"), "pair-metrics.ts")
+
+    const dbSrcPair = readPair("src/lib/db.ts")
+    check("PAIR-MET/source: الترسيخ — جدول PairMetric بنمط §23 الآمن + فهرس زمني عادي (بلا فهارس فوق القيود — درس §28)",
+      dbSrcPair.includes('CREATE TABLE IF NOT EXISTS "PairMetric"') && dbSrcPair.includes('"totalMs"')
+      && dbSrcPair.includes('"PairMetric_at_idx"') && !dbSrcPair.includes('UNIQUE INDEX IF NOT EXISTS "PairMetric'), "db.ts")
+
+    const schemaPair = readPair("prisma/schema.prisma")
+    check("PAIR-MET/source: المخطط — نموذج PairMetric موثق (عقد §30) ببيانات وصفية حصرًا",
+      schemaPair.includes("model PairMetric") && schemaPair.includes("qrToPairMs") && schemaPair.includes("firstValueKind")
+      && schemaPair.includes("M1.1 اقتران مقيس"), "schema.prisma")
+
+    const devRoute = readPair("src/app/api/devices/route.ts")
+    check("PAIR-MET/source: ختم t1 — فرعا pair (جديد وإعادة تسجيل) يسجلان qrToPairMs من إصدار آخر QR (المطابَق حصرًا — G-1 يجعل الزمن دقيقًا تعاقديًا)",
+      devRoute.includes("recordPairMetric") && devRoute.includes("reregister: true") && devRoute.includes("reregister: false")
+      && devRoute.includes("Date.now() - store().pairingIssuedAt") && devRoute.includes("Date.now() - s.pairingIssuedAt"), "devices/route.ts")
+
+    const prodBridgePair = readPair("src/lib/nexus/productivity-bridge.ts")
+    check("PAIR-MET/source: ختم t2 (prod) — أول حافظة/تسليم من الجهاز يكمل التسييل",
+      prodBridgePair.includes('markFirstValue(item.deviceId, "prod")') && prodBridgePair.includes("pair-metrics"), "productivity-bridge.ts")
+
+    const remBridgePair = readPair("src/lib/nexus/remote-bridge.ts")
+    check("PAIR-MET/source: ختم t2 (control) — أول جلسة تحكم مقبولة تُكمِل التسييل",
+      remBridgePair.includes('markFirstValue(session.deviceId, "control")') && remBridgePair.includes("pair-metrics"), "remote-bridge.ts")
+
+    const apiPair = readPair("src/app/api/pair-metrics/route.ts")
+    check("PAIR-MET/source: نقطة القراءة — {ok, targetMs, stats, entries} بيانات وصفية حصرًا بلا محتوى",
+      apiPair.includes("listPairMetrics") && apiPair.includes("pairStats") && apiPair.includes("PAIR_TARGET_MS")
+      && !apiPair.includes("content"), "api/pair-metrics/route.ts")
+
+    const panelPair = readPair("src/components/nexus/pair-panel.tsx")
+    const dvPair = readPair("src/components/nexus/devices-view.tsx")
+    check("PAIR-MET/source: اللوحة الحية — شارة عتبة + لوحة موسّعة (طورا الإجمالي + مئين + سجل) بنبض عند الفتح حصرًا — مدموجة بواجهة الأجهزة",
+      panelPair.includes("PAIR_TARGET_MS") && panelPair.includes("pairStats") && panelPair.includes("/api/pair-metrics")
+      && panelPair.includes("setInterval") && dvPair.includes("PairPanel"), "pair-panel.tsx + devices-view.tsx")
+
+    const napiPair = readPair("nexuslink_mobile/lib/data/nexus_api.dart")
+    const nmodPair = readPair("nexuslink_mobile/lib/domain/models.dart")
+    const nprovPair = readPair("nexuslink_mobile/lib/state/providers.dart")
+    const ndevPair = readPair("nexuslink_mobile/lib/presentation/devices_screen.dart")
+    check("PAIR-MET/source: الهاتف — pairMetrics() في NexusApi + PairMetricsStats/PairTarget + نبض provider + بطاقة سرعة بقائمة الأجهزة",
+      napiPair.includes("pairMetrics") && nmodPair.includes("class PairMetricsStats") && nmodPair.includes("static const int ms = 30000")
+      && nprovPair.includes("pairMetricsProvider") && ndevPair.includes("_PairSpeedCard"), "flutter")
+
+    const arPair = readPair("nexuslink_mobile/assets/translations/ar.json")
+    const enPair = readPair("nexuslink_mobile/assets/translations/en.json")
+    check("PAIR-MET/source: ترجمتا الهاتف — pair.speed بلساني ar/en",
+      arPair.includes('"speed"') && arPair.includes("اقتران فوري") && enPair.includes('"speed"') && enPair.includes("Instant pairing"), "ar/en.json")
+
+    const contractPair = readPair("docs/protocol-contract.md")
+    check("PAIR-MET/source: العقد §30 — التسييل بثلاث طوابع + الحدود الصادقة (المدمجتان حصرًا — زمن المسح البصري خارج التعاقد)",
+      contractPair.includes("## 30. الاقتران المقيس") && contractPair.includes("### 30.د الحدود الصادقة")
+      && contractPair.includes("pairToFirstValueMs"), "contract §30")
+
+    // ---- (ب) حي: سلسلة كاملة QR → pair → أول قيمة → القياس ----
+    try {
+      const base = `http://127.0.0.1:3000`
+      // (1) إصدار QR حي — t0 يُختم في الخادم (السر داخل payload — حمولة الاتصال نفسها)
+      const qrRes = await fetch(`${base}/api/devices/qr`)
+      const qr = await qrRes.json()
+      const qrSecret = qr?.payload?.secret
+      check("PAIR-MET/live: إصدار QR حي — سر + code + نافذة صلاحية (t0 مختم في الخادم)",
+        qrRes.ok && !!qrSecret && !!qr?.code && typeof qr?.expiresAt === "number" && qr?.payload?.ts > 0, `code=${qr?.code ?? "—"}`)
+
+      // (2) pair حقيقي بالسر الحي — t1 يُختم ويُرسيخ إدخال معلق
+      const devId = `pair-e2e-${Date.now().toString(36)}`
+      const pairRes = await fetch(`${base}/api/devices`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "pair", name: "PAIR-E2E", kind: "phone", id: devId, secret: qrSecret }),
+      })
+      const pairJ = await pairRes.json()
+      check("PAIR-MET/live: اقتران حقيقي بسر QR الحي — جهاز موثوق متصل (t1)",
+        pairRes.ok && pairJ?.ok === true && pairJ?.device?.id === devId, `id=${pairJ?.device?.id ?? "—"}`)
+
+      // (3) الإدخال المعلق مسجل — qrToPairMs>0 وبلا أول قيمة بعد
+      const pm1 = await (await fetch(`${base}/api/pair-metrics`)).json()
+      const pendingE = (pm1?.entries ?? []).find((e) => e.deviceId === devId)
+      check("PAIR-MET/live: إدخال معلق بسلسلة نصف مكتملة — qrToPairMs>0 · pairToFirstValueMs=null · pass=null",
+        pendingE && pendingE.qrToPairMs > 0 && pendingE.pairToFirstValueMs === null && pendingE.pass === null
+        && pendingE.reregister === false, `qrToPair=${pendingE?.qrToPairMs ?? "—"}ms`)
+
+      // (4) أول قيمة حقيقية: حافظة من الوكيل على 3007 بنفس الهوية — t2
+      const { io: ioPair } = await import("socket.io-client")
+      const prodSock = ioPair(`http://localhost:3007`, { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 8000, reconnection: false })
+      await new Promise((res, rej) => { prodSock.on("connect", res); prodSock.on("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("pair 3007 timeout")), 10000) })
+      prodSock.emit("clip:push", { deviceId: devId, deviceName: "PAIR-E2E", kind: "text", content: `pair-metric-${devId}`, mode: "manual" })
+      let completed = null
+      for (let i = 0; i < 25 && !completed; i++) {
+        await sleep(200)
+        const pm = await (await fetch(`${base}/api/pair-metrics`)).json()
+        completed = (pm?.entries ?? []).find((e) => e.deviceId === devId && e.pairToFirstValueMs !== null) ?? null
+      }
+      try { prodSock.disconnect() } catch {}
+      check("PAIR-MET/live: أول قيمة تكمل التسييل حيًا — pairToFirstValueMs>0 وtotalMs = qrToPair + pairToFirstValue",
+        completed && completed.pairToFirstValueMs > 0 && completed.totalMs === completed.qrToPairMs + completed.pairToFirstValueMs,
+        completed ? `total=${completed.totalMs}ms (${completed.qrToPairMs}+${completed.pairToFirstValueMs})` : "—")
+
+      // (5) العتبة التعاقدية M1.1 — إجمالي أقل من 30 ثانية داخل الشبكة المحلية
+      check("PAIR-MET/live: العتبة التعاقدية — إجمالي QR→أول قيمة أقل من 30ث وpass=true (prod)",
+        completed && completed.totalMs < 30000 && completed.pass === true && completed.firstValueKind === "prod",
+        `total=${completed?.totalMs ?? "—"}ms < 30000`)
+
+      // (6) F6 متوافق — الإدخال بلا محتوى: مفاتيحه المعروفة حصرًا
+      const knownKeys = ["id", "deviceId", "deviceName", "reregister", "qrToPairMs", "pairToFirstValueMs", "totalMs", "firstValueKind", "pass", "at"]
+      check("PAIR-MET/live: شكل الإدخال بلا محتوى (حرس F6 متوافق) — مفاتيح معروفة حصرًا",
+        completed && Object.keys(completed).every((k) => knownKeys.includes(k)), `keys=${completed ? Object.keys(completed).length : "—"}/10`)
+
+      // (7) الإحصاء الحي صحيح — مكتمل ≥1 وlast ≤ 30ث وترتيب مئين سليم
+      const pm2 = await (await fetch(`${base}/api/pair-metrics`)).json()
+      const st2 = pm2?.stats ?? {}
+      check("PAIR-MET/live: الإحصاء — completed≥1 · last<30000 · p95≤max · targetMs=30000",
+        st2.completed >= 1 && st2.last != null && st2.last < 30000 && st2.p95 <= st2.max && pm2?.targetMs === 30000,
+        `completed=${st2.completed} last=${st2.last} p95=${st2.p95} max=${st2.max}`)
+
+      // (8) سر خاطئ لا يُقيَّد — عدد الإدخالات ثابت (لا إدخال بلا إثبات قرب)
+      const beforeCnt = (pm2?.entries ?? []).length
+      await fetch(`${base}/api/devices`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "pair", name: "PAIR-BAD", kind: "phone", id: "pair-e2e-bad", secret: "deadbeef" }),
+      })
+      const pm3 = await (await fetch(`${base}/api/pair-metrics`)).json()
+      check("PAIR-MET/live: اقتران مرفوض (سر فاسد 403) لا يُقيَّد إطلاقًا — لا إدخال بلا إثبات قرب",
+        (pm3?.entries ?? []).length === beforeCnt, `entries=${(pm3?.entries ?? []).length}/${beforeCnt}`)
+    } catch (ePair) {
+      check("PAIR-MET/live: سلسلة القياس الحية (QR→pair→أول قيمة)", false, ePair instanceof Error ? ePair.message : String(ePair))
+    }
+  }
+
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {

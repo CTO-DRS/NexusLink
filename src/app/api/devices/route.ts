@@ -5,6 +5,7 @@ import { startTransfer, createAgentOfferJob, jobs } from "@/lib/nexus/transfer-e
 import { resolveSafe, ensureDeviceRoot, mimeOf } from "@/lib/nexus/fs-server"
 import { isAgentOnline, getAgentDeviceId, guardEmitToAgent } from "@/lib/nexus/guard-bridge"
 import { writeServerAudit } from "@/lib/nexus/desktop-hardening"
+import { recordPairMetric } from "@/lib/nexus/pair-metrics"
 import type { NexusDevice } from "@/lib/nexus/types"
 
 export const dynamic = "force-dynamic"
@@ -91,6 +92,15 @@ export async function POST(req: NextRequest) {
           actor: exists.name,
           deviceId: exists.id,
         }).catch(() => null)
+        // §30 (M1.1): ختم t1 على التسييل الزمني — إعادة تسجيل بنفس المسار التعاقدي
+        // سر QR الصحيح يطابق آخر QR صادر حصرًا، فالزمن من إصداره دقيق تعاقديًا
+        // (await: الترسيخ قبل الرد — آمن بcatch داخلي، القياس لا يعطل الاقتران)
+        await recordPairMetric({
+          deviceId: exists.id,
+          deviceName: exists.name,
+          qrToPairMs: Date.now() - store().pairingIssuedAt,
+          reregister: true,
+        })
         forceHealthTick()
         return NextResponse.json({ ok: true, device: exists })
       }
@@ -123,6 +133,13 @@ export async function POST(req: NextRequest) {
         actor: d.name,
         deviceId: d.id,
       }).catch(() => null)
+      // §30 (M1.1): ختم t1 على التسييل الزمني — الاقتران الجديد (await: قبل الرد)
+      await recordPairMetric({
+        deviceId: d.id,
+        deviceName: d.name,
+        qrToPairMs: Date.now() - s.pairingIssuedAt,
+        reregister: false,
+      })
       forceHealthTick()
       return NextResponse.json({ ok: true, device: d })
     }

@@ -717,5 +717,13 @@
     "startShare": "Start sharing",
     "stopShare": "Stop",
     "liveHint": "Your screen is streaming to the requesting phone — stopping the share or closing the app ends it."
+  },
+  "pair": {
+    "speed": {
+      "title": "Instant pairing",
+      "last": "last {v}",
+      "wait": "waiting for first completed pairing",
+      "detail": "{n} completed pairings · p95 {p95} · max {max} · pass {rate}"
+    }
   }
 }

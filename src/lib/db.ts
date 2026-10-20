@@ -129,6 +129,26 @@ function ensureUpgradeSchema(): Promise<void> {
       await db.$executeRawUnsafe(
         `CREATE UNIQUE INDEX IF NOT EXISTS "ProdOpLog_opId_key" ON "ProdOpLog"("opId")`,
       )
+      // قياس الاقتران الفوري (عقد §30 — M1.1): التسييل QR→pair→أول قيمة
+      // بيانات وصفية حصرًا (أرقام/أزمنة/أسماء — لا محتوى، حرس F6 متوافق).
+      // بلا فهارس فوق القيود (درس §28) — فهرس زمني عادي للاستعلام الحي فقط.
+      await db.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS "PairMetric" (
+           "id"                 INTEGER PRIMARY KEY AUTOINCREMENT,
+           "deviceId"           TEXT     NOT NULL,
+           "deviceName"         TEXT     NOT NULL,
+           "reregister"         BOOLEAN  NOT NULL,
+           "qrToPairMs"         INTEGER  NOT NULL,
+           "pairToFirstValueMs" INTEGER,
+           "totalMs"            INTEGER,
+           "firstValueKind"     TEXT,
+           "pass"               BOOLEAN,
+           "at"                 DATETIME NOT NULL
+         )`,
+      )
+      await db.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS "PairMetric_at_idx" ON "PairMetric"("at")`,
+      )
     } catch (e) {
       // بلا هلع: القاعدة الجاهزة (seed 1.1.0) تحوي الجدول مسبقًا؛ فشل ضمان
       // المخطط (قاعدة للقراءة فقط مثلًا) يظهر في مسارات الكتابة بصدق لاحقًا.

@@ -225,6 +225,27 @@ model ProdOpLog {
 }
 // ============ المرحلة 10 — تقوية الأمان ============
 
+// ============ M1.1 اقتران مقيس — التسييل الزمني (عقد §30) ============
+// t0: إصدار آخر QR (السر المطابَق حصرًا — G-1) → t1: نجاح pair →
+// t2: أول قيمة (prod: أول حافظة/تسليم · control: أول جلسة مقبولة).
+// بيانات وصفية حصرًا — لا محتوى أبدًا (حرس F6 متوافق). بلا فهارس فوق
+// القيود (درس §28) — فهرس زمني عادي للاستعلام الحي.
+model PairMetric {
+  id                 Int       @id @default(autoincrement())
+  deviceId           String
+  deviceName         String
+  reregister         Boolean
+  qrToPairMs         Int
+  pairToFirstValueMs Int?
+  totalMs            Int?
+  firstValueKind     String?   // prod | control
+  pass               Boolean?
+  at                 DateTime
+
+  @@index([at])
+}
+// ============ المرحلة 10 — تقوية الأمان ============
+
 model AuditEvent {
   id       String   @id @default(cuid())
   at       DateTime @default(now())
