@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner"
 import type { NexusDevice } from "@/lib/nexus/types"
 import { HealthPanel } from "@/components/nexus/health-panel"
+import { PairPanel } from "@/components/nexus/pair-panel"
 
 const kindIcon = (k: string) => (k === "phone" ? Smartphone : k === "tablet" ? Tablet : k === "tv" ? Tv : Monitor)
 const modeLabel = (m: string) => (m === "wifi" ? "واي فاي" : m === "hotspot" ? "نقطة اتصال" : "USB")
@@ -202,6 +203,9 @@ export function DevicesView() {
   return (
     <div className="space-y-6">
       <HealthPanel />
+
+      {/* §30 (M1.1): لوحة قياس الاقتران الفوري الحية — من QR إلى أول قيمة */}
+      <PairPanel />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>

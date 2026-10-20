@@ -413,3 +413,37 @@ class DiscoveredServer {
   String get proto => txt['proto'] ?? 'Nexus/1.2';
   int get guardPort => int.tryParse(txt['guard'] ?? '') ?? NexusPorts.guard;
 }
+
+/// العتبة التعاقدية M1.1 — الاقتران الفوري الكامل (QR → أول قيمة)
+class PairTarget {
+  static const int ms = 30000;
+}
+
+/// قياس الاقتران الفوري (عقد §30 — بند M1.1): إحصاء زمن
+/// «من إصدار QR إلى أول قيمة» — بيانات وصفية حصرًا (لا محتوى).
+class PairMetricsStats {
+  final double? lastTotalMs; // إجمالي آخر اقتران مكتمل
+  final int completed; // عدد السلاسل المكتملة
+  final double? p95Ms;
+  final double? maxMs;
+  final double? passRate; // 0..1
+
+  const PairMetricsStats({
+    this.lastTotalMs,
+    this.completed = 0,
+    this.p95Ms,
+    this.maxMs,
+    this.passRate,
+  });
+
+  factory PairMetricsStats.fromJson(Map<String, dynamic> j) {
+    double? num2d(dynamic v) => v is num ? v.toDouble() : null;
+    return PairMetricsStats(
+      lastTotalMs: num2d(j['last']),
+      completed: (j['completed'] as num?)?.toInt() ?? 0,
+      p95Ms: num2d(j['p95']),
+      maxMs: num2d(j['max']),
+      passRate: num2d(j['passRate']),
+    );
+  }
+}
