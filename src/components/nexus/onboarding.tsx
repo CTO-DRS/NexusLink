@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useNexus } from "@/lib/store"
-import { useI18n } from "@/lib/i18n"
+import { useI18n, LANGS } from "@/lib/i18n"
 import QRCode from "qrcode"
 import {
   Link2, Bell, Database, ClipboardCopy, Camera, QrCode, Keyboard, Gauge,
@@ -137,13 +137,13 @@ export function Onboarding() {
             {t("منصة واحدة تربط هاتفك وجهازك الكمبيوتر وتابلتك وتلفازك — كل شيء محلي على شبكتك، بدون سحابة وبدون حسابات")}
           </p>
         </div>
-        <div className="flex items-center justify-center gap-2">
-          <Button variant={lang === "ar" ? "default" : "outline"} size="sm" onClick={() => setLang("ar")} className="gap-1.5">
-            <Languages className="w-4 h-4" /> العربية · RTL
-          </Button>
-          <Button variant={lang === "en" ? "default" : "outline"} size="sm" onClick={() => setLang("en")} className="gap-1.5">
-            <Languages className="w-4 h-4" /> English · LTR
-          </Button>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {LANGS.map((L) => (
+            <Button key={L.code} variant={lang === L.code ? "default" : "outline"} size="sm" onClick={() => setLang(L.code)} className="gap-1.5" aria-pressed={lang === L.code}>
+              <Languages className="w-4 h-4" />
+              <span data-no-i18n>{L.native}{L.dir === "rtl" ? " · RTL" : ""}</span>
+            </Button>
+          ))}
         </div>
         <p className="text-[11px] text-muted-foreground">{t("يمكنك تغيير اللغة لاحقاً من الإعدادات أو اختصار Ctrl+Shift+E")}</p>
       </div>,
