@@ -1010,18 +1010,20 @@ export function SettingsView() {
 }
 
 // ============================================================
-// سوق التكاملات (عقد §34.ب — M3.2): قناة موقعة محليًا + تثبيت بنقرة.
-// تكاملات تصريحية حصرًا (manifest بقدرات ضمن الكتالوج — بلا أي كود تنفيذي)،
-// والتوقيع HMAC-SHA256 يتحقق منه الخادم قبل كل تثبيت.
+// سوق التكاملات (عقد §34.ب — M3.2 + §35.أ — قناة الناشر): قناة موقعة محليًا
+// + غلاف الناشر المالك + تثبيت بنقرة. تكاملات تصريحية حصرًا (manifest بقدرات
+// ضمن الكتالوج — بلا أي كود تنفيذي)، والتوقيعان يتحقق منهما الخادم قبل كل تثبيت.
 // ============================================================
-type MarketChannelItem = { manifest: { id: string; name: string; description: string; version: string; capabilities: string[] }; sig: string; bundled: boolean }
-type MarketInstalled = { manifest: MarketChannelItem["manifest"]; sig: string; installedAt: number }
+type MarketChannelItem = { manifest: { id: string; name: string; description: string; version: string; capabilities: string[] }; sig: string; pub?: { id: string; kv: number }; bundled: boolean }
+type MarketInstalled = { manifest: MarketChannelItem["manifest"]; sig: string; pub?: { id: string; kv: number }; installedAt: number }
+type MarketPublisher = { id: string; name: string; currentKv: number; revoked: boolean; fp: string }
 
 function MarketCard() {
   const { t } = useI18n()
   const [chan, setChan] = useState<MarketChannelItem[]>([])
   const [installed, setInstalled] = useState<MarketInstalled[]>([])
   const [keyFp, setKeyFp] = useState("")
+  const [publishers, setPublishers] = useState<MarketPublisher[]>([])
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState("")
 
@@ -1032,6 +1034,7 @@ function MarketCard() {
       setChan(Array.isArray(j.channel) ? j.channel : [])
       setInstalled(Array.isArray(j.installed) ? j.installed : [])
       setKeyFp(String(j.keyFp ?? ""))
+      setPublishers(Array.isArray(j.publishers) ? j.publishers : [])
     } catch { /* البقاء صامتًا — بطاقة إعدادات */ }
     setLoaded(true)
   }, [])
@@ -1042,7 +1045,7 @@ function MarketCard() {
     try {
       const r = await fetch("/api/marketplace", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "install", manifest: item.manifest, sig: item.sig }),
+        body: JSON.stringify({ action: "install", manifest: item.manifest, sig: item.sig, pub: item.pub ?? null }),
       })
       const j = await r.json()
       if (r.ok && j.ok) { announce(t("تم تثبيت التكامل")); toast.success(t("تم تثبيت التكامل")); await load() }
@@ -1085,6 +1088,13 @@ function MarketCard() {
             <div className="flex flex-wrap items-center gap-1.5">
               <Badge variant="outline" className="gap-1"><Fingerprint className="w-3 h-3" />{t("بصمة مفتاح القناة")}: <span data-no-i18n>{keyFp}</span></Badge>
               <Badge variant="outline">{t("قناة البداية")}: <span data-no-i18n>{chan.length}</span></Badge>
+              {publishers.map((p) => (
+                <Badge key={p.id} variant="outline" className="gap-1" data-market-publisher={p.id}>
+                  <Fingerprint className="w-3 h-3" />{t("الناشر")}: <span data-no-i18n>{p.id}</span>
+                  {t("إصدار المفتاح")}: <span data-no-i18n>{p.currentKv}</span>
+                  <span data-no-i18n>{p.fp}</span>{p.revoked ? ` · ${t("موقوف")}` : ""}
+                </Badge>
+              ))}
             </div>
             <Separator />
             <div className="space-y-2.5">

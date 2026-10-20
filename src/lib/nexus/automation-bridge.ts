@@ -17,6 +17,7 @@ import { ensureProdBridge, prodInjectClip } from "./productivity-bridge"
 import { onAutomationFact } from "./automation-facts"
 import { evalSustainedTrigger, MIN_DURATION_MIN, MAX_DURATION_MIN } from "./automation-health"
 import { loadPersistedRules, persistRuleUpsert, persistRuleDelete, persistFire, loadPersistedFires, markFiresSeenDb } from "./automation-persist"
+import { pluginHasCapability, isPluginLive } from "./marketplace" // الفرض اللحظي (§35.ب)
 import { socketCors } from "./socket-security" // SEC (M0.3 F4)
 import {
   TRIGGER_KINDS, ACTION_KINDS, isSustainedTrigger, COMPOSITE_STATE_KINDS, isCompositeStateKind,
@@ -181,6 +182,29 @@ async function fireRule(rule: AutoRule, detail: string, manual: boolean, reason?
   // {…rule} فتُحدّث إحصاءاتها النسخة الحية لا النسخة (وإلا ظهر الإطلاق بلا أثر في العدّاد)
   const live = rules.find((r) => r.id === rule.id) ?? rule
   const now = Date.now()
+  // الفرض اللحظي (§35.ب — إغلاق حد §34.هـ.2): قاعدة بولادة تكامل لا تُطلق
+  // إلا وهو حي **لحظة الإطلاق** — إزالة التكامل/إبطال ناشره يوقفها فورًا
+  // بصدق: بلا تنفيذ وبلا عدّاد وبلا تحديث lastFiredAt — ومدخل سجل/تنبيه
+  // ok=false مسبب يوثّق التوقف (القاعدة محفوظة لا محذوفة — عود التثبيت يحييها).
+  if (live.origin?.plugin) {
+    const v = await isPluginLive(live.origin.plugin)
+    if (!v.ok) {
+      const full = `الفرض اللحظي: ${v.reason} — لم يُنفّذ الفعل (عقد §35.ب — القاعدة محفوظة لا محذوفة)`
+      pushLog({ ruleId: live.id, ruleName: live.name, at: now, ok: false, detail: full, manual })
+      let clients = 0
+      try { clients = io?.engine?.clientsCount ?? 0 } catch { clients = 0 }
+      const fireEntry: AutoFireEntry = {
+        id: uid(), ruleId: live.id, ruleName: live.name, at: now, ok: false, detail: full, manual,
+        seenAt: clients > 0 ? now : null,
+      }
+      fireLog.unshift(fireEntry)
+      if (fireLog.length > 200) fireLog.length = 200
+      void persistFire(fireEntry)
+      try { io?.emit("auto:fired", { ruleId: live.id, ruleName: live.name, at: now, ok: false, detail: full, manual }) } catch { /* ignore */ }
+      broadcastState()
+      return
+    }
+  }
   live.lastFiredAt = now
   live.fireCount++
   const res = await executeAction(live)
@@ -439,7 +463,7 @@ function compositeStateSatisfied(and: AutoTrigger): { ok: boolean; reason: strin
   }
 }
 
-function sanitizeRule(input: unknown, existingId?: string): AutoRule | { error: string } {
+async function sanitizeRule(input: unknown, existingId?: string): Promise<AutoRule | { error: string }> {
   if (!input || typeof input !== "object") return { error: "قاعدة غير صالحة" }
   const r = input as Record<string, unknown>
   const name = typeof r.name === "string" ? r.name.trim().slice(0, 80) : ""
@@ -452,6 +476,19 @@ function sanitizeRule(input: unknown, existingId?: string): AutoRule | { error: 
   const trigger = sanitizeTrigger(tr)
   if ("error" in trigger) return trigger
 
+  // أصل التكامل (§35.ب — الفرض اللحظي): إن وُجد origin.plugin فلا يُقبل
+  // الإنشاء/التعديل إلا والتكامل حي **الآن** ويصرّح بقدرة invoke.automation —
+  // نفس مصدر الحقيقة الذي سيحكم لحظة الإطلاق (isPluginLive في fireRule).
+  let origin: { plugin: string } | undefined
+  const oRaw = r.origin
+  if (oRaw !== undefined && oRaw !== null) {
+    if (typeof oRaw !== "object" || Array.isArray(oRaw)) return { error: "أصل التكامل (origin) غير صالح" }
+    const pid = String((oRaw as Record<string, unknown>).plugin ?? "").trim()
+    if (!/^[a-z0-9][a-z0-9-]{1,39}$/.test(pid)) return { error: "أصل التكامل (origin.plugin) غير صالح" }
+    const v = await pluginHasCapability(pid, "invoke.automation")
+    if (!v.ok) return { error: `الفرض اللحظي: ${v.reason}` }
+    origin = { plugin: pid }
+  }
   const action: AutoRule["action"] = { kind: aKind as AutoRule["action"]["kind"] }
   if (typeof ac.text === "string") action.text = ac.text.slice(0, 300)
   if (aKind === "clipboard.push" && !(action.text || "").trim()) return { error: "دفع الحافظة يتطلب نصًا" }
@@ -466,6 +503,7 @@ function sanitizeRule(input: unknown, existingId?: string): AutoRule | { error: 
     name,
     enabled: r.enabled !== false,
     trigger, action,
+    ...(origin ? { origin } : {}),
     createdAt: Date.now(),
     lastFiredAt: null,
     fireCount: 0,
@@ -539,8 +577,8 @@ export function ensureAutomationBridge() {
       socket.emit("auto:hello", { at: Date.now() })
       socket.emit("auto:state", buildState())
 
-      socket.on("rule:upsert", (d: { rule?: unknown; id?: string }) => {
-        const clean = sanitizeRule(d?.rule, typeof d?.id === "string" && d.id ? d.id : undefined)
+      socket.on("rule:upsert", async (d: { rule?: unknown; id?: string }) => {
+        const clean = await sanitizeRule(d?.rule, typeof d?.id === "string" && d.id ? d.id : undefined)
         if ("error" in clean) {
           socket.emit("auto:rejected", { error: clean.error, at: Date.now() })
           return
@@ -579,12 +617,14 @@ export function ensureAutomationBridge() {
         broadcastState()
       })
 
-      socket.on("rule:run-now", (d: { id?: string }) => {
+      socket.on("rule:run-now", (d: { id?: string }, ack?: (r: Record<string, unknown>) => void) => {
         const rule = rules.find((r) => r.id === d?.id)
         if (!rule) {
           socket.emit("auto:rejected", { error: "قاعدة غير موجودة", at: Date.now() })
+          try { ack?.({ ok: false, error: "قاعدة غير موجودة" }) } catch { /* بلا مستمع */ }
           return
         }
+        const ackOk = () => { try { ack?.({ ok: true }) } catch { /* بلا مستمع */ } }
         if (isSustainedTrigger(rule.trigger.kind)) {
           // باب اختبار التاريخ (§26.و): قيّم من التاريخ الحالي — إن استوفى أُطلق
           // يدويًا، وإلا سُجّل الرفض مسببًا (بلا تغيير لحالة التسليح التلقائية)
@@ -599,14 +639,22 @@ export function ensureAutomationBridge() {
                 pushLog({ ruleId: rule.id, ruleName: rule.name, at: Date.now(), ok: false, detail: `تشغيل يدوي: التاريخ الحالي لا يثبت استمرار الشرط — ${v.reason}`, manual: true })
                 broadcastState()
               }
+              ackOk()
             } catch {
               pushLog({ ruleId: rule.id, ruleName: rule.name, at: Date.now(), ok: false, detail: "تشغيل يدوي: فشل تقييم التاريخ الصحي", manual: true })
               broadcastState()
+              try { ack?.({ ok: false, error: "فشل تقييم التاريخ الصحي" }) } catch { /* بلا مستمع */ }
             }
           })()
           return
         }
-        void fireRule({ ...rule }, "تشغيل يدوي من الواجهة", true)
+        // الإقرار (ack) بعد اكتمال المعالجة فعلًا — باب الفرض اللحظي (§35.ب)
+        // داخل fireRule قد يوقف الإطلاق؛ المسار لا يُغلق المقبس قبل الحسم
+        // (الدرس: waitState يلتقط الحالة الابتدائية فيغلق قبل معالجة الحدث)
+        void (async () => {
+          await fireRule({ ...rule }, "تشغيل يدوي من الواجهة", true)
+          ackOk()
+        })()
       })
 
       // فحص التاريخ الحي من المحرر (§26.ي) — قراءة محضة: تقييم المشغّل التاريخي من

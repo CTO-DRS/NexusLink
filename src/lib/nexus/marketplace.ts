@@ -1,7 +1,10 @@
 import crypto from "node:crypto"
 import { db, dbReady } from "@/lib/db"
+import { verifyPublisherEnvelope, signWithPublisherKey, type PublisherEnvelope } from "./publisher"
 
-// سوق التكاملات — القناة الموقعة محليًا (عقد §34.ب — M3.2)
+// سوق التكاملات — القناة الموقعة محليًا (عقد §34.ب — M3.2) + قناة الناشر (§35.أ)
+// الفرض اللحظي (§35.ب): isPluginLive/pluginHasCapability مصدر الحقيقة لحظة
+// الاستدعاء — إبطال الناشر أو إزالة التكامل يُلمس فورًا بلا إعادة تشغيل.
 // ============================================================
 // النموذج الأمني (تصريحي لا تنفيذي): التكامل **manifest JSON** يصرّح بقدراته
 // — لا كود تنفيذي يُثبَّت أبدًا — فلا سطح تنفيذ جديد. التثبيت يتطلب:
@@ -27,6 +30,8 @@ export const PLUGIN_CAPABILITIES = [
 
 export type PluginCapability = (typeof PLUGIN_CAPABILITIES)[number]
 
+/** غلاف التثبيت: توقيع القناة المحلية حصرًا (M3) أو غلاف ناشر مركزي إضافي (§35.أ) —
+ *  المساران يقبلان معًا: غلاف pub يُتحقق منه أولًا، وغيابه = توقيع القناة المحلية. */
 export interface MarketManifest {
   id: string
   name: string
@@ -95,18 +100,41 @@ const CHANNEL_SEEDS: Seed[] = [
   { id: "backup-beacon", name: "Backup Beacon", description: "منارة نسخ احتياطي أسبوعية: تذكير بمزامنة النسخ المحلية عبر الروتينات", capabilities: ["read.insights", "invoke.automation", "notify.user"], entry: { kind: "automation-rule", template: { trigger: { kind: "time.daily", hh: 12, mm: 0 }, action: { kind: "notify", text: "موعد النسخ الاحتياطي الأسبوعي" } } } },
 ]
 
-/** قناة البداية موقعة بمفتاح القناة المحلية (قناة موقعة ذاتيًا — موثقة بصدق §34.ب) */
-export async function signedChannel(): Promise<{ manifest: MarketManifest; sig: string; bundled: boolean }[]> {
+/** قناة البداية موقعة بمفتاح القناة المحلية + **غلاف الناشر المالك** (§35.أ):
+ *  كل تكامل يحمل الآن توقيعين — قناة الجهاز المحلية (توافق M3 حرفيًا) وغلاف
+ *  pub بتوقيع nexuslink-labs بالمفتاح الحالي (kv الحالي) على الشكل المتعارف نفسه.
+ *  التحقق في التثبيت: غلاف الناشر أولًا فإن غاب صحيح توقيع القناة المحلية. */
+export async function signedChannel(): Promise<{ manifest: MarketManifest; sig: string; pub?: PublisherEnvelope; bundled: boolean }[]> {
   const { key } = await getChannelKey()
+  const publishers = await listPublishersInternal()
+  const owner = publishers["nexuslink-labs"]
+  const ownerKey = owner?.keys[String(owner.currentKv)] ?? ""
   return CHANNEL_SEEDS.map((s) => {
     const manifest: MarketManifest = { version: "1.0.0", author: "NexusLink Labs", homepage: "", ...s } as MarketManifest
-    return { manifest, sig: signManifest(manifest, key), bundled: true }
+    const pub: PublisherEnvelope | undefined = ownerKey
+      ? { id: "nexuslink-labs", kv: owner.currentKv, sig: signWithPublisherKey(manifest, ownerKey) }
+      : undefined
+    return { manifest, sig: signManifest(manifest, key), ...(pub ? { pub } : {}), bundled: true }
   })
+}
+
+/** قراءة السجل الداخلية للقناة (مفاتيح كاملة — داخل العملية حصرًا).
+ *  عبر loadRegistry حصرًا — فهي تضمن بذرة الناشر المالك عند أول استخدام
+ *  فلا سباق: الغلاف موجود في القناة من أول رد. */
+async function listPublishersInternal(): Promise<Record<string, { keys: Record<string, string>; currentKv: number; revoked: boolean }>> {
+  const { loadRegistry } = await import("./publisher")
+  return loadRegistry()
 }
 
 // ---------- التثبيت (الارتساء صفر-مخطط: DesktopSetting) ----------
 
-export interface InstalledPlugin { manifest: MarketManifest; sig: string; installedAt: number }
+export interface InstalledPlugin {
+  manifest: MarketManifest
+  sig: string
+  /** غلاف الناشر إن ثبت عبره (§35.أ) — يُتحقق منه **لحظيًا** في isPluginLive */
+  pub?: PublisherEnvelope
+  installedAt: number
+}
 
 export async function listInstalled(): Promise<InstalledPlugin[]> {
   await dbReady
@@ -131,7 +159,7 @@ export type InstallRejectReason =
   | "manifest غير صالح" | "توقيع مفقود أو مشوه" | "التوقيع لا يطابق المحتوى"
   | "قدرة خارج الكتالوج" | "معرف التكامل مكرر" | "إصدار غير صالح"
 
-export async function installPlugin(rawManifest: unknown, rawSig: unknown):
+export async function installPlugin(rawManifest: unknown, rawSig: unknown, rawPub?: unknown):
   Promise<{ ok: true; installed: InstalledPlugin } | { ok: false; reason: InstallRejectReason }> {
   if (!rawManifest || typeof rawManifest !== "object" || Array.isArray(rawManifest)) return { ok: false, reason: "manifest غير صالح" }
   const m = rawManifest as Partial<MarketManifest>
@@ -148,17 +176,60 @@ export async function installPlugin(rawManifest: unknown, rawSig: unknown):
   if (m.entry.kind === "local-open" && (typeof m.entry.url !== "string" || !m.entry.url.startsWith("/"))) {
     return { ok: false, reason: "manifest غير صالح" }
   }
-  // التوقيع على الشكل المتعارف حصرًا
-  const { key } = await getChannelKey()
-  if (!verifySignature(m as MarketManifest, String(rawSig ?? ""), key)) {
-    if (typeof rawSig !== "string" || !/^[0-9a-f]{64}$/.test(rawSig)) return { ok: false, reason: "توقيع مفقود أو مشوه" }
-    return { ok: false, reason: "التوقيع لا يطابق المحتوى" }
+  // التوقيع على الشكل المتعارف حصرًا — مساران (§35.أ):
+  //  (1) غلاف ناشر مركزي (pub) يُتحقق أولًا — رفضه لا يُسقط للمسار المحلي
+  //      (غلاف حاضر = هوية الناشر هي الحكم)
+  //  (2) غياب الغلاف = توقيع قناة الجهاز المحلية كما في M3 حرفيًا
+  let pubEnv: PublisherEnvelope | undefined
+  if (rawPub !== undefined && rawPub !== null) {
+    const v = await verifyPublisherEnvelope(rawPub, m)
+    if (!v.ok) return { ok: false, reason: v.reason as InstallRejectReason }
+    pubEnv = rawPub as PublisherEnvelope
+  }
+  if (!pubEnv) {
+    const { key } = await getChannelKey()
+    if (!verifySignature(m as MarketManifest, String(rawSig ?? ""), key)) {
+      if (typeof rawSig !== "string" || !/^[0-9a-f]{64}$/.test(rawSig)) return { ok: false, reason: "توقيع مفقود أو مشوه" }
+      return { ok: false, reason: "التوقيع لا يطابق المحتوى" }
+    }
   }
   const installed = await listInstalled()
   if (installed.some((p) => p.manifest.id === m.id)) return { ok: false, reason: "معرف التكامل مكرر" }
-  const entry: InstalledPlugin = { manifest: m as MarketManifest, sig: String(rawSig), installedAt: Date.now() }
+  const entry: InstalledPlugin = { manifest: m as MarketManifest, sig: String(rawSig ?? ""), installedAt: Date.now(), ...(pubEnv ? { pub: pubEnv } : {}) }
   await persistInstalled([...installed, entry])
   return { ok: true, installed: entry }
+}
+
+// ---------- الفرض اللحظي (عقد §35.ب — إغلاق حد §34.هـ.2) ----------
+
+export type LiveCheckResult = { ok: true } | { ok: false; reason: string }
+
+/** حياة التكامل لحظة الاستدعاء: موجود في المثبت + ناشره (إن ثبت بغلاف)
+ *  غير موقوف وإصدار مفتاحه معروف **الآن** — الإبطال/تدوير المفاتيح
+ *  يُلمس هنا فورًا بلا إعادة تثبيت. هذا هو مصدر حقيقة الفرض اللحظي
+ *  الذي يستدعيه جسر الروتينات عند إنشاء القاعدة وعند الإطلاق. */
+export async function isPluginLive(pluginId: string): Promise<LiveCheckResult> {
+  const installed = await listInstalled()
+  const entry = installed.find((p) => p.manifest.id === pluginId)
+  if (!entry) return { ok: false, reason: `التكامل «${pluginId}» غير مثبت الآن` }
+  if (entry.pub) {
+    const v = await verifyPublisherEnvelope(entry.pub, entry.manifest)
+    if (!v.ok) return { ok: false, reason: `ناشر التكامل «${pluginId}» ${v.reason}` }
+  }
+  return { ok: true }
+}
+
+/** حياة القدرة لحظة الاستدعاء: التكامل حي + القدرة مصرّح بها في manifestه الحالي */
+export async function pluginHasCapability(pluginId: string, cap: string): Promise<LiveCheckResult> {
+  const live = await isPluginLive(pluginId)
+  if (!live.ok) return live
+  const installed = await listInstalled()
+  const entry = installed.find((p) => p.manifest.id === pluginId)
+  const caps = entry?.manifest.capabilities ?? []
+  if (!caps.includes(cap)) {
+    return { ok: false, reason: `التكامل «${pluginId}» لا يصرّح بالقدرة «${cap}»` }
+  }
+  return { ok: true }
 }
 
 export async function uninstallPlugin(id: string): Promise<boolean> {

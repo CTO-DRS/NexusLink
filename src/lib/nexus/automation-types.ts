@@ -65,13 +65,17 @@ export interface AutoAction {
   mac?: string
 }
 
-/** قاعدة روتين كاملة كما تُخزَّن في ذاكرة الجسر وتُعرض في الواجهة. */
+/** قاعدة روتين كاملة كما تُخزَّن في ذاكرة الجسر وتُعرض في الواجهة.
+ *  origin (§35.ب — الفرض اللحظي): إن وُجد فالقاعدة مولودة من تكامل مثبت —
+ *  لا يُقبل الإنشاء إلا والتكامل حيًا ويصرّح بقدرة invoke.automation، ولا
+ *  يُطلق الإطلاق إلا وهو حي لحظة الإطلاق (إزالة التكامل توقفه بصدق بلا حذف). */
 export interface AutoRule {
   id: string
   name: string
   enabled: boolean
   trigger: AutoTrigger
   action: AutoAction
+  origin?: { plugin: string }
   createdAt: number
   lastFiredAt: number | null
   fireCount: number

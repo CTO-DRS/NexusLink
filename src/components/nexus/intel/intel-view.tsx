@@ -1,17 +1,19 @@
 "use client"
 
 /**
- * عرض الذكاء (عقد §33 — M2): تبويبان —
+ * عرض الذكاء (عقد §33 — M2 + §35.ج — التنبؤ الاستباقي): تبويبات ثلاثة —
  *  المساعد (§33.ب): محادثة مع مساعد الجهاز الحتمي (NLU محلي + إجابات من
  *    الفهرس المحلي + محول LLM محلي اختياري) عبر /api/assistant.
  *  الرؤى (§33.د): لوحة استخدام محلية من /api/insights — أشرطة CSS خالصة
  *    بلا أي اعتماد رسومي خارجي.
+ *  التنبؤ (§35.ج): توقعات إطلاق الروتينات واقتراحات مسبّبة بالدليل من
+ *    /api/predictions — قراءة حصرًا والإنشاء بيد المستخدم حصرًا.
  */
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Sparkles, SendHorizontal, Bot, Cpu, BarChart3, MessageSquare, Zap, ClipboardCopy, ArrowLeftRight, HeartPulse, Link2 } from "lucide-react"
+import { Sparkles, SendHorizontal, Bot, Cpu, BarChart3, MessageSquare, Zap, ClipboardCopy, ArrowLeftRight, HeartPulse, Link2, TrendingUp } from "lucide-react"
 import { useI18n } from "@/lib/i18n"
 
 interface AssistantSource { kind: string; label: string; count: number }
@@ -75,9 +77,116 @@ function StatCard({ icon: Icon, label, value, hint }: { icon: typeof Zap; label:
   )
 }
 
+interface PredictPayload {
+  ok: boolean
+  windowDays: number
+  forecasts: Array<{
+    ruleId: string
+    ruleName: string
+    pattern: "daily" | "interval"
+    nextPredictedAt: number
+    stale: boolean
+    basis: { fires: number; distinctDays: number; hhmm?: string; medianIntervalMin?: number }
+  }>
+  suggestions: Array<{
+    id: string
+    source: "oplog" | "battery"
+    kind: string
+    deviceId: string | null
+    suggestedTrigger: Record<string, unknown>
+    occurrences: number
+    distinctDays: number
+    reason: string
+  }>
+}
+
+function PredictionsPanel() {
+  const { t } = useI18n()
+  const [pred, setPred] = useState<PredictPayload | null>(null)
+  const [created, setCreated] = useState<string[]>([])
+  useEffect(() => {
+    let alive = true
+    fetch("/api/predictions", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: PredictPayload) => { if (alive) setPred(j) })
+      .catch(() => { if (alive) setPred({ ok: false } as PredictPayload) })
+    return () => { alive = false }
+  }, [])
+  const createFromSuggestion = useCallback(async (s: PredictPayload["suggestions"][number]) => {
+    const name = `${s.kind === "battery" ? t("تذكير بطارية") : t("تذكير عمليات")} · ${s.deviceId ?? ""}`.trim().slice(0, 80)
+    const rule = {
+      name,
+      trigger: s.suggestedTrigger,
+      action: { kind: "notify", text: s.reason.slice(0, 200) },
+    }
+    const res = await fetch("/api/automation/rules", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "upsert", rule }),
+    })
+    if (res.ok) setCreated((prev) => [...prev, s.id])
+  }, [t])
+  if (!pred) return <div className="text-[12px] text-muted-foreground py-8 text-center">{t("…جارٍ حساب التوقعات")}</div>
+  if (!pred.ok) return <div className="text-[12px] text-destructive py-8 text-center">{t("تعذّر حساب التوقعات الآن")}</div>
+  return (
+    <div className="space-y-3" data-predictions-panel>
+      <div className="rounded-2xl border bg-card p-4 space-y-2">
+        <div className="text-[12px] font-semibold flex items-center gap-1.5">
+          <TrendingUp className="w-3.5 h-3.5 text-primary" />
+          {t("توقعات إطلاق الروتينات")}
+          <Badge variant="secondary" className="text-[9px]">{t("حتمي من تاريخ 14 يومًا")}</Badge>
+        </div>
+        {pred.forecasts.length === 0 && <div className="text-[11px] text-muted-foreground py-2">{t("لا توقعات بعد — ثلاثة إطلاقات فأكثر تبني النمط")}</div>}
+        <div className="space-y-1.5">
+          {pred.forecasts.map((f) => (
+            <div key={f.ruleId} className="flex items-center gap-2 rounded-xl border px-3 py-2">
+              <div className="flex-1 min-w-0">
+                <div className="text-[12px] font-medium truncate" dir="auto">{f.ruleName}</div>
+                <div className="text-[10px] text-muted-foreground" dir="auto">
+                  {f.pattern === "daily"
+                    ? `${t("النمط اليومي")} · ${f.basis.hhmm} · ${f.basis.fires} ${t("إطلاقات")}`
+                    : `${t("وسيط الفترة")} · ${f.basis.medianIntervalMin} ${t("دقيقة")} · ${f.basis.fires} ${t("إطلاقات")}`}
+                </div>
+              </div>
+              {f.stale && <Badge variant="outline" className="text-[9px]">{t("توقع متأخر")}</Badge>}
+              <div className="text-[11px] tabular-nums text-primary font-semibold whitespace-nowrap" dir="ltr">
+                {new Date(f.nextPredictedAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="rounded-2xl border bg-card p-4 space-y-2">
+        <div className="text-[12px] font-semibold flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-primary" />
+          {t("اقتراحات روتينات مسبّبة")}
+          <Badge variant="secondary" className="text-[9px]">{t("الإنشاء بيدك حصرًا")}</Badge>
+        </div>
+        {pred.suggestions.length === 0 && <div className="text-[11px] text-muted-foreground py-2">{t("لا اقتراحات بعد — الأنماط تحتاج 3 مشاهدات على يومين مختلفين")}</div>}
+        <div className="space-y-1.5">
+          {pred.suggestions.map((s) => (
+            <div key={s.id} className="rounded-xl border px-3 py-2 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-[9px]">
+                  {s.source === "oplog" ? t("من تاريخ العمليات") : t("من عينات الصحة")}
+                </Badge>
+                <span className="text-[11px] text-muted-foreground truncate flex-1" dir="ltr">{s.deviceId ?? s.kind}</span>
+                <Button size="sm" variant="secondary" className="h-6 text-[10px] rounded-lg" disabled={created.includes(s.id)} onClick={() => void createFromSuggestion(s)}>
+                  {created.includes(s.id) ? t("أُنشئت القاعدة") : t("إنشاء قاعدة")}
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground leading-relaxed" dir="auto">{s.reason}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="text-[10px] text-muted-foreground text-center">{t("توقعات حتمية من تاريخك المحلي — بلا نماذج وبلا مغادرة أي بايت")}</p>
+    </div>
+  )
+}
+
 export function IntelView() {
   const { t } = useI18n()
-  const [tab, setTab] = useState<"assistant" | "insights">("assistant")
+  const [tab, setTab] = useState<"assistant" | "insights" | "predictions">("assistant")
 
   // ---- المساعد ----
   const [turns, setTurns] = useState<Turn[]>([])
@@ -151,8 +260,13 @@ export function IntelView() {
           <Button variant={tab === "insights" ? "default" : "ghost"} size="sm" className="h-7 rounded-lg gap-1.5" onClick={() => setTab("insights")} role="tab" aria-selected={tab === "insights"}>
             <BarChart3 className="w-3.5 h-3.5" />{t("الرؤى")}
           </Button>
+          <Button variant={tab === "predictions" ? "default" : "ghost"} size="sm" className="h-7 rounded-lg gap-1.5" onClick={() => setTab("predictions")} role="tab" aria-selected={tab === "predictions"} data-tab-predictions>
+            <TrendingUp className="w-3.5 h-3.5" />{t("التنبؤ")}
+          </Button>
         </div>
       </div>
+
+      {tab === "predictions" && <PredictionsPanel />}
 
       {tab === "assistant" && (
         <div className="rounded-2xl border bg-card overflow-hidden flex flex-col h-[62vh]">
