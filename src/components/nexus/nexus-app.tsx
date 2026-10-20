@@ -20,6 +20,8 @@ import { GuardView } from "@/components/nexus/guard/guard-view"
 import { ProdView } from "@/components/nexus/prod/prod-view"
 import { SecView } from "@/components/nexus/sec/sec-view"
 import { AutomationView } from "@/components/nexus/automation/automation-view"
+import { IntelView } from "@/components/nexus/intel/intel-view"
+import { UnifiedSearch } from "@/components/nexus/unified-search"
 import { ToolsView } from "@/components/nexus/tools/tools-view"
 import { Onboarding } from "@/components/nexus/onboarding"
 import { CommandPalette, ShortcutsOverlay } from "@/components/nexus/command-palette"
@@ -113,6 +115,12 @@ export function NexusApp() {
         st.setPaletteOpen(true)
         return
       }
+      // البحث الموحد (§33.أ): Ctrl+Shift+F — يعمل حتى أثناء الكتابة
+      if (e.shiftKey && (combo === "ctrl+f" || (e.ctrlKey && e.key.toLowerCase() === "f"))) {
+        e.preventDefault()
+        st.setUnifiedSearchOpen(true)
+        return
+      }
       if (isHelp && !typing) {
         e.preventDefault()
         st.setShortcutsHelpOpen(true)
@@ -200,6 +208,7 @@ export function NexusApp() {
             {view === "prod" && <ProdView />}
             {view === "security" && <SecView />}
             {view === "automation" && <AutomationView />}
+            {view === "intel" && <IntelView />}
             {view === "tools" && <ToolsView />}
             {view === "simulator" && <SimulatorView />}
             {view === "settings" && <SettingsView />}
@@ -212,6 +221,7 @@ export function NexusApp() {
       <CommsToaster />
       <Onboarding />
       <CommandPalette />
+      <UnifiedSearch />
       <ShortcutsOverlay />
       <LockScreen />
       <Toaster position="bottom-center" richColors />

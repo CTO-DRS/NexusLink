@@ -16,7 +16,7 @@
 
 import { db, dbReady } from "../db"
 import {
-  TRIGGER_KINDS, ACTION_KINDS,
+  TRIGGER_KINDS, ACTION_KINDS, COMPOSITE_STATE_KINDS,
   type AutoRule, type TriggerKind, type ActionKind, type AutoFireEntry,
 } from "./automation-types"
 
@@ -35,6 +35,15 @@ function reviveRule(raw: unknown): AutoRule | null {
     if (!id || !name) return null
     if (!TRIGGER_KINDS.includes(tKind as never)) return null
     if (!ACTION_KINDS.includes(aKind as never)) return null
+    // الشرط المركب (§33.ج): تحقق الاستعادة — نفس قواعد التعقيم (تاريخي أولًا،
+    // ثانٍ من قائمة الحالات، بلا تعشيش) — والمخالف يُرفض كلّه (لا إحياء جزئي).
+    if (tr.and != null) {
+      if (typeof tr.and !== "object") return null
+      const sub = tr.and as Record<string, unknown>
+      const subKind = String(sub.kind ?? "")
+      if (!COMPOSITE_STATE_KINDS.includes(subKind as never)) return null
+      if (sub.and != null) return null
+    }
     const createdAt = Number(r.createdAt)
     return {
       id,
