@@ -432,6 +432,9 @@ export function SettingsView() {
       {/* سوق التكاملات (عقد §34.ب — M3.2) */}
       <MarketCard />
 
+      {/* الوصول البعيد برمز اقتران (عقد §37 — إغلاق حد §36.هـ.1) */}
+      <RemoteAccessCard />
+
       {/* اللغة */}
       <Card>
         <CardContent className="p-5 space-y-4">
@@ -1136,6 +1139,107 @@ function MarketCard() {
             )}
           </>
         )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// الوصول البعيد برمز اقتران (عقد §37): تفعيل/تدوير/تعطيل — الإدارة بيد
+// الجهاز حصرًا (حرس loopback في المسار نفسه)، والرمز الخام يُعرض مرة واحدة
+// عند الإصدار حصرًا (GET يعيد البصمة لا الرمز). حسم البوابة لحظي بلا إعادة
+// تشغيل، والحد الصادق: TLS/النفق مسؤولية البنية الخارجية (§37.هـ).
+function RemoteAccessCard() {
+  const { t } = useI18n()
+  const [enabled, setEnabled] = useState<boolean | null>(null)
+  const [fp, setFp] = useState("")
+  const [createdAt, setCreatedAt] = useState("")
+  const [issued, setIssued] = useState<{ token: string; urlQuery: string } | null>(null)
+  const [busy, setBusy] = useState("")
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch("/api/remote-access")
+      const j = await r.json()
+      setEnabled(!!j.enabled)
+      setFp(String(j.fingerprint ?? ""))
+      setCreatedAt(String(j.createdAt ?? ""))
+    } catch { /* البقاء صامتًا — بطاقة إعدادات */ setEnabled(false) }
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const doAction = useCallback(async (action: "enable" | "rotate" | "disable") => {
+    setBusy(action)
+    try {
+      const r = await fetch("/api/remote-access", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action }),
+      })
+      const j = await r.json()
+      if (r.ok && j.ok) {
+        if (action === "disable") { setIssued(null); announce(t("تم تعطيل الوصول البعيد")); toast.success(t("تم تعطيل الوصول البعيد")) }
+        else {
+          setIssued({ token: String(j.token ?? ""), urlQuery: String(j.urlQuery ?? "") })
+          announce(t(action === "enable" ? "تم تفعيل الوصول البعيد" : "تم تدوير الرمز"))
+          toast.success(t(action === "enable" ? "تم تفعيل الوصول البعيد" : "تم تدوير الرمز"))
+        }
+        await load()
+      } else {
+        toast.error(String(j.error ?? t("تعذر تنفيذ الإجراء")))
+      }
+    } catch { toast.error(t("تعذر تنفيذ الإجراء")) }
+    setBusy("")
+  }, [t, load])
+
+  const copyUrl = useCallback(async () => {
+    if (!issued) return
+    try { await navigator.clipboard.writeText(`${window.location.origin}/web-client/index.html${issued.urlQuery}`); toast.success(t("تم النسخ")) } catch { /* حجب الحافظة */ }
+  }, [issued, t])
+
+  return (
+    <Card data-remote-access-card>
+      <CardContent className="p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <SectionTitle
+            icon={Wifi}
+            title={t("الوصول البعيد")}
+            desc={t("اقتران الوصول عبر الإنترنت — معطّل افتراضيًا؛ عند التفعيل يحتاج كل واصل من خارج الجهاز الرمز")}
+          />
+          <Button variant="ghost" size="sm" onClick={load} aria-label={t("تحديث")}>
+            <RefreshCw className="w-4 h-4" />
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge variant="outline" data-ra-status={enabled ? "on" : "off"}>
+            {t("الحالة")}: {enabled === null ? "…" : enabled ? t("مفعّل") : t("معطّل")}
+          </Badge>
+          {enabled && fp && (
+            <Badge variant="outline" className="gap-1" data-ra-fp={fp}>
+              <Fingerprint className="w-3 h-3" />{t("بصمة الرمز")}: <span data-no-i18n>{fp}</span>
+              {createdAt && (<span data-no-i18n> · {new Date(createdAt).toLocaleString()}</span>)}
+            </Badge>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {!enabled && (
+            <Button size="sm" disabled={busy !== ""} onClick={() => doAction("enable")} data-ra-enable>{t("تفعيل")}</Button>
+          )}
+          {enabled && (
+            <>
+              <Button size="sm" variant="outline" disabled={busy !== ""} onClick={() => doAction("rotate")} data-ra-rotate>{t("تدوير الرمز")}</Button>
+              <Button size="sm" variant="destructive" disabled={busy !== ""} onClick={() => doAction("disable")} data-ra-disable>{t("تعطيل")}</Button>
+            </>
+          )}
+        </div>
+        {issued && (
+          <div className="space-y-2 rounded-lg border p-3" data-ra-issued>
+            <p className="text-xs font-medium">{t("رابط الوصول برمزه — معروض مرة واحدة، احتفظ به")}</p>
+            <code className="block break-all text-xs" data-no-i18n data-ra-url>{window.location.origin}/web-client/index.html{issued.urlQuery}</code>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={copyUrl}>{t("نسخ")}</Button>
+            </div>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">{t("حد صادق: تشفير النقل عبر النفق/البنية الخارجية مسؤولية نشرها — البوابة تحسم الرمز قبل وصول أي طلب للخدمات، والإدارة من خارج الجهاز مرفوضة ولو برمز صحيح")}</p>
       </CardContent>
     </Card>
   )

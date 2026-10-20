@@ -203,7 +203,14 @@ export function makeGuardedFetch(impl, isTv) {
 // ---------------------------------------------------------------------------
 if (typeof document !== "undefined") {
   const TV = new URLSearchParams(location.search).get("tv") === "1"
-  const api = makeGuardedFetch((p, init) => fetch(p, init), TV)
+  // §37: رمز الوصول البعيد — يُقرأ من رابط الفتح مرة واحدة ويُمرّر ترويسة
+  // x-pair-token حصرًا (لا تخزين — الخصوصية أولًا §36.هـ.3). النواة المصدّرة
+  // نفسها بلا تغيير — التركيب في السلك حصرًا، وSW يمرر الترويسة كما تمر كلها.
+  const PAIR = new URLSearchParams(location.search).get("pair") || ""
+  const api = makeGuardedFetch((p, init) => {
+    if (!PAIR) return fetch(p, init)
+    return fetch(p, { ...init, headers: { ...(init?.headers || {}), "x-pair-token": PAIR } })
+  }, TV)
 
   const state = {
     lang: localStorage.getItem("nexus-web-lang") === "en" ? "en" : "ar",
