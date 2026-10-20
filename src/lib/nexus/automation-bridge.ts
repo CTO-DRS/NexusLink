@@ -19,7 +19,7 @@ import { evalSustainedTrigger, MIN_DURATION_MIN, MAX_DURATION_MIN } from "./auto
 import { loadPersistedRules, persistRuleUpsert, persistRuleDelete, persistFire, loadPersistedFires, markFiresSeenDb } from "./automation-persist"
 import { socketCors } from "./socket-security" // SEC (M0.3 F4)
 import {
-  TRIGGER_KINDS, ACTION_KINDS, isSustainedTrigger,
+  TRIGGER_KINDS, ACTION_KINDS, isSustainedTrigger, COMPOSITE_STATE_KINDS, isCompositeStateKind,
   type AutoRule, type AutoRunEntry, type AutoStatePayload, type AutoFiredPayload, type AutoFireEntry, type AutoTrigger,
 } from "./automation-types"
 
@@ -176,7 +176,7 @@ async function executeAction(rule: AutoRule): Promise<{ ok: boolean; detail: str
 
 // ---------- إطلاق قاعدة ----------
 
-async function fireRule(rule: AutoRule, detail: string, manual: boolean) {
+async function fireRule(rule: AutoRule, detail: string, manual: boolean, reason?: string) {
   // القاعدة الحية في المصفوفة دائمًا — الإطلاق اليدوي (run-now) يمرر نسخة
   // {…rule} فتُحدّث إحصاءاتها النسخة الحية لا النسخة (وإلا ظهر الإطلاق بلا أثر في العدّاد)
   const live = rules.find((r) => r.id === rule.id) ?? rule
@@ -186,8 +186,11 @@ async function fireRule(rule: AutoRule, detail: string, manual: boolean) {
   const res = await executeAction(live)
   // ترسيخ الإحصاءات (§26.ز): lastFiredAt/fireCount يعيشان عبر إعادة التشغيل
   void persistRuleUpsert(live)
-  // التفصيل الصادق = سبب المشغّل + نتيجة الفعل معًا (السبب يجيب «لماذا؟» والنتيجة «ماذا حدث؟»)
-  const full = detail && res.detail && res.detail !== detail ? `${detail} — ${res.detail}` : (res.detail || detail)
+  // الدليل التفسيري (§33.ج): جملة «لماذا» المهيكلة تُدمج في التفصيل الصادق
+  // بالبادئة «الدليل:» فتبقى التنبيهات التاريخية/المركبة بذليلها بعد إعادة
+  // التشغيل (التخزين داخل detail القائم — صفر تغيير مخطط).
+  const reasonFull = reason ? `الدليل: ${reason}` : ""
+  const full = [detail, res.detail, reasonFull].filter(Boolean).filter((s, i, arr) => arr.indexOf(s) === i).join(" — ")
   pushLog({ ruleId: live.id, ruleName: live.name, at: now, ok: res.ok, detail: full, manual })
   // ترسيخ الإطلاق نفسه (§26.ح): البث الحي لواجهة متصلة يعدّه رؤية عند التسليم
   // (clientsCount > 0)، وإلا يبقى «غير مرئي» بانتظار ملخص العودة عند الاتصال التالي.
@@ -196,6 +199,7 @@ async function fireRule(rule: AutoRule, detail: string, manual: boolean) {
   const fireEntry: AutoFireEntry = {
     id: uid(), ruleId: live.id, ruleName: live.name, at: now, ok: res.ok, detail: full, manual,
     seenAt: clients > 0 ? now : null,
+    ...(reason ? { reason } : {}),
   }
   fireLog.unshift(fireEntry)
   if (fireLog.length > 200) fireLog.length = 200
@@ -293,9 +297,18 @@ async function pollHealthSustained() {
       if (!rule.enabled || !isSustainedTrigger(rule.trigger.kind)) continue
       const v = await evalSustainedTrigger(rule.trigger)
       if (v.satisfied) {
-        if (sustainedArmed.get(rule.id) !== false && !coolingDown(rule)) {
+        if (rule.trigger.and) {
+          // مركب (§33.ج): التاريخ اكتمل — بانتظار شرط الحالة أيضًا. الحقبة
+          // لا تُستهلك إلا بالإطلاق الفعلي، وإذا زال التاريخ يُعاد التسليح
+          // كالعادة (فرع else أدناه) — فلا يُفوّت اكتمال الشرطين لاحقًا.
+          const st = compositeStateSatisfied(rule.trigger.and)
+          if (st.ok && sustainedArmed.get(rule.id) !== false && !coolingDown(rule)) {
+            sustainedArmed.set(rule.id, false)
+            await fireRule(rule, v.reason, false, `${v.reason} + ${st.reason}`)
+          }
+        } else if (sustainedArmed.get(rule.id) !== false && !coolingDown(rule)) {
           sustainedArmed.set(rule.id, false)
-          await fireRule(rule, v.reason, false)
+          await fireRule(rule, v.reason, false, v.reason)
         }
       } else {
         sustainedArmed.set(rule.id, true)
@@ -375,7 +388,55 @@ function sanitizeTrigger(tr: Record<string, unknown>): AutoTrigger | { error: st
     if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return { error: "الموعد اليومي يتطلب ساعة 0-23 ودقيقة 0-59" }
     trigger.hh = hh; trigger.mm = mm
   }
+  // الشرط المركب (§33.ج): تاريخي أولًا حصرًا + شرط حالة ثانٍ من القائمة،
+  // بلا تعشيش (and داخل and مرفوض) — والثاني يُعقّم بنفس المطيّم.
+  const andRaw = tr.and
+  if (andRaw && typeof andRaw === "object") {
+    if (!isSustainedTrigger(trigger.kind)) return { error: "الدمج (و/AND) يتطلب مشغلًا تاريخيًا مستمرًا أولًا" }
+    if ((andRaw as Record<string, unknown>).and) return { error: "تعشيش الدمج مرفوض — مستوى واحد حصرًا" }
+    const aSubKind = String((andRaw as Record<string, unknown>).kind ?? "")
+    if (!COMPOSITE_STATE_KINDS.includes(aSubKind as never)) {
+      return { error: `شرط الحالة الثاني يجب أن يكون من: ${COMPOSITE_STATE_KINDS.join(" · ")}` }
+    }
+    const sub = sanitizeTrigger({ ...(andRaw as Record<string, unknown>) })
+    if ("error" in sub) return { error: `الشرط الثاني: ${sub.error}` }
+    if (!isCompositeStateKind(sub.kind)) return { error: "الشرط الثاني خارج قائمة حالات الدمج" }
+    trigger.and = sub
+  }
   return trigger
+}
+
+// ---------- الشرط المركب (§33.ج): تقييم «شرط الحالة» كحالة الآن ----------
+
+/** يقيّم الشرط الثاني للمشغل المركب كحالة لحظية على سجل الأجهزة الحالي:
+ *  device.connect = يوجد جهاز مطابق متصل الآن · device.disconnect = يوجد غير متصل
+ *  · battery.below/above = بطارية جهاز (مطابق) تحت/فوق العتبة. قراءة محضة —
+ *  لا تسليح ولا إحصاءات؛ فشل السجل = غير مستوفى بصدق (لا إطلاق زائف). */
+function compositeStateSatisfied(and: AutoTrigger): { ok: boolean; reason: string } {
+  try {
+    const devs = store().devices
+    const pool = and.deviceId ? devs.filter((d) => d.id === and.deviceId) : devs
+    if (and.kind === "device.connect") {
+      const hit = pool.find((d) => d.state === "connected")
+      return hit ? { ok: true, reason: `الحالة: «${hit.id}» متصل الآن` } : { ok: false, reason: "الحالة: لا جهاز مطابق متصل الآن" }
+    }
+    if (and.kind === "device.disconnect") {
+      const hit = pool.find((d) => d.state !== "connected")
+      return hit ? { ok: true, reason: `الحالة: «${hit.id}» غير متصل الآن` } : { ok: false, reason: "الحالة: كل الأجهزة المتابعة متصلة الآن" }
+    }
+    const th = Math.min(100, Math.max(1, Math.round(and.threshold ?? (and.kind === "battery.above" ? 80 : 20))))
+    if (and.kind === "battery.below") {
+      const hit = pool.find((d) => d.battery <= th)
+      return hit ? { ok: true, reason: `الحالة: «${hit.id}» بطاريته ${hit.battery}% (≤ ${th}%)` } : { ok: false, reason: `الحالة: لا بطارية تحت ${th}% الآن` }
+    }
+    if (and.kind === "battery.above") {
+      const hit = pool.find((d) => d.battery >= th)
+      return hit ? { ok: true, reason: `الحالة: «${hit.id}» بطاريته ${hit.battery}% (≥ ${th}%)` } : { ok: false, reason: `الحالة: لا بطارية فوق ${th}% الآن` }
+    }
+    return { ok: false, reason: "الحالة: نوع غير مدعوم" }
+  } catch {
+    return { ok: false, reason: "الحالة: سجل الأجهزة غير جاهز بعد" }
+  }
 }
 
 function sanitizeRule(input: unknown, existingId?: string): AutoRule | { error: string } {

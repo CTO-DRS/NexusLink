@@ -5762,6 +5762,211 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     check("EDGE-NEG/api: POST على i18n-status (GET حصرًا) → غير 200 (حارس الطريقة)", iPost !== 200, `status=${iPost}`)
   }
 
+  // ================================================================
+  // ============ INTEL — طبقة الذكاء المحلي (عقد §33 — M2) ==========
+  // ============ البحث الموحد · المساعد · الدمج · الرؤى =============
+  // ================================================================
+  console.log("\n== INTEL: local intelligence layer (§33) ==")
+  {
+    const ROOT_INTEL = process.cwd()
+    const fsIntel = (await import("node:fs")).default
+    const readIntel = (p) => { try { return fsIntel.readFileSync(`${ROOT_INTEL}/${p}`, "utf8") } catch { return "" } }
+
+    // ---- (أ) مصدر: البحث الموحد ----
+    const intelSearch = readIntel("src/lib/nexus/intel-search.ts")
+    check("INTEL/src: نواة البحث الموحد — searchAll + تطهير الاستعلام + 8 مخازن وسقوف 8/40",
+      intelSearch.includes("export async function searchAll") && intelSearch.includes("export function cleanQuery") &&
+      intelSearch.includes('"device" | "routine" | "clip" | "message" | "contact" | "call" | "handoff" | "file"') &&
+      intelSearch.includes("GROUP_CAP = 8") && intelSearch.includes("TOTAL_CAP = 40"), "intel-search.ts")
+    check("INTEL/src: البحث فوق المخازن المحلية حصرًا — بلا أي fetch خارجي في النواة",
+      !intelSearch.includes("fetch(") && intelSearch.includes('db.nexusMessage.findMany') && intelSearch.includes("store().devices"), "SQLite+memory only")
+    const searchRoute = readIntel("src/app/api/search/route.ts")
+    check("INTEL/src: مسار /api/search — GET مع 400 للاستعلام الفارغ", searchRoute.includes("export async function GET") && searchRoute.includes("status: 400"), "route.ts")
+    const unifiedSearch = readIntel("src/components/nexus/unified-search.tsx")
+    check("INTEL/src: نافذة البحث الموحد — تجميع بالمصدر + debounce + قفزة للعرض",
+      unifiedSearch.includes("KIND_ICONS") && unifiedSearch.includes("setTimeout") && unifiedSearch.includes("setView"), "unified-search.tsx")
+
+    // ---- (ب) مصدر: المساعد المحلي ----
+    const assistant = readIntel("src/lib/nexus/assistant.ts")
+    check("INTEL/src: المساعد — تصنيف نوايا حتمي بخمس نوايا (status/find/suggest/explain/help)",
+      assistant.includes("export function classifyIntent") && assistant.includes("export async function buildAnswer") &&
+      ['"status"', '"find"', '"suggest"', '"explain"', '"help"'].every((s) => assistant.includes(s)), "assistant.ts")
+    const assistantLlm = readIntel("src/lib/nexus/assistant-llm.ts")
+    check("INTEL/src: محول LLM المحلي — 127.0.0.1 حصرًا (Ollama + llama.cpp) بحرس نطاق ومهلة",
+      assistantLlm.includes("127.0.0.1:11434") && assistantLlm.includes("127.0.0.1:8080") &&
+      assistantLlm.includes("isLocalhostUrl") && assistantLlm.includes("PROBE_TIMEOUT_MS = 600") &&
+      !/fetch\("https?:\/\/(?!127\.0\.0\.1|localhost)/.test(assistantLlm), "localhost-only")
+    const assistantRoute = readIntel("src/app/api/assistant/route.ts")
+    check("INTEL/src: مسار /api/assistant — POST للسؤال + GET تشخيص الفهرس",
+      assistantRoute.includes("export async function POST") && assistantRoute.includes("export async function GET"), "route.ts")
+
+    // ---- (ج) مصدر: الدمج والتنبيهات التفسيرية ----
+    const autoTypes = readIntel("src/lib/nexus/automation-types.ts")
+    check("INTEL/src: أنواع الدمج — COMPOSITE_STATE_KINDS (حالات) + and? + reason?",
+      autoTypes.includes('export const COMPOSITE_STATE_KINDS') && autoTypes.includes('"battery.below", "battery.above", "device.connect", "device.disconnect"') &&
+      autoTypes.includes("and?: AutoTrigger") && autoTypes.includes("reason?: string"), "automation-types.ts")
+    const autoBridge = readIntel("src/lib/nexus/automation-bridge.ts")
+    check("INTEL/src: الجسر — تعقيم الدمج (تاريخي أولًا + بلا تعشيش + من قائمة الحالات) وتقييم الحالة الآن",
+      autoBridge.includes("تعشيش الدمج مرفوض") && autoBridge.includes("الدمج (و/AND) يتطلب مشغلًا تاريخيًا مستمرًا أولًا") &&
+      autoBridge.includes("function compositeStateSatisfied") && autoBridge.includes("الدليل: ${reason}"), "automation-bridge.ts")
+    const autoPersist = readIntel("src/lib/nexus/automation-persist.ts")
+    check("INTEL/src: الترسيخ — إحياء القاعدة المركبة يرفض تعشيش/أنواع خارج القائمة",
+      autoPersist.includes("COMPOSITE_STATE_KINDS.includes(subKind") && autoPersist.includes("if (sub.and != null) return null"), "automation-persist.ts")
+    const autoView = readIntel("src/components/nexus/automation/automation-view.tsx")
+    check("INTEL/src: محرر الروتينات — صف الشرط الإضافي (AND) للقواعد التاريخية + شارة الدمج",
+      autoView.includes("automation-and-toggle") && autoView.includes("automation-and-kind") && autoView.includes("automation-rule-and-chip"), "automation-view.tsx")
+
+    // ---- (د) مصدر: الرؤى + التسجيل ----
+    const insightsRoute = readIntel("src/app/api/insights/route.ts")
+    check("INTEL/src: /api/insights — نافذة 14 يومًا متصلة + أعمدة يومية وإجماليات بلا محتوى",
+      insightsRoute.includes("const DAYS = 14") && insightsRoute.includes("opsDaily") && insightsRoute.includes("topDevices") && insightsRoute.includes("p95Ms"), "route.ts")
+    const storeIntel = readIntel("src/lib/store.ts")
+    const dockIntel = readIntel("src/components/nexus/dock.tsx")
+    const appIntel = readIntel("src/components/nexus/nexus-app.tsx")
+    const topIntel = readIntel("src/components/nexus/top-bar.tsx")
+    check("INTEL/src: التسجيل — عرض intel في المخزن والشريط + نافذة البحث + اختصار Ctrl+Shift+F",
+      storeIntel.includes('"intel"') && storeIntel.includes("setUnifiedSearchOpen") && dockIntel.includes('id: "intel"') &&
+      appIntel.includes('<IntelView />') && appIntel.includes("<UnifiedSearch />") &&
+      appIntel.includes("st.setUnifiedSearchOpen(true)") && topIntel.includes("ScanSearch"), "store+dock+app+topbar")
+    const intelView = readIntel("src/components/nexus/intel/intel-view.tsx")
+    check("INTEL/src: عرض الذكاء — تبويبا المساعد والرؤى + أشرطة CSS خالصة بلا اعتماد رسومي",
+      intelView.includes('data-intel-view') && intelView.includes('data-insights-panel') && intelView.includes('"assistant"') &&
+      intelView.includes('"insights"') && !/from "(recharts|chart\.js|d3)"/.test(intelView), "intel-view.tsx")
+    const i18nMap = JSON.parse(readIntel("src/lib/ar-en-map.json") || "{}")
+    check("INTEL/src: خريطة i18n — مفاتيح §33 مضافة (بحث موحد · ذكاء محلي · دمج · رؤى)",
+      i18nMap["بحث موحد"] === "Unified search" && i18nMap["الذكاء المحلي"] === "Local intelligence" &&
+      i18nMap["شرط إضافي (و/AND) — حالة يجب أن تتحقق الآن أيضًا"]?.includes("AND") && i18nMap["أكثر الأجهزة نشاطًا (عمليات)"] === "Most active devices (ops)", "48 keys")
+
+    // ---- (هـ) حي: البحث الموحد عبر /api/search ----
+    const seedIntel = fsIntel.readFileSync(`${ROOT_INTEL}/.env`, "utf8").match(/^DATABASE_URL=(.*)$/m)?.[1]
+    const INTEL_Q = "INTEL-E2E-needle-7f3d"
+    let pdbI = null
+    try {
+      const { PrismaClient } = await import("@prisma/client")
+      pdbI = new PrismaClient({ datasources: { db: { url: seedIntel } }, log: [] })
+      const conv = await pdbI.nexusConversation.create({ data: { address: "+9665INTEL00" } })
+      await pdbI.nexusMessage.create({ data: { conversationId: conv.id, body: `نص البحث ${INTEL_Q} المزروع`, direction: "in" } })
+      await pdbI.prodClip.create({ data: { deviceId: "galaxy-s24", deviceName: "E2E-Phone", kind: "text", content: `مقطع ${INTEL_Q} للبحث الموحد` } })
+    } catch { pdbI = null }
+
+    const sDev = await fetch("http://127.0.0.1:3000/api/search?q=PC-OFFICE").then((r) => r.json()).catch(() => null)
+    check("INTEL/live: البحث يصيب الأجهزة من سجل الجسر الحي (بادئة = أعلى درجة)",
+      sDev?.ok === true && sDev?.groups?.some((g) => g.kind === "device" && g.items?.some((i) => i.score === 3)), `total=${sDev?.total}`)
+    check("INTEL/live: شكل الاستجابة التعاقدي — ok/q/total/took/groups ببنود id/title/score",
+      sDev?.ok === true && typeof sDev?.took === "number" && sDev?.groups?.every((g) => g.items?.every((i) => typeof i.id === "string" && typeof i.title === "string" && typeof i.score === "number")), "shape")
+    const sMsg = await fetch(`http://127.0.0.1:3000/api/search?q=${encodeURIComponent(INTEL_Q)}`).then((r) => r.json()).catch(() => null)
+    check("INTEL/live: البحث يجد رسالة هاتف مزروعة ومقطع حافظة في نفس الاستعلام (مصدران)",
+      sMsg?.groups?.some((g) => g.kind === "message") && sMsg?.groups?.some((g) => g.kind === "clip"), `total=${sMsg?.total}`)
+    const sNo = await fetch("http://127.0.0.1:3000/api/search?q=zzz-%D9%84%D9%8A%D8%B3-%D9%85%D9%88%D8%AC%D9%88%D8%AF-xyz").then((r) => r.json()).catch(() => null)
+    check("INTEL/live: لا نتائج → total=0 بصدق لا فشل", sNo?.ok === true && sNo?.total === 0, `total=${sNo?.total}`)
+    const sEmpty = await fetch("http://127.0.0.1:3000/api/search?q=").then((r) => r.status).catch(() => 0)
+    check("INTEL/live: استعلام فارغ → 400 (حارس التعاقد)", sEmpty === 400, `status=${sEmpty}`)
+    const sLong = await fetch(`http://127.0.0.1:3000/api/search?q=${encodeURIComponent("x".repeat(120))}`).then((r) => r.json()).catch(() => null)
+    check("INTEL/live: استعلام 120 حرفًا → يُقبل مقصوصًا إلى 80 (لا 500)", sLong?.ok === true && sLong?.q?.length === 80, `len=${sLong?.q?.length}`)
+    const sRoutine = await fetch(`http://127.0.0.1:3000/api/search?q=${encodeURIComponent("بطارية")}`).then((r) => r.json()).catch(() => null)
+    check("INTEL/live: البحث يصيب الروتينات المرسوخة (بذرة «بطارية جهاز منخفضة»)",
+      sRoutine?.groups?.some((g) => g.kind === "routine" && g.items?.some((i) => i.title.includes("بطارية"))), `total=${sRoutine?.total}`)
+
+    // ---- (و) حي: المساعد عبر /api/assistant ----
+    const aDiag = await fetch("http://127.0.0.1:3000/api/assistant").then((r) => r.json()).catch(() => null)
+    check("INTEL/live: تشخيص المساعد — فهرس بأعداد صحيحة + حالة LLM بولية",
+      aDiag?.ok === true && Number.isFinite(aDiag?.index?.rules) && Number.isFinite(aDiag?.index?.ops) &&
+      typeof aDiag?.llm?.available === "boolean", `rules=${aDiag?.index?.rules} llm=${aDiag?.llm?.available}`)
+    const aStatus = await fetch("http://127.0.0.1:3000/api/assistant", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ q: "ما حالة الأجهزة؟" }) }).then((r) => r.json()).catch(() => null)
+    check("INTEL/live: نية status — إجابة من سجل الأجهزة بعداد متصل وأسماء",
+      aStatus?.intent === "status" && aStatus?.answer?.includes("أجهزة") && aStatus?.sources?.some((s) => s.kind === "devices"), aStatus?.answer?.slice(0, 50))
+    const aFind = await fetch("http://127.0.0.1:3000/api/assistant", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ q: `ابحث عن ${INTEL_Q}` }) }).then((r) => r.json()).catch(() => null)
+    check("INTEL/live: نية find — تفويض لنواة البحث نفسها (نتائج حقيقية بمصادر)",
+      aFind?.intent === "find" && (aFind?.sources?.length ?? 0) > 0 && aFind?.answer?.includes("وجدت"), aFind?.answer?.slice(0, 60))
+    const aSuggest = await fetch("http://127.0.0.1:3000/api/assistant", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ q: "اقترح روتينًا" }) }).then((r) => r.json()).catch(() => null)
+    check("INTEL/live: نية suggest — اقتراح مسبب من التاريخ لا قالب أعمى",
+      aSuggest?.intent === "suggest" && aSuggest?.answer?.length > 20 && aSuggest?.sources?.some((s) => s.kind === "fires"), aSuggest?.answer?.slice(0, 50))
+    const aExplain = await fetch("http://127.0.0.1:3000/api/assistant", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ q: "لماذا آخر تنبيه؟" }) }).then((r) => r.json()).catch(() => null)
+    check("INTEL/live: نية explain — يشرح آخر إطلاق أو يصدق بعدم وجود تنبيهات",
+      aExplain?.intent === "explain" && aExplain?.answer?.length > 15, aExplain?.answer?.slice(0, 50))
+    const aHelp = await fetch("http://127.0.0.1:3000/api/assistant", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ q: "مساعدة" }) }).then((r) => r.json()).catch(() => null)
+    check("INTEL/live: نية help الافتراضية + الثقة بين 0 و1 + زمن القياس",
+      aHelp?.intent === "help" && aHelp?.confidence >= 0 && aHelp?.confidence <= 1 && typeof aHelp?.took === "number", `conf=${aHelp?.confidence}`)
+    const aEmpty = await fetch("http://127.0.0.1:3000/api/assistant", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ q: "   " }) }).then((r) => r.status).catch(() => 0)
+    check("INTEL/live: سؤال فارغ/فراغات → 400", aEmpty === 400, `status=${aEmpty}`)
+    check("INTEL/live: في هذه البيئة بلا مُشغّل LLM محلي → المحرك الحتمي يخدم (llm.available=false صادقة)",
+      aStatus?.llm?.available === false && aStatus?.llm?.runtime === null, "deterministic path")
+
+    // ---- (ز) حي: الرؤى عبر /api/insights ----
+    const ins = await fetch("http://127.0.0.1:3000/api/insights").then((r) => r.json()).catch(() => null)
+    check("INTEL/live: الرؤى — نافذة 14 يومًا بسلسلة يومية متصلة (14 خانة لا أقل)",
+      ins?.ok === true && ins?.windowDays === 14 && ins?.opsDaily?.length === 14 && ins?.firesDaily?.length === 14, `ops=${ins?.opsDaily?.length}`)
+    check("INTEL/live: الرؤى — مقاييس الاقتران بنفس رياضيات §30 (p95 عدد أو null) وأعلى الأجهزة مصفوفة",
+      (ins?.pairs?.p95Ms === null || Number.isFinite(ins?.pairs?.p95Ms)) && Array.isArray(ins?.topDevices) && Number.isFinite(ins?.clips?.total), `p95=${ins?.pairs?.p95Ms}`)
+    check("INTEL/live: الرؤى — رسائل 7 أيام واردة/صادرة أعداد (بذرة INTEL ظاهرة داخلها)",
+      Number.isFinite(ins?.messages?.in7d) && Number.isFinite(ins?.messages?.out7d) && ins?.messages?.in7d >= 1, `in=${ins?.messages?.in7d}`)
+    check("INTEL/live: الرؤى — صفر محتوى: الحقول كلها أعداد وأزمنة وأحجام",
+      [ins?.opsKinds?.every((k) => typeof k.kind === "string" && Number.isFinite(k.count)), Number.isFinite(ins?.sync?.events14d),
+       Number.isFinite(ins?.health?.samples)].every(Boolean), "metadata only")
+
+    // ---- (ح) حي: القاعدة المركبة عبر مقبس auto :3008 ----
+    // PERSIST أعاد إقلاع الخادم قبلنا — الباب idempotent يضمن جسرًا حيًا
+    // (يعيد الإقلاع إن كان ميتًا ولا يفعل شيئًا إن كان حيًا — نمط A-1)
+    await waitHttp("automation boot (INTEL)", "http://localhost:3000/api/automation/boot", 20000, (j) => j?.ok === true && j?.booted === true)
+    const { io: ioIntel } = await import("socket.io-client")
+    const comp = await new Promise((resolve) => {
+      const auto = ioIntel("http://localhost:3008", { path: "/", transports: ["polling", "websocket"], forceNew: true, timeout: 8000, reconnection: false })
+      const out = { state: null, upsertOk: null, rejNested: null, rejMomentary: null, rejKind: null, rejectsAll: [], deleted: false, timers: [], done: false }
+      const finish = () => { if (out.done) return; out.done = true; out.timers.forEach(clearTimeout); try { auto.disconnect() } catch {}; resolve(out) }
+      out.timers.push(setTimeout(finish, 9000))
+      auto.on("connect_error", (e) => { out.connectErr = String(e?.message ?? e) })
+      auto.on("auto:state", (s) => {
+        // آخر حالة دائمًا — والقبول يُلتقط مرة واحدة (أول ظهور للقاعدة بـand)
+        out.state = s
+        if (!out.upsertOk) {
+          const mine = (s?.rules ?? []).find((r) => r.name === "INTEL-E2E-comp")
+          if (mine) out.upsertOk = { hasAnd: !!mine.trigger?.and, andKind: mine.trigger?.and?.kind ?? null }
+        }
+      })
+      auto.on("auto:rejected", (d) => {
+        const err = String(d?.error ?? "")
+        out.rejectsAll.push(err)
+        if (err.includes("تعشيش الدمج")) out.rejNested = err
+        else if (err.includes("الدمج (و/AND) يتطلب")) out.rejMomentary = err
+        else if (err.includes("شرط الحالة الثاني")) out.rejKind = err
+      })
+      auto.on("connect", () => {
+        auto.emit("rule:upsert", { rule: { name: "INTEL-E2E-comp", enabled: false, trigger: { kind: "health.battery.sustained", threshold: 15, durationMin: 60, and: { kind: "device.disconnect" } }, action: { kind: "notify", text: "e2e" } } })
+        out.timers.push(setTimeout(() => { auto.emit("rule:upsert", { rule: { name: "INTEL-E2E-nested", enabled: false, trigger: { kind: "health.battery.sustained", threshold: 15, durationMin: 60, and: { kind: "device.disconnect", and: { kind: "battery.below" } } }, action: { kind: "notify" } } }) }, 500))
+        out.timers.push(setTimeout(() => { auto.emit("rule:upsert", { rule: { name: "INTEL-E2E-mom", enabled: false, trigger: { kind: "battery.below", threshold: 20, and: { kind: "device.disconnect" } }, action: { kind: "notify" } } }) }, 1000))
+        out.timers.push(setTimeout(() => { auto.emit("rule:upsert", { rule: { name: "INTEL-E2E-kind", enabled: false, trigger: { kind: "health.battery.sustained", threshold: 15, durationMin: 60, and: { kind: "clip.received" } }, action: { kind: "notify" } } }) }, 1500))
+        out.timers.push(setTimeout(() => {
+          out.deleted = true
+          const mine = (out.state?.rules ?? []).find((r) => r.name === "INTEL-E2E-comp")
+          if (mine) auto.emit("rule:delete", { id: mine.id })
+        }, 2200))
+        // الإنهاء عند 3800: بعد الحذف وحصول آخر auto:state (بلا إنهاء مبكر —
+        // الرفض الخام في rejectsAll يكفي للتشخيص)
+        out.timers.push(setTimeout(finish, 3800))
+      })
+    })
+    check("INTEL/live: قاعدة مركبة (تاريخي + شرط حالة) تُقبل وتُخزَّن بـand.kind صحيح",
+      comp?.upsertOk?.hasAnd === true && comp?.upsertOk?.andKind === "device.disconnect", `and=${comp?.upsertOk?.andKind}`)
+    check("INTEL/live: تعشيش الدمج (and داخل and) → auto:rejected بالسبب",
+      typeof comp?.rejNested === "string" && comp.rejNested.includes("تعشيش"), `raw=${JSON.stringify(comp?.rejectsAll ?? []).slice(0, 80)}`)
+    check("INTEL/live: دمج بمشغل لحظي أول → auto:rejected (تاريخي أولًا حصرًا)",
+      typeof comp?.rejMomentary === "string", comp?.rejMomentary?.slice(0, 40))
+    check("INTEL/live: شرط حالة خارج قائمة الدمج (clip.received) → auto:rejected",
+      typeof comp?.rejKind === "string", comp?.rejKind?.slice(0, 40))
+    check("INTEL/live: حذف القاعدة المركبة نظيف — تختفي من auto:state",
+      comp?.state && !(comp?.state?.rules ?? []).some((r) => r.name === "INTEL-E2E-comp"), "deleted")
+
+    // تنظيف بذور INTEL (الرسالة والمحادثة والمقطع) — لا تراكم
+    try {
+      if (pdbI) {
+        await pdbI.nexusMessage.deleteMany({ where: { body: { contains: INTEL_Q } } })
+        await pdbI.nexusConversation.deleteMany({ where: { address: "+9665INTEL00" } })
+        await pdbI.prodClip.deleteMany({ where: { content: { contains: INTEL_Q } } })
+        await pdbI.$disconnect()
+      }
+    } catch { /* ignore */ }
+  }
+
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {

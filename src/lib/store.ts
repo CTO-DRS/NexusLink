@@ -2,7 +2,7 @@
 import { create } from "zustand"
 import type { FsEntry, NexusDevice, TransferJob } from "./nexus/types"
 
-export type ViewId = "devices" | "files" | "transfers" | "storage" | "comms" | "simulator" | "remote" | "media" | "guard" | "prod" | "security" | "automation" | "tools" | "settings"
+export type ViewId = "devices" | "files" | "transfers" | "storage" | "comms" | "simulator" | "remote" | "media" | "guard" | "prod" | "security" | "automation" | "intel" | "tools" | "settings"
 export type SortKey = "name" | "size" | "mtime" | "category"
 export type ViewMode = "grid" | "list"
 
@@ -127,6 +127,8 @@ interface NexusState {
   setOnboardingOpen: (b: boolean) => void
   paletteOpen: boolean
   setPaletteOpen: (b: boolean) => void
+  unifiedSearchOpen: boolean
+  setUnifiedSearchOpen: (b: boolean) => void
   shortcutsHelpOpen: boolean
   setShortcutsHelpOpen: (b: boolean) => void
 
@@ -255,6 +257,8 @@ export const useNexus = create<NexusState>((set, get) => ({
   setOnboardingOpen: (b) => set({ onboardingOpen: b }),
   paletteOpen: false,
   setPaletteOpen: (b) => set({ paletteOpen: b }),
+  unifiedSearchOpen: false,
+  setUnifiedSearchOpen: (b) => set({ unifiedSearchOpen: b }),
   shortcutsHelpOpen: false,
   setShortcutsHelpOpen: (b) => set({ shortcutsHelpOpen: b }),
 
