@@ -12,6 +12,7 @@ import '../state/transfer_providers.dart';
 import 'control_screen.dart';
 import 'phone_remote_screen.dart';
 import 'unblock_center_screen.dart';
+import 'language_chips.dart';
 
 /// الإعدادات: المظهر (داكن/فاتح/نظام)، اللغة (ar/en)، معلومات الهوية، حالة الخدمة.
 class SettingsScreen extends ConsumerWidget {
@@ -66,18 +67,23 @@ class SettingsScreen extends ConsumerWidget {
           // ==== اللغة ====
           _Header('settings.language'.tr()),
           Card(
-            child: ListTile(
-              leading: const Icon(Icons.translate_rounded),
-              title: Text(context.locale.languageCode == 'ar' ? 'العربية' : 'English'),
-              trailing: SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'ar', label: Text('AR')),
-                  ButtonSegment(value: 'en', label: Text('EN')),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    const Icon(Icons.translate_rounded, size: 20),
+                    const SizedBox(width: 10),
+                    // M1.4 (عقد §31.ب.5): اللغات الست بأسمائها الأصلية
+                    Text(LanguageChips.nativeName(context.locale.languageCode), style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ]),
+                  const SizedBox(height: 10),
+                  LanguageChips(
+                    current: context.locale,
+                    onSelect: (l) async => await context.setLocale(l),
+                  ),
                 ],
-                selected: {context.locale.languageCode == 'ar' ? 'ar' : 'en'},
-                onSelectionChanged: (sel) async {
-                  await context.setLocale(Locale(sel.first));
-                },
               ),
             ),
           ),
