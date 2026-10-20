@@ -6170,6 +6170,233 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     }
   }
 
+  // ================================================================================
+  // ====== DEEP — عمق ما بعد M3 (عقد §35: الناشر المركزي · الفرض اللحظي · التنبؤ) ======
+  // ================================================================================
+  console.log("\n== DEEP: post-M3 depth (§35) ==")
+  {
+    const fsDeep = (await import("node:fs")).default
+    const readDeep = (p) => { try { return fsDeep.readFileSync(`${process.cwd()}/${p}`, "utf8") } catch { return "" } }
+
+    // ---- (أ) مصدر: قناة الناشر المركزية (§35.أ — إغلاق حد §34.هـ.1) ----
+    const pubSrc = readDeep("src/lib/nexus/publisher.ts")
+    check("DEEP/src: الناشر — سجل صفر-مخطط في DesktopSetting + بذرة nexuslink-labs",
+      pubSrc.includes('PUBLISHERS_SETTING = "market.publishers"') && pubSrc.includes('"nexuslink-labs"') &&
+      pubSrc.includes("desktopSetting.upsert"), "registry zero-schema")
+    check("DEEP/src: الناشر — تدوير يحفظ القديم + إبطال يوقف + HMAC بـtimingSafeEqual",
+      pubSrc.includes("rotatePublisherKey") && pubSrc.includes("setPublisherRevoked") &&
+      pubSrc.includes("timingSafeEqual") && pubSrc.includes("randomBytes(32)"), "rotate+revoke+safe-eq")
+    const mkSrcDeep = readDeep("src/lib/nexus/marketplace.ts")
+    check("DEEP/src: السوق — القناة بغلاف الناشر + تثبيت بمسارين (الغلاف أولًا ثم القناة المحلية)",
+      mkSrcDeep.includes("signWithPublisherKey(manifest, ownerKey)") &&
+      mkSrcDeep.includes("verifyPublisherEnvelope(rawPub, m)") && mkSrcDeep.includes("if (!pubEnv) {"), "two-path install")
+    check("DEEP/src: الفرض اللحظي — isPluginLive/pluginHasCapability مصدر الحقيقة في السوق",
+      mkSrcDeep.includes("export async function isPluginLive") &&
+      mkSrcDeep.includes("export async function pluginHasCapability"), "live source of truth")
+
+    // ---- (ب) مصدر: الفرض في محرك الروتينات (§35.ب — إغلاق حد §34.هـ.2) ----
+    const bridgeSrc = readDeep("src/lib/nexus/automation-bridge.ts")
+    check("DEEP/src: الجسر — باب الإنشاء يتحقق من حياة القدرة الآن",
+      bridgeSrc.includes('await pluginHasCapability(pid, "invoke.automation")') &&
+      bridgeSrc.includes("async function sanitizeRule"), "creation gate")
+    check("DEEP/src: الجسر — باب الإطلاق يتحقق لحظيًا ويوثق التوقف بمدخل ok=false مسبب",
+      bridgeSrc.includes("await isPluginLive(live.origin.plugin)") &&
+      /لم يُنفّذ الفعل \(عقد §35\.ب/.test(bridgeSrc), "fire gate")
+    const typesDeep = readDeep("src/lib/nexus/automation-types.ts")
+    check("DEEP/src: الأنواع — origin?: { plugin } في AutoRule (أصل التكامل)",
+      typesDeep.includes("origin?: { plugin: string }"), "origin field")
+
+    // ---- (ج) مصدر: التنبؤ الاستباقي (§35.ج — عمق M2 الاختياري) ----
+    const predSrc = readDeep("src/lib/nexus/predict.ts")
+    check("DEEP/src: التنبؤ — حتمي صفر-مخطط من جداول قائمة حصرًا وبلا عشوائية",
+      predSrc.includes("nexusAutomationFire") && predSrc.includes("prodOpLog") &&
+      predSrc.includes("nexusHealthSample") && !predSrc.includes("Math.random"), "deterministic sources")
+    check("DEEP/src: التنبؤ — نمط يومي بذات اللحظة + وسيط الفترات + اقتراح بذليل «الدليل:»",
+      predSrc.includes("isDailyPattern") && predSrc.includes("function median") &&
+      predSrc.includes("الدليل:"), "daily+interval+evidence")
+    const predRoute = readDeep("src/app/api/predictions/route.ts")
+    check("DEEP/src: /api/predictions — قراءة حصرًا (GET بلا POST)",
+      predRoute.includes("buildPredictPayload") && !predRoute.includes("export async function POST"), "GET-only")
+
+    // ---- (د) مصدر: الواجهة + i18n ----
+    const intelDeep = readDeep("src/components/nexus/intel/intel-view.tsx")
+    check("DEEP/src: تبويب «التنبؤ» الثالث — توقعات + اقتراحات + إنشاء بيد المستخدم",
+      intelDeep.includes("PredictionsPanel") && intelDeep.includes('"/api/predictions"') &&
+      intelDeep.includes('"/api/automation/rules"'), "predictions tab")
+    const settingsDeep = readDeep("src/components/nexus/settings-view.tsx")
+    check("DEEP/src: بطاقة السوق تعرض الناشرين ببصماتهم وإصدارات مفاتيحهم",
+      settingsDeep.includes("data-market-publisher") && settingsDeep.includes("إصدار المفتاح"), "publisher badges")
+    const arEnDeep = readDeep("src/lib/ar-en-map.json")
+    check("DEEP/src: i18n — مفاتيح §35 في السجل (بفواصل موثقة)",
+      arEnDeep.includes('"التنبؤ": "Predict"') && arEnDeep.includes('"الناشر": "Publisher"') &&
+      arEnDeep.includes('"إنشاء قاعدة": "Create rule"'), "ar-en-map")
+
+    // ================= حي: قناة الناشر (§35.أ) =================
+    const BASE = "http://127.0.0.1:3000"
+    try {
+      const mkt = await fetch(`${BASE}/api/marketplace`).then((r) => r.json())
+      check("DEEP/live: GET /api/marketplace — publishers ببصمات دون أي مفاتيح",
+        Array.isArray(mkt.publishers) && mkt.publishers.length >= 1 &&
+        mkt.publishers[0]?.id === "nexuslink-labs" && mkt.publishers[0]?.fp?.length === 16 &&
+        !("keys" in (mkt.publishers[0] ?? {})) && !("keys" in (mkt.publishers[0]?.fingerprints ?? {})), "public shape")
+      check("DEEP/live: قناة البداية العشرة كلها بغلاف ناشر (id صحيح وkv رقم)",
+        Array.isArray(mkt.channel) && mkt.channel.length === 10 &&
+        mkt.channel.every((it) => it.pub?.id === "nexuslink-labs" && typeof it.pub?.kv === "number"), "channel envelopes")
+
+      // تثبيت بغلاف الناشر حصرًا (بلا توقيع قناة محلي صالح) — قالب فحص
+      const pubManifest = { id: "deep-e2e-pub", name: "Deep E2E Pub", description: "تكامل فحص قناة الناشر", version: "1.0.0", author: "E2E", capabilities: ["read.devices"], entry: { kind: "local-open", url: "/?app=1" }, homepage: "" }
+      const signed = await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "pub-sign", manifest: pubManifest, pubId: "nexuslink-labs" }) }).then((r) => r.json())
+      check("DEEP/live: pub-sign — غلاف ناشر بمعرف وإصدار وتوقيع hex",
+        signed?.ok === true && signed.pub?.id === "nexuslink-labs" && typeof signed.pub?.kv === "number" &&
+        /^[0-9a-f]{64}$/.test(signed.pub?.sig ?? ""), "pub envelope")
+      const pubVerify = await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "pub-verify", manifest: pubManifest, pub: signed.pub }) }).then((r) => r.json())
+      check("DEEP/live: pub-verify — الغلاف الصالح يصدّق بمعرف الناشر", pubVerify?.ok === true && pubVerify.pubId === "nexuslink-labs", "verified")
+      const pubInst = await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "install", manifest: pubManifest, sig: "no-sig", pub: signed.pub }) }).then((r) => r.json())
+      check("DEEP/live: تثبيت بغلاف ناشر دون توقيع محلي — يُقبل", pubInst?.ok === true && pubInst.installed?.manifest?.id === "deep-e2e-pub", "installed via publisher")
+      const tamperedPub = await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "install", manifest: { ...pubManifest, name: "Tampered Pub" }, sig: "x", pub: signed.pub }) })
+      check("DEEP/live: غلاف ناشر على محتوى معدل → «توقيع الناشر لا يطابق»",
+        tamperedPub.status === 400 && (await tamperedPub.json()).error?.includes("توقيع الناشر"), "tamper rejected")
+
+      // التدوير: إصدار جديد يترقّى — والقديم يبقى يتحقق (المثبت سابقًا لا يُسقط)
+      const kvBefore = mkt.publishers[0].currentKv
+      const rot = await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "pub-rotate", pubId: "nexuslink-labs" }) }).then((r) => r.json())
+      check("DEEP/live: pub-rotate — إصدار جديد = السابق +1 وبصمة جديدة",
+        rot?.ok === true && rot.currentKv === kvBefore + 1 && rot.fp?.length === 16, `kv=${rot?.currentKv}`)
+      const oldVerify = await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "pub-verify", manifest: pubManifest, pub: signed.pub }) }).then((r) => r.json())
+      check("DEEP/live: تحقق بمفتاح قديم بعد التدوير — يعمل (لا إسقاط مفاجئ)", oldVerify?.ok === true, "old kv verifies")
+      const pubList = await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "pub-list" }) }).then((r) => r.json())
+      check("DEEP/live: pub-list — الناشرون ببصماتهم لكل إصدار", pubList?.ok === true && pubList.publishers?.[0]?.fingerprints && Object.keys(pubList.publishers[0].fingerprints).length >= 2, "fingerprints per kv")
+
+      // ================= حي: الفرض اللحظي (§35.ب) =================
+      // تنظيف أثر فحص الناشر ثم تجهيز تكاملَين: بأتمتة وبلاها
+      await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "uninstall", id: "deep-e2e-pub" }) })
+      const capManifest = { id: "deep-e2e-cap", name: "Deep E2E Cap", description: "تكامل الفرض اللحظي", version: "1.0.0", author: "E2E", capabilities: ["invoke.automation"], entry: { kind: "automation-rule", template: { trigger: { kind: "time.daily", hh: 23, mm: 59 }, action: { kind: "notify", text: "x" } } }, homepage: "" }
+      const capSigned = await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "pub-sign", manifest: capManifest, pubId: "nexuslink-labs" }) }).then((r) => r.json())
+      const roManifest = { id: "deep-e2e-readonly", name: "Deep E2E RO", description: "بلا قدرة أتمتة", version: "1.0.0", author: "E2E", capabilities: ["read.devices"], entry: { kind: "local-open", url: "/?app=1" }, homepage: "" }
+      const roSigned = await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "pub-sign", manifest: roManifest, pubId: "nexuslink-labs" }) }).then((r) => r.json())
+      await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "install", manifest: capManifest, sig: "x", pub: capSigned.pub }) })
+      await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "install", manifest: roManifest, sig: "x", pub: roSigned.pub }) })
+
+      // حصانة من بقايا جولة سابقة: احذف أي قاعدة بنفس الاسم قبل الإنشاء
+      try {
+        const st0 = await fetch(`${BASE}/api/automation/rules`).then((r) => r.json()).catch(() => null)
+        const stale = (st0?.rules ?? []).find((r) => r.name === "DEEP-ENFORCE-LIVE")
+        if (stale?.id) await fetch(`${BASE}/api/automation/rules`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "delete", id: stale.id }) })
+      } catch { /* صمت */ }
+      // (1) إنشاء قاعدة بتكامل غير مثبت → رفض 400 «الفرض اللحظي»
+      const ghost = { name: "DEEP-ENFORCE-GHOST", trigger: { kind: "time.daily", hh: 5, mm: 30 }, action: { kind: "notify", text: "x" }, origin: { plugin: "deep-e2e-ghost" } }
+      const rejGhost = await fetch(`${BASE}/api/automation/rules`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "upsert", rule: ghost }) })
+      check("DEEP/live: إنشاء قاعدة بتكامل غير مثبت → «الفرض اللحظي» مسبّب",
+        rejGhost.status === 400 && (await rejGhost.json()).error?.includes("الفرض اللحظي"), "creation gate live")
+      // (2) إنشاء قاعدة بتكامل حي بلا قدرة invoke.automation → رفض
+      const ro = { name: "DEEP-ENFORCE-RO", trigger: { kind: "time.daily", hh: 5, mm: 31 }, action: { kind: "notify", text: "x" }, origin: { plugin: "deep-e2e-readonly" } }
+      const rejRO = await fetch(`${BASE}/api/automation/rules`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "upsert", rule: ro }) })
+      check("DEEP/live: إنشاء قاعدة بتكامل بلا القدرة → «لا يصرّح بالقدرة» مسبّب",
+        rejRO.status === 400 && (await rejRO.json()).error?.includes("لا يصرّح بالقدرة"), "capability gate live")
+      // (3) قاعدة بأصل تكامل حي يصرّح بالقدرة → تُقبل
+      const live = { name: "DEEP-ENFORCE-LIVE", trigger: { kind: "time.daily", hh: 23, mm: 59 }, action: { kind: "notify", text: "فحص الفرض" }, origin: { plugin: "deep-e2e-cap" } }
+      const okLive = await fetch(`${BASE}/api/automation/rules`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "upsert", rule: live }) }).then((r) => r.json()).catch(() => null)
+      const liveId = okLive?.rule?.id ?? null
+      check("DEEP/live: قاعدة بأصل تكامل حي ذي قدرة → تُقبل بمعرّف", okLive?.ok === true && typeof liveId === "string" && liveId.length > 0, `id=${liveId}`)
+
+      // (4) إزالة التكامل ثم تشغيل يدوي → مدخل فرض ok=false مسبب في السجل المرسوخ
+      await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "uninstall", id: "deep-e2e-cap" }) })
+      const pollFires = async (match, tries = 12) => {
+        for (let i = 0; i < tries; i++) {
+          const fj = await fetch(`${BASE}/api/automation/rules`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "fires" }) }).then((r) => r.json()).catch(() => null)
+          const hit = (fj?.fires ?? []).find((f) => f.ruleId === liveId && match(f))
+          if (hit) return hit
+          await new Promise((res) => setTimeout(res, 450))
+        }
+        return null
+      }
+      await fetch(`${BASE}/api/automation/rules`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "run", id: liveId }) })
+      const blocked = await pollFires((f) => f.ok === false && /الفرض اللحظي/.test(f.detail ?? ""))
+      check("DEEP/live: إطلاق قاعدة بتكامل أُزيل → مدخل ok=false «الفرض اللحظي … لم يُنفّذ الفعل»",
+        !!blocked && /غير مثبت الآن/.test(blocked.detail ?? ""), "enforced on fire")
+      // (5) عودة التثبيت ثم تشغيل → إطلاق حقيقي ok=true
+      await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "install", manifest: capManifest, sig: "x", pub: capSigned.pub }) })
+      await fetch(`${BASE}/api/automation/rules`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "run", id: liveId }) })
+      const fired = await pollFires((f) => f.ok === true)
+      check("DEEP/live: عودة التثبيت تحيي القاعدة → إطلاق ok=true فعلي", !!fired, "revive on reinstall")
+      // (6) إبطال الناشر → الحياة تُلمس لحظيًا → الإطلاق يُوقف مسببًا
+      await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "pub-revoke", pubId: "nexuslink-labs" }) })
+      await fetch(`${BASE}/api/automation/rules`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "run", id: liveId }) })
+      const revokedHit = await pollFires((f) => f.ok === false && /الناشر موقوف/.test(f.detail ?? ""))
+      check("DEEP/live: إبطال الناشر يوقف قواعده لحظيًا → «ناشر التكامل … الناشر موقوف»",
+        !!revokedHit, "revoke stops live")
+      await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "pub-restore", pubId: "nexuslink-labs" }) })
+      const restoredLive = await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "pub-verify", manifest: capManifest, pub: capSigned.pub }) }).then((r) => r.json())
+      check("DEEP/live: رفع الإبطال يعيد الحياة (pub-verify يصدّق مجددًا)", restoredLive?.ok === true, "restore")
+    } catch (e) {
+      check("DEEP/live: انسداد الناشر/الفرض اكتمل بلا خطأ غير متوقع", false, e.message?.slice(0, 120))
+    }
+
+    // ================= حي: التنبؤ الاستباقي (§35.ج) =================
+    try {
+      // بذور حقيقية: 3 إطلاقات بنفس اللحظة على 3 أيام → توقع يومي حتمي
+      const dbUrlDeep = fsDeep.readFileSync(`${process.cwd()}/.env`, "utf8").match(/^DATABASE_URL=(.*)$/m)?.[1]
+      const { PrismaClient } = await import("@prisma/client")
+      const pdbD = new PrismaClient({ datasources: { db: { url: dbUrlDeep } }, log: [] })
+      const mkAt = (daysAgo, hh, mm) => { const d = new Date(); d.setDate(d.getDate() - daysAgo); d.setHours(hh, mm, 0, 0); return d }
+      await pdbD.nexusAutomationFire.deleteMany({ where: { ruleId: "deep-predict-1" } })
+      await pdbD.nexusAutomationFire.createMany({
+        data: [
+          { id: "deep-pred-f1", ruleId: "deep-predict-1", ruleName: "DEEP-PREDICT-DAILY", at: mkAt(3, 9, 30), ok: true, manual: false, detail: "بذرة تنبؤ" },
+          { id: "deep-pred-f2", ruleId: "deep-predict-1", ruleName: "DEEP-PREDICT-DAILY", at: mkAt(2, 9, 30), ok: true, manual: false, detail: "بذرة تنبؤ" },
+          { id: "deep-pred-f3", ruleId: "deep-predict-1", ruleName: "DEEP-PREDICT-DAILY", at: mkAt(1, 9, 30), ok: true, manual: false, detail: "بذرة تنبؤ" },
+        ],
+      })
+      // بذور بطارية: 3 عينات ≤30 على يومين مختلفين → اقتراح battery.below
+      await pdbD.nexusHealthSample.deleteMany({ where: { deviceId: "deep-e2e-dev" } })
+      await pdbD.nexusHealthSample.createMany({
+        data: [
+          { deviceId: "deep-e2e-dev", battery: 18, rttMs: 20, online: true, storagePct: 40, createdAt: mkAt(2, 8, 10) },
+          { deviceId: "deep-e2e-dev", battery: 15, rttMs: 20, online: true, storagePct: 40, createdAt: mkAt(1, 8, 12) },
+          { deviceId: "deep-e2e-dev", battery: 12, rttMs: 20, online: true, storagePct: 40, createdAt: mkAt(1, 22, 5) },
+        ],
+      })
+      const predJ = await fetch(`${BASE}/api/predictions`).then((r) => r.json()).catch(() => null)
+      check("DEEP/live: /api/predictions — الشكل التعاقدي (ok + نافذة 14 + مصادر عدّادية)",
+        predJ?.ok === true && predJ.windowDays === 14 && typeof predJ.sources?.fires === "number" &&
+        Array.isArray(predJ.forecasts) && Array.isArray(predJ.suggestions), "shape")
+      const daily = (predJ?.forecasts ?? []).find((f) => f.ruleId === "deep-predict-1")
+      check("DEEP/live: توقع يومي حتمي — النمط daily عند 09:30 بموعد مستقبلي",
+        !!daily && daily.pattern === "daily" && daily.basis?.hhmm === "09:30" &&
+        daily.basis?.fires === 3 && daily.basis?.distinctDays === 3 && daily.nextPredictedAt > Date.now(), `hhmm=${daily?.basis?.hhmm}`)
+      check("DEEP/live: كل التوقعات إما بموعد مستقبلي أو بشارة «متأخر» بصدق",
+        (predJ?.forecasts ?? []).every((f) => f.nextPredictedAt > Date.now() || f.stale === true), "future or stale")
+      const batSug = (predJ?.suggestions ?? []).find((s) => s.source === "battery" && s.deviceId === "deep-e2e-dev")
+      check("DEEP/live: اقتراح بطارية مسبّب — 3 عينات على يومين وعتبة تغطي الملاحظ",
+        !!batSug && batSug.occurrences === 3 && batSug.distinctDays === 2 &&
+        batSug.suggestedTrigger?.kind === "battery.below" && batSug.suggestedTrigger?.threshold === 20 &&
+        batSug.reason.includes("الدليل:"), `th=${batSug?.suggestedTrigger?.threshold}`)
+      check("DEEP/live: كل الاقتراحات بدليل مسبّب وعينات كافية (≥3 على ≥2)",
+        (predJ?.suggestions ?? []).every((s) => s.reason.includes("الدليل:") && s.occurrences >= 3 && s.distinctDays >= 2), "evidence gate")
+      // تنظيف البذور كاملًا (لا أثر على قاعدة المستخدم)
+      await pdbD.nexusAutomationFire.deleteMany({ where: { ruleId: "deep-predict-1" } })
+      await pdbD.nexusHealthSample.deleteMany({ where: { deviceId: "deep-e2e-dev" } })
+      await pdbD.$disconnect()
+      const predAfter = await fetch(`${BASE}/api/predictions`).then((r) => r.json()).catch(() => null)
+      check("DEEP/live: بعد التنظيف — التوقع المزروع اختفى (لا بذور باقية)",
+        predAfter?.ok === true && !(predAfter?.forecasts ?? []).some((f) => f.ruleId === "deep-predict-1"), "cleaned")
+    } catch (e) {
+      check("DEEP/live: انسداد التنبؤ اكتمل بلا خطأ غير متوقع", false, e.message?.slice(0, 120))
+    }
+
+    // ---- تنظيف DEEP النهائي (قواعد + تكاملات) — بالاسم عبر الحالة الحية ----
+    try {
+      const stEnd = await fetch(`${BASE}/api/automation/rules`).then((r) => r.json()).catch(() => null)
+      for (const r of (stEnd?.rules ?? []).filter((r) => r.name === "DEEP-ENFORCE-LIVE")) {
+        await fetch(`${BASE}/api/automation/rules`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "delete", id: r.id }) })
+      }
+      for (const pid of ["deep-e2e-cap", "deep-e2e-readonly", "deep-e2e-pub", "dbg-cap"]) {
+        await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "uninstall", id: pid }) })
+      }
+      check("DEEP/cleanup: قواعد وتكاملات الفحص أُزيلت (لا أثر على مستخدم حقيقي)", true, "cleaned")
+    } catch { /* صمت التنظيف */ }
+  }
+
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {

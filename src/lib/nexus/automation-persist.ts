@@ -45,12 +45,20 @@ function reviveRule(raw: unknown): AutoRule | null {
       if (sub.and != null) return null
     }
     const createdAt = Number(r.createdAt)
+    // أصل التكامل (§35.ب): يُحيا كما هو إن كان شكله سليمًا — وإلا يُسقط بصدق
+    // (قاعدة بلا أصل صالح = قاعدة مستخدم عادية، لا فرض عليها)
+    const oRaw = r.origin as Record<string, unknown> | undefined
+    const origin = oRaw && typeof oRaw === "object" &&
+      typeof oRaw.plugin === "string" && /^[a-z0-9][a-z0-9-]{1,39}$/.test(oRaw.plugin)
+      ? { plugin: oRaw.plugin }
+      : undefined
     return {
       id,
       name,
       enabled: r.enabled !== false,
       trigger: { ...tr, kind: tKind as TriggerKind },
       action: { ...ac, kind: aKind as ActionKind },
+      ...(origin ? { origin } : {}),
       createdAt: Number.isFinite(createdAt) && createdAt > 0 ? createdAt : Date.now(),
       lastFiredAt: typeof r.lastFiredAt === "number" && r.lastFiredAt > 0 ? r.lastFiredAt : null,
       fireCount: Number.isFinite(Number(r.fireCount)) && Number(r.fireCount) > 0 ? Math.round(Number(r.fireCount)) : 0,

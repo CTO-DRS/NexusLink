@@ -126,6 +126,24 @@ export async function POST(req: NextRequest) {
       })
       return NextResponse.json({ ok: true })
     }
+    if (action === "run") {
+      // تشغيل يدوي عبر rule:run-now — نفس مسار زر الواجهة حرفيًا (بما فيه
+      // الفرض اللحظي §35.ب: قاعدة تكامل ميت لا يُنفّذ فعلها ويثبّت الرفض).
+      // **الإقرار (ack) بعد الحسم**: انتظار ack الجسر بدل waitState —
+      // الدرس الموثق (§35): waitState يلتقط الحالة الابتدائية للمقبس فيُغلق
+      // الاتصال قبل معالجة run-now فتضيع العملية صامتة.
+      const id = String(body.id ?? "").trim()
+      if (!id) return NextResponse.json({ error: "معرف مفقود" }, { status: 400 })
+      const out = await withBridge<Record<string, unknown>>(async (socket) =>
+        new Promise<Record<string, unknown>>((resolve) => {
+          socket.emit("rule:run-now", { id }, (resp: Record<string, unknown>) => resolve(resp ?? { ok: true }))
+        }),
+      )
+      if (out?.ok === false) {
+        return NextResponse.json({ ok: false, error: String(out.error ?? "مرفوض") }, { status: 404 })
+      }
+      return NextResponse.json({ ok: true })
+    }
     return NextResponse.json({ error: `إجراء غير معروف: ${action}` }, { status: 400 })
   } catch (e) {
     // رفض الجسر (تعقيم/قواعد §26.ي/§33.ج) يعود 400 مسببًا — نفس سبب الواجهة
