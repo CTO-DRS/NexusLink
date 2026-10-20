@@ -17,6 +17,19 @@ export type TriggerKind =
   | "health.silence.sustained" // تاريخي: لا عينات صحة خلال المدة (صمت الجهاز عن التقارير)
   | "health.storage.sustained" // تاريخي: التخزين ≥ العتبة لمدة متواصلة (§26.ط — امتلاء مستمر)
 
+/** أنواع «شرط الحالة» المسموح بها كعنصر ثانٍ في المشغل المركب (§33.ج):
+ *  تُقيَّم كحالة الآن عند اكتمال الشرط التاريخي الأول — لا كحافة.
+ *  المشغل المركب يتطلب مشغلًا تاريخيًا مستمرًا أولًا (النوع الأول) + شرط حالة
+ *  ثانٍ من هذه القائمة — وحدة واحدة بلا تعشيش (and داخل and مرفوض).
+ *  المثال المالك: «بطارية ≤ 15% لمدة ساعة والجهاز غير متصل» → رنّ الهاتف. */
+export const COMPOSITE_STATE_KINDS: readonly TriggerKind[] = [
+  "battery.below", "battery.above", "device.connect", "device.disconnect",
+] as const
+
+export function isCompositeStateKind(kind: TriggerKind): boolean {
+  return COMPOSITE_STATE_KINDS.includes(kind)
+}
+
 /** أنواع الأفعال المدعومة في الإصدار الأول (§26.ب) — كلها قنوات قائمة. */
 export type ActionKind =
   | "notify"          // إذاعة إشعار لعملاء الواجهة (حدث auto:fired)
@@ -26,6 +39,10 @@ export type ActionKind =
 
 export interface AutoTrigger {
   kind: TriggerKind
+  /** الشرط المركب (§33.ج): مشغل تاريخي أول + شرط حالة ثانٍ من
+   *  COMPOSITE_STATE_KINDS — يُقيَّم الثانٍ كحالة الآن عند اكتمال الأول.
+   *  مرفوض: تعشيش (and داخل and) أو مشغل أول غير تاريخي أو نوع ثانٍ خارج القائمة. */
+  and?: AutoTrigger
   /** مرشّح الجهاز من سجل الأجهزة (null/غياب = أي جهاز) — للمشغلات الجهازية. */
   deviceId?: string | null
   /** عتبة البطارية 1..100 أو الاستجابة ms 10..60000 (نفس الحقل حسب النوع). */
@@ -69,6 +86,9 @@ export interface AutoRunEntry {
   ok: boolean
   detail: string
   manual: boolean
+  /** الدليل التفسيري (§33.ج): جملة «لماذا أُطلق» المبنية من شطيرة الدليل
+   *  التاريخية + حالة الشرط الثاني — تُدمج في detail المخزّن بالبادئة نفسها. */
+  reason?: string
 }
 
 /** حالة المحرك الكاملة التي تُذاع للعملاء بعد كل تغيير (auto:state). */
@@ -86,7 +106,10 @@ export interface AutoStatePayload {
 }
 
 /** إطلاق مرسوخ (§26.ح) — نسخة دائمة من مدخل السجل مع لحظة الرؤية seenAt:
- *  null = أُطلق بلا واجهة متصلة ولم يُرَ بعد (يظهر في ملخص العودة). */
+ *  null = أُطلق بلا واجهة متصلة ولم يُرَ بعد (يظهر في ملخص العودة).
+ *  reason (§33.ج): الدليل التفسيري للتنبيهات المركبة/التاريخية — يُخزَّن
+ *  داخل detail المرسوخ بالبادئة «الدليل:» فتبقى تنبيهات التاريخ بعد إعادة
+ *  التشغيل بذليلها كاملًا بلا أي تغيير مخطط. */
 export interface AutoFireEntry {
   id: string
   ruleId: string
@@ -96,6 +119,7 @@ export interface AutoFireEntry {
   detail: string
   manual: boolean
   seenAt: number | null
+  reason?: string
 }
 
 /** ملخص التنبيهات المرسوخة في حمولة auto:state (§26.ح). */

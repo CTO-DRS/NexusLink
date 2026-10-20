@@ -22,7 +22,7 @@ import {
   FlaskConical, CheckCircle2, AlertTriangle,
 } from "lucide-react"
 import type { TriggerKind, ActionKind, AutoRule, AutoTestResult } from "@/lib/nexus/automation-types"
-import { SUSTAINED_TRIGGER_KINDS } from "@/lib/nexus/automation-types"
+import { SUSTAINED_TRIGGER_KINDS, COMPOSITE_STATE_KINDS } from "@/lib/nexus/automation-types"
 import { toast } from "sonner"
 
 type TFn = (s: string) => string
@@ -46,6 +46,14 @@ const ACTION_META: Record<ActionKind, { icon: typeof Workflow; label: string }> 
   "clipboard.push": { icon: ClipboardPaste, label: "دفع نص إلى الحافظة الموحدة" },
   "phone.ring": { icon: PhoneCall, label: "رنين الهاتف" },
   wol: { icon: Power, label: "إيقاظ جهاز على الشبكة (WoL)" },
+}
+
+/** تسميات شروط الحالة المسموحة كعنصر ثانٍ في الدمج (§33.ج) */
+const COMPOSITE_META: Record<string, string> = {
+  "battery.below": "بطارية تحت العتبة",
+  "battery.above": "بطارية فوق العتبة",
+  "device.connect": "يوجد جهاز متصل الآن",
+  "device.disconnect": "يوجد جهاز غير متصل الآن",
 }
 
 function triggerSummary(r: AutoRule, tr: TFn): string {
@@ -90,12 +98,18 @@ interface Draft {
   mm: string
   text: string
   mac: string
+  // الشرط المركب (§33.ج): تاريخي أولًا + شرط حالة ثانٍ — بلا تعشيش
+  andEnabled: boolean
+  andKind: TriggerKind
+  andThreshold: string
+  andDeviceId: string
 }
 
 const EMPTY_DRAFT: Draft = {
   name: "", tKind: "device.connect", aKind: "notify",
   deviceId: "", deviceManual: false, threshold: "20", duration: "60", onceAt: "", hh: "8", mm: "0",
   text: "", mac: "",
+  andEnabled: false, andKind: "device.disconnect", andThreshold: "20", andDeviceId: "",
 }
 
 /** بناء المشغّل من مسودة المحرر — مشترك بين الحفظ (save) وفحص التاريخ الحي (§26.ي)
@@ -118,6 +132,14 @@ function buildTrigger(d: Draft): AutoRule["trigger"] {
   if (d.tKind === "time.daily") {
     trig.hh = Math.min(23, Math.max(0, Math.round(Number(d.hh) || 0)))
     trig.mm = Math.min(59, Math.max(0, Math.round(Number(d.mm) || 0)))
+  }
+  // الشرط المركب (§33.ج): يُبنى فقط لمشغل تاريخي أول + شرط حالة من القائمة
+  if (SUSTAINED_TRIGGER_KINDS.includes(d.tKind) && d.andEnabled && COMPOSITE_STATE_KINDS.includes(d.andKind)) {
+    const sub: AutoRule["trigger"] = { kind: d.andKind }
+    if (d.andDeviceId.trim()) sub.deviceId = d.andDeviceId.trim()
+    if (d.andKind === "battery.below") sub.threshold = Math.min(100, Math.max(1, Math.round(Number(d.andThreshold) || 20)))
+    if (d.andKind === "battery.above") sub.threshold = Math.min(100, Math.max(1, Math.round(Number(d.andThreshold) || 80)))
+    trig.and = sub
   }
   return trig
 }
@@ -159,6 +181,10 @@ export function AutomationView() {
       mm: String(r.trigger.mm ?? 0),
       text: r.action.text || "",
       mac: r.action.mac || "",
+      andEnabled: !!r.trigger.and,
+      andKind: r.trigger.and?.kind ?? "device.disconnect",
+      andThreshold: String(r.trigger.and?.threshold ?? (r.trigger.and?.kind === "battery.above" ? 80 : 20)),
+      andDeviceId: r.trigger.and?.deviceId || "",
     })
   }
 
@@ -267,6 +293,9 @@ export function AutomationView() {
                   </div>
                   <div className="flex flex-wrap gap-1.5 text-[11px]">
                     <Badge variant="outline" className="gap-1 font-normal"><TIcon className="size-3 text-violet-500" />{t(TRIGGER_META[r.trigger.kind]?.label ?? r.trigger.kind)}: <span className="font-medium">{triggerSummary(r, t)}</span></Badge>
+                    {r.trigger.and && (
+                      <Badge variant="outline" className="gap-1 font-normal border-dashed" data-testid="automation-rule-and-chip">+ {t(COMPOSITE_META[r.trigger.and.kind] ?? r.trigger.and.kind)}{r.trigger.and.threshold != null ? ` (${r.trigger.and.threshold}%)` : ""}</Badge>
+                    )}
                     {SUSTAINED_TRIGGER_KINDS.includes(r.trigger.kind) && (
                       <Badge variant="outline" className="gap-1 font-normal text-sky-600 border-sky-500/40" data-testid="automation-historical-badge"><History className="size-3" />{t("تاريخي")}</Badge>
                     )}
@@ -398,6 +427,42 @@ export function AutomationView() {
                     <Label className="shrink-0 text-xs">{t("المدة (دقائق)")}</Label>
                     <Input type="number" min={1} max={1440} value={draft.duration} onChange={(e) => setDraft({ ...draft, duration: e.target.value })} data-testid="automation-duration-input" />
                     <span className="text-[10px] text-muted-foreground shrink-0">{t("1..1440 — يُقرأ من تاريخ مركز الصحة")}</span>
+                  </div>
+                )}
+                {/* الشرط المركب (§33.ج): شرط حالة ثانٍ يُقيَّم عند اكتمال التاريخ — للقواعد التاريخية حصرًا */}
+                {SUSTAINED_TRIGGER_KINDS.includes(draft.tKind) && (
+                  <div className="space-y-1.5 rounded-xl border border-dashed p-2.5" data-testid="automation-and-box">
+                    <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={draft.andEnabled}
+                        onChange={(e) => setDraft({ ...draft, andEnabled: e.target.checked })}
+                        className="accent-primary"
+                        data-testid="automation-and-toggle"
+                      />
+                      {t("شرط إضافي (و/AND) — حالة يجب أن تتحقق الآن أيضًا")}
+                    </label>
+                    {draft.andEnabled && (
+                      <div className="space-y-1.5 ps-6">
+                        <Select value={draft.andKind} onValueChange={(v) => setDraft({ ...draft, andKind: v as TriggerKind, andThreshold: v === "battery.above" ? "80" : "20" })}>
+                          <SelectTrigger data-testid="automation-and-kind"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {COMPOSITE_STATE_KINDS.map((k) => (
+                              <SelectItem key={k} value={k}>{t(COMPOSITE_META[k])}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {(draft.andKind === "battery.below" || draft.andKind === "battery.above") && (
+                          <div className="flex items-center gap-2">
+                            <Label className="shrink-0 text-xs">{t("العتبة %")}</Label>
+                            <Input type="number" min={1} max={100} value={draft.andThreshold} onChange={(e) => setDraft({ ...draft, andThreshold: e.target.value })} data-testid="automation-and-threshold" />
+                          </div>
+                        )}
+                        {(draft.andKind === "device.connect" || draft.andKind === "device.disconnect") && (
+                          <Input value={draft.andDeviceId} onChange={(e) => setDraft({ ...draft, andDeviceId: e.target.value })} placeholder={t("معرّف جهاز — فارغ = أي جهاز")} data-testid="automation-and-device" />
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
                 {/* فحص التاريخ الحي (§26.ي) — قراءة محضة قبل الحفظ: هل يستوفي التاريخ الحالي الشرط؟ ولماذا لا؟ */}

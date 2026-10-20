@@ -8,10 +8,10 @@ import { syncDnd } from "@/hooks/use-comms"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { Sun, Moon, Link2, Smartphone, BellOff, Bell, MessageSquareText, Zap, Languages, Search } from "lucide-react"
+import { Sun, Moon, Link2, Smartphone, BellOff, Bell, MessageSquareText, Zap, Languages, Search, ScanSearch } from "lucide-react"
 
 export function TopBar() {
-  const { theme, toggleTheme, devices, setView, setPaletteOpen } = useNexus()
+  const { theme, toggleTheme, devices, setView, setPaletteOpen, setUnifiedSearchOpen } = useNexus()
   const { t, lang } = useI18n()
   const phone = useComms((s) => s.phone)
   const unreadNotifs = useComms((s) => s.notifications.filter((n) => n.status === "new").length)
@@ -35,6 +35,24 @@ export function TopBar() {
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* البحث الموحد (§33.أ) */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-xl gap-1.5 px-2.5 hidden sm:flex"
+                onClick={() => setUnifiedSearchOpen(true)}
+                aria-label={`${t("بحث موحد")} (Ctrl+Shift+F)`}
+              >
+                <ScanSearch className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline text-[11px] font-medium">{t("بحث موحد")}</span>
+                <kbd className="hidden xl:inline-flex items-center rounded border bg-muted px-1 font-mono text-[9px]" data-no-i18n>Ctrl+Shift+F</kbd>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("بحث موحد عبر الأجهزة والملفات والرسائل")} — Ctrl+Shift+F</TooltipContent>
+          </Tooltip>
+
           {/* لوحة الأوامر */}
           <Tooltip>
             <TooltipTrigger asChild>
