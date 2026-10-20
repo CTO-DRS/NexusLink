@@ -12,13 +12,13 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { useNexus, SHORTCUT_META, type ShortcutAction } from "@/lib/store"
-import { useI18n, announce } from "@/lib/i18n"
+import { useI18n, announce, LANGS, langMeta } from "@/lib/i18n"
 import {
   Moon, Sun, Languages, ShieldCheck, Wifi, Cpu, Info, Radio, Contrast,
   Accessibility, Keyboard, Gauge, HardDriveDownload, Sparkles, RotateCcw,
   Ear, Volume2, CheckCircle2, AlertTriangle, Rocket, Package, Globe,
   FolderSync, Plus, Trash2, FolderOpen, MonitorPlay, Camera, Mic,
-  Lock, Fingerprint, ScrollText, History,
+  Lock, Fingerprint, ScrollText, History, Type,
 } from "lucide-react"
 import { toast } from "sonner"
 import { pickFolder } from "@/lib/desktop-files"
@@ -432,17 +432,25 @@ export function SettingsView() {
       {/* اللغة */}
       <Card>
         <CardContent className="p-5 space-y-4">
-          <SectionTitle icon={Globe} title={t("اللغة والاتجاه")} desc={t("عربي RTL كامل + إنجليزي LTR — التبديل فوري لكل الواجهة")} />
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant={lang === "ar" ? "default" : "outline"} onClick={() => setLang("ar")} className="gap-1.5">
-              <Languages className="w-4 h-4" /> العربية · RTL
-            </Button>
-            <Button size="sm" variant={lang === "en" ? "default" : "outline"} onClick={() => setLang("en")} className="gap-1.5">
-              <Languages className="w-4 h-4" /> English · LTR
-            </Button>
-            <Badge variant="outline" className="ms-auto" data-no-i18n>{lang === "ar" ? "ar · RTL" : "en · LTR"}</Badge>
+          <SectionTitle icon={Globe} title={t("اللغة والاتجاه")} desc={t("ست لغات: عربي RTL + خمس LTR — التبديل فوري لكل الواجهة")} />
+          <div className="flex flex-wrap items-center gap-2">
+            {LANGS.map((L) => (
+              <Button
+                key={L.code}
+                size="sm"
+                variant={lang === L.code ? "default" : "outline"}
+                onClick={() => setLang(L.code)}
+                className="gap-1.5"
+                aria-label={`${t("اللغة")}: ${L.native} (${t(L.dir === "rtl" ? "من اليمين إلى اليسار" : "من اليسار إلى اليمين")})`}
+                aria-pressed={lang === L.code}
+              >
+                <Languages className="w-4 h-4" />
+                <span data-no-i18n>{L.native}{L.dir === "rtl" ? " · RTL" : ""}</span>
+              </Button>
+            ))}
+            <Badge variant="outline" className="ms-auto" data-no-i18n>{lang} · {langMeta(lang).dir.toUpperCase()}</Badge>
           </div>
-          <p className="text-[11px] text-muted-foreground">{t("اختصار: Ctrl+Shift+E")}</p>
+          <p className="text-[11px] text-muted-foreground">{t("اختصار: Ctrl+Shift+E — يدور بين الست لغات")}</p>
         </CardContent>
       </Card>
 
@@ -456,6 +464,25 @@ export function SettingsView() {
               desc={t("رابط «تخطّي إلى المحتوى» + حلقات تركيز أوضح + إعلانات صوتية للأحداث")}
             />
             <Switch checked={srMode} onCheckedChange={(b) => { setSrMode(b); announce(b ? t("وضع قارئ الشاشة مفعّل") : t("وضع قارئ الشاشة معطل")) }} aria-label={t("وضع قارئ الشاشة")} />
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between gap-3">
+            <SectionTitle icon={Type} title={t("حجم الخط")} desc={t("ثلاثة مستويات تُطبّق على الواجهة كلها")} />
+            <div className="flex items-center gap-1.5">
+              {([1, 1.125, 1.25] as const).map((s) => (
+                <Button
+                  key={s}
+                  size="sm"
+                  variant={fontScale === s ? "default" : "outline"}
+                  onClick={() => { setFontScale(s); announce(t("حجم الخط") + " " + (s === 1 ? "100%" : s === 1.125 ? "112%" : "125%")) }}
+                  className="min-w-11"
+                  aria-label={`${t("حجم الخط")} ${s === 1 ? "100%" : s === 1.125 ? "112%" : "125%"}`}
+                  aria-pressed={fontScale === s}
+                >
+                  <span data-no-i18n>{s === 1 ? "A" : s === 1.125 ? "A+" : "A++"}</span>
+                </Button>
+              ))}
+            </div>
           </div>
           <Separator />
           <div className="flex items-center justify-between gap-3">

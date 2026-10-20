@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { useNexus, initPolishPrefs, type ShortcutAction } from "@/lib/store"
-import { useI18n, initLang, announce } from "@/lib/i18n"
+import { useI18n, initLang, announce, cycleLang, langMeta } from "@/lib/i18n"
 import { Toaster } from "@/components/ui/sonner"
 import { TopBar } from "@/components/nexus/top-bar"
 import { Dock } from "@/components/nexus/dock"
@@ -57,7 +57,7 @@ function comboOf(e: KeyboardEvent): string {
 
 export function NexusApp() {
   const { view, theme, shortcuts } = useNexus()
-  const { lang, setLang } = useI18n()
+  const { lang, t } = useI18n()
   const srMode = useNexus((s) => s.srMode)
   const onboarded = useNexus((s) => s.onboarded)
   const setDevices = useNexus((s) => s.setDevices)
@@ -135,7 +135,10 @@ export function NexusApp() {
       }
       else if (byCombo("theme")) st.toggleTheme()
       else if (byCombo("contrast")) st.setContrast(st.contrast === "high" ? "normal" : "high")
-      else if (byCombo("lang")) setLang(document.documentElement.dir === "rtl" ? "en" : "ar")
+      else if (byCombo("lang")) {
+        const next = cycleLang()
+        announce(t("تم تبديل اللغة إلى") + " " + langMeta(next).native)
+      }
       else if (byCombo("speedtest")) st.setView("tools")
       else if (byCombo("dnd")) syncDnd(!useComms.getState().phone.dnd)
       else handled = false
@@ -143,7 +146,7 @@ export function NexusApp() {
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [setLang, shortcuts])
+  }, [t, shortcuts])
 
   // poll devices (heartbeat feel)
   useEffect(() => {
@@ -179,7 +182,7 @@ export function NexusApp() {
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-secondary/60 to-background">
       {srMode && (
         <a href="#nexus-main" className="nexus-skip-link">
-          {lang === "ar" ? "تخطَّ إلى المحتوى الرئيسي" : "Skip to main content"}
+          {t("تخطَّ إلى المحتوى الرئيسي")}
         </a>
       )}
       <div key={lang} className="contents">

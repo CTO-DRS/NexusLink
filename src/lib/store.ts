@@ -60,7 +60,7 @@ export const SHORTCUT_META: Record<ShortcutAction, string> = {
   sendFile: "إرسال ملف سريع",
   lock: "قفل التطبيق",
   theme: "تبديل المظهر",
-  lang: "تبديل اللغة (ع/EN)",
+  lang: "تبديل اللغة (دورة الست)",
   contrast: "تبديل التباين العالي",
   speedtest: "بدء اختبار السرعة",
   dnd: "تبديل عدم الإزعاج",

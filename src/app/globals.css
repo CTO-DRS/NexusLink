@@ -315,7 +315,11 @@ html.motion-reduced *::after {
   top: 8px;
 }
 
-/* حلقات تركيز أوضح في وضع قارئ الشاشة */
+/* حلقات التركيز مرئية دائمًا (M1.4 — عقد §31.ب.2) — وتشتد في وضع قارئ الشاشة */
+*:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
 html[data-sr="on"] *:focus-visible {
   outline: 3px solid var(--ring) !important;
   outline-offset: 2px !important;

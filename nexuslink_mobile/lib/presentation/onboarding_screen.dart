@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../state/security_providers.dart' show onboardingDoneProvider;
+import 'language_chips.dart';
 
 /// Onboarding أول تشغيل (FA-10 البند 7) — 5 خطوات قصيرة:
 /// ترحيب + لغة ← صلاحيات بطلبات حقيقية ← الاقتران ← جولة الميزات ← انطلاق.
@@ -160,7 +161,6 @@ class _Welcome extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isAr = context.locale.languageCode == 'ar';
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
       child: Column(
@@ -184,18 +184,14 @@ class _Welcome extends ConsumerWidget {
           const SizedBox(height: 30),
           Text('onb.language'.tr(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
           const SizedBox(height: 10),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'ar', label: Text('العربية'), icon: Icon(Icons.translate_rounded, size: 16)),
-              ButtonSegment(value: 'en', label: Text('English'), icon: Icon(Icons.translate_rounded, size: 16)),
-            ],
-            selected: {isAr ? 'ar' : 'en'},
-            onSelectionChanged: (s) async {
-              final locale = Locale(s.first);
+          // M1.4 (عقد §31.ب.5): اللغات الست في الترحيب
+          LanguageChips(
+            current: context.locale,
+            onSelect: (locale) async {
               await context.setLocale(locale);
               try {
                 final p = await SharedPreferences.getInstance();
-                await p.setString('nexus.onboarding.lang', s.first);
+                await p.setString('nexus.onboarding.lang', locale.languageCode);
               } catch (_) {}
             },
           ),

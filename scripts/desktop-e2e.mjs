@@ -5183,6 +5183,111 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     }
   }
 
+  // [LANG-A11Y] M1.4 — اللغات الست والإتاحة الكاملة (عقد §31)
+  {
+    console.log("== [LANG-A11Y] M1.4 six languages + full accessibility ==")
+    const fsL = await import("node:fs")
+    const base = "http://127.0.0.1:3000"
+    const readF = (p) => fsL.readFileSync(p, "utf8")
+
+    // ---- source: engine (عقد §31.أ) ----
+    const i18nSrc = readF("src/lib/i18n.ts")
+    const langs6 = (i18nSrc.match(/code: "(ar|en|fr|es|de|ru)"/g) || []).length
+    check("LANG-A11Y/source: سجل اللغات الست المعاقد — ar rtl + en/fr/es/de/ru ltr بمحارف Intl ووحدة سرعة",
+      langs6 === 6 && i18nSrc.includes('code: "ar", native: "العربية", dir: "rtl"')
+      && i18nSrc.includes('code: "ru", native: "Русский", dir: "ltr"'), `registry=${langs6}/6`)
+    check("LANG-A11Y/source: سلسلة السقوط التعاقدية lang→en→raw — أي سلسلة غير مُترجَمة تظهر بالإنجليزية لا بالعربية",
+      i18nSrc.includes("translateTextTo") && i18nSrc.includes("fromDict(EN_DICT, input)") && i18nSrc.includes("return input"),
+      "map(lang)→map(en)→raw")
+    check("LANG-A11Y/source: تحميل كسول للمعاجم الأربع + إشارة الجاهزية بعد اكتمال المعجم (عقد §31.أ)",
+      i18nSrc.includes('import("./i18n/fr.json")') && i18nSrc.includes('import("./i18n/es.json")')
+      && i18nSrc.includes('import("./i18n/de.json")') && i18nSrc.includes('import("./i18n/ru.json")')
+      && i18nSrc.includes('dataset.i18nReady = "1"'), "dynamic import ×4 + i18nReady")
+    check("LANG-A11Y/source: الماسح لغير العربية كلها (كان en حصرًا) — بنفس تخطيات CODE/PRE/KBD والسمات",
+      i18nSrc.includes("if (currentLang === \"ar\") return") && i18nSrc.includes("sweepAttrs"), "sweeper gate non-ar")
+    check("LANG-A11Y/source: دورة كاملة سداسية cycleLang (ar→en→fr→es→de→ru→ar)",
+      i18nSrc.includes("export function cycleLang") && i18nSrc.includes("(i + 1) % LANGS.length"), "6-cycle")
+
+    // ---- source: dictionaries ×4 ----
+    const dCount = (p) => { try { return Object.keys(JSON.parse(readF(p))).filter((k) => /[\u0600-\u06FF]/.test(k)).length } catch { return 0 } }
+    const cFr = dCount("src/lib/i18n/fr.json")
+    const cEs = dCount("src/lib/i18n/es.json")
+    const cDe = dCount("src/lib/i18n/de.json")
+    const cRu = dCount("src/lib/i18n/ru.json")
+    check("LANG-A11Y/source: معاجم الويب الأربع — fr/es كاملة ≥3,300 وde/ru بتغطية متدرجة موثقة ≥2,100 (نافذة حصة الترجمة أُغلقت عند الإغلاق — المولّد قابل للاستئناف ويستكمل بلا تغيير كود §31.د.1)",
+      cFr >= 3300 && cEs >= 3300 && cDe >= 2100 && cRu >= 2100, `fr=${cFr} es=${cEs} de=${cDe} ru=${cRu}`)
+    check("LANG-A11Y/source: مولّد القواميس بنمط الدروس — حمولات مفهرسة (درس ترجمة المفاتيح المختلطة) + طابور تدوير + قابل للاستئناف",
+      readF("scripts/translate-batch-lang.mjs").includes("JSON.stringify(srcs)")
+      && readF("scripts/translate-batch-lang.mjs").includes("queue units=")
+      && readF("scripts/translate-batch-lang.mjs").includes("i18n-progress-"), "indexed payloads + RR queue + resumable")
+
+    // ---- source: UI touchpoints ----
+    const setSrc = readF("src/components/nexus/settings-view.tsx")
+    check("LANG-A11Y/source: بطاقة اللغة — ستة أزرار من LANGS.map بأسماء أصلية + aria-pressed + شارة الاتجاه الحي",
+      setSrc.includes("LANGS.map") && setSrc.includes("aria-pressed={lang === L.code}") && setSrc.includes("langMeta(lang).dir.toUpperCase()"), "6 language buttons")
+    check("LANG-A11Y/source: بطاقة حجم الخط — ثلاثة مستويات (أ/أ+/أ++) بمعلق aria-pressed وإعلان (فجوة §31.ب.1 — المخزن كان بلا واجهة)",
+      setSrc.includes("حجم الخط") && setSrc.includes("setFontScale") && setSrc.includes("[1, 1.125, 1.25]"), "font-scale UI ×3")
+    check("LANG-A11Y/source: زر الشريط العلوي — دورة سداسية بلغة تالية + aria-label مركب",
+      readF("src/components/nexus/top-bar.tsx").includes("cycleLang()") && readF("src/components/nexus/top-bar.tsx").includes("aria-label={`${t(\"تبديل اللغة\")}"), "cycle button")
+    check("LANG-A11Y/source: onboarding — رقائق الست من LANGS.map في خطوة الترحيب",
+      readF("src/components/nexus/onboarding.tsx").includes("LANGS.map") && readF("src/components/nexus/onboarding.tsx").includes("aria-pressed"), "onboarding 6 chips")
+    const appSrc = readF("src/components/nexus/nexus-app.tsx")
+    check("LANG-A11Y/source: الاختصار يُدير دورة الست مع إعلان قارئ الشاشة + رابط التخطي عبر المحرك t() (عقد §31.ب.4)",
+      appSrc.includes("const next = cycleLang()") && appSrc.includes('announce(t("تم تبديل اللغة إلى")') && appSrc.includes('{t("تخطَّ إلى المحتوى الرئيسي")}'), "shortcut 6-cycle + t() skip link")
+
+    // ---- source: a11y CSS ----
+    const cssSrc = readF("src/app/globals.css")
+    check("LANG-A11Y/source: حلقات التركيز مرئية دائمًا 2px وتشتد 3px في وضع قارئ الشاشة (عقد §31.ب.2)",
+      cssSrc.includes("*:focus-visible {") && cssSrc.includes("outline: 2px solid var(--ring)") && cssSrc.includes('html[data-sr="on"] *:focus-visible'), "focus-visible always")
+
+    // ---- source: store font scale application ----
+    const storeSrc = readF("src/lib/store.ts")
+    check("LANG-A11Y/source: تطبيق مقياس الخط html.style.fontSize = 16×scale (قائم ويغطيه E2E الآن)",
+      storeSrc.includes("html.style.fontSize = `${16 * fontScale}px`"), "fontSize 16×scale")
+
+    // ---- source: phone six locales (عقد §31.ب.5) ----
+    const flatCount = (p) => {
+      const out = []
+      const walk = (o, pre) => { for (const [k, v] of Object.entries(o)) { const key = pre ? `${pre}.${k}` : k; if (v && typeof v === "object") walk(v, key); else out.push(key) } }
+      try { walk(JSON.parse(readF(p)), "") } catch { return 0 }
+      return out.length
+    }
+    const pAr = flatCount("nexuslink_mobile/assets/translations/ar.json")
+    const pFr = flatCount("nexuslink_mobile/assets/translations/fr.json")
+    const pEs = flatCount("nexuslink_mobile/assets/translations/es.json")
+    const pDe = flatCount("nexuslink_mobile/assets/translations/de.json")
+    const pRu = flatCount("nexuslink_mobile/assets/translations/ru.json")
+    check("LANG-A11Y/source: ملفات الهاتف الأربع بتكافؤ مفاتيح كامل مع ar (619)",
+      pAr === 619 && pFr === 619 && pEs === 619 && pDe === 619 && pRu === 619, `ar=${pAr} fr=${pFr} es=${pEs} de=${pDe} ru=${pRu}`)
+    const mainDart = readF("nexuslink_mobile/lib/main.dart")
+    const chipsDart = readF("nexuslink_mobile/lib/presentation/language_chips.dart")
+    const natives6 = (chipsDart.match(/'(العربية|English|Français|Español|Deutsch|Русский)'/g) || []).length
+    check("LANG-A11Y/source: supportedLocales سداسية في main.dart + منتقي رقائق مشترك بأسماء أصلية سداسية",
+      mainDart.includes("Locale('ar'), Locale('en'), Locale('fr'), Locale('es'), Locale('de'), Locale('ru')") && natives6 === 6, "6 locales + 6 native chips")
+    check("LANG-A11Y/source: منتقي الهاتف مشترك في الإعدادات والترحيب (استُبدل الثنائي الصلب)",
+      readF("nexuslink_mobile/lib/presentation/settings_screen.dart").includes("LanguageChips(")
+      && readF("nexuslink_mobile/lib/presentation/onboarding_screen.dart").includes("LanguageChips("), "shared picker ×2 screens")
+
+    // ---- live: i18n-status (بيانات وصفية حصرًا — F6 متوافق) ----
+    try {
+      const st = await (await fetch(`${base}/api/i18n-status`)).json()
+      const byCode = Object.fromEntries((st.langs ?? []).map((l) => [l.code, l]))
+      check("LANG-A11Y/live: /api/i18n-status حي — عقد §31 + سلسلة السقوط + ست لغات",
+        st?.ok === true && st?.contract === "§31" && st?.fallback === "lang→en→raw" && (st.langs ?? []).length === 6, `langs=${(st.langs ?? []).length}`)
+      check("LANG-A11Y/live: الاتجاهات المعاقدة — ar rtl حصرًا والخمس الباقية ltr",
+        byCode.ar?.dir === "rtl" && ["en", "fr", "es", "de", "ru"].every((c) => byCode[c]?.dir === "ltr"), "1 rtl + 5 ltr")
+      check("LANG-A11Y/live: عدّادات المعاجم حية — en كامل ≥3,400 وfr/es ≥3,300 وde/ru متدرجة ≥2,100 وar بلا معجم (المفاتيح نفسها)",
+        byCode.en?.entries >= 3400 && byCode.fr?.entries >= 3300 && byCode.es?.entries >= 3300
+        && byCode.de?.entries >= 2100 && byCode.ru?.entries >= 2100 && byCode.ar?.entries === null,
+        `en=${byCode.en?.entries} fr=${byCode.fr?.entries} es=${byCode.es?.entries} de=${byCode.de?.entries} ru=${byCode.ru?.entries}`)
+      check("LANG-A11Y/live: الأسماء الأصلية بالسجل المعاقد (بيانات وصفية بلا محتوى ترجمة — F6)",
+        byCode.ar?.native === "العربية" && byCode.fr?.native === "Français" && byCode.es?.native === "Español"
+        && byCode.de?.native === "Deutsch" && byCode.ru?.native === "Русский", "natives match")
+    } catch (eI18n) {
+      check("LANG-A11Y/live: /api/i18n-status حي", false, eI18n instanceof Error ? eI18n.message : String(eI18n))
+    }
+  }
+
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {

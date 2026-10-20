@@ -3,7 +3,7 @@
 import { useNexus } from "@/lib/store"
 import { useComms } from "@/lib/comms-store"
 import { useProd } from "@/lib/prod-store"
-import { useI18n } from "@/lib/i18n"
+import { useI18n, LANGS, cycleLang, langMeta } from "@/lib/i18n"
 import { syncDnd } from "@/hooks/use-comms"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -12,7 +12,7 @@ import { Sun, Moon, Link2, Smartphone, BellOff, Bell, MessageSquareText, Zap, La
 
 export function TopBar() {
   const { theme, toggleTheme, devices, setView, setPaletteOpen } = useNexus()
-  const { t, lang, setLang } = useI18n()
+  const { t, lang } = useI18n()
   const phone = useComms((s) => s.phone)
   const unreadNotifs = useComms((s) => s.notifications.filter((n) => n.status === "new").length)
   const unreadMsgs = useComms((s) => s.conversations.reduce((acc, c) => acc + c.unread, 0))
@@ -60,11 +60,15 @@ export function TopBar() {
                 variant="outline"
                 size="sm"
                 className="h-8 rounded-xl gap-1.5 px-2.5"
-                onClick={() => setLang(lang === "ar" ? "en" : "ar")}
-                aria-label={t("تبديل اللغة")}
+                onClick={() => cycleLang()}
+                aria-label={`${t("تبديل اللغة")} — ${langMeta(lang).native} → ${langMeta(LANGS[(LANGS.findIndex((x) => x.code === lang) + 1) % LANGS.length].code).native}`}
               >
                 <Languages className="w-3.5 h-3.5" />
-                <span className="text-[11px] font-bold" data-no-i18n>{lang === "ar" ? "EN" : "ع"}</span>
+                <span className="text-[11px] font-bold" data-no-i18n>
+                  {LANGS[(LANGS.findIndex((x) => x.code === lang) + 1) % LANGS.length].code === "ar"
+                    ? "ع"
+                    : LANGS[(LANGS.findIndex((x) => x.code === lang) + 1) % LANGS.length].code.slice(0, 2).toUpperCase()}
+                </span>
               </Button>
             </TooltipTrigger>
             <TooltipContent>{t("تبديل اللغة")} — Ctrl+Shift+E</TooltipContent>
