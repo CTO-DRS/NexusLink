@@ -1,0 +1,17 @@
+{
+  "name": "NexusLink — العميل الوِب المستقل",
+  "short_name": "NexusLink",
+  "description": "كل قدرات جهازك من متصفحك — مزامنة خاصة صفر-سحابة، صفر بايت يغادر جهازك",
+  "id": "/web-client/",
+  "start_url": "/web-client/index.html",
+  "scope": "/web-client/",
+  "display": "standalone",
+  "dir": "rtl",
+  "lang": "ar",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    { "src": "/web-client/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/web-client/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

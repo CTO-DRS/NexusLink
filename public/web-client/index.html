@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-client="nexus-web">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="description" content="NexusLink — العميل الوِب المستقل: كل قدرات جهازك من متصفحك، صفر بايت يغادر الشبكة المحلية" />
+  <title>NexusLink — العميل الوِب المستقل</title>
+  <link rel="manifest" href="/web-client/manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="/web-client/icon.svg" />
+  <link rel="stylesheet" href="/web-client/style.css" />
+</head>
+<body>
+  <header class="top" role="banner">
+    <div class="brand">
+      <img class="logo" src="/web-client/icon.svg" alt="" width="28" height="28" />
+      <div class="brand-text">
+        <strong id="brand-name">NexusLink</strong>
+        <span id="brand-tag" class="muted"></span>
+      </div>
+    </div>
+    <div class="top-tools">
+      <span id="ver-badge" class="badge" hidden></span>
+      <span id="health-dot" class="dot off" title="health"></span>
+      <button id="lang-btn" class="btn ghost" type="button">EN</button>
+      <a id="tv-link" class="btn ghost" href="/web-client/?tv=1">TV</a>
+    </div>
+  </header>
+
+  <nav id="tabs" class="tabs" role="tablist" aria-label="sections"></nav>
+
+  <main id="view" class="view" role="tabpanel">
+    <p class="muted" id="boot-note"></p>
+  </main>
+
+  <footer class="foot">
+    <span id="foot-zero"></span>
+    <span class="muted" id="foot-origin"></span>
+  </footer>
+
+  <noscript>هذا العميل يحتاج جافاسكربت — This client requires JavaScript.</noscript>
+  <script type="module" src="/web-client/app.js"></script>
+</body>
+</html>

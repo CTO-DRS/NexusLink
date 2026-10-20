@@ -6397,6 +6397,115 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     } catch { /* صمت التنظيف */ }
   }
 
+  // ================================================================================
+  // ====== WEB — العميل الوِب المستقل (عقد §36 — M4.4 النواة المحلية) ======
+  // ====== منظرٌ لا باب: أثر ثابت صفر-بناء فوق الأسطح الثمانية القائمة حصرًا ======
+  // ================================================================================
+  console.log("\n== WEB: standalone web client (§36) ==")
+  {
+    const fsWeb = (await import("node:fs")).default
+    const readWeb = (p) => { try { return fsWeb.readFileSync(`${process.cwd()}/${p}`, "utf8") } catch { return "" } }
+    const WROOT = "public/web-client"
+    const WFILES = ["index.html", "style.css", "app.js", "manifest.webmanifest", "sw.js", "icon.svg"]
+    const wsrc = Object.fromEntries(WFILES.map((f) => [f, readWeb(`${WROOT}/${f}`)]))
+
+    // ---- (أ) مصدر: الأثر ونقاؤه ----
+    check("WEB/src: الأثر الستة كاملة غير فارغة",
+      WFILES.every((f) => wsrc[f].length > 100), WFILES.map((f) => `${f}:${wsrc[f].length}`).join(" "))
+    const stripped = WFILES.map((f) => wsrc[f].replace(/https?:\/\/www\.w3\.org\/[\w./-]*/g, "")).join("\n")
+    const extHits = stripped.match(/https?:\/\//g) ?? []
+    check("WEB/src: صفر عنوان مطلق خارجي في الأثر كله (إعفاء xmlns فقط)",
+      extHits.length === 0, `hits=${extHits.length}`)
+    const jsSrc = wsrc["app.js"]
+    check("WEB/src: بناء DOM آمن — لا innerHTML ولا eval ولا document.write",
+      !jsSrc.includes("innerHTML") && !jsSrc.includes("eval(") && !jsSrc.includes("document.write") &&
+      jsSrc.includes("textContent") && jsSrc.includes("replaceChildren"), "safe DOM")
+
+    // ---- (ب) النواة النقية عبر استيراد data:URL (بلا متصفح) ----
+    let core = null
+    try { core = await import("data:text/javascript;base64," + Buffer.from(jsSrc).toString("base64")) } catch { /* يُفحص أدناه */ }
+    check("WEB/src: النواة النقية تُستورد بلا متصفح (data:URL)",
+      !!core && typeof core.t === "function" && typeof core.makeGuardedFetch === "function" &&
+      typeof core.sumTrigger === "function", "core import")
+    const arK = Object.keys(core?.I18N?.ar ?? {})
+    const enK = Object.keys(core?.I18N?.en ?? {})
+    check("WEB/src: توازن الترجمة المضمنة ar/en مفتاحًا بمفتاح (≥100)",
+      arK.length >= 100 && enK.length === arK.length && arK.every((k) => enK.includes(k)), `keys=${arK.length}/${enK.length}`)
+    check("WEB/src: لوحة التبويبات الثمانية بمفاتيحها في السجلين",
+      Array.isArray(core?.TABS) && core.TABS.length === 8 &&
+      core.TABS.every((tb) => arK.includes(tb.key) && enK.includes(tb.key)), "8 tabs")
+    const tvDenied = await core.makeGuardedFetch(() => Promise.resolve("OK-GET"), true)("/api/x", { method: "POST" })
+      .then(() => "LEAKED").catch((e) => `blocked:${e.message}`)
+    const tvOk = await core.makeGuardedFetch(() => Promise.resolve("OK-GET"), true)("/api/health")
+      .then((r) => r).catch(() => "ERR")
+    check("WEB/src: حارس TV — POST يُرفض قبل الإرسال وGET يعبر",
+      String(tvDenied).startsWith("blocked:") && tvOk === "OK-GET", String(tvDenied).slice(0, 36))
+    check("WEB/src: خلاصات النواة — مركّب ∧ وأفعال وترجمة بمتغيرات",
+      core.sumTrigger({ kind: "battery.below", threshold: 20, and: { kind: "health.rtt.sustained", threshold: 500, durationMin: 10 } }, "en").includes("∧") &&
+      core.sumAction({ kind: "notify", text: "x" }, "ar").includes("x") &&
+      core.t("en", "s_total", { n: 7 }) === "7 results", "core helpers")
+    const T0 = Date.parse("2026-01-15T12:00:00Z")
+    check("WEB/src: fmtRel/fmtBytes حتمية (now محقون) وdirOf rtl/ltr",
+      core.fmtRel(T0 - 90 * 60000, "en", T0) === "1h ago" && core.fmtRel(T0 - 90 * 60000, "ar", T0) === "قبل 1 س" &&
+      core.fmtBytes(1536 * 1024 * 1024) === "1.5 GB" && core.dirOf("ar") === "rtl" && core.dirOf("en") === "ltr", "pure helpers")
+
+    // ---- (ج) manifest وsw وindex ----
+    let mf = {}
+    try { mf = JSON.parse(wsrc["manifest.webmanifest"] || "{}") } catch { /* يُفحص */ }
+    check("WEB/src: manifest — standalone وبداية صريحة index.html (درس الـ308) ونطاق صحيح",
+      mf.display === "standalone" && mf.start_url === "/web-client/index.html" && mf.scope === "/web-client/" &&
+      Array.isArray(mf.icons) && mf.icons.length >= 1, mf.start_url)
+    const swSrc = wsrc["sw.js"]
+    check("WEB/src: sw — /api شبكي بلا تخزين ورفض المصدر الغريب والصدفة حصرًا وتنظيف كاش قديم",
+      swSrc.includes('startsWith("/api/")') && swSrc.includes("url.origin !== self.location.origin") &&
+      swSrc.includes('startsWith("/web-client/")') && swSrc.includes("caches.delete"), "sw guards")
+    const ixSrc = wsrc["index.html"]
+    const refs = [...ixSrc.matchAll(/(?:src|href)="([^"]+)"/g)].map((m) => m[1])
+    check("WEB/src: مراجع index كلها داخل /web-client/ (لا CDN لا خارجي)",
+      refs.length >= 5 && refs.every((r) => r.startsWith("/web-client/")), `refs=${refs.length}`)
+    check("WEB/src: index — RTL عربي أولًا وبيان العميل وبلا معالجات inline",
+      ixSrc.includes('dir="rtl"') && ixSrc.includes('lang="ar"') && ixSrc.includes('data-client="nexus-web"') &&
+      !/on(click|load|error)=/.test(ixSrc), "rtl + no inline handlers")
+
+    // ================= حي: الخدمة الفعلية =================
+    const BASEW = "http://127.0.0.1:3000"
+    try {
+      const served = {}
+      for (const f of WFILES) {
+        const res = await fetch(`${BASEW}/web-client/${f}`)
+        served[f] = { status: res.status, ct: res.headers.get("content-type") ?? "", body: f === "app.js" ? await res.text() : "" }
+      }
+      check("WEB/live: الأثر الستة تُخدوم 200 من الحزمة الإنتاجية",
+        WFILES.every((f) => served[f].status === 200), WFILES.map((f) => `${f}=${served[f].status}`).join(" "))
+      check("WEB/live: أنواع المحتوى صحيحة (js · css · manifest+json · svg)",
+        /javascript/.test(served["app.js"].ct) && /css/.test(served["style.css"].ct) &&
+        /manifest\+json|json/.test(served["manifest.webmanifest"].ct) && /svg/.test(served["icon.svg"].ct), served["manifest.webmanifest"].ct)
+      check("WEB/live: المسجل المخدوم هو النواة نفسها حرفيًا (طول متطابق)",
+        served["app.js"].body.includes("makeGuardedFetch") && served["app.js"].body.length === jsSrc.length, `len=${served["app.js"].body.length}/${jsSrc.length}`)
+      const bootSeq = await Promise.all(["/api/health", "/api/version", "/api/devices", "/api/insights", "/api/predictions"].map(async (p) => (await fetch(`${BASEW}${p}`)).status))
+      check("WEB/live: تسلسل إقلاع العميل — الأسطح الخمس كلها 200",
+        bootSeq.every((s) => s === 200), bootSeq.join(","))
+      const devJ = await fetch(`${BASEW}/api/devices`).then((r) => r.json()).catch(() => null)
+      check("WEB/live: /api/devices بالشكل التعاقدي (devices مصفوفة)", Array.isArray(devJ?.devices), `n=${devJ?.devices?.length ?? 0}`)
+      const opsJ = await fetch(`${BASEW}/api/sync/ops?since=0`).then((r) => r.json()).catch(() => null)
+      check("WEB/live: /api/sync/ops — رأس رقمي وF6 محفوظ (الحمولة فارغة مع العلم)",
+        typeof opsJ?.head === "number" && Array.isArray(opsJ?.ops) &&
+        (opsJ.ops ?? []).every((o) => JSON.stringify(o.payload ?? {}) === "{}"), `head=${opsJ?.head}`)
+
+      // عبر البوابة (كيف يبلغه المستخدم فعليًا من الشبكة) — منفذ ديناميكي 81→8180
+      let gwWeb = 0
+      for (const p of [8180, 81]) {
+        const h = await fetch(`http://127.0.0.1:${p}/__gw/health`).then((r) => r.json()).catch(() => null)
+        if (h?.ok === true && h?.role === "gateway") { gwWeb = p; break }
+      }
+      const viaGw = gwWeb ? await fetch(`http://127.0.0.1:${gwWeb}/web-client/index.html`) : null
+      check("WEB/live: العميل يبلغ عبر البوابة (المسار الشبكي نفسه)",
+        viaGw?.status === 200 && (await viaGw.text()).includes("data-client=\"nexus-web\""), `gw=${gwWeb}`)
+    } catch (e) {
+      check("WEB/live: انسداد العميل اكتمل بلا خطأ غير متوقع", false, e.message?.slice(0, 120))
+    }
+  }
+
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {
