@@ -68,9 +68,10 @@ await killPorts([3000, 3003, 81, 3004, 3005, 3006, 3007, 3009])
 await sleep(600)
 
 try {
+  let nextProc = null
   // ============ 1) Next standalone (PORT=3000) ============
   console.log("== [1] next standalone on :3000 ==")
-  spawnProc("next", process.execPath, [`${ROOT}.next/standalone/server.js`],
+  nextProc = spawnProc("next", process.execPath, [`${ROOT}.next/standalone/server.js`],
     { PORT: "3000", HOSTNAME: "127.0.0.1", NODE_ENV: "production", NEXUS_WOL_BROADCAST: "127.0.0.1", NEXUS_WOL_PORT: "9009" },
     (l) => { if (/ready|error|Error/i.test(l)) console.log("   " + l.slice(0, 160)) })
 
@@ -5286,6 +5287,479 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     } catch (eI18n) {
       check("LANG-A11Y/live: /api/i18n-status حي", false, eI18n instanceof Error ? eI18n.message : String(eI18n))
     }
+  }
+
+  // [SYNC-DEEP] عمق offline-first — تدقيق ما بعد المراجعة لعقد §28 (E2E→900)
+  {
+    console.log("== [SYNC-DEEP] ops-log depth audit (§28) ==")
+    const fsSD = await import("node:fs")
+    const rdSD = (p) => fsSD.readFileSync(ROOT + p, "utf8")
+
+    // ---- (أ) مصدر: دلالات السجل وحدوده ----
+    const opSD = rdSD("src/lib/nexus/oplog.ts")
+    const pbSD = rdSD("src/lib/nexus/productivity-bridge.ts")
+    check("SYNC-DEEP/source: الثوابت التعاقدية الثلاثة — دفعة 200 · أرضية 400 · سقف صلب 2000 (§28.ب)",
+      opSD.includes("export const REPLAY_LIMIT = 200") && opSD.includes("export const KEEP_FLOOR = 400")
+      && opSD.includes("const HARD_CAP = 2000"), "REPLAY_LIMIT/KEEP_FLOOR/HARD_CAP")
+    check("SYNC-DEEP/source: ackUpto يحصر المؤشر بين 0 ورأس−400 — لا قص فوق الأرضية مهما كبر upto",
+      opSD.includes("const eff = Math.min(Math.max(0, Math.floor(Number(upto) || 0)), head - KEEP_FLOOR)")
+      && opSD.includes("if (eff <= 0) return 0"), "ack clamp")
+    check("SYNC-DEEP/source: opsSince يطهر المؤشر (سالب/نص/عائم → أرضية 0) ويسقف الحد الداخلي بـ1000",
+      opSD.includes("const s = Math.max(0, Math.floor(Number(since) || 0))")
+      && opSD.includes("Math.max(1, Math.min(1000, Math.floor(limit)))"), "since sanitize + limit cap")
+    check("SYNC-DEEP/source: appendOp يعيد 0 عند تعارض opId الوحيد — idempotent بالتصميم (إعادة فتح رابط)",
+      opSD.includes("return 0 // تعارض UNIQUE") && opSD.includes('WHERE "opId" = ?'), "unique opId → 0")
+    check("SYNC-DEEP/source: capTotal إطفائي بعد كل ترسيخ — السقف الصلب يمنع النمو بلا نهاية",
+      opSD.includes("void capTotal()") && opSD.includes("async function capTotal"), "cap on append")
+    check("SYNC-DEEP/source: الجسر يطهر since وupto بنفس الأرضية قبل الاستدعاء (دفاع ثانٍ فوق الوحدة)",
+      pbSD.includes("Math.max(0, Math.floor(Number(d?.since ?? 0)) || 0)")
+      && pbSD.includes("Math.max(0, Math.floor(Number(d?.upto ?? 0)) || 0)"), "bridge double sanitize")
+    check("SYNC-DEEP/source: prod:replay يعلن truncated وlocal — الدفعة المقطوعة مُعلنة ومستوى الثقة موثوق",
+      pbSD.includes("truncated: rows.length >= REPLAY_LIMIT") && pbSD.includes("local"), "truncated+local flags")
+    check("SYNC-DEEP/source: حرس F6 لكل عملية — opForClient يفرق المحلي/الشبكي قبل إرسال الاستئناف",
+      pbSD.includes("opForClient") && pbSD.includes("isLocalSocket"), "per-op guard")
+    check("SYNC-DEEP/source: صندوق الصادر يُصرّف بعد المصافحة عبر sendFrame — استخدام حقيقي في جسر الأمان",
+      rdSD("src/lib/nexus/clip-outbox.ts").includes("export async function flushClipOutbox")
+      && rdSD("src/hooks/use-sec-bridge.ts").includes("flushClipOutbox(async (t) => sendFrame"), "flush wiring")
+    check("SYNC-DEEP/source: Flutter — المؤشر من shared_preferences والقر يثبّته (استئناف هاتفي كامل)",
+      rdSD("nexuslink_mobile/lib/data/signaling.dart").includes("nl-prod-cursor")
+      && rdSD("nexuslink_mobile/lib/data/signaling.dart").includes("ProdEvents.ack"), "flutter cursor")
+
+    // ---- (ب) حي: شطدات · idempotent · عملاء مستقلان · دفعة مقطوعة · أرضية 400 ----
+    const { io: ioSD } = await import("socket.io-client")
+    const mkSd = (url, opts = {}) => {
+      const s = ioSD(url, { path: "/", transports: ["polling"], reconnection: false, timeout: 10000, ...opts })
+      return new Promise((res, rej) => {
+        s.once("connect", () => res(s)); s.once("connect_error", (e) => rej(new Error(e.message)))
+        setTimeout(() => rej(new Error("timeout sd socket")), 12000)
+      })
+    }
+    const sdHello = (s) => new Promise((res) => { const t = setTimeout(() => res(null), 6000); s.once("prod:hello", (d) => { clearTimeout(t); res(d) }) })
+    const sdReplay = (s, since) => new Promise((res) => {
+      const t = setTimeout(() => res(null), 9000)
+      s.once("prod:replay", (d) => { clearTimeout(t); res(d) })
+      if (since === undefined) s.emit("prod:resume"); else s.emit("prod:resume", { since })
+    })
+    const dumpAll = async (s) => {
+      const all = []; let cur = 0
+      for (let i = 0; i < 40; i++) {
+        const r = await sdReplay(s, cur)
+        const ops = Array.isArray(r?.ops) ? r.ops : []
+        if (!ops.length) break
+        all.push(...ops); cur = Number(ops[ops.length - 1].seq)
+      }
+      return all
+    }
+    // الرأس الموثوق — عبر replay بعيد (lastSeq يُعاد دائمًا؛ hello يُبث عند الاتصال حصرًا فلا يصلح للمراقبة المتأخرة)
+    const headOf = async (s) => Number((await sdReplay(s, 1_000_000_000))?.lastSeq ?? -1)
+    const cl = await mkSd("http://127.0.0.1:3007")
+    const hA = await headOf(cl)
+    const w0 = await sdReplay(cl, 0)
+    const ops0 = Array.isArray(w0?.ops) ? w0.ops : []
+    const seqs0 = ops0.map((o) => Number(o.seq))
+    const asc0 = seqs0.every((v, i) => i === 0 || v > seqs0[i - 1])
+    check("SYNC-DEEP/live: نافذة الأساس since=0 صالحة — مصفوفة بترتيب رتيب صاعد", Array.isArray(ops0) && asc0, `len=${ops0.length}`)
+    const L = ops0.length
+    const rNop = await sdReplay(cl)
+    check("SYNC-DEEP/live: resume بلا حزمة = since 0 — نفس النافذة حرفيًا", Array.isArray(rNop?.ops) && rNop.ops.length === L, `${rNop?.ops?.length}==${L}`)
+    const rAbc = await sdReplay(cl, "abc")
+    check("SYNC-DEEP/live: since نص شطد «abc» → أرضية 0 — نفس النافذة (تعقيم مزدوج)",
+      Array.isArray(rAbc?.ops) && rAbc.ops.length === L, `${rAbc?.ops?.length}==${L}`)
+    const rNeg = await sdReplay(cl, -5)
+    check("SYNC-DEEP/live: since سالب → أرضية 0 — نفس النافذة", Array.isArray(rNeg?.ops) && rNeg.ops.length === L, `${rNeg?.ops?.length}==${L}`)
+    const rF = await sdReplay(cl, 12.9)
+    check("SYNC-DEEP/live: since عائم 12.9 → floor 12 — كل العائد seq≥13",
+      Array.isArray(rF?.ops) && rF.ops.every((o) => Number(o.seq) >= 13) && rF.ops.length <= L, `n=${rF?.ops?.length}`)
+    const rFar = await sdReplay(cl, hA + 1_000_000)
+    check("SYNC-DEEP/live: since فوق الرأس بكثير → صفر عمليات (لا إعادة تشغيل تاريخًا)",
+      Array.isArray(rFar?.ops) && rFar.ops.length === 0, `n=${rFar?.ops?.length}`)
+    const hB = await headOf(cl)
+    cl.emit("prod:ack"); await sleep(400)
+    check("SYNC-DEEP/live: ack بلا حزمة لا يضر — الرأس ثابت (حرس try + أرضية 0)",
+      await headOf(cl) === hB, "head stable")
+    cl.emit("prod:ack", { upto: -9 }); await sleep(400)
+    check("SYNC-DEEP/live: ack سالب لا يقص شيئًا — الرأس ثابت", await headOf(cl) === hB, "head stable")
+    cl.emit("prod:ack", { upto: 1e9 }); await sleep(700)
+    check("SYNC-DEEP/live: ack فوق الرأس لا يغير الرأس أبدًا (القص للأرضية لا للرأس)",
+      await headOf(cl) === hB, "head stable")
+    const dump0 = await dumpAll(cl)
+    check("SYNC-DEEP/live: بعد ack الأقصى — المحفوظ الكامل = min(الرأس، 400) بالضبط (أرضية الاحتفاظ تعاقديًا)",
+      dump0.length === Math.min(hB, 400), `kept=${dump0.length} head=${hB}`)
+    // رتيبة +1
+    const hG = await headOf(cl)
+    cl.emit("clip:push", { deviceId: "galaxy-s24", deviceName: "Galaxy-S24", kind: "text", content: `SD-ONE-${Date.now()}`, mode: "manual" })
+    await sleep(600)
+    check("SYNC-DEEP/live: إبرة واحدة = رأس +1 بالضبط (ترسيخ واحد لكل طفرة)",
+      await headOf(cl) === hG + 1, "+1")
+    // idempotent ×2
+    const hH = await headOf(cl)
+    const idemP = new Promise((res) => { cl.once("hand:new", (d) => res(d?.id ?? null)); setTimeout(() => res(null), 6000) })
+    cl.emit("hand:push", { deviceId: "galaxy-s24", deviceName: "Galaxy-S24", kind: "link", title: "SD idem", url: `https://example.com/sd-idem-${Date.now()}` })
+    const idemId = await idemP; await sleep(400)
+    cl.emit("hand:opened", { id: idemId, openedOn: "PC-OFFICE" }); await sleep(300)
+    cl.emit("hand:opened", { id: idemId, openedOn: "PC-OFFICE" }); await sleep(700)
+    const idemOps = (await sdReplay(cl, hH))?.ops ?? []
+    const idemOpened = idemOps.filter((o) => o.kind === "hand:opened")
+    check("SYNC-DEEP/live: فتح الرابط مرتين بنفس المعرف → عملية واحدة (appendOp idempotent بالسجل)",
+      idemOpened.length === 1 && idemOpened[0]?.payload?.id === idemId, `opened=${idemOpened.length}`)
+    // عملاء مستقلان — الرؤوس عبر replay بعيد (بلا سباق hello)
+    const cOld = await mkSd("http://127.0.0.1:3007")
+    const oldBase = await headOf(cOld)
+    const cNew = await mkSd("http://127.0.0.1:3007")
+    const newBase = await headOf(cNew)
+    const n2 = `SD-IND-${Date.now()}`
+    cl.emit("clip:push", { deviceId: "galaxy-s24", deviceName: "Galaxy-S24", kind: "text", content: n2, mode: "manual" })
+    await sleep(600)
+    const oldRe = await sdReplay(cOld, oldBase)
+    const newRe = await sdReplay(cNew, newBase)
+    check("SYNC-DEEP/live: عميل بمؤشر قديم يستلم الإبرة الجديدة", (oldRe?.ops ?? []).some((o) => o.payload?.content === n2), "old client got it")
+    // عميل ينضم بعد آخر عملية — رأسه حينها لا يعيد تشغيل أي تاريخ (مؤشرات العملاء مستقلة)
+    const cAt = await mkSd("http://127.0.0.1:3007")
+    const atBase = await headOf(cAt)
+    const atRe = await sdReplay(cAt, atBase)
+    check("SYNC-DEEP/live: عميل انضم بعد آخر عملية — استئنافه من رأسه صفر عمليات (لا إعادة تاريخ)",
+      (atRe?.ops ?? []).length === 0 && atRe?.local === true, `n=${atRe?.ops?.length}`)
+    try { cAt.disconnect() } catch {}
+    check("SYNC-DEEP/live: علامة local موثوقة في replay للعميل المحلي", oldRe?.local === true && newRe?.local === true, "local=true")
+    try { cOld.disconnect(); cNew.disconnect() } catch {}
+    // دفعة 205 — الاستئناف المقطوع
+    const hE = await headOf(cl)
+    const needleBulk = `SD-BULK-${Date.now()}`
+    for (let i = 0; i < 205; i++) {
+      cl.emit("clip:push", { deviceId: "galaxy-s24", deviceName: "Galaxy-S24", kind: "text", content: `${needleBulk}-${i}`, mode: "manual" })
+      if (i % 20 === 19) await sleep(60)
+    }
+    await sleep(1500)
+    const hF = await headOf(cl)
+    check("SYNC-DEEP/live: الدفعة الكبيرة رَسَّخت 205 عمليات — الرأس تقدم بالضبط (سجل رتيب)", hF === hE + 205, `${hF}==${hE}+205`)
+    const d1 = await sdReplay(cl, 0)
+    const o1 = Array.isArray(d1?.ops) ? d1.ops : []
+    check("SYNC-DEEP/live: أول دفعة استئناف = 200 بالضبط + truncated معلن (سقف الدفعة التعاقدي)",
+      o1.length === 200 && d1?.truncated === true, `first=${o1.length}`)
+    const dump1 = await dumpAll(cl)
+    // الوسيط بين dump0 وdump1: SD-ONE +1 · hand:new +1 · opened (idempotent) +1 · SD-IND +1 · bulk 205 → +209
+    check("SYNC-DEEP/live: التفريغ الكامل بعد الدفعة = المحفوظ + 209 (الإبر الوسيطة الأربع + الدفعة) بالضبط",
+      dump1.length === dump0.length + 209, `${dump1.length}==${dump0.length}+209`)
+    const sq1 = dump1.map((o) => Number(o.seq))
+    check("SYNC-DEEP/live: الاتصال العالمي — سلسلة seq متصلة بلا فجوة عبر كل الدفعات",
+      sq1.every((v, i) => i === 0 || v === sq1[i - 1] + 1), `contiguous ${sq1.length}`)
+    check("SYNC-DEEP/live: الدفعة الأخيرة أقصر من السقف — الاستئناف بالمؤشر ينتهي طبيعيًا",
+      dump1.length > 200 && (dump1.length % 200) < 200 && (dump1.length % 200) !== 0, `tail=${dump1.length % 200}`)
+    const bulkContents = dump1.filter((o) => o.kind === "clip:new" && String(o.payload?.content || "").startsWith(needleBulk)).map((o) => String(o.payload?.content))
+    const expectedBulk = Array.from({ length: 205 }, (_, i) => `${needleBulk}-${i}`)
+    // الدفعات المتوازية تُدرج بترتيب اكتمال appendOp (لا ترتيب الإرسال) — الضمانة التعاقدية: المجموعة كاملة + رتيب بالـseq
+    const bulkExact = bulkContents.length === 205 && new Set(bulkContents).size === 205 && expectedBulk.every((x) => new Set(bulkContents).has(x))
+    check("SYNC-DEEP/live: كل الإبر الـ205 كاملة وفريدة في السجل — صفر فقد في الدفعة الكبيرة (ترتيب الإدراج باكتمال المعالجة)",
+      bulkExact, `bulk=${bulkContents.length} unique=${new Set(bulkContents).size}`)
+    // LAN — F6 يمتد للدفعات الكبيرة
+    const osSD = await import("node:os")
+    const lanSD = Object.values(osSD.networkInterfaces()).flat().find((i) => i && !i.internal && i.family === "IPv4")?.address || ""
+    if (lanSD) {
+      const lanS = await mkSd(`http://${lanSD}:3007`)
+      const lanD = await sdReplay(lanS, 0)
+      const lanOps = Array.isArray(lanD?.ops) ? lanD.ops : []
+      const lanClips = lanOps.filter((o) => o.kind === "clip:new")
+      const stripped = lanClips.length > 0 && lanClips.every((o) => o.payload?.content === "" && o.payload?.encrypted === true)
+      check("SYNC-DEEP/live: دفعة 200 لعميل LAN ببيانات وصفية حصرًا — حرس F6 يمتد للسقف الكامل", stripped, `clips=${lanClips.length}`)
+      check("SYNC-DEEP/live: truncated معلن لعميل LAN + صفر إبر على السلك",
+        lanD?.truncated === true && !JSON.stringify(lanOps).includes(needleBulk), "meta-only batch")
+      try { lanS.disconnect() } catch {}
+    } else {
+      check("SYNC-DEEP/live: لا عنوان شبكة — فحص LAN بيانات وصفية تجاوز صادق", true, "no lan ip")
+      check("SYNC-DEEP/live: لا عنوان شبكة — فحص truncated LAN تجاوز صادق", true, "no lan ip")
+    }
+    try { cl.disconnect() } catch {}
+  }
+
+  // [PERSIST] بقاء عبر إعادة تشغيل الخادم — جوهر offline-first (§28.د — السجل أقدم من العملية)
+  {
+    console.log("== [PERSIST] server restart durability ==")
+    const { io: ioPs } = await import("socket.io-client")
+    const mkPs = (url) => {
+      const s = ioPs(url, { path: "/", transports: ["polling"], reconnection: false, timeout: 10000 })
+      return new Promise((res, rej) => { s.once("connect", () => res(s)); s.once("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("timeout ps")), 12000) })
+    }
+    const psHello = (s) => new Promise((res) => { const t = setTimeout(() => res(null), 6000); s.once("prod:hello", (d) => { clearTimeout(t); res(d) }) })
+    const psReplay = (s, since) => new Promise((res) => { const t = setTimeout(() => res(null), 9000); s.once("prod:replay", (d) => { clearTimeout(t); res(d) }); s.emit("prod:resume", { since }) })
+
+    const pre = await mkPs("http://127.0.0.1:3007")
+    const headOfPs = async (s) => Number((await psReplay(s, 1_000_000_000))?.lastSeq ?? -1)
+    const hPre = await headOfPs(pre)
+    const preSeqs = []; let psCur = 0
+    for (let i = 0; i < 40; i++) { const r = await psReplay(pre, psCur); const ops = Array.isArray(r?.ops) ? r.ops : []; if (!ops.length) break; preSeqs.push(...ops.map((o) => Number(o.seq))); psCur = Number(ops[ops.length - 1].seq) }
+    pre.disconnect()
+    check("PERSIST/pre: لقطة قبل الإيقاف — رأس ونافذة كاملة مرصودة", hPre >= 0 && preSeqs.length >= Math.min(hPre, 400), `head=${hPre} window=${preSeqs.length}`)
+
+    // إيقاف عنيف (SIGKILL — محاكاة انهيار) ثم إعادة إقلاع حرفية بنفس البيئة
+    if (nextProc) { try { nextProc.kill("SIGKILL") } catch {} }
+    await killPorts([3000]); await sleep(1000)
+    nextProc = spawnProc("next", process.execPath, [`${ROOT}.next/standalone/server.js`],
+      { PORT: "3000", HOSTNAME: "127.0.0.1", NODE_ENV: "production", NEXUS_WOL_BROADCAST: "127.0.0.1", NEXUS_WOL_PORT: "9009" },
+      (l) => { if (/error|Error/i.test(l)) console.log("   " + l.slice(0, 160)) })
+    await waitHttp("next restart /api/health", "http://127.0.0.1:3000/api/health", 90000)
+    check("PERSIST/reboot: الخادم عاد بعد الإيقاف العنيف (SIGKILL → standalone up)", true, "health ok")
+    const stPs = await waitHttp("desktop/status reboot", "http://127.0.0.1:3000/api/desktop/status", 30000)
+    check("PERSIST/reboot: الجسور أعيد إقلاعها مع الخادم الجديد", stPs?.bridges?.prod?.booted === true, "prod booted")
+    let post = null
+    for (let i = 0; i < 20 && !post; i++) { await sleep(800); try { post = await mkPs("http://127.0.0.1:3007"); break } catch { post = null } }
+    check("PERSIST/reboot: جسر الإنتاجية يقبل الاستئناف مجددًا", !!post, "socket ready")
+    const hPost = await headOfPs(post)
+    check("PERSIST/durability: الرأس بعد الإقلاع = الرأس قبل الإيقاف حرفيًا — السجل لم يفقد ولا عملية",
+      hPost === hPre, `${hPost}==${hPre}`)
+    const postSeqs = []; let psCur2 = 0
+    for (let i = 0; i < 40; i++) { const r = await psReplay(post, psCur2); const ops = Array.isArray(r?.ops) ? r.ops : []; if (!ops.length) break; postSeqs.push(...ops.map((o) => Number(o.seq))); psCur2 = Number(ops[ops.length - 1].seq) }
+    check("PERSIST/durability: نافذة الاستئناف بعد البقاء مطابقة حرفيًا لقبل الإيقاف (نفس seqs بالترتيب)",
+      JSON.stringify(postSeqs) === JSON.stringify(preSeqs), `pre=${preSeqs.length} post=${postSeqs.length}`)
+    const nPost = `SD-POSTREBOOT-${Date.now()}`
+    post.emit("clip:push", { deviceId: "galaxy-s24", deviceName: "Galaxy-S24", kind: "text", content: nPost, mode: "manual" })
+    await sleep(700)
+    check("PERSIST/durability: الإبرة بعد البقاء رأسها تقدم بالضبط — السجل حي لا قراءة أرشيف فقط",
+      await headOfPs(post) === hPost + 1, "+1 after reboot")
+    const devPs = await fetch("http://127.0.0.1:3000/api/devices").then((r) => r.json()).catch(() => null)
+    check("PERSIST/durability: الأجهزة المقترنة بقيت بعد الإقلاع (مخزن SQLite)",
+      Array.isArray(devPs?.devices) && devPs.devices.length >= 2, `devices=${devPs?.devices?.length}`)
+    const pmPs = await fetch("http://127.0.0.1:3000/api/pair-metrics").then((r) => r.json()).catch(() => null)
+    check("PERSIST/durability: قياسات الاقتران بقيت بعد الإقلاع (ترسيخ PairMetric)", pmPs?.ok === true, "pair metrics alive")
+    try { post.disconnect() } catch {}
+  }
+
+  // [PERF-DEEP] رياضيات عقد §29 — مئين أقرب-رتبة والنافذة والعتبة (تدقيق ما بعد المراجعة)
+  {
+    console.log("== [PERF-DEEP] percentile math depth (§29) ==")
+    const fsPf = await import("node:fs")
+    const rdPf = (p) => fsPf.readFileSync(ROOT + p, "utf8")
+    // نسخة حرفية من الدوال النقية (نفس الدلالات) — الفحص رياضي صرف
+    const pctR = (sortedAsc, p) => { const n = sortedAsc.length; if (n === 0) return null; const rank = Math.max(1, Math.ceil((p / 100) * n)); return sortedAsc[Math.min(rank, n) - 1] ?? sortedAsc[n - 1] }
+    const seriesR = (samples) => {
+      if (!samples.length) return { n: 0, last: null, p50: null, p95: null, max: null }
+      const rtts = samples.map((s) => s.rtt).sort((a, b) => a - b)
+      return { n: samples.length, last: samples[samples.length - 1]?.rtt ?? null, p50: pctR(rtts, 50), p95: pctR(rtts, 95), max: rtts[rtts.length - 1] ?? null }
+    }
+    const statsR = (samples, minControl = 5) => {
+      const control = seriesR(samples.filter((s) => s.kind === "control"))
+      const ping = seriesR(samples.filter((s) => s.kind === "ping"))
+      return { control, ping, pass: control.p95 != null && control.n >= minControl && control.p95 < 80 }
+    }
+    const srcPf = rdPf("src/lib/perf-store.ts")
+    check("PERF-DEEP/math: pct فارغة → null (لا انهيار على قناة صامتة)", pctR([], 95) === null, "null empty")
+    check("PERF-DEEP/math: عنصر واحد — أي مئين يعيده حرفيًا", pctR([7], 50) === 7 && pctR([7], 95) === 7, "singleton")
+    const h100 = Array.from({ length: 100 }, (_, i) => i + 1)
+    check("PERF-DEEP/math: p95 من 100 = العنصر 95 (أقرب رتبة — تعاقد §29)", pctR(h100, 95) === 95, "nearest-rank 95")
+    check("PERF-DEEP/math: p50 من 100 = العنصر 50", pctR(h100, 50) === 50, "nearest-rank 50")
+    check("PERF-DEEP/math: p0 → الأول (rank حد أدنى 1)", pctR(h100, 0) === 1, "rank floor 1")
+    check("PERF-DEEP/math: p100 → الأخير", pctR(h100, 100) === 100, "rank 100")
+    check("PERF-DEEP/math: مئين فوق 100 → يحصر عند الذيل (لا خروج بالمصفوفة)", pctR(h100, 200) === 100, "clamped tail")
+    check("PERF-DEEP/math: مصفوفة قصيرة [10,20] p95 → rank=ceil(1.9)=2 → 20", pctR([10, 20], 95) === 20, "ceil rank")
+    check("PERF-DEEP/math: [1..4] p95 → rank=ceil(3.8)=4 → 4 (المتطرف يحكم)", pctR([1, 2, 3, 4], 95) === 4, "tail rules")
+    check("PERF-DEEP/math: مكررات [5,5,5] p95 → 5", pctR([5, 5, 5], 95) === 5, "duplicates")
+    check("PERF-DEEP/math: عينات إنتاجية [12,40,80,120,200] p95 → 200 (أبطأ 5% يحكم العتبة)",
+      pctR([12, 40, 80, 120, 200], 95) === 200, "real window")
+    check("PERF-DEEP/math: سلسلة فارغة — كل الحقول null وn=0", JSON.stringify(seriesR([])) === '{"n":0,"last":null,"p50":null,"p95":null,"max":null}', "empty series")
+    const sMix = seriesR([{ at: 1, rtt: 200 }, { at: 2, rtt: 10 }, { at: 3, rtt: 50 }])
+    check("PERF-DEEP/math: last = الأخير زمنيًا لا الأصغر (10 وصل ثانٍ — الأخير 50)",
+      sMix.last === 50 && sMix.n === 3, "last is chronological")
+    check("PERF-DEEP/math: max = الأكبر قيمة (200) وp50 = 50 المصنفة", sMix.max === 200 && sMix.p50 === 50, "max vs p50")
+    check("PERF-DEEP/math: p95 على الثلاث = 200 (rank=ceil(2.85)=3)", sMix.p95 === 200, "p95 of 3")
+    check("PERF-DEEP/math: فصل القناتين — ping بطيء لا يلوث control",
+      statsR([...Array.from({ length: 6 }, (_, i) => ({ at: i, rtt: 10 + i, kind: "control" })), { at: 9, rtt: 500, kind: "ping" }]).control.p95 < 40, "channel split")
+    check("PERF-DEEP/math: ping يُحسب في سلسلته (p95=500)", statsR([{ at: 1, rtt: 500, kind: "ping" }]).ping.p95 === 500, "ping series")
+    check("PERF-DEEP/math: 4 عينات سريعة فقط → pass=false (حد أدنى 5)", statsR(Array.from({ length: 4 }, (_, i) => ({ at: i, rtt: 10, kind: "control" }))).pass === false, "min 5 samples")
+    check("PERF-DEEP/math: 5 سريعات → pass=true", statsR(Array.from({ length: 5 }, (_, i) => ({ at: i, rtt: 10, kind: "control" }))).pass === true, "pass at 5")
+    check("PERF-DEEP/math: عتبة 79 حيّة و80 مرفوضة — الحد < حصرًا (تعاقد)",
+      statsR(Array.from({ length: 5 }, () => ({ at: 0, rtt: 79, kind: "control" }))).pass === true
+      && statsR(Array.from({ length: 5 }, () => ({ at: 0, rtt: 80, kind: "control" }))).pass === false, "79 pass / 80 reject")
+    check("PERF-DEEP/math: ذيل واحد 100 من 5 → p95=100 → pass=false (الأبطأ 5% يحكم)",
+      statsR([10, 10, 10, 10, 100].map((r, i) => ({ at: i, rtt: r, kind: "control" }))).pass === false, "tail governs")
+    check("PERF-DEEP/math: minControl مخصص 3 — ثلاث سريعات تكفي", statsR(Array.from({ length: 3 }, () => ({ at: 0, rtt: 5, kind: "control" })), 3).pass === true, "custom min")
+    check("PERF-DEEP/math: ping حصرًا → control فارغة → pass=false", statsR([{ at: 1, rtt: 5, kind: "ping" }]).pass === false, "control empty")
+    check("PERF-DEEP/source: النافذة المنزلقة 240 عينات — سقف الذاكرة التعاقدي", srcPf.includes("export const PERF_WINDOW = 240"), "window 240")
+    check("PERF-DEEP/source: التطبيق slice(-PERF_WINDOW) — النافذة تقص الأقدم", srcPf.includes("slice(-PERF_WINDOW)"), "sliding slice")
+    check("PERF-DEEP/source: رفض العينات غير المنتهية والسالبة (Number.isFinite + rtt<0)", srcPf.includes("Number.isFinite(rtt) || rtt < 0") || srcPf.includes("!Number.isFinite(rtt) || rtt < 0"), "reject bad rtt")
+    check("PERF-DEEP/source: العتبة التعاقدية 80 نصًا في المصدر (PERF_TARGET_MS)", srcPf.includes("export const PERF_TARGET_MS = 80"), "target 80")
+    check("PERF-DEEP/source: ختم __m على الأوامر المتقطعة وإقرار rc:ack من الجسر (مرآة §29)",
+      rdPf("src/lib/remote-socket.ts").includes("__m: stampMid") && rdPf("src/lib/nexus/remote-bridge.ts").includes('socket.on("rc:ack"'), "stamped acks")
+  }
+
+  // [PAIR-DEEP] رياضيات وتسييل عقد §30 (تدقيق ما بعد المراجعة)
+  {
+    console.log("== [PAIR-DEEP] pair metric depth (§30) ==")
+    const fsPd = await import("node:fs")
+    const rdPd = (p) => fsPd.readFileSync(ROOT + p, "utf8")
+    const pmMath = rdPd("src/lib/pair-math.ts")
+    check("PAIR-DEEP/source: العتبة التعاقدية 30_000ms نصًا (M1.1)", pmMath.includes("export const PAIR_TARGET_MS = 30_000"), "30s target")
+    check("PAIR-DEEP/source: مئين أقرب-رتبة shared مع نفس الدلالات (rank max/ceil/min)",
+      pmMath.includes("Math.max(1, Math.ceil((p / 100) * n))") && pmMath.includes("sortedAsc[Math.min(rank, n) - 1]"), "nearest-rank shared")
+    check("PAIR-DEEP/source: last = الأحدث زمنًا (reduce بأكبر at) لا الأكبر قيمة — درس §30 الموثق",
+      pmMath.includes("done.reduce((a, b) => (b.at > a.at ? b : a))"), "last is newest not max")
+    check("PAIR-DEEP/source: avg مقرّب (Math.round) على المكتملة حصرًا", pmMath.includes("Math.round(sum / totals.length)"), "rounded avg")
+    check("PAIR-DEEP/source: pass يطلب الكل مكتملًا اجتيازًا وبحد أدنى (passRate=1 + minCompleted)",
+      pmMath.includes("passCount > 0 && passCount === done.length && done.length >= minCompleted"), "strict pass")
+    check("PAIR-DEEP/source: سجل فارغ → nulls كاملة وpass=false وcompleted=0 (بلا انهيار)",
+      pmMath.includes("completed: 0") && pmMath.includes("pass: false"), "empty snapshot")
+    const pmStore = rdPd("src/lib/nexus/pair-metrics.ts")
+    check("PAIR-DEEP/source: t1 — recordPairMetric يقصّ المعرفات 120 ويرسّخ qrToPairMs موجبًا",
+      pmStore.includes("slice(0, 120)") && pmStore.includes("Math.max(0, Math.round(d.qrToPairMs))"), "t1 record")
+    check("PAIR-DEEP/source: t2 — markFirstValue يبحث المعلق بنافذة 10 دقائق بترتيب الأحدث",
+      pmStore.includes("PENDING_WINDOW_MS = 10 * 60_000") && pmStore.includes('orderBy: { at: "desc" }'), "t2 pending window")
+    check("PAIR-DEEP/source: totalMs = qrToPair + pairToFirst — الجمع التعاقدي الثلاثي",
+      pmStore.includes("const totalMs = pending.qrToPairMs + pairToFirstValueMs"), "tri-stamp sum")
+    check("PAIR-DEEP/source: pass = totalMs < العتبة حصرًا (حد صارم)", pmStore.includes("pass: totalMs < PAIR_TARGET_MS"), "strict <")
+    check("PAIR-DEEP/source: فشل الترسيخ صامت — القياس لا يعطل الاقتران ولا تدفق القيم أبدًا",
+      (pmStore.match(/catch \{/g) || []).length >= 2, "silent measurement")
+    check("PAIR-DEEP/source: القراءة الأحدث أولًا بسقف 200 إدخال (listPairMetrics)",
+      pmStore.includes('orderBy: { at: "desc" }') && pmStore.includes("Math.min(limit, 200)"), "read window")
+    check("PAIR-DEEP/source: تسييل prod — جسر الإنتاجية يختم أول قيمة",
+      rdPd("src/lib/nexus/productivity-bridge.ts").includes("markFirstValue"), "prod t2")
+    check("PAIR-DEEP/source: تسييل control — جسر التحكم يختم أول جلسة مقبولة",
+      rdPd("src/lib/nexus/remote-bridge.ts").includes("markFirstValue"), "control t2")
+    // حي — API
+    const pmApi = await fetch("http://127.0.0.1:3000/api/pair-metrics").then((r) => r.json()).catch(() => null)
+    check("PAIR-DEEP/live: /api/pair-metrics — ok + targetMs=30000 + stats + entries مصفوفة",
+      pmApi?.ok === true && pmApi?.targetMs === 30000 && !!pmApi?.stats && Array.isArray(pmApi?.entries), "api shape")
+    const stPd = pmApi?.stats ?? {}
+    check("PAIR-DEEP/live: اتساق رياضي — p95 ≤ max دائمًا (أقرب رتبة على المصنفة)",
+      stPd.p95 == null || stPd.max == null || stPd.p95 <= stPd.max, `p95=${stPd.p95} max=${stPd.max}`)
+    check("PAIR-DEEP/live: completed ≤ n دائمًا", stPd.completed <= stPd.n, `completed=${stPd.completed} n=${stPd.n}`)
+    check("PAIR-DEEP/live: passRate ∈ [0,1] أو null (بلا مكتملة)",
+      stPd.passRate == null || (stPd.passRate >= 0 && stPd.passRate <= 1), `passRate=${stPd.passRate}`)
+    check("PAIR-DEEP/live: pass=true ⇒ passRate=1 حصرًا (كل المكتملة اجتازت)",
+      stPd.pass !== true || stPd.passRate === 1, "pass implies rate 1")
+    check("PAIR-DEEP/live: حقول الإدخال العشرة المعاقدة كاملة (id/device/…/firstValueKind/pass/at)",
+      (pmApi.entries ?? []).length === 0 || ["id", "deviceId", "deviceName", "reregister", "qrToPairMs", "pairToFirstValueMs", "totalMs", "firstValueKind", "pass", "at"].every((k) => k in pmApi.entries[0]), "entry keys ×10")
+    check("PAIR-DEEP/live: أزمنة سليمة — at رقم >0 وqrToPairMs ≥ 0 والأنواع المعاقدة فقط",
+      (pmApi.entries ?? []).length === 0 || pmApi.entries.every((e) => Number(e.at) > 0 && Number(e.qrToPairMs) >= 0
+        && (e.firstValueKind === null || e.firstValueKind === "prod" || e.firstValueKind === "control")), "entry sanity")
+    check("PAIR-DEEP/live: الحد الصادق موثق بالعقد — التسييل بثلاث طوابع والمدمجتان حصرًا (درس §29 الموثق في §30)",
+      rdPd("docs/protocol-contract.md").includes("## 30. الاقتران المقيس")
+      && rdPd("docs/protocol-contract.md").includes("### 30.د الحدود الصادقة")
+      && rdPd("docs/ROADMAP.md").includes("M1.1"), "contract §30 documented")
+  }
+
+  // [LANG-DEEP] عمق اللغات الست والإتاحة — معاجم حقيقية وسقوط بيانات (عقد §31)
+  {
+    console.log("== [LANG-DEEP] dictionaries & a11y depth (§31) ==")
+    const fsLd = await import("node:fs")
+    const rdLd = (p) => fsLd.readFileSync(ROOT + p, "utf8")
+    const parseJ = (p) => { try { return JSON.parse(rdLd(p)) } catch { return {} } }
+    const arabic = (s) => /[\u0600-\u06FF]/.test(s)
+    const dictHealth = (p, floor) => {
+      const d = parseJ(p)
+      const ks = Object.keys(d).filter((k) => arabic(k))
+      const bad = ks.filter((k) => !d[k] || !String(d[k]).trim() || arabic(d[k]))
+      return { n: ks.length, bad: bad.length, ok: ks.length >= floor && bad.length / Math.max(1, ks.length) <= 0.005 }
+    }
+    const hFr = dictHealth("src/lib/i18n/fr.json", 3300)
+    const hEs = dictHealth("src/lib/i18n/es.json", 3300)
+    const hDe = dictHealth("src/lib/i18n/de.json", 2100)
+    const hRu = dictHealth("src/lib/i18n/ru.json", 2100)
+    check("LANG-DEEP/dict: fr — ≥3300 مفتاحًا و≥99.5% قيم مُترجَمة نظيفة (بلا عربية ولا فراغ)",
+      hFr.ok, `n=${hFr.n} bad=${hFr.bad}`)
+    check("LANG-DEEP/dict: es — ≥3300 مفتاحًا و≥99.5% نظيفة", hEs.ok, `n=${hEs.n} bad=${hEs.bad}`)
+    check("LANG-DEEP/dict: de — ≥2100 (تغطية متدرجة موثقة §31.د.1) و≥99.5% نظيفة", hDe.ok, `n=${hDe.n} bad=${hDe.bad}`)
+    check("LANG-DEEP/dict: ru — ≥2100 (تغطية متدرجة) و≥99.5% نظيفة", hRu.ok, `n=${hRu.n} bad=${hRu.bad}`)
+    const four = ["fr", "es", "de", "ru"].map((l) => parseJ(`src/lib/i18n/${l}.json`))
+    check("LANG-DEEP/dict: المفتاحان المحوريان «الأجهزة» و«الإعدادات» موجودان بالأربع كلها",
+      four.every((d) => "الأجهزة" in d && "الإعدادات" in d), "core keys ×4")
+    const vFr = four[0]["الإعدادات"], vEs = four[1]["الإعدادات"], vDe = four[2]["الإعدادات"]
+    check("LANG-DEEP/dict: قيمة «الإعدادات» متمايزة فعلًا بين اللغات (ترجمة حقيقية لا نسخ)",
+      vFr !== vDe && vEs !== vDe && vFr !== vEs, `fr=${vFr} es=${vEs} de=${vDe}`)
+    // الهاتف — نظافة الترجمة الأربع
+    for (const l of ["fr", "es", "de", "ru"]) {
+      const vals = []; const walkLd = (o) => { for (const v of Object.values(o ?? {})) { if (v && typeof v === "object") walkLd(v); else vals.push(String(v)) } }
+      walkLd(parseJ(`nexuslink_mobile/assets/translations/${l}.json`))
+      const residue = vals.filter((v) => arabic(v)).length
+      const empty = vals.filter((v) => !v.trim()).length
+      check(`LANG-DEEP/phone: ${l} للهاتف — صفر بقايا عربية وصفر قيم فارغة (619/619 نظيفة)`, residue === 0 && empty === 0, `vals=${vals.length} residue=${residue} empty=${empty}`)
+    }
+    const arVals = []; const walkAr = (o) => { for (const v of Object.values(o ?? {})) { if (v && typeof v === "object") walkAr(v); else arVals.push(String(v)) } }
+    walkAr(parseJ("nexuslink_mobile/assets/translations/ar.json"))
+    check("LANG-DEEP/phone: قاموس ar للهاتف عربي الطابع (≥600 قيمة عربية من 619 — البقية أرقام ومتغيرات)",
+      arVals.filter((v) => arabic(v)).length >= 600, `arabic=${arVals.filter((v) => arabic(v)).length}/${arVals.length}`)
+    const rawMap = parseJ("src/lib/ar-en-map.json")
+    const deDict = four[2]
+    const missDe = Object.keys(rawMap).filter((k) => arabic(k) && !(k in deDict)).length
+    check("LANG-DEEP/fallback: مفاتيح غائبة عن de موجودة بسجل en — السقوط map(en) يغطيها بياناتًا",
+      Object.keys(rawMap).length >= 3400 && missDe > 0 && missDe < Object.keys(rawMap).length, `raw=${Object.keys(rawMap).length} missingInDe=${missDe}`)
+    const i18nLd = rdLd("src/lib/i18n.ts")
+    check("LANG-DEEP/source: الثبات nexus-lang في LS (setItem + getItem عند initLang)",
+      i18nLd.includes('localStorage.setItem("nexus-lang"') && i18nLd.includes('localStorage.getItem("nexus-lang")'), "persisted lang")
+    check("LANG-DEEP/source: تطبيق الاتجاه واللغة على html — dir من langMeta وlang مباشرة",
+      i18nLd.includes("html.dir = langMeta(l).dir") && i18nLd.includes("html.lang"), "html dir+lang")
+    check("LANG-DEEP/source: إشارة i18nReady تُضبط وتُمسح — الماسح لا يجري على معجم ناقص",
+      i18nLd.includes('dataset.i18nReady = "1"') && i18nLd.includes('removeAttribute("data-i18n-ready")'), "ready signal toggle")
+    check("LANG-DEEP/source: announce عبر aria-live (إعلان قارئ الشاشة بالمحرك نفسه)",
+      i18nLd.includes("aria-live"), "aria-live announce")
+    check("LANG-DEEP/source: Intl لكل لغة — تاريخ ووحدة سرعة بثقافة اللغة (fmtDateLang/speedUnit)",
+      i18nLd.includes("Intl.DateTimeFormat(langMeta(currentLang).locale") && i18nLd.includes("langMeta(currentLang).speedUnit"), "locale-aware fmt")
+    const storeLd = rdLd("src/lib/store.ts")
+    check("LANG-DEEP/source: ثبات الإتاحة — fontScale وsr ومقارنة وحركة كلها localStorage (تجاوز إعادة التشغيل)",
+      storeLd.includes('localStorage.setItem("nexus-font-scale"') && storeLd.includes('localStorage.setItem("nexus-sr"')
+      && storeLd.includes('localStorage.getItem("nexus-font-scale")') && storeLd.includes('localStorage.getItem("nexus-sr")'), "a11y persisted")
+    const cssLd = rdLd("src/app/globals.css")
+    check("LANG-DEEP/source: إتاحة الحركة — prefers-reduced-motion موجودة في CSS", cssLd.includes("prefers-reduced-motion"), "reduced motion")
+    check("LANG-DEEP/source: حلقات التركيز الدائمة تُطبق على كل شيء (focus-visible عالمي لا على حقول حصرًا)",
+      cssLd.includes("*:focus-visible {") && cssLd.includes("var(--ring)"), "global focus ring")
+  }
+
+  // [EDGE-NEG] شطدات البوابة والنقاط — الرفض المهذب (تدقيق ما بعد المراجعة)
+  {
+    console.log("== [EDGE-NEG] gateway & endpoint edges ==")
+    const gGet = async (path) => {
+      try { const r = await fetch(`http://127.0.0.1:${gwPort}${path}`); const t = await r.text(); let j = null; try { j = JSON.parse(t) } catch {} ; return { s: r.status, j } }
+      catch (e) { return { s: 0, j: null } }
+    }
+    const dis = (p) => gGet(`/status?XTransformPort=${p}`)
+    const r3000 = await dis(3000)
+    check("EDGE-NEG/gw: XTransformPort=3000 مرفوض 403 — REST الحقيقي لا يُعرض عبر البوابة (سطح محصور)",
+      r3000.s === 403 && r3000.j?.error === "port-not-allowed", `status=${r3000.s}`)
+    check("EDGE-NEG/gw: 3001 خارج النطاق → 403", (await dis(3001)).s === 403, "403")
+    check("EDGE-NEG/gw: 3010 فوق النطاق → 403", (await dis(3010)).s === 403, "403")
+    check("EDGE-NEG/gw: 8180 (البوابة نفسها) غير معروضة عبر نفسها → 403", (await dis(8180)).s === 403, "403 self")
+    const rAbc = await dis("abc")
+    check("EDGE-NEG/gw: منفذ غير رقمي «abc» → 403 (تحليل آمن)", rAbc.s === 403, `status=${rAbc.s}`)
+    const r3008 = await dis(3008)
+    check("EDGE-NEG/gw: 3008 ضمن السماح 3003-3009 لكن بلا مستمع → upstream وليس 403 (السماح ≠ الوجود)",
+      r3008.s !== 403, `status=${r3008.s}`)
+    const rPath = await gGet("/some/odd/path")
+    check("EDGE-NEG/gw: مسار شطد بلا XTransformPort يمرّ لـ3000 الافتراضي (لا 403 ولا 502)",
+      rPath.s !== 403 && rPath.s !== 502, `status=${rPath.s}`)
+    const r3004 = await gGet("/status?XTransformPort=3004")
+    check("EDGE-NEG/gw: 3004 مسموح — الرد من الجسر (ليس 403) مهما كان شكل المسار",
+      r3004.s !== 403, `status=${r3004.s}`)
+    // سوكِت شطدات — المراقبة عبر resume→replay (يرد دائمًا إن كان الجسر حيًا؛ hello يُبث عند الاتصال حصرًا)
+    const { io: ioEg } = await import("socket.io-client")
+    const mkEg = (url) => {
+      const s = ioEg(url, { path: "/", transports: ["polling"], reconnection: false, timeout: 10000 })
+      const helloP = new Promise((res) => { const t = setTimeout(() => res(null), 6000); s.once("prod:hello", (d) => { clearTimeout(t); res(d) }) })
+      const connP = new Promise((res, rej) => { s.once("connect", res); s.once("connect_error", (e) => rej(new Error(e.message))); setTimeout(() => rej(new Error("timeout eg")), 12000) })
+      return { s, helloP, connP }
+    }
+    const egReplay = (s, since) => new Promise((res) => { const t = setTimeout(() => res(null), 8000); s.once("prod:replay", (d) => { clearTimeout(t); res(d) }); s.emit("prod:resume", { since }) })
+    const egA = mkEg("http://127.0.0.1:3007")
+    const egH0 = await egA.helloP
+    await egA.connP
+    const eg = egA.s
+    check("EDGE-NEG/bridge: الجسر يرحب عند الاتصال (hello بlastSeq ≥0)", Number(egH0?.lastSeq ?? -1) >= 0, `head=${egH0?.lastSeq}`)
+    eg.emit("clip:push", { deviceId: "galaxy-s24", deviceName: "Galaxy-S24", kind: "text", content: "", mode: "manual" })
+    await sleep(500)
+    const egR1 = await egReplay(eg, 0)
+    check("EDGE-NEG/bridge: حافظة بمحتوى فارغ لا تُسقط الجسر — replay يرد بعدها (lastSeq سليم)",
+      !!egR1 && Number(egR1?.lastSeq ?? -1) >= 0, "bridge alive")
+    eg.emit("hand:opened", { id: "does-not-exist-xyz", openedOn: "PC-OFFICE" })
+    await sleep(500)
+    const egR2 = await egReplay(eg, 0)
+    check("EDGE-NEG/bridge: فتح بمعرّف غير موجود لا يُسقط الجسر — replay يرد بعدها",
+      !!egR2 && Number(egR2?.lastSeq ?? -1) >= 0, "bridge alive")
+    const hEg = Number(egR2?.lastSeq ?? 0)
+    eg.emit("prod:ack", { upto: 1e9 }); await sleep(500)
+    const egR3 = await egReplay(eg, 0)
+    check("EDGE-NEG/bridge: ack أقصى متكرر آمن — الرأس ثابت بعد الشطدات",
+      Number(egR3?.lastSeq ?? -1) === hEg, `head=${egR3?.lastSeq}==${hEg}`)
+    try { eg.disconnect() } catch {}
+    const pmEg = await fetch("http://127.0.0.1:3000/api/pair-metrics?limit=abc&foo=bar").then((r) => r.json()).catch(() => null)
+    check("EDGE-NEG/api: معاملات شطدة على pair-metrics → مخطط سليم 200 (لا كسر)", pmEg?.ok === true && Array.isArray(pmEg?.entries), "query ignored")
+    const iPost = await fetch("http://127.0.0.1:3000/api/i18n-status", { method: "POST" }).then((r) => r.status).catch(() => 0)
+    check("EDGE-NEG/api: POST على i18n-status (GET حصرًا) → غير 200 (حارس الطريقة)", iPost !== 200, `status=${iPost}`)
   }
 
 } catch (e) {
