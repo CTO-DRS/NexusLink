@@ -13,6 +13,7 @@ import { createSocket, Socket as UdpSocket, RemoteInfo } from "dgram"
 import { randomBytes } from "crypto"
 import { Server as SocketServer } from "socket.io"
 import { store as deviceStore } from "./devices"
+import { markFirstValue } from "./pair-metrics" // M1.1 §30: أول جلسة تحكم مقبولة تُكمل التسييل
 import { socketCors, realClientIp, isLocalSocket } from "./socket-security"
 
 const PORT = 3004
@@ -436,6 +437,7 @@ export function ensureRemoteBridge() {
           session.socketId = socket.id
           session.at = Date.now()
           session.lastHb = Date.now()
+          if (session.deviceId) void markFirstValue(session.deviceId, "control") // M1.1 §30: أول قيمة تحكم تُكمل التسييل
           io2.emit("rc:session", { active: true, controller: { deviceId: session.deviceId, name: session.name }, at: session.at })
           io2.emit("rc:log", { id: uid(), text: `بدأت جلسة تحكم بالكمبيوتر من: ${session.name} — إشعار دائم في الشريط والقطع فوري من الطرفين`, kind: "ok", at: Date.now() })
         } else if (action === "hb") {
