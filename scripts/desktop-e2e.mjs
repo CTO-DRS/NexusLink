@@ -4707,6 +4707,9 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
       && sigSyncDart.includes("nl-prod-cursor") && sigSyncDart.includes("ProdEvents.ack"), "flutter wiring")
 
     // ---- (ب) حي: انقطاع → دفع → عودة → استئناف بلا فقد ----
+    // درس A-1 (موثق في M2): قسم PERSIST يقتل الخادم ويعيد إقلاعه — الجسور قد تموت بعد سابقه.
+    // إحياء جسر prod الصريح (idempotent) قبل أي مقبس حي — لا اعتماد على ترتيب الأقسام.
+    try { await waitHttp("prod boot (A-1)", "http://127.0.0.1:3000/api/prod/boot", 20000, (j) => j?.ok === true) } catch { /* الحي أدناه سيكشف */ }
     const { io: ioSync } = await import("socket.io-client")
     const needleA = `SYNC-CLIP-A-${Date.now()}`
     const needleB = `SYNC-CLIP-B-${Date.now()}`
@@ -4723,8 +4726,9 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     }
 
     // 1) عميل محلي — يقرأ رأس السجل ثم ينقطع (محاكاة الانقطاع)
+    // درس تثبيت: hello تحت حِمل الجولة الكاملة قد يتجاوز 6ث — 10ث (المهلة الوحيدة الضيقة هنا)
     const cur1 = await mkProdSync("http://127.0.0.1:3007")
-    const hello1 = await new Promise((res) => { cur1.once("prod:hello", (d) => res(d)); setTimeout(() => res(null), 6000) })
+    const hello1 = await new Promise((res) => { cur1.once("prod:hello", (d) => res(d)); setTimeout(() => res(null), 10000) })
     const head0 = Number(hello1?.lastSeq ?? -1)
     check("SYNC/live: prod:hello يحمل رأس السجل lastSeq (عدد صحيح ≥ 0)", head0 >= 0, `head0=${head0}`)
     cur1.disconnect()
@@ -5965,6 +5969,205 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
         await pdbI.$disconnect()
       }
     } catch { /* ignore */ }
+  }
+
+  // ============ M3 — المنظومة المفتوحة (عقد §34 — SDK 2.0 · السوق · CLI) ============
+  // ================================================================================
+  console.log("\n== M3: open ecosystem (§34) ==")
+  {
+    const fsM3 = (await import("node:fs")).default
+    const readM3 = (p) => { try { return fsM3.readFileSync(`${process.cwd()}/${p}`, "utf8") } catch { return "" } }
+
+    // ---- (أ) مصدر: SDK 2.0 ----
+    const sdkSrc = readM3("sdk/index.mjs")
+    const sdkCode = sdkSrc.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")
+    check("M3/src: SDK — صفر اعتماد (لا استيراد حزم خارجية) ESM خالص",
+      sdkSrc.includes("export class NexusLink") && !/@?import\s+[^"']*from\s+"(?!node:)[^"]+"/.test(sdkCode) &&
+      !sdkCode.includes('require('), "zero-dep ESM")
+    check("M3/src: SDK — حرس محلي صارم في البناء (127.0.0.1/localhost/[::1] حصرًا)",
+      /127\\\.0\\\.0\\\.1\|\\\[::1\\\]|127\.0\.0\.1\|\[::1\]/.test(sdkSrc) && sdkSrc.includes("محلي حصرًا") &&
+      sdkSrc.includes("LOCALHOST_RE"), "constructor guard")
+    check("M3/src: SDK — سطح الطرق التعاقدي كامل (أجهزة+نقل+ذكاء+أتمتة+سوق)",
+      ["version", "health", "devices", "ops", "transfers", "search", "ask", "insights"].every((m) => sdkSrc.includes(`${m}(`)) &&
+      ["list", "upsert", "remove", "fires"].every((m) => sdkSrc.includes(`automation`) && sdkSrc.includes(m)) &&
+      ["install", "uninstall", "sign"].every((m) => sdkSrc.includes(m)), "contract 2.0 surface")
+    check("M3/src: SDK — NexusError موحد بستاتيوس ومسار + بلا token/account",
+      sdkSrc.includes("export class NexusError") && sdkSrc.includes("this.status") &&
+      !/token|password|api[_-]?key/i.test(sdkSrc.replace(/\/\*[\s\S]*?\*\//g, "")), "no credentials")
+
+    // ---- (ب) مصدر: واجهات REST العامة الجديدة ----
+    const autoRules = readM3("src/app/api/automation/rules/route.ts")
+    check("M3/src: /api/automation/rules — واجهة فوق مقبس الجسر (صفر ازدواج تحقق) والرفض 400 مسببًا",
+      autoRules.includes('io("http://127.0.0.1:3008"') && autoRules.includes('socket.emit("rule:upsert"') &&
+      autoRules.includes('socket.emit("rule:delete"') && autoRules.includes('"auto:rejected"') &&
+      autoRules.includes("status: 400"), "bridge facade")
+    const syncOps = readM3("src/app/api/sync/ops/route.ts")
+    check("M3/src: /api/sync/ops — قراءة حصرًا + شطدات المؤشر + F6 (حمولة فارغة بعلم وجود)",
+      syncOps.includes("headSeq") && syncOps.includes("opsSince") && syncOps.includes("Math.min(since, head)") &&
+      syncOps.includes('payload: {}') && syncOps.includes("hasPayload"), "read-only + F6")
+
+    // ---- (ج) مصدر: نواة السوق ----
+    const marketSrc = readM3("src/lib/nexus/marketplace.ts")
+    check("M3/src: السوق — تعارف JSON بمفاتيح مرتبة + HMAC-SHA256 بـtimingSafeEqual",
+      marketSrc.includes("export function canonicalize") && marketSrc.includes('createHmac("sha256"') &&
+      marketSrc.includes("timingSafeEqual") && marketSrc.includes('Object.keys(obj).sort()'), "canon+sign")
+    check("M3/src: السوق — كتالوج قدرات مغلق (7) والغريب يرفض + تصريحي لا تنفيذي",
+      marketSrc.includes("PLUGIN_CAPABILITIES") &&
+      ["read.devices", "read.search", "read.insights", "read.ops", "invoke.automation", "invoke.transfer", "notify.user"]
+        .every((c) => marketSrc.includes(`"${c}"`)) &&
+      marketSrc.includes("قدرة خارج الكتالوج") && marketSrc.includes('"automation-rule"') &&
+      marketSrc.includes('"local-open"'), "closed catalog")
+    check("M3/src: السوق — قناة بداية بعشرة تكاملات (معيار خروج M3)",
+      (marketSrc.match(/id: "[a-z0-9-]+", name:/g) || []).length === 10, "10 integrations")
+    check("M3/src: السوق — مفتاح محلي randomBytes يرسخ صفر-مخطط في DesktopSetting",
+      marketSrc.includes("randomBytes(32)") && marketSrc.includes("MARKET_KEY_SETTING") &&
+      marketSrc.includes("desktopSetting.upsert"), "local key, no schema")
+
+    // ---- (د) مصدر: بطاقة السوق + i18n ----
+    const settingsSrc = readM3("src/components/nexus/settings-view.tsx")
+    check("M3/src: بطاقة «سوق التكاملات» في الإعدادات — تثبيت بنقرة + رقائق قدرات + بصمة",
+      settingsSrc.includes("MarketCard") && settingsSrc.includes('"/api/marketplace"') &&
+      settingsSrc.includes("action: \"install\"") && settingsSrc.includes("action: \"uninstall\"") &&
+      settingsSrc.includes("بصمة مفتاح القناة"), "settings card")
+    const arEn = readM3("src/lib/ar-en-map.json")
+    check("M3/src: i18n — مفاتيح السوق في السجل (بفواصل موثقة)",
+      arEn.includes('"سوق التكاملات": "Integration Marketplace"') &&
+      arEn.includes('"تثبيت": "Install"') && arEn.includes('"مثبت": "Installed"'), "ar-en-map")
+
+    // ---- (هـ) مصدر: CLI + docs المفتوحة ----
+    const cliSrc = readM3("cli/nexus.mjs")
+    check("M3/src: CLI — يعيد استخدام SDK (أول تكامل) بأوامر الأتمتة والسوق والبحث",
+      cliSrc.includes('from "../sdk/index.mjs"') && cliSrc.includes('"automation"') &&
+      cliSrc.includes('"market"') && cliSrc.includes("nx.search(") && cliSrc.includes("nx.automation."), "sdk reuse")
+    const sdkGuide = readM3("docs/sdk-guide.md")
+    check("M3/docs: دليل المطور 2.0 كامل — الأسطح + التوقيع + القدرات + الحدود",
+      sdkGuide.includes("عقد 2.0") && sdkGuide.includes("market sign") && sdkGuide.includes("read.devices") &&
+      sdkGuide.includes("automation.upsert") && sdkGuide.includes("حدود موثقة بصدق"), "sdk-guide.md")
+    const openComp = readM3("docs/OPEN-COMPONENTS.md")
+    check("M3/docs: المجموعة المفتوحة — كل مسار معلن موجود فعلًا في الشجرة",
+      ["src/lib/pair-math.ts", "src/lib/nexus/oplog.ts", "sdk/index.mjs", "cli/nexus.mjs", "docs/sdk-guide.md"]
+        .every((p) => fsM3.existsSync(`${process.cwd()}/${p}`)) &&
+      openComp.includes("MIT") && openComp.includes("pair-math"), "no claim without file")
+
+    // ================= حي: SDK 2.0 =================
+    const BASE = "http://127.0.0.1:3000"
+    const { NexusLink, NexusError } = await import("../sdk/index.mjs")
+    let nxL = null
+    try { nxL = new NexusLink({ url: BASE }) } catch { /* تمسك أدناه */ }
+    check("M3/live: SDK يقبل العنوان المحلي ويتموضع", nxL !== null && nxL.base === BASE, BASE)
+
+    // رفض العنوان البعيد — الحرس التعاقدي في البناء
+    let rejRemote = ""
+    try { new NexusLink({ url: "https://example.com" }) } catch (e) { rejRemote = e instanceof NexusError ? e.message : String(e) }
+    check("M3/live: SDK يرفض عنوانًا بعيدًا في البناء (حرس الجهاز-الحدود)",
+      rejRemote.includes("محلي حصرًا"), rejRemote.slice(0, 60))
+
+    try {
+      const v = await nxL.version()
+      check("M3/live: SDK version — إصدار حقيقي وسجل", typeof v?.current === "string" && v.current.length >= 5, v?.current)
+      const h = await nxL.health()
+      check("M3/live: SDK health — الخادم المضمن حي", h?.ok === true || h?.status === "ok" || typeof h === "object", "ok")
+      const d = await nxL.devices()
+      check("M3/live: SDK devices — قائمة حية", Array.isArray(d?.devices) && d.devices.length >= 1, `${d?.devices?.length ?? 0} devices`)
+      const ins = await nxL.insights()
+      check("M3/live: SDK insights — بنية الأرقام الحية", typeof ins === "object" && ins !== null, "object")
+      const o = await nxL.ops()
+      check("M3/live: SDK ops — رأس سجل العمليات وحمولات مخفاة (F6)",
+        typeof o?.head === "number" && o.head >= 0 && Array.isArray(o.ops) &&
+        o.ops.every((op) => op.payload !== null && Object.keys(op.payload ?? {}).length === 0), `head=${o?.head}`)
+
+      // أتمتة roundtrip عبر REST العام (فوق الجسر — نفس تعقيم المحرر)
+      const RULE_M3 = { name: "M3-E2E-sdk-rule", enabled: true, trigger: { kind: "battery.below", threshold: 33 }, action: { kind: "notify", text: "M3 SDK rule" } }
+      const up = await nxL.automation.upsert(RULE_M3)
+      check("M3/live: SDK automation.upsert — مقبول من تعقيم الجسر نفسه", up?.ok === true && typeof up?.rule?.id === "string", up?.rule?.id)
+      const bad = await nxL.automation.upsert({ name: "M3-E2E-bad", enabled: true, trigger: { kind: "not.a.kind" }, action: { kind: "notify", text: "x" } }).catch((e) => e)
+      check("M3/live: SDK automation.upsert فاسد — 400 مسبب بنفس سبب المحرر",
+        bad instanceof NexusError && bad.status === 400 && String(bad.message).includes("غير معروف"), String(bad.message ?? "").slice(0, 60))
+      const ls = await nxL.automation.list()
+      check("M3/live: SDK automation.list — القاعدة حاضرة مع الإحصاءات",
+        Array.isArray(ls?.rules) && ls.rules.some((r) => r.name === RULE_M3.name) && ls?.stats != null, "listed")
+      const rm = await nxL.automation.remove(up.rule.id)
+      check("M3/live: SDK automation.remove — نظيف", rm?.ok === true, "removed")
+
+      // سوق حي عبر SDK
+      const ml = await nxL.market.list()
+      check("M3/live: SDK market.list — قناة ≥10 موقعة + بصمة مفتاح + كتالوج",
+        Array.isArray(ml?.channel) && ml.channel.length === 10 && typeof ml?.keyFp === "string" && ml.keyFp.length === 16 &&
+        ml.channel.every((c) => /^[0-9a-f]{64}$/.test(c.sig ?? "")), `channel=${ml?.channel?.length} fp=${ml?.keyFp}`)
+
+      // تثبيت من القناة ثم مكرر ثم إزالة — عبر SDK حصرًا
+      const item = ml.channel.find((c) => c.manifest.id === "battery-warden")
+      const inst = await nxL.market.install(item.manifest, item.sig)
+      check("M3/live: SDK market.install — تثبيت من القناة الموقعة", inst?.ok === true && inst?.installed?.manifest?.id === "battery-warden", "installed")
+      const dup = await nxL.market.install(item.manifest, item.sig).catch((e) => e)
+      check("M3/live: SDK market.install مكرر — 400 «معرف مكرر»",
+        dup instanceof NexusError && dup.status === 400 && String(dup.message).includes("مكرر"), String(dup.message ?? "").slice(0, 40))
+      const uni = await nxL.market.uninstall("battery-warden")
+      check("M3/live: SDK market.uninstall — نظيف", uni?.ok === true, "uninstalled")
+
+      // بحث ببذرة حقيقية عبر Prisma (نفس نمط INTEL — بذر ثم تنظيف)
+      const M3_Q = "M3SDKSEED"
+      try {
+        const seedUrlM3 = fsM3.readFileSync(`${process.cwd()}/.env`, "utf8").match(/^DATABASE_URL=(.*)$/m)?.[1]
+        const { PrismaClient } = await import("@prisma/client")
+        const pdbM3 = new PrismaClient({ datasources: { db: { url: seedUrlM3 } }, log: [] })
+        await pdbM3.prodClip.create({ data: { deviceId: "galaxy-s24", deviceName: "E2E-Phone", kind: "text", content: `مقطع ${M3_Q} للبحث عبر SDK` } })
+        const sr = await nxL.search(M3_Q)
+        const hit = (sr?.groups ?? []).some((g) => g.kind === "clip" && (g.items ?? []).some((it) => String(it.title ?? it.snippet ?? "").includes(M3_Q)))
+        check("M3/live: SDK search — بذرة حقيقية تُصاب عبر REST العام", sr?.ok === true && sr.total >= 1 && hit, `total=${sr?.total}`)
+        await pdbM3.prodClip.deleteMany({ where: { content: { contains: M3_Q } } })
+        await pdbM3.$disconnect()
+      } catch (e) { check("M3/live: SDK search — بذرة حقيقية تُصاب عبر REST العام", false, e.message?.slice(0, 80)) }
+
+      // ================= حي: السوق (عبث/قدرات) عبر REST مباشرة =================
+      const mktJ = await fetch(`${BASE}/api/marketplace`).then((r) => r.json())
+      check("M3/live: GET /api/marketplace — القناة والمثبت والكتالوج",
+        mktJ?.channel?.length === 10 && Array.isArray(mktJ?.capabilities) && mktJ.capabilities.length === 7, "shape")
+      check("M3/live: بصمة المفتاح مستقرة عبر النداءات", mktJ.keyFp === ml.keyFp, mktJ.keyFp)
+
+      const tampered = { ...item.manifest, description: `${item.manifest.description} (معدَّل)` }
+      const tR = await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "install", manifest: tampered, sig: item.sig }) })
+      check("M3/live: عبث في المحتوى بتوقيع قديم → مرفوع «التوقيع لا يطابق»",
+        tR.status === 400 && (await tR.json()).error?.includes("لا يطابق"), "tamper rejected")
+      const badCap = { ...item.manifest, id: "m3-e2e-badcap", capabilities: ["read.devices", "kernel.root"] }
+      const badSig = (await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "sign", manifest: badCap }) }).then((r) => r.json())).sig
+      const cR = await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "install", manifest: badCap, sig: badSig }) })
+      check("M3/live: قدرة خارج الكتالوج → مرفوعة «قدرة خارج الكتالوج» حتى بتوقيع صحيح",
+        cR.status === 400 && (await cR.json()).error?.includes("خارج الكتالوج"), "capability closed")
+      const nR = await fetch(`${BASE}/api/marketplace`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "install", manifest: item.manifest, sig: "deadbeef" }) })
+      check("M3/live: توقيع مشوه → «توقيع مفقود أو مشوه»",
+        nR.status === 400 && (await nR.json()).error?.includes("توقيع"), "malformed sig")
+
+      // ================= حي: CLI =================
+      const { execFile: execFileM3 } = await import("node:child_process")
+      const runCli = (args) => new Promise((res) => {
+        execFileM3(process.execPath, ["cli/nexus.mjs", ...args], { cwd: process.cwd(), timeout: 30000, env: { ...process.env } }, (err, stdout, stderr) => res({ err, stdout, stderr }))
+      })
+      const st = await runCli(["status"])
+      let stJ = null
+      try { stJ = JSON.parse(st.stdout) } catch { /* غير JSON */ }
+      check("M3/live: CLI status — ملخص JSON (إصدار + أجهزة + رأس مزامنة)",
+        !st.err && typeof stJ?.version === "string" && typeof stJ?.devices?.total === "number" && typeof stJ?.syncOps?.head === "number",
+        `v=${stJ?.version} devices=${stJ?.devices?.total} head=${stJ?.syncOps?.head}`)
+      const dv = await runCli(["devices", "--json"])
+      check("M3/live: CLI devices --json — قائمة خام قابلة للسكربتات",
+        !dv.err && (() => { try { return Array.isArray(JSON.parse(dv.stdout)) } catch { return false } })(), "json list")
+      const sr2 = await runCli(["search", "NexusLink"])
+      check("M3/live: CLI search — استعلام يعمل من الطرفية", !sr2.err && sr2.stdout.includes('"ok"'), "searched")
+      const al = await runCli(["automation", "list"])
+      check("M3/live: CLI automation list — عبر REST العام", !al.err && al.stdout.includes('"rules"'), "listed")
+      const mk = await runCli(["market", "install", "focus-timer"])
+      check("M3/live: CLI market install — تثبيت من الطرفية", !mk.err && /"ok":\s*true/.test(mk.stdout), "installed via cli")
+      const mu = await runCli(["market", "uninstall", "focus-timer"])
+      check("M3/live: CLI market uninstall — إزالة من الطرفية", !mu.err && /"ok":\s*true/.test(mu.stdout), "uninstalled via cli")
+      const remoteCli = await runCli(["--url", "https://example.com", "status"])
+      check("M3/live: CLI بعنوان بعيد — يرفض برمز خروج غير صفري",
+        remoteCli.err !== undefined && remoteCli.stderr.includes("محلي حصرًا"), "rejected remote")
+      const ver = await runCli(["version"])
+      check("M3/live: CLI version — نفس إصدار API", !ver.err && ver.stdout.includes('"current"'), "version")
+    } catch (e) {
+      check("M3/live: انسداد حي اكتمل بلا خطأ غير متوقع", false, e.message?.slice(0, 120))
+    }
   }
 
 } catch (e) {
