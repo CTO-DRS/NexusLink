@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import crypto from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
+import { readEnterprisePolicy } from "@/lib/enterprise-policy"
 
 export const dynamic = "force-dynamic"
 
@@ -58,12 +59,17 @@ function newToken(): string {
 
 export async function GET() {
   const p = readPairFile()
-  if (!p) return NextResponse.json({ ok: true, enabled: false })
+  // §38 — تلميح الإدارة للبطاقة: ما تفرضه السياسة المؤسسية (بلا حساسيات —
+  // اسم المؤسسة ووضع الفرض فقط، وبصمة السياسة في /api/enterprise/compliance).
+  const pol = readEnterprisePolicy()
+  const policy = { remoteAccess: pol.remoteAccess, organization: pol.organization }
+  if (!p) return NextResponse.json({ ok: true, enabled: false, policy })
   return NextResponse.json({
     ok: true,
     enabled: true,
     fingerprint: p.fingerprint,
     createdAt: p.createdAt,
+    policy,
     // الرمز الخام عمدًا غائب — يُسلَّم مرة واحدة في استجابة enable/rotate حصرًا
   })
 }
@@ -84,6 +90,18 @@ export async function POST(request: Request) {
   let body: { action?: string } = {}
   try { body = await request.json() } catch { /* بلا جسم */ }
   const action = String(body.action ?? "")
+
+  // §38 — قفل السياسة المؤسسية (الأولوية المعتمدة: المُدار فوق المستخدم):
+  //  - force-off → التفعيل والتدوير مرفوضان (الوصول البعيد مغلق مؤسسيًا)
+  //  - force-on  → التعطيل مرفوض — التدوير متروك (دورة الرمز نفسها بلا فجوة أمنية)
+  // القفل بعد حرس loopback حصرًا: الإدارة بيد الجهاز أولًا ثم بيد المؤسسة.
+  const pol = readEnterprisePolicy()
+  if (pol.state === "managed" && pol.remoteAccess === "force-off" && (action === "enable" || action === "rotate")) {
+    return NextResponse.json({ ok: false, error: "policy-remote-access-locked", policy: "force-off" }, { status: 403 })
+  }
+  if (pol.state === "managed" && pol.remoteAccess === "force-on" && action === "disable") {
+    return NextResponse.json({ ok: false, error: "policy-remote-access-locked", policy: "force-on" }, { status: 403 })
+  }
 
   if (action === "disable") {
     try { fs.rmSync(PAIR_FILE, { force: true }) } catch { /* غائب أصلًا */ }

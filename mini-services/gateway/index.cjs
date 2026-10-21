@@ -17,6 +17,13 @@
 //  - مقارنة زمن-ثابت عبر sha256 (لا تسرّب طول) + حجب مؤقت لكل IP بعد 5 فشل.
 //  - نظافة: بارامتر pair يُجرَد من المسار قبل التحويل للأعلى (الرمز لا يصل
 //    لسجلات الخدمات الداخلية أبدًا) ولا يُطبع في أي سجل.
+//
+// §38 — السياسات المؤسسية المركزية (M4.1 النواة المحلية — docs/protocol-contract.md):
+//  - ملف سياسة واحد (NEXUSLINK_POLICY_FILE أو مسار النشر القياسي) يُقرأ بمتغير
+//    تعديل-الوقت — التعديل حي بلا إعادة تشغيل (نمط الرمز نفسه).
+//  - force-off: الخارج مرفوض حصرًا (حتى برمز صحيح) · force-on: الرمز شرط دائم.
+//  - blockedBridges: جسور محجوبة عن الخارج حصرًا — loopback معفى (الجهاز هي الحدود).
+//  - /__gw/health يعلن policyManaged/policyRemoteAccess للتشخيص الحي.
 const http = require("http")
 const net = require("net")
 const fs = require("fs")
@@ -34,6 +41,84 @@ let BOUND_PORT = GATEWAY_PORT
 // { token, fingerprint, createdAt } — تكتبه /api/remote-access وحذفه = تعطيل.
 const PAIR_FILE = process.env.NEXUSLINK_PAIR_FILE || pathMod.join(process.cwd(), ".zstate", "pair-token.json")
 let pairCache = { mtimeMs: -1, size: -1, data: null }
+
+// §38 — السياسات المؤسسية المركزية (M4.1 النواة المحلية) — نفس نمط §37:
+// ملف JSON واحد (NEXUSLINK_POLICY_FILE أو مسار النشر القياسي للنظام) بفرض
+// حي بمتغير تعديل-الوقت بلا إعادة تشغيل. المخطط v1:
+// { schemaVersion: 1, organization?, managed?: { remoteAccess?, blockedBridges? } }
+//  - remoteAccess "force-off": كل واصل من خارج الجهاز مرفوض ولو برمز صحيح
+//    (الرمز بلا معنى — التعطيل مؤسسي) · "force-on": الرمز شرط دائم.
+//  - blockedBridges: جسور (3003..3009) محجوبة عن الخارج حصرًا — loopback
+//    معفى دائمًا (الجهاز هي الحدود — عقد 2.0).
+//  - ملف غير صالح = لا فرض (فشل-آمن نحو سلوك المستخدم) — الحالة تُعلن في
+//    /api/enterprise/compliance (حد §38.هـ.3).
+// هذا المنطق مطابق لمنطق src/lib/enterprise-policy.ts — التعديل هناك يستوجب
+// مراجعة هنا (نمط النسختين المتطابقتين نفسه).
+const POLICY_FILE_CANDIDATES = [
+  process.env.NEXUSLINK_POLICY_FILE,
+  process.platform === "win32"
+    ? pathMod.join(process.env.ProgramData || "C:\\ProgramData", "NexusLink", "policy.json")
+    : process.platform === "darwin"
+      ? "/Library/Application Support/NexusLink/policy.json"
+      : "/etc/nexuslink/policy.json",
+].filter(Boolean)
+const BRIDGE_PORTS = new Set([3003, 3004, 3005, 3006, 3007, 3008, 3009])
+let policyCache = { mtimeMs: -1, size: -1, data: null }
+
+function resolvePolicyFile() {
+  for (const p of POLICY_FILE_CANDIDATES) {
+    try { if (fs.statSync(p).isFile()) return p } catch { /* غائب — التالي */ }
+  }
+  return null
+}
+
+function loadPolicy() {
+  const p = resolvePolicyFile()
+  if (!p) { policyCache = { mtimeMs: -1, size: -1, data: null }; return null }
+  try {
+    const st = fs.statSync(p)
+    if (st.mtimeMs !== policyCache.mtimeMs || st.size !== policyCache.size) {
+      policyCache = { mtimeMs: st.mtimeMs, size: st.size, data: parsePolicy(fs.readFileSync(p, "utf8")) }
+    }
+    return policyCache.data
+  } catch {
+    policyCache = { mtimeMs: -1, size: -1, data: null }
+    return null
+  }
+}
+
+/** تحقق مخطط v1 — null عند أي مخالفة (فشل-آمن بلا فرض) */
+function parsePolicy(raw) {
+  try {
+    const j = JSON.parse(raw)
+    if (!j || typeof j !== "object" || Array.isArray(j) || j.schemaVersion !== 1) return null
+    const out = { organization: null, remoteAccess: null, blockedBridges: [] }
+    if (j.organization !== undefined && j.organization !== null) {
+      if (typeof j.organization !== "string" || j.organization.length > 120) return null
+      out.organization = j.organization
+    }
+    if (j.managed !== undefined && j.managed !== null) {
+      if (typeof j.managed !== "object" || Array.isArray(j.managed)) return null
+      const m = j.managed
+      if (m.remoteAccess !== undefined && m.remoteAccess !== null) {
+        if (m.remoteAccess !== "force-on" && m.remoteAccess !== "force-off") return null
+        out.remoteAccess = m.remoteAccess
+      }
+      if (m.blockedBridges !== undefined && m.blockedBridges !== null) {
+        if (!Array.isArray(m.blockedBridges) || m.blockedBridges.length > 7) return null
+        const seen = new Set()
+        for (const v of m.blockedBridges) {
+          if (!Number.isInteger(v) || !BRIDGE_PORTS.has(v)) return null
+          seen.add(v)
+        }
+        out.blockedBridges = [...seen].sort((a, b) => a - b)
+      }
+    }
+    return out
+  } catch {
+    return null
+  }
+}
 
 function loadPair() {
   try {
@@ -89,9 +174,16 @@ function pairCandidate(req, u) {
 
 /** حسم البوابة لطلب HTTP — false = رُفض وردّ 401/429 (المتصل loopback معفى دائمًا) */
 function pairGateHttp(req, res, reqUrl) {
+  const ip = clientIp(req)
+  // §38 — الفرض المؤسسي قبل حسم الرمز: force-off يلغي معنى الرمز أصلًا
+  const policy = loadPolicy()
+  if (!isLoopbackIp(ip) && policy && policy.remoteAccess === "force-off") {
+    res.writeHead(403, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" })
+    res.end(JSON.stringify({ ok: false, gateway: true, error: "remote-access-disabled-by-policy" }))
+    return false
+  }
   const pair = loadPair()
   if (!pair) return true // OFF — السلوك التاريخي حرفيًا
-  const ip = clientIp(req)
   if (isLoopbackIp(ip)) return true
   let u
   try { u = new URL(reqUrl, "http://gw") } catch { u = new URL("/", "http://gw") }
@@ -111,9 +203,16 @@ function pairGateHttp(req, res, reqUrl) {
 
 /** حسم البوابة لترقية WS — نفس الحسم برد خام على المقبس */
 function pairGateRaw(req, socket, reqUrl) {
+  const ip = clientIp(req)
+  const policy = loadPolicy()
+  if (!isLoopbackIp(ip) && policy && policy.remoteAccess === "force-off") {
+    try {
+      socket.end("HTTP/1.1 403 Forbidden\r\ncontent-type: application/json\r\n\r\n" + JSON.stringify({ ok: false, gateway: true, error: "remote-access-disabled-by-policy" }))
+    } catch { /* مقبس ميت */ }
+    return false
+  }
   const pair = loadPair()
   if (!pair) return true
-  const ip = clientIp(req)
   if (isLoopbackIp(ip)) return true
   let u
   try { u = new URL(reqUrl, "http://gw") } catch { u = new URL("/", "http://gw") }
@@ -170,6 +269,18 @@ function targetPort(reqUrl) {
   }
 }
 
+/** §38 — حظر جسور بالسياسة عن الخارج حصرًا: false = رُفض 403 (loopback معفى) */
+function policyBridgeGate(req, res, port) {
+  if (!port) return true // REST 3000 ليست جسرًا قابلًا للحجب
+  const ip = clientIp(req)
+  if (isLoopbackIp(ip)) return true
+  const policy = loadPolicy()
+  if (!policy || !policy.blockedBridges.includes(port)) return true
+  res.writeHead(403, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" })
+  res.end(JSON.stringify({ ok: false, gateway: true, error: "bridge-blocked-by-policy", port }))
+  return false
+}
+
 /** IP العميل الحقيقي: البوابة محلية — الواصل من loopback عبر البوابة يحمل
  * x-gw-client-ip (نستبدله حرفيًا فلا يُثق بترويسة من عميل مباشر)، والواصل
  * مباشرة من الشبكة يبقى بعنوانه الحقيقي. تقرؤه الجسور لبوابة desktop:register. */
@@ -200,6 +311,7 @@ function proxyHttp(req, res) {
   const t = targetPort(req.url)
   if (t === -1) return rejectDisallowed(req, res, t)
   const port = t ?? REST_PORT
+  if (!policyBridgeGate(req, res, t)) return
   // SEC: تمرير IP العميل الحقيقي للجسور (يستبدل دائمًا — لا يُثق بترويسة عميل)
   const headers = hopByHop(req.headers)
   headers["x-gw-client-ip"] = clientIp(req)
@@ -230,6 +342,14 @@ function proxyUpgrade(req, socket, head) {
     return
   }
   const port = t ?? REST_PORT
+  // §38 — حظر جسور بالسياسة عن الخارج حصرًا (WS نفس الحسم — برد خام)
+  if (t && !isLoopbackIp(clientIp(req))) {
+    const policy = loadPolicy()
+    if (policy && policy.blockedBridges.includes(t)) {
+      try { socket.end("HTTP/1.1 403 Forbidden\r\ncontent-type: application/json\r\n\r\n" + JSON.stringify({ ok: false, gateway: true, error: "bridge-blocked-by-policy", port: t })) } catch {}
+      return
+    }
+  }
   const up = net.connect(port, "127.0.0.1", () => {
     let raw = `${req.method} ${stripPair(req.url)} HTTP/1.1\r\n`
     for (let i = 0; i < req.rawHeaders.length; i += 2) {
@@ -257,7 +377,8 @@ const server = http.createServer((req, res) => {
     const path = (req.url || "/").split("?")[0]
     if (path === "/__gw/health") {
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store", "access-control-allow-origin": "*" })
-      res.end(JSON.stringify({ ok: true, proto: "Nexus/1.2", role: "gateway", port: GATEWAY_PORT, rest: REST_PORT, uptimeMs: Date.now() - STARTED_AT, pair: !!loadPair() }))
+      const pol = loadPolicy()
+      res.end(JSON.stringify({ ok: true, proto: "Nexus/1.2", role: "gateway", port: GATEWAY_PORT, rest: REST_PORT, uptimeMs: Date.now() - STARTED_AT, pair: !!loadPair(), policyManaged: !!pol, policyRemoteAccess: pol ? pol.remoteAccess : null }))
       return
     }
     if (!pairGateHttp(req, res, req.url)) return
