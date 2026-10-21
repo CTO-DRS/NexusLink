@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:easy_localization/easy_localization.dart';
 
 /// M1.4 (عقد §31.ب.5): منتقي اللغات الست المشترك — رقائق اختيار بأسماء أصلية.
 class LanguageChips extends StatelessWidget {
