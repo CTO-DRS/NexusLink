@@ -3,6 +3,7 @@ import crypto from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
 import { readEnterprisePolicy } from "@/lib/enterprise-policy"
+import { appendAudit, observePolicy } from "@/lib/enterprise-audit"
 
 export const dynamic = "force-dynamic"
 
@@ -62,6 +63,8 @@ export async function GET() {
   // §38 — تلميح الإدارة للبطاقة: ما تفرضه السياسة المؤسسية (بلا حساسيات —
   // اسم المؤسسة ووضع الفرض فقط، وبصمة السياسة في /api/enterprise/compliance).
   const pol = readEnterprisePolicy()
+  // §39 — رصد انتقالات السياسة عند القراءات الإدارية (رصد لا فرض)
+  await observePolicy(pol)
   const policy = { remoteAccess: pol.remoteAccess, organization: pol.organization }
   if (!p) return NextResponse.json({ ok: true, enabled: false, policy })
   return NextResponse.json({
@@ -75,56 +78,73 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  // §39 — تحليل الجسم أولًا (بلا أثر جانبي) ليُوثق الفعل المرفوض في السجل كاملًا
+  let body: { action?: string } = {}
+  try { body = await request.json() } catch { /* بلا جسم */ }
+  const action = String(body.action ?? "")
+
   // حرس loopback للإدارة: البوابة تستبدل x-gw-client-ip دائمًا بعنوان العميل
   // الحقيقي — إن وصلت الترويسة من خارج loopback فالواصل عبر الشبكة (حتى
   // برمز صحيح) ولا يُدير الاقتران. المتصل المباشر بواجهة الجهاز (بلا ترويسة)
   // أو عبر البوابة من loopback يُسمح له.
   const fwd = request.headers.get("x-gw-client-ip")
   if (fwd && !isLoopbackIp(fwd)) {
+    // §39 — محاولة إدارة من خارج الجهاز: دليل أمني (وسم خارجي — بلا عناوين خام F6)
+    await appendAudit("pair.admin.denied", false, "remote", { action: action.slice(0, 24), reason: "loopback" })
     return NextResponse.json(
       { ok: false, error: "pair-admin-loopback-only", detail: "via-gateway-non-loopback" },
       { status: 403 },
     )
   }
 
-  let body: { action?: string } = {}
-  try { body = await request.json() } catch { /* بلا جسم */ }
-  const action = String(body.action ?? "")
-
   // §38 — قفل السياسة المؤسسية (الأولوية المعتمدة: المُدار فوق المستخدم):
   //  - force-off → التفعيل والتدوير مرفوضان (الوصول البعيد مغلق مؤسسيًا)
   //  - force-on  → التعطيل مرفوض — التدوير متروك (دورة الرمز نفسها بلا فجوة أمنية)
   // القفل بعد حرس loopback حصرًا: الإدارة بيد الجهاز أولًا ثم بيد المؤسسة.
   const pol = readEnterprisePolicy()
+  // §39 — رصد السياسة قبل الحسم (كل قفل/سماح يُوثق في السجل التدقيقي)
+  await observePolicy(pol)
   if (pol.state === "managed" && pol.remoteAccess === "force-off" && (action === "enable" || action === "rotate")) {
+    await appendAudit("pair.admin.denied", false, "local", { action, reason: "policy-force-off" })
     return NextResponse.json({ ok: false, error: "policy-remote-access-locked", policy: "force-off" }, { status: 403 })
   }
   if (pol.state === "managed" && pol.remoteAccess === "force-on" && action === "disable") {
+    await appendAudit("pair.admin.denied", false, "local", { action, reason: "policy-force-on" })
     return NextResponse.json({ ok: false, error: "policy-remote-access-locked", policy: "force-on" }, { status: 403 })
   }
 
   if (action === "disable") {
+    const last = readPairFile()
     try { fs.rmSync(PAIR_FILE, { force: true }) } catch { /* غائب أصلًا */ }
+    // §39 — دليل التعطيل: بصمة الرمز الأخير (لا رمزه)
+    await appendAudit("pair.disable", true, "local", { fp: last?.fingerprint ?? null })
     return NextResponse.json({ ok: true, enabled: false })
   }
 
   if (action === "enable") {
     if (readPairFile()) {
+      await appendAudit("pair.admin.denied", false, "local", { action, reason: "conflict" })
       return NextResponse.json({ ok: false, error: "already-enabled", hint: "rotate" }, { status: 409 })
     }
     const token = newToken()
     const { fingerprint, createdAt } = writePairFile(token)
+    await appendAudit("pair.enable", true, "local", { fp: fingerprint })
     return NextResponse.json({ ok: true, enabled: true, token, fingerprint, createdAt, urlQuery: `?pair=${token}` })
   }
 
   if (action === "rotate") {
-    if (!readPairFile()) {
+    const last = readPairFile()
+    if (!last) {
+      await appendAudit("pair.admin.denied", false, "local", { action, reason: "conflict" })
       return NextResponse.json({ ok: false, error: "not-enabled", hint: "enable" }, { status: 409 })
     }
     const token = newToken()
     const { fingerprint, createdAt } = writePairFile(token)
+    // §39 — دليل التدوير: من بصمة إلى بصمة (الهوية تغيّرت — لا الرمز الخام)
+    await appendAudit("pair.rotate", true, "local", { from: last.fingerprint, to: fingerprint })
     return NextResponse.json({ ok: true, enabled: true, token, fingerprint, createdAt, urlQuery: `?pair=${token}` })
   }
 
+  await appendAudit("pair.admin.denied", false, "local", { action: action.slice(0, 24), reason: "unknown-action" })
   return NextResponse.json({ ok: false, error: "unknown-action" }, { status: 400 })
 }
