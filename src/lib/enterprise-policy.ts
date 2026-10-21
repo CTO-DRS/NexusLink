@@ -63,6 +63,12 @@ function resolvePolicyPath(): string | null {
   return null
 }
 
+/** حل مسار ملف السياسة الخام (بلا قراءة) — تستخدمه طبقة السجل التدقيقي §39
+ * لوضع audit.jsonl بجانب السياسة المُدارة (مجلد يكتبه MDM = قابل للجمع) */
+export function resolvePolicyPathForAudit(): string | null {
+  return resolvePolicyPath()
+}
+
 /** تحقق مخطط v1 — يرمي Error عند أي مخالفة (المستدعي يحوّلها إلى invalid) */
 function validateV1(j: unknown): {
   organization: string | null

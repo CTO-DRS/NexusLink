@@ -3,6 +3,7 @@ import crypto from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
 import { readEnterprisePolicy, policyPaths, POLICY_CONTRACT } from "@/lib/enterprise-policy"
+import { observePolicy, auditSummary, AUDIT_CONTRACT } from "@/lib/enterprise-audit"
 
 export const dynamic = "force-dynamic"
 
@@ -57,6 +58,8 @@ export async function GET(request: Request) {
   }
 
   const pol = readEnterprisePolicy()
+  // §39 — رصد انتقالات السياسة عند قراءات الامتثال (إدارة التغيير — أدلة SOC 2)
+  await observePolicy(pol)
   const pair = readPairFile()
   return NextResponse.json({
     ok: true,
@@ -77,6 +80,8 @@ export async function GET(request: Request) {
       fingerprint: pair?.fingerprint ?? null,
       createdAt: pair?.createdAt ?? null,
     },
+    // §39 — ملخص السجل التدقيقي المحلي (أدلة الإدارة والتغيير — توصيفي حصرًا)
+    audit: { contract: AUDIT_CONTRACT, ...auditSummary() },
     appVersion: appVersion(),
     platform: process.platform,
     generatedAt: new Date().toISOString(),

@@ -1275,10 +1275,24 @@ function RemoteAccessCard() {
 // الإدارة وإنفاذها كما يقرأها /api/enterprise/compliance — منظرٌ توصيفي حصرًا
 // (لا إجراءات هنا: التعديل بيد المدير عبر ملف السياسة، والمسار حلقي فقط).
 // غير مُدار = السلوك التاريخي حرفيًا · invalid = تحذير صاخب (فشل-آمن §38.هـ.3).
+// §39 — قسم السجل التدقيقي: ملخص السلسلة (كشف تعديل رجعي) وآخر الأحداث —
+// منظرٌ حصرًا، السجل يكتبه الخادم عند الأفعال الإدارية والرصد (لا إلحاق من الواجهة).
+const AUDIT_KIND_LABEL: Record<string, string> = {
+  "pair.enable": "تفعيل الوصول البعيد",
+  "pair.rotate": "تدوير رمز الوصول البعيد",
+  "pair.disable": "تعطيل الوصول البعيد",
+  "pair.admin.denied": "رفض فعل إداري",
+  "policy.observed": "رصد أولي للسياسة",
+  "policy.changed": "تغير ملف السياسة",
+}
+interface AuditEventView { i: number; t: string; k: string; ok: boolean; actor: string }
+
 function EnterprisePolicyCard() {
   const { t } = useI18n()
   const [rep, setRep] = useState<Record<string, unknown> | null>(null)
   const [state, setState] = useState("loading")
+  const [audit, setAudit] = useState<{ count: number; valid: boolean } | null>(null)
+  const [events, setEvents] = useState<AuditEventView[] | null>(null)
 
   const load = useCallback(async () => {
     await fetch("/api/enterprise/compliance")
@@ -1287,8 +1301,18 @@ function EnterprisePolicyCard() {
         if (!j.ok) throw new Error(String(j.error ?? ""))
         setRep(j)
         setState(String(j.policyState ?? "unmanaged"))
+        const a = j.audit as { count?: number; valid?: boolean } | undefined
+        if (a && typeof a.count === "number" && typeof a.valid === "boolean") setAudit({ count: a.count, valid: a.valid })
       })
       .catch(() => { /* البقاء صامتًا — بطاقة إعدادات */ setState("unavailable") })
+    await fetch("/api/enterprise/audit?limit=8")
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j.ok) return
+        setAudit({ count: Number(j.count ?? 0), valid: j.valid === true })
+        setEvents(Array.isArray(j.events) ? (j.events as AuditEventView[]) : [])
+      })
+      .catch(() => { /* البقاء صامتًا — بطاقة إعدادات */ })
   }, [])
   useEffect(() => { load() }, [load])
 
@@ -1337,7 +1361,38 @@ function EnterprisePolicyCard() {
         {state === "unmanaged" && (
           <p className="text-xs text-muted-foreground">{t("غير مُدار: الجهاز بيد مستخدمه بالكامل (الافتراضي) — نشر ملف السياسة يجعل هذا الجهاز قابلًا للإدارة المركزية")}</p>
         )}
+
+        {/* §39 — السجل التدقيقي المؤسسي: ملخص السلسلة + آخر الأحداث (منظر حصرًا) */}
+        {audit && (
+          <div className="space-y-2 rounded-lg border p-3" data-audit-block>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="outline" data-audit-valid={audit.valid ? "1" : "0"}>
+                <ScrollText className="w-3 h-3" />{t("السجل التدقيقي المؤسسي")}: <span data-no-i18n>{audit.count}</span>
+              </Badge>
+              <Badge variant={audit.valid ? "secondary" : "destructive"} data-audit-chain={audit.valid ? "ok" : "broken"}>
+                {audit.valid ? t("سلسلة سليمة") : t("سلسلة مكسورة — السجل متجمد")}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">{t("سجل إلحاقي بسلسلة بصمات للأفعال الإدارية وانتقالات السياسة — أي تعديل رجعي يكسر السلسلة ويُعلن")}</p>
+            {audit.valid && events && events.length > 0 && (
+              <div className="space-y-1" data-audit-events>
+                <p className="text-xs font-medium">{t("آخر الأحداث المدققة")}</p>
+                {events.slice().reverse().map((e) => (
+                  <div key={e.i} className="flex flex-wrap items-center gap-1.5 text-xs" data-audit-event={e.k}>
+                    <span className="font-mono" data-no-i18n>#{e.i}</span>
+                    <span>{t(AUDIT_KIND_LABEL[e.k] ?? e.k)}</span>
+                    <Badge variant="outline" className="px-1 py-0" data-audit-actor={e.actor}>{e.actor === "remote" ? t("خارجي") : t("محلي")}</Badge>
+                    {!e.ok && <Badge variant="destructive" className="px-1 py-0">{t("مرفوض")}</Badge>}
+                    <span className="text-muted-foreground" data-no-i18n>{new Date(e.t).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <p className="text-xs text-muted-foreground">{t("حد صادق: ملف السياسة مصدر الحقيقة الواحد بلا قراءة سجل النظام، والحجب يمس الخارج حصرًا (loopback معفى — الجهاز هي الحدود)، والقبول المؤسسي الموسع (نشر صامت على عشرات الأجهزة/مدقق SOC 2/عقد OEM) بند خارجي M4")}</p>
+        <p className="text-xs text-muted-foreground">{t("حد صادق للسجل: كاتبٌ واحد (خادم الويب) وحلقي العرض، ومن يملك القرص قد يعيد بناء السلسلة كاملة — كشف تعديل لا منعه (نموذج الجهاز المحلي نفسه)، والجمع المركزي للأدلة بند النشر الخارجي")}</p>
       </CardContent>
     </Card>
   )
