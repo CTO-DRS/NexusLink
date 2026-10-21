@@ -66,6 +66,8 @@ dev.log
 dev.out.log
 key.properties
 local-*
+# وثيقة الفئة ③.ج — حاجز النموذج المحلي: توثيق تعاقدي يجب أن يُلتزم (نقض نطاق local-* الجراحي)
+!docs/local-model-barrier.md
 next-env.d.ts
 node_modules
 npm-debug.log*
