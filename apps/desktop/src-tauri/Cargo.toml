@@ -1,6 +1,6 @@
 [package]
 name = "nexuslink-desktop"
-version = "1.2.0"
+version = "2.0.0"
 description = "NexusLink — جسر الأجهزة (سيرفر مضمّن + واجهة + Tray + طبقة أصلية)"
 authors = ["DRS"]
 edition = "2021"
