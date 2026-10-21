@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>خارطة طريق NexusLink الشاملة&nbsp;— نحو تطبيقٍ لا منافس له</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+@page { size: 794px 1123px; margin: 0; }
+:root{
+  --page-bg:#f0f1f1; --section-bg:#edefef; --card-bg:#e9ebec; --stripe:#eceff0;
+  --header-fill:#334751; --cover-block:#47565d; --border:#b3c2ca; --icon:#346b86;
+  --accent:#27698b; --accent2:#d04e64; --text:#141617; --muted:#777e81;
+  --ok:#4b7f5c; --warn:#a48444; --err:#ad544c; --info:#4d6c8b;
+}
+html,body{ margin:0; padding:0; width:794px; background:var(--page-bg); color:var(--text);
+  font-family:'Tajawal',sans-serif; font-size:15px; line-height:1.75; overflow-wrap:break-word; }
+@media screen{
+  html{ display:flex; justify-content:center; background:#222; }
+  body{ margin:20px auto; box-shadow:0 4px 40px rgba(0,0,0,.4); }
+}
+*{ box-sizing:border-box; }
+img,svg{ max-width:100%; height:auto; }
+
+/* ============ COVER&nbsp;— Template 01 mirrored RTL ============ */
+.cover{ position:relative; width:794px; height:1123px; break-after:page;
+  background:var(--page-bg); border:none; outline:none; box-shadow:none; }
+.cv-l1{ position:absolute; inset:0; overflow:hidden; z-index:1;
+  background-image:
+    radial-gradient(circle 1050px at -35px 1238px, rgba(39,105,139,.03) 0, rgba(39,105,139,.03) 1048px, transparent 1049px),
+    linear-gradient(rgba(39,105,139,.035) .5px, transparent .5px),
+    linear-gradient(90deg, rgba(39,105,139,.035) .5px, transparent .5px);
+  background-size: 100% 100%, 50px 50px, 50px 50px; }
+.cv-l2{ position:absolute; inset:0; z-index:2; }
+.cv-l2 .anchor{ position:absolute; right:95px; top:112px; bottom:112px; width:6px; background:var(--accent); }
+.cv-l2 .tick{ position:absolute; right:87px; width:22px; height:2px; background:var(--accent); opacity:.45; }
+.cv-l3{ position:absolute; inset:0; z-index:3; }
+.cv-kicker{ position:absolute; top:166px; right:179px; font-size:14px; letter-spacing:2px;
+  color:var(--muted); opacity:.85; display:flex; gap:10px; align-items:baseline; }
+.cv-kicker .k-ar{ font-family:'Cairo',sans-serif; font-weight:700; color:var(--icon); letter-spacing:1px; }
+.cv-kicker .k-en{ font-size:12px; }
+.cv-hero{ position:absolute; top:262px; right:179px; left:56px; text-align:right; }
+.cv-hero .brand{ font-family:'Cairo',sans-serif; font-weight:900; font-size:76px; line-height:1.05;
+  color:var(--text); letter-spacing:-1px; }
+.cv-hero .ar{ font-family:'Cairo',sans-serif; font-weight:800; font-size:33px; color:var(--accent);
+  margin-top:10px; line-height:1.25; }
+.cv-summary{ position:absolute; top:540px; right:179px; width:476px; font-size:16.5px; line-height:1.8;
+  color:var(--text); opacity:.85; text-align:right; }
+.cv-stats{ position:absolute; top:712px; right:179px; left:56px; display:flex; flex-wrap:wrap; gap:12px; }
+.cv-chip{ flex:1 1 150px; min-width:140px; max-width:100%; background:rgba(255,255,255,.6);
+  border:1px solid var(--border); border-radius:6px; padding:12px 14px 10px; }
+.cv-chip b{ display:block; font-family:'Cairo',sans-serif; font-weight:900; font-size:21px; color:var(--accent); }
+.cv-chip span{ font-size:11.5px; color:var(--muted); }
+.cv-meta{ position:absolute; top:852px; right:179px; font-size:16px; color:var(--text); opacity:.85; line-height:1.9; }
+.cv-meta .lbl{ color:var(--muted); font-size:13px; }
+.cv-footer{ position:absolute; top:986px; right:179px; left:56px; font-size:12px; color:var(--muted);
+  opacity:.75; letter-spacing:.5px; }
+
+/* ============ FLOW CONTENT ============ */
+.main-content{ padding:56px 60px 44px 60px; }
+.chapter-header{ break-after:avoid; break-inside:avoid; margin-top:28px; margin-bottom:14px; }
+.chapter-header.first{ margin-top:0; }
+.sec-row{ display:flex; align-items:center; gap:12px; padding-bottom:10px;
+  border-bottom:2px solid rgba(39,105,139,.30); }
+.sec-row .sec-num{ }
+.sec-num{ font-family:'Cairo',sans-serif; font-weight:900; font-size:15px; color:var(--accent);
+  border:1.5px solid var(--accent); border-radius:5px; padding:1px 10px; letter-spacing:1px; }
+h2{ font-family:'Cairo',sans-serif; font-weight:800; font-size:23px; margin:0; color:var(--header-fill); }
+p{ margin:0 0 12px; text-align:justify; }
+.lead{ font-size:16px; color:var(--text); }
+h3{ font-family:'Cairo',sans-serif; font-weight:800; font-size:17px; color:var(--header-fill);
+  margin:16px 0 8px; break-after:avoid; }
+
+/* stat cards */
+.stat-row{ display:flex; flex-wrap:wrap; gap:12px; break-inside:avoid; margin:14px 0; }
+.stat{ flex:1 1 150px; min-width:130px; max-width:100%; background:var(--card-bg);
+  border:1px solid var(--border); border-radius:6px; padding:13px 16px 11px; }
+.stat b{ display:block; font-family:'Cairo',sans-serif; font-weight:900; font-size:25px; color:var(--accent); line-height:1.15; }
+.stat span{ font-size:12px; color:var(--muted); }
+
+/* tables */
+.fixtable td:first-child{ white-space:nowrap; color:var(--accent); font-family:'Cairo',sans-serif; font-weight:700; }
+table{ width:100%; border-collapse:collapse; table-layout:fixed; margin:12px 0 8px; font-size:12.8px; }
+thead{ display:table-header-group; }
+tr{ break-inside:avoid; }
+th{ background:var(--header-fill); color:#fff; font-family:'Cairo',sans-serif; font-weight:700;
+  padding:8px 9px; text-align:right; font-size:12.5px; border:1px solid var(--header-fill); }
+td{ border:1px solid var(--border); padding:7px 9px; vertical-align:top; overflow-wrap:break-word; text-align:right; }
+tbody tr:nth-child(odd){ background:var(--stripe); }
+tbody tr:nth-child(even){ background:#ffffff; }
+.tbl-note{ font-size:11.5px; color:var(--muted); margin:2px 0 10px; }
+.tag{ display:inline-block; border-radius:4px; padding:0 8px; font-size:11.5px; font-weight:700;
+  font-family:'Cairo',sans-serif; }
+.tag.hi{ color:var(--err); background:rgba(173,84,76,.10); border:1px solid rgba(173,84,76,.35); }
+.tag.md{ color:var(--warn); background:rgba(164,132,68,.10); border:1px solid rgba(164,132,68,.35); }
+.tag.lo{ color:var(--info); background:rgba(77,108,139,.10); border:1px solid rgba(77,108,139,.35); }
+
+/* cards */
+.moat-card{ background:var(--card-bg); border:1px solid var(--border); border-right:3px solid var(--accent);
+  border-radius:6px; padding:13px 16px 11px; break-inside:avoid; margin-bottom:12px; }
+.moat-card h4{ font-family:'Cairo',sans-serif; font-weight:800; font-size:15.5px; color:var(--header-fill);
+  margin:0 0 5px; }
+.moat-card h4 .n{ color:var(--accent); font-weight:900; margin-left:6px; }
+.moat-card p{ margin:0; font-size:13.6px; }
+
+/* timeline */
+.timeline{ position:relative; display:flex; flex-wrap:wrap; gap:12px; margin:18px 0 6px; break-inside:avoid; }
+.timeline::before{ content:''; position:absolute; top:20px; right:60px; left:60px; height:2px; background:var(--border); }
+.tl-node{ flex:1 1 140px; min-width:130px; max-width:100%; position:relative; text-align:center; }
+.tl-dot{ width:14px; height:14px; border-radius:50%; background:var(--page-bg); border:3.5px solid var(--accent);
+  margin:6px auto 10px; position:relative; z-index:1; }
+.tl-card{ background:var(--card-bg); border:1px solid var(--border); border-radius:6px; padding:10px 10px 8px; }
+.tl-card b{ font-family:'Cairo',sans-serif; font-weight:800; font-size:13.5px; color:var(--header-fill); display:block; margin-bottom:3px; }
+.tl-card span{ font-size:11.5px; color:var(--muted); line-height:1.55; display:block; }
+
+/* phase items */
+.phase-item{ display:flex; gap:12px; break-inside:avoid; margin-bottom:11px; }
+.pi-num{ flex:0 0 30px; height:30px; border-radius:6px; background:var(--header-fill); color:#fff;
+  font-family:'Cairo',sans-serif; font-weight:800; font-size:14px; display:flex; align-items:center; justify-content:center; margin-top:2px; }
+.pi-body{ flex:1; min-width:0; }
+.pi-body b{ font-family:'Cairo',sans-serif; font-weight:800; font-size:14.5px; color:var(--header-fill); display:block; }
+.pi-body p{ margin:2px 0 0; font-size:13.4px; }
+
+/* decisions */
+.decision{ background:var(--card-bg); border:1px solid var(--border); border-radius:6px;
+  padding:13px 16px 10px; break-inside:avoid; margin-bottom:12px; }
+.decision b{ font-family:'Cairo',sans-serif; font-weight:800; font-size:15px; color:var(--header-fill); }
+.decision .dnum{ color:var(--accent); font-weight:900; }
+.decision p{ margin:4px 0 0; font-size:13.4px; }
+.cost{ display:inline-block; margin-top:6px; font-size:11.5px; color:var(--muted); border:1px dashed var(--border);
+  border-radius:4px; padding:1px 8px; }
+
+/* ending */
+.ending{ width:794px; height:1123px; break-before:page; position:relative;
+  background:var(--page-bg); display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.end-l1{ position:absolute; inset:0; overflow:hidden; z-index:1;
+  background-image: radial-gradient(circle 450px at 764px -10px, rgba(39,105,139,.03) 0, rgba(39,105,139,.03) 448px, transparent 449px); }
+.end-line{ width:56px; height:5px; background:var(--accent); border-radius:2px; margin-bottom:46px; z-index:2; }
+.end-quote{ font-family:'Cairo',sans-serif; font-weight:900; font-size:42px; color:var(--text);
+  text-align:center; line-height:1.35; z-index:2; margin:0 70px; }
+.end-sub{ font-size:16.5px; color:var(--muted); text-align:center; max-width:480px; margin-top:22px; line-height:1.85; z-index:2; }
+.end-meta{ position:absolute; bottom:120px; text-align:center; width:100%; z-index:2; }
+.end-meta b{ font-family:'Cairo',sans-serif; font-weight:800; font-size:14px; color:var(--header-fill); display:block; }
+.end-meta span{ font-size:12px; color:var(--muted); letter-spacing:1px; }
+</style>
+</head>
+<body>
+
+<!-- ==================== COVER ==================== -->
+<div class="cover">
+  <div class="cv-l1"></div>
+  <div class="cv-l2">
+    <div class="anchor"></div>
+    <div class="tick" style="top:166px;"></div>
+    <div class="tick" style="top:986px;"></div>
+  </div>
+  <div class="cv-l3">
+    <div class="cv-kicker"><span class="k-ar">خارطة طريق استراتيجية شاملة</span><span class="k-en">STRATEGIC ROADMAP</span></div>
+    <div class="cv-hero">
+      <div class="brand">NexusLink</div>
+      <div class="ar">نحو تطبيقٍ لا منافس له&nbsp;— التطوير والإصلاح والإكمال</div>
+    </div>
+    <div class="cv-summary">
+      وثيقة التخطيط الأمّ لمسار NexusLink من الانتهاء المحلي الكامل إلى الريادة المطلقة:
+      مبنية حصراً على الحقيقة الموثقة في المستودع&nbsp;— عقد البروتوكول المُصدَّر حتى §37،
+      وأساس اختبارات E2E البالغ 1080 اختباراً ناجحاً مرتين متتاليتين، وصفر دَين محلي متبقٍّ —
+      ثم ترسم ما بعده: الإنهاء الخارجي، والترسيخ، وعمق المنتج، والتحصين المؤسسي.
+    </div>
+    <div class="cv-stats">
+      <div class="cv-chip"><b>§ 37</b><span>عقد بروتوكول مُصدَّر ومحكوم</span></div>
+      <div class="cv-chip"><b>1080</b><span>اختبار E2E&nbsp;— مرتين متتاليتين</span></div>
+      <div class="cv-chip"><b>0</b><span>دَين تنفيذ محلي متبقٍّ</span></div>
+    </div>
+    <div class="cv-meta">
+      <div><span class="lbl">الإصدار:</span> 1.0 &nbsp;·&nbsp; <span class="lbl">التاريخ:</span> أكتوبر 2026</div>
+      <div><span class="lbl">الإعداد:</span> CTO-DRS &nbsp;·&nbsp; <span class="lbl">النطاق:</span> 0–18 شهراً</div>
+    </div>
+    <div class="cv-footer">وثيقة عمل داخلية مبنية على سجل العمل وعقد البروتوكول المُصدَّر في مستودع CTO-DRS/NexusLink&nbsp;— كل بند فيها مُسند إلى حدٍّ موثق أو قدرة مفحوصة حيّاً.</div>
+  </div>
+</div>
+
+<!-- ==================== MAIN CONTENT ==================== -->
+<div class="main-content">
+
+<!-- ===== 01 الملخص التنفيذي ===== -->
+<div class="chapter-header first">
+  <div class="sec-row"><div class="sec-num">01</div><h2>الملخص التنفيذي</h2></div>
+  
+</div>
+<p class="lead">يقف NexusLink اليوم في موقعٍ نادر تبلغه المشاريع الهندسية قليلة: انتهى التنفيذ المحلي للخارطة كلها بعقد بروتوكول مُصدَّر حتى §37، وأساس اختبارات يُعاد إثباته كاملاً مرتين متتاليتين عند كل دورة عمل (1080/1080)، وصفر باب أمني مفتوح بلا تصميم وتدقيق. إنجاز الفئة الثالثة كلها (التنبؤ الاستباقي، والفرض اللحظي للقدرات، وقناة الناشر المركزية) ثم العميل الوِب المستقل ثم الاقتران البعيد برمز اقتران مغلقة، غادرت المستودع بلا أي حدٍّ معلَّق بمفتاح محلي. ما تبقّى في الخارطة الرسمية كلّه خارجي حصراً، ومقيّد بقرارات ملكية وشراءات وعتاد لا تنتجه هندسة الكود.</p>
+<p>غير أنّ «الانتهاء المحلي» ليست غايةً بذاتها؛ إنها نقطة الإطلاق. هذا المستند يترجم ذلك المخزون الهندسي إلى مسارٍ تنافسي من أربع مراحل يغطي ثلاث ركائز طلبها المالك صراحة: <b>التطوير</b> (قدرات جديدة تبني عمقاً لا يملكه خصوم السحابة)، و<b>الإصلاح</b> (تحويل الحدود الصادقة الموثقة في §35.د و§36.هـ و§37.هـ إلى بنود عمل مُرقّمة بأولويات)، و<b>الإكمال</b> (إغلاق البنود الخارجية الخمسة المعلقة وتحصين النشر المؤسسي). كل بند في المراحل الأربع مُسند إلى أساسه الموثق&nbsp;— لا ميزة تُطرح بلا عقدها، ولا إصلاح بلا حده الأصلي، ولا مرحلة بلا مؤشرات إنجاز قابلة للقياس.</p>
+<p>الأطروحة التنافسية الحاكمة للوثيقة كلها: منافسونا يبنون منصةً تُخليص بيانات المستخدم ثم يبيعون «الخصوصية» كطبقة تسويقية فوقها؛ بينما يبني NexusLink منصةً لا تغادرها البيانات فيزيائياً أصلًا، ثم يُثبت ذلك بفحوص حية لا بشعارات. هذا الفارق ليس ميزةً واحدة بل خندقٌ من خمس ركائز تفصّلها القسم الرابع، وتحوّل كل مرحلة لاحقة إلى تعميقٍ لهذا الخندق لا انحرافٍ عنه. القرار الاستراتيجي المطلوب من المالك ليس «هل ننفّذ؟»&nbsp;— فالتنفيذ المحلي منتهٍ&nbsp;— بل «متى نفتح البنود الخارجية الخمسة التي تفتح بعدها الأسواق؟».</p>
+
+<!-- ===== 02 جرد الواقع ===== -->
+<div class="chapter-header">
+  <div class="sec-row"><div class="sec-num">02</div><h2>جرد الواقع&nbsp;— ما المنجز اليوم</h2></div>
+  
+</div>
+<p>قبل رسم ما هو قادم، يُثبَّت ما هو قائم&nbsp;— لأن مصداقية خارطة الطريق تُقاس بدقتها في وصف نقطة الصفر. الجرد أدناه ليس ادعاءات تسويقية بل قدرات مُصدَّرة في العقد ومفحوصة حيًّا ضمن جناح E2E الذي يُعاد تشغيله كاملاً مرتين متتاليتين عند كل دورة تطوير، فأي انحدار يُكتشف فوراً وليس عند المستخدم. البنية رباعية الأطراف: خادم الجهاز (Next.js مستقل chdir آمن)، وجسر الاتصالات (comms&nbsp;— اكتشاف mDNS ونقل)، والبوابة المحلية (gateway&nbsp;— حسم الوصول والتحويل)، وعميل سطح المكتب (Tauri)&nbsp;— وكلها تُحزم ببناء موارد واحد قابل للتكرار.</p>
+<div class="stat-row">
+  <div class="stat"><b>1080</b><span>اختبار E2E ناجح&nbsp;— مرتين متتاليتين</span></div>
+  <div class="stat"><b>8</b><span>أسطح تفاعلية كاملة فوق نواة واحدة</span></div>
+  <div class="stat"><b>§ 37</b><span>أحدث عقد مُصدَّر: الاقتران البعيد</span></div>
+  <div class="stat"><b>صفر</b><span>بايت خارجي في العميل الوِب&nbsp;— مفحوص</span></div>
+</div>
+<table>
+  <colgroup><col style="width:22%"><col style="width:50%"><col style="width:28%"></colgroup>
+  <thead><tr><th>القدرة</th><th>الحالة الموثقة</th><th>العقد الحاكم</th></tr></thead>
+  <tbody>
+    <tr><td>الأسطح الثماني</td><td>الأجهزة · البحث · السوق · الذكاء (رؤى + تبويب التنبؤ الثالث) · العمليات المحفوظة · الإعدادات · التلفاز · العميل الوِب المستقل</td><td>§31–§36</td></tr>
+    <tr><td>السوق الموقعة</td><td>غلاف الناشر بتوقيع ثنائي على قناة مركزية بسجل صفر-مخطط، تدوير إصدارات المفاتيح مع حفظ القديم، بصمات حصرًا لا مفاتيح، وإبطال لحظي</td><td>§35.أ</td></tr>
+    <tr><td>الفرض اللحظي للقدرات</td><td>بابا الإنشاء والإطلاق عبر مصدر حقيقة واحد (isPluginLive)، توقف بصدق مسبب والقاعدة محفوظة لا محذوفة، وإحياء يحفظ الأصل عبر إعادة التشغيل</td><td>§35.ب</td></tr>
+    <tr><td>التنبؤ الاستباقي</td><td>محرك حتمي من تاريخ الإطلاقات والصحة (وسيط فترات، أنماط يومية بذات اللحظة)، اقتراحات مسبّبة بالدليل، قراءة حصراً، والإنشاء بيد المستخدم</td><td>§35.ج</td></tr>
+    <tr><td>الاقتران البعيد</td><td>رمز اقتران بحسم لحظي في البوابة، مقارنة زمن-ثابت، حجب 5 فشل ← 30 ثانية، إدارة بحرس loopback، والرمز لا يغادر البوابة</td><td>§37</td></tr>
+    <tr><td>العميل الوِب المستقل</td><td>أثر ثابت صفر-بناء تخدمه الجهاز نفسها، PWA قابل للتثبيت، وضع تلفاز للقراءة حصراً، RTL أولًا بموازنة ترجمة مفحوصة 114/114</td><td>§36</td></tr>
+    <tr><td>النموذج الأمني</td><td>«الجهاز هي الحدود»: SDK بحرس localhost تعاقدي، صفر سطح جديد بلا عقد، وتدقيق أمني مرافق لكل إصدار</td><td>عقد 2.0 + §34</td></tr>
+  </tbody>
+</table>
+<div class="tbl-note">الجدول أعلاه ملخّص تنفيذي&nbsp;— التفصيل الكامل لكل قدرة موثق في عقده وأدلة فحوصه الحية في جناح E2E.</div>
+<!-- ===== 03 قائمة الإصلاح ===== -->
+<div class="chapter-header">
+  <div class="sec-row"><div class="sec-num">03</div><h2>قائمة الإصلاح&nbsp;— من الحدود الصادقة إلى بنود عمل</h2></div>
+  
+</div>
+<p class="lead">منهجية المستودع تمنع أي إعلان إنجاز بلا حدٍّ موثق، ولهذا فإن كل حدٍّ صادق وثّقته العقود §35.د و§36.هـ و§37.هـ هو في جوهره بندُ إصلاحٍ مُجَدوَل سلفاً&nbsp;— لا عيب مخفي بل مساحة معروفة بحدودها. الجدول أدناه يجمّع هذه الحدود العشرة ويحوّلها إلى بنود عمل مُرقّمة بأولوية وجهد تقديري، وهي البذرة المباشرة للمراحل 1 و2. الأولوية تحسب بأثرها التنافسي والأمني معاً: كل ما يمس الوعد الأمني أو فتح السوق أولاً.</p>
+<table class="fixtable">
+  <colgroup><col style="width:6%"><col style="width:17%"><col style="width:26%"><col style="width:30%"><col style="width:11%"><col style="width:10%"></colgroup>
+  <thead><tr><th>#</th><th>البند</th><th>الحد الموثق (المصدر)</th><th>العلاج المقترح</th><th>الأولوية</th><th>الجهد</th></tr></thead>
+  <tbody>
+    <tr><td>F1</td><td>TLS والنفق للوصول عبر الإنترنت</td><td>التعرض الفعلي (نفق/نطاق/TLS) خارجي حصراً (§37.هـ)</td><td>بناء طبقة النفق مع شهادة النطاق، والبوابة تحسم كما هي&nbsp;— الحسم يبقى محلياً</td><td><span class="tag hi">عالية</span></td><td>متوسط</td></tr>
+    <tr><td>F2</td><td>الرمز في رابط الفتح الأول</td><td>رمز الاقتران في رابط الفتح الأول قد يظهر بسجلات النفق الخارجي (§37.هـ)</td><td>صفحة تسليم أولى تُدخل الرمز حقلًا لا رابطًا، والتدوير الدوري الموصى به آلياً</td><td><span class="tag hi">عالية</span></td><td>صغير</td></tr>
+    <tr><td>F3</td><td>الحجب في الذاكرة</td><td>حجب 5 فشل←30ث يصفّر بإعادة التشغيل والحسم يبقى (§37.هـ)</td><td>سجل حجب دائم محلي بصفر-مخطط بنفس فلسفة ملف الاقتران وتدوير تلقائي</td><td><span class="tag md">متوسطة</span></td><td>صغير</td></tr>
+    <tr><td>F4</td><td>تقاعد إصدارات مفاتيح الناشر</td><td>سياسة تقاعد الإصدارات بند لاحق (§35.د)</td><td>نافذة تقاعد محكومة بالسجل (إبطال ناعم ثم قسري) مع إشعار السوق</td><td><span class="tag md">متوسطة</span></td><td>متوسط</td></tr>
+    <tr><td>F5</td><td>سجل الناشرين محلي الإدارة</td><td>شبكة ناشرين PKI بند ما بعد M4 والغلاف جاهز (§35.د)</td><td>بنية PKI خفيفة: سلسلة ثقة متعددة الناشرين بترويسة المصدر نفسها</td><td><span class="tag md">متوسطة</span></td><td>كبير</td></tr>
+    <tr><td>F6</td><td>النقل «تصريحي لا تنفيذي»</td><td>الفرض يغطي قنوات الروتينات والنقل أصلًا تصريحي (§35.د)</td><td>محرّك نقل تنفيذي محكوم بـ isPluginLive نفسها: لا إطلاق نقل إلا بموافقة لحظية</td><td><span class="tag md">متوسطة</span></td><td>كبير</td></tr>
+    <tr><td>F7</td><td>مزامنة المصطلحين يدوية</td><td>التوازن بين الترجمة المضمنة وسجل الواجهة يدوي مفحوص (§36.هـ)</td><td>مولّد مزامنة من المصدر: أي مفتاح جديد في الواجهة يُستخرج آلياً لدورة الترجمة</td><td><span class="tag lo">منخفضة</span></td><td>صغير</td></tr>
+    <tr><td>F8</td><td>أفق التنبؤ 14 يومًا</td><td>التنبؤ توصيف حتمي من 14 يومًا فقط (§35.د)</td><td>طبقة تعلّم محلية اختيارية فوق المحرك الحتمي&nbsp;— بلا خروج أي بايت من الجهاز</td><td><span class="tag lo">منخفضة</span></td><td>متوسط</td></tr>
+    <tr><td>F9</td><td>مفاتيح الغلاف لا تغادر العملية</td><td>البصمات حصراً في العرض والمفاتيح داخل العملية (§35.أ)</td><td>الحفاظ على الضمانة كما هي، وإضافة نسخ احتياطي مشفّر بيد المالك للتعافي</td><td><span class="tag lo">منخفضة</span></td><td>صغير</td></tr>
+    <tr><td>F10</td><td>حاجز النموذج المحلي</td><td>Ollama/llama.cpp غير مثبتة وممنوع تثبيتها&nbsp;— التوثيق والبدائل جاهزة</td><td>بروتوكول الموصل الخارجي: ضيف اختياري يُشغّله المستخدم خارج العملية بعقد صريح</td><td><span class="tag md">متوسطة</span></td><td>متوسط</td></tr>
+  </tbody>
+</table>
+<div class="tbl-note">الأولوية العالية = يمس الوعد الأمني أو فتح السوق مباشرة. الجهد: صغير (≤ أسبوع) · متوسط (≤ شهر) · كبير (≤ ربع سنة) لدورة عمل واحدة.</div>
+
+<!-- ===== 04 خندق لا منافس ===== -->
+<div class="chapter-header">
+  <div class="sec-row"><div class="sec-num">04</div><h2>خندق «لا منافس»&nbsp;— خمس ركائز تنافسية</h2></div>
+  
+</div>
+<p class="lead">سؤال «كيف يصبح التطبيق لا منافس له؟» لا تُجيبه قائمة ميزات، بل بنية تميّز يصعب تقليدها. الركائز الخمس أدناه ليست طموحات مستقبلية بل حقائق مفحوصة في الكود اليوم&nbsp;— والخندق التنافسي يُبنى بتعميقها لا باستبدالها. كل ركيزة مسندة إلى دليلها من المستودع، وكل مرحلة لاحقة في هذه الخارطة تُقيَّم بمدى خدمتها لهذه الركائز.</p>
+<div class="moat-card"><h4><span class="n">1</span>صفر سحابة، صفر تلميح&nbsp;— بالفيزياء لا بالسياسة</h4><p>المنافسون يعدون بـ«عدم البيع»؛ NexusLink يجعل الخروج مستحيلًا أصلًا: العميل الوِب مفحوص صفر بايت خارجي، والمفاتيح لا تغادر العملية، والوصول البعيد يُحسم في البوابة المحلية بلا خادم وسيط. تقليد هذا النموذج يتطلب من خصوم سحابيين تفكيك نموذج إيراداتهم بالكامل&nbsp;— وهذا ما لا يفعله المنافس العقلاني أبدًا.</p></div>
+<div class="moat-card"><h4><span class="n">2</span>العقد المُصدَّر كمنهجية هندسية</h4><p>سبعة وثلاثون بنداً عقداً مُصدَّراً، كل بند بحدوده الصادقة وأدلته الحية، وأساس اختبارات يُعاد إثباته كاملاً مرتين متتاليتين. هذه ليست ممارسة جودة فحسب بل سلاح سرعة: كل ميزة جديدة تُبنى فوق أرضية لا تنهار، فدورة التطوير أسرع وثبات الإصدار أعلى من أي منافس يبني على اختبارات جزئية.</p></div>
+<div class="moat-card"><h4><span class="n">3</span>«الجهاز هي الحدود»&nbsp;— نموذج أمني قابل للإثبات</h4><p>حرس localhost تعاقدي في الـSDK، وحرس loopback للإدارة حتى برمز صحيح، وحسم لحظي من ملف 0600 بكتابة ذرية. النموذج متماسك بلا استثناءات معلقة، وكل باب أمني جديد يُمنع بلا تصميم رموز وتدقيق حي&nbsp;— كما أثبت §37 بإغلاق حد §36.هـ.1 المقيد.</p></div>
+<div class="moat-card"><h4><span class="n">4</span>اقتصاد محلي بلا اشتراك سحابي</h4><p>لا تكلفة خوادم ولا اشتراك إجباري ولا مقياس استخدام: التكلفة الحدّية للمستخدم الجديد صفر تقريباً، والسوق المحلي بالغلاف الموقّع يفتح اقتصاد مكونات يخصّ الناشر إيراده مباشرة بلا وسيط. هذا نموذج لا يستطيع السحابيون مجاراته بنيوياً لأن كل مستخدم جديد عندهم يزيد فاتورتهم.</p></div>
+<div class="moat-card"><h4><span class="n">5</span>قابلية التدقيق الكاملة</h4><p>عقد البروتوكول، وسجل العمل، والتدقيق الأمني المرافق، وفحوص المصدر&nbsp;— كلها وثائق قابلة للمراجعة المستقلة. للمؤسسات التي تطلب فهم ما يشتغل على أجهزتها، هذا فرق وجودي عن الصناديق السوداء السحابية، وهو بوابة القبول المؤسسي في المرحلة 3 مباشرة.</p></div>
+
+<!-- ===== 05 خط الزمن ===== -->
+<div class="chapter-header">
+  <div class="sec-row"><div class="sec-num">05</div><h2>خط الزمن&nbsp;— أربع مراحل حتى 2028</h2></div>
+  
+</div>
+<p>تتوزع المراحل على ثمانية عشر شهراً من تاريخ اعتماد هذه الوثيقة، وكل مرحلة لها باب دخول واضح: المرحلة صفر تنتظر قرارات الملكية لا هندسة، والمراحل 1–3 تنتظر إغلاق سابقتها بمؤشراتها. الخط أدناه نظرة علوية، والأقسام 6–9 تفصّل كل مرحلة ببنودها ومعايير إنجازها.</p>
+<div class="timeline">
+  <div class="tl-node"><div class="tl-dot"></div><div class="tl-card"><b>صفر&nbsp;— الإنهاء الخارجي</b><span>0–30 يومًا · بنود الثلاثين المعلقة بيد المالك + حكم M4</span></div></div>
+  <div class="tl-node"><div class="tl-dot"></div><div class="tl-card"><b>1&nbsp;— الترسيخ والنشر</b><span>الشهر 2–4 · تحديث ذاتي موقع + قياس محلي + حزم توزيع</span></div></div>
+  <div class="tl-node"><div class="tl-dot"></div><div class="tl-card"><b>2&nbsp;— عمق المنتج</b><span>الشهر 5–9 · SDK والموصل + PKI الناشرين + مشاهد + نقل تنفيذي</span></div></div>
+  <div class="tl-node"><div class="tl-dot"></div><div class="tl-card"><b>3&nbsp;— التحصين المؤسسي</b><span>الشهر 10–18 · MDM + SOC2 + OEM + مزامنة P2P</span></div></div>
+</div>
+<div class="tbl-note">الأساس الحاكم ثابت عبر المراحل كلها: لا تراجع عن أساس E2E الصاعد، ولا باب أمني بلا عقد، وعقد بروتوكول جديد (§38+) لكل قدرة كبيرة.</div>
+
+<!-- ===== 06 المرحلة صفر ===== -->
+<div class="chapter-header">
+  <div class="sec-row"><div class="sec-num">06</div><h2>المرحلة صفر&nbsp;— الإنهاء الخارجي (0–30 يومًا)</h2></div>
+  
+</div>
+<p class="lead">هذه المرحلة مصنفة «خارجي حصراً» في الخارطة الرسمية لأن كل بند فيها يُفتح بقرار ملكية وشراء أو حساب أو عتاد&nbsp;— لا بكود. لكنها البوابة الوحيدة لكل ما بعدها: بلا توقيع إصدار لا يوجد تحديث ذاتي آمن في المرحلة 1، وبلا نطاق لا يوجد TLS للمرحلة 2، وبلا قرار النسخة الاحتياطية تبقى مخاطر التاريخ قائمة. البنود الخمسة مرتبة بترتيب فتحها الموصى به، وكل واحد بمعيار إنجاز صريح.</p>
+<div class="phase-item"><div class="pi-num">1</div><div class="pi-body"><b>توقيع M0.1&nbsp;— شهادات توقيع الإصدارات</b><p>فتح حساب موفّر شهادات توقيع كود (Windows Authenticode + macOS Developer ID) وربطه بمسار التغليف. المخرج: إصدارات موقعة تنزل بلا تحذيرات نظام التشغيل. المعيار: SmartScreen/Gatekeeper يمران بلا إنذار.</p><span class="cost">بيد المالك: حساب + رسوم سنوية تقريبية 300–500 دولار</span></div></div>
+<div class="phase-item"><div class="pi-num">2</div><div class="pi-body"><b>نطاق Pages وشهادته</b><p>شراء النطاق وفتح نشر صفحات المشروع والتوثيق العام. المخرج: عنوان دائم للمستندات ومركز تنزيل موقّع. المعيار: HTTPS حي على النطاق والشهادة تجدد آلياً&nbsp;— وهو شرط مسبق لبنود F1/F2.</p><span class="cost">بيد المالك: شراء النطاق وتجديده السنوي 10–20 دولار</span></div></div>
+<div class="phase-item"><div class="pi-num">3</div><div class="pi-body"><b>حساب Flathub</b><p>فتح حساب الناشر على Flathub وإعداد مسار الحزم بمعاييره. المخرج: حضور رسمي في متجر لينكس الأوسع. المعيار: حزمة تجريبية تمر مراجعة البنية&nbsp;— التغليف نفسه جاهز محلياً.</p><span class="cost">بيد المالك: حساب الناشر والتحقق (مجاني)</span></div></div>
+<div class="phase-item"><div class="pi-num">4</div><div class="pi-body"><b>عتاد Mac G-38</b><p>توفير جهاز Mac للتغطية الصلبة (قنوات الإطلاق، التغليف، سلوك permissions). المخرج: مصفوفة منصات مكملة بذراع Apple. المعيار: دورة E2E كاملة خضراء على الجهاز الجديد.</p><span class="cost">بيد المالك: عتاد حسب المواصفات المستهدفة</span></div></div>
+<div class="phase-item"><div class="pi-num">5</div><div class="pi-body"><b>قرار backup-pre-rewrite.bundle</b><p>البتّ في الاحتفاظ بنسخة احتياطية سابقة لإعادة الكتابة التاريخية: أرشفة نهائية أو إتلاف موثق. المخرج: غلق آخر بند تاريخي مفتوح. المعيار: قرار موثق في سجل العمل بيد المالك&nbsp;— ولا يبقى بند معلق في الخارطة كلها.</p><span class="cost">بيد المالك: قرار فقط&nbsp;— التنفيذ الآلي جاهز</span></div></div>
+<!-- ===== 07 المرحلة 1 ===== -->
+<div class="chapter-header">
+  <div class="sec-row"><div class="sec-num">07</div><h2>المرحلة 1&nbsp;— الترسيخ والنشر (الشهر 2–4)</h2></div>
+  
+</div>
+<p class="lead">الهدف الواحد لهذه المرحلة: أن يصل NexusLink إلى أول مستخدم خارج فريق التطوير بنفس الجودة التي يراها فريق التطوير&nbsp;— لا نسخة «تجريبية» أخفض معياراً. هذا يتطلب إغلاق فجوات النشر الثلاث: توقيع وتحديث ذاتي، وقياس أعطال لا يخرج بايتاً من الجهاز، وحزم توزيع لكل منصة. كل بند هنا يرتكز على دروس العمليات الموثقة (الزومبي الصامت، والقافل البيئي، والتثبيت على كل الأطراف) فالترسيخ يبدأ من دروس التشغيل لا من ميزات جديدة.</p>
+<div class="phase-item"><div class="pi-num">1</div><div class="pi-body"><b>التحديث الذاتي الموقع</b><p>قناة تحديث تتحقق من توقيع الحزمة قبل التركيب (مرتبط بتوقيع M0.1 من المرحلة صفر)، مع تراجع آمن عند فشل التحقق. المعيار: تحديث شامل من إصدار لأحدث عبر قناة موقعة بلا تدخل المستخدم، وفشل توقيع مزوّر يُرفض مفحوصاً.</p><span class="cost">يعتمد على: بنود المرحلة صفر 1 و2</span></div></div>
+<div class="phase-item"><div class="pi-num">2</div><div class="pi-body"><b>القياس عن بُعد المحلي حصراً</b><p>سجل أعطال وأداء يبقى على الجهاز ويُصدَّر بيد المستخدم عند طلبه&nbsp;— لا أنابيب خارجية إطلاقاً. المخرج: لوحة تشخيص داخل الإعدادات تُظهر الأخطاء الأخيرة وسياقها. المعيار: انهيار مُحاكى يُسجل محلياً ويُصدَّر ملف تشخيص كامل بلا أي اتصال خارجي مفحوص.</p><span class="cost">يغلق فجوة: مراقبة ما بعد النشر بلا كسر الركيزة 1</span></div></div>
+<div class="phase-item"><div class="pi-num">3</div><div class="pi-body"><b>الأداء والذاكرة والاقلاع</b><p>ميزانيات صريحة: زمن إقلاع بارد، وذاكرة مقيمة للأطراف الأربعة، وحجم الحزمة&nbsp;— بمسبارات آلية في جناح E2E تُخطئ الدورة عند تجاوزها. المعيار: تجاوز أي ميزانية يكسر الدورة كما يفعل أي فشل اختبار&nbsp;— فالأداء عقد وليس أمنية.</p><span class="cost">يكمل درس الزومبي والقافل البيئي بفحوص دائمة</span></div></div>
+<div class="phase-item"><div class="pi-num">4</div><div class="pi-body"><b>حزم التوزيع لكل منصة</b><p>MSI/EXE مثبت لويندوز، وDMG للماك عند وصول G-38، وAppImage/Flatpak للينكس، وكلها من مسار build-resources الواحد القابل للتكرار. المعيار: تركيب نظيف وإزالة نظيفة بلا بقايا على المنصات الثلاث مفحوص آلياً.</p><span class="cost">يعتمد على: بنود المرحلة صفر 1 و3 و4</span></div></div>
+<div class="phase-item"><div class="pi-num">5</div><div class="pi-body"><b>دليل المستخدم ومسار التبني الأول</b><p>دليل عربي أولًا بأسلوب عقود المستودع الصادقة: ما يفعله التطبيق، وما لا يفعله، وما حدود صادقة. المعيار: مستخدم جديد يُنجز أول اقتران جهاز وروتين عبر الدليل وحده دون مساعدة&nbsp;— مفحوص بمسحة حية.</p><span class="cost">يرفع التبني ويخفض تذاكر الدعم المستقبلية</span></div></div>
+
+<!-- ===== 08 المرحلة 2 ===== -->
+<div class="chapter-header">
+  <div class="sec-row"><div class="sec-num">08</div><h2>المرحلة 2&nbsp;— عمق المنتج التنافسي (الشهر 5–9)</h2></div>
+  
+</div>
+<p class="lead">بعد الترسيخ، تفتح مرحلة العمق: هنا يتحول NexusLink من منتج متين إلى منصة لا يملك خصومها ما يقارن بها. البند المحوري هو فتح النظام البيئي بعقد&nbsp;— SDK المكونات للطرف الثالث فوق غلاف الناشر الموقّع القائم، والموصل الخارجي للنموذج المحلي كأول ضيف عليه (يغلق F10 بتصميم لا بحلول وسط أمنية). وفي التوازي تُعمَّق القدرات الأربع التي جعلت الأطروحة ممكنة: النقل التنفيذي المحكوم، وشبكة الناشرين، والمشاهد متعددة الأجهزة، وأفق التنبؤ.</p>
+<div class="phase-item"><div class="pi-num">1</div><div class="pi-body"><b>SDK المكونات + بروتوكول الموصل الخارجي</b><p>عقد §38: مواصفات موصل خارجي يُشغّله المستخدم خارج عملية الجهاز (نموذج محلي مثلاً) بحرس مصدر وصلاحيات تصريحية وإبطال لحظي&nbsp;— نفس فلسفة isPluginLive لكن لعملية ضيفة. المعيار: موصل نموذجي يُثبت الاتصال والإبطال والتدقيق الحي بلا أي سطح جديد داخل العملية المحصورة.</p><span class="cost">يغلق: F10&nbsp;— ويفتح النظام البيئي بلا كسر «الجهاز هي الحدود»</span></div></div>
+<div class="phase-item"><div class="pi-num">2</div><div class="pi-body"><b>شبكة الناشرين PKI</b><p>الانتقال من سجل ناشرين محلي الإدارة إلى سلسلة ثقة متعددة الناشرين: شهادات ناشر متوسطة، وتدوير متقاطع، وسحب موثق&nbsp;— مع بقاء البصمات حصراً في العرض (يغلق F5). المعيار: ناشر ثانٍ يوقّع ويُثبَّت ويُسحب بصلاحيات كاملة مفحوصة.</p><span class="cost">يبني على: §35.أ&nbsp;— الغلاف جاهز والسجل محكم</span></div></div>
+<div class="phase-item"><div class="pi-num">3</div><div class="pi-body"><b>مشاهد متعددة الأجهزة</b><p>تركيبات من روتينات وأجهزة تُنشأ وتُطلق كوحدة واحدة بفرض لحظي على كل عضو (نفس بابا الإنشاء والإطلاق). المعيار: مشهد بثلاثة أعضاء، إبطال قدرة أحدهم يوقف المشهد بصدق مسبب&nbsp;— كما فعل §35.ب للقاعدة الواحدة.</p><span class="cost">ميزة التعميق الأولى فوق الأسطح الثماني</span></div></div>
+<div class="phase-item"><div class="pi-num">4</div><div class="pi-body"><b>النقل التنفيذي المحكوم</b><p>محرّك نقل فعلي (نسخ/مزامنة) خلف الحرس اللحظي نفسه&nbsp;— النقل ينتقل من «تصريحي» إلى «تنفيذي» بلا تغيير نموذج أمن (يغلق F6). المعيار: إبطال قدرة أثناء نقل حي يوقفه بصدق فوراً مفحوصاً من عنوان LAN حقيقي.</p><span class="cost">أعلى قيمة مستخدم فوق بنية §35 القائمة</span></div></div>
+<div class="phase-item"><div class="pi-num">5</div><div class="pi-body"><b>تعميق التنبؤ وسوق القوالب</b><p>طبقة تعلم محلية اختيارية فوق المحرك الحتمي تمتد الأفق بعد 14 يوماً (تغلق F8)، وسوق قوالب روتينات موقّعة يعيد استثمار بنية §35 كاملة. المعيار: لا بايت تعلم يغادر الجهاز مفحوصاً، وقالب موقّع يُثبّت ويُشغّل كالمكون.</p><span class="cost">يوسع الخندق 1 و4 معاً</span></div></div>
+
+<!-- ===== 09 المرحلة 3 ===== -->
+<div class="chapter-header">
+  <div class="sec-row"><div class="sec-num">09</div><h2>المرحلة 3&nbsp;— التحصين المؤسسي (الشهر 10–18)</h2></div>
+  
+</div>
+<p class="lead">المرحلة الأخيرة تفتح باب M4 المؤسسي الذي وثّقته العقود كخارجي حصراً: النشر المُدار، والجاهزية للتدقيق، والتكامل OEM. الفارق الجوهري عن المنافسين: كل متطلب مؤسسي هنا يُبنى فوق نواة صفر-سحابة مفحوصة&nbsp;— فالمؤسسة تحصل على سيطرة النشر دون أن تفقد المستخدم خصوصيته، وهي المعادلة التي تعجز عنها المنصات السحابية بنيوياً.</p>
+<div class="phase-item"><div class="pi-num">1</div><div class="pi-body"><b>MDM والنشر الصامت</b><p>حزم مؤسسية بسياسات مدفوعة مسبقاً (تعطيل الوصول البعيد افتراضاً، تثبيت ناشرين معتمدين حصراً، ملف اقتران مركزي الإمداد بنمط §37.هـ.4). المعيار: نشر صامت على عشرة أجهزة تجريبية بسياسة واحدة مفحوصة حيًّا.</p><span class="cost">يبني على حزم المرحلة 1 مباشرة</span></div></div>
+<div class="phase-item"><div class="pi-num">2</div><div class="pi-body"><b>جاهزية SOC2 وأدلة التدقيق</b><p>تحويل قابلية التدقيق (الركيزة 5) إلى حزمة جاهزية رسمية: خريطة ضوابط، وسجل تغييرات، وأدلة فحوص. المعيار: مدقق خارجي يمر على الحزمة ويعيد تقرير جاهزية&nbsp;— النواة لا تتغير باباً.</p><span class="cost">بوابة العقود المؤسسية الكبرى</span></div></div>
+<div class="phase-item"><div class="pi-num">3</div><div class="pi-body"><b>مزامنة أجهزة المالك P2P</b><p>مزامنة إعدادات وروتينات وسوق بين أجهزة المستخدم نفسه مباشرة&nbsp;— تشفير طرف-لطرف بلا خادم وسيط ولا نسخة سحابية. المعيار: جهازان يتبادلان سوقاً وروتينات ببصمات محفوظة مفحوصاً من LAN حقيقي.</p><span class="cost">يغلق حدود السجل المحلي بين أجهزة المالك</span></div></div>
+<div class="phase-item"><div class="pi-num">4</div><div class="pi-body"><b>TLS والنفق المؤسسي</b><p>الوصول عبر الإنترنت فوق F1/F2 المكتملين: نفق موثق بنطاق وشهادة، والرمز لا يظهر في أي رابط. المعيار: اختبار §37 الحي كله يعبر فوق النفق&nbsp;— صفر تغيير في حسم البوابة.</p><span class="cost">يغلق F1 ويكمل §37 بالتعرض الفعلي</span></div></div>
+<div class="phase-item"><div class="pi-num">5</div><div class="pi-body"><b>تكامل OEM ومعيار الخروج التعاقدي</b><p>تجهيز النواة للتضمين في أجهزة شركاء (صور مسبقة الإعداد)، وغلق بند معيار الخروج التعاقدي الموثق في M4. المعيار: صورة OEM تجريبية تقلع بمعايرة مشتركة وتدقيق كامل.</p><span class="cost">الحد الأعلى للانتشار&nbsp;— بقرار مالك منفصل</span></div></div>
+
+<!-- ===== 10 مؤشرات النجاح ===== -->
+<div class="chapter-header">
+  <div class="sec-row"><div class="sec-num">10</div><h2>مؤشرات النجاح&nbsp;— KPIs لكل مرحلة</h2></div>
+  
+</div>
+<p>المؤشرات أدناه حاكمة لقبول كل مرحلة، ومقاييسها آلية كلما أمكن (مسبارات ضمن جناح E2E نفسه حتى لا تتحول إلى تقارير يدوية تنم عن الإخلاص). القاعدة الثابتة: أساس E2E لا ينقص أبداً&nbsp;— يرتفع مع كل قدرة جديدة ويُعاد إثباته مرتين متتاليتين كما هو متبع.</p>
+<table>
+  <colgroup><col style="width:28%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup>
+  <thead><tr><th>المؤشر</th><th>المرحلة صفر</th><th>المرحلة 1</th><th>المرحلة 2</th><th>المرحلة 3</th></tr></thead>
+  <tbody>
+    <tr><td>أساس E2E (مثبت مرتين)</td><td>1080 ثابتاً</td><td>≥ 1120</td><td>≥ 1180</td><td>≥ 1230</td></tr>
+    <tr><td>بنود مغلقة من قائمة F</td><td>0 / 10</td><td>F2·F3·F7</td><td>F4·F5·F6·F8·F10</td><td>F1·F9 + PKI كاملة</td></tr>
+    <tr><td>زمن الإقلاع البارد</td><td>قياس أساس</td><td>≤ 5 ثوانٍ</td><td>≤ 5 ثوانٍ محفوظاً</td><td>≤ 4 ثوانٍ</td></tr>
+    <tr><td>حوادث أمنية بباب جديد</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+    <tr><td>بايت خارجي غير مفحوص</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+    <tr><td>زمن دورة إصدار كاملة</td><td>أساس موثق</td><td>≤ يوم واحد آلياً</td><td>≤ يوم واحد</td><td>≤ نصف يوم</td></tr>
+    <tr><td>منصات بدورة خضراء كاملة</td><td>1</td><td>3</td><td>3 + موصل خارجي</td><td>4 (Mac G-38)</td></tr>
+  </tbody>
+</table>
+<div class="tbl-note">مؤشر «صفر بايت خارجي» وفحصه وراثة §36 ويمتد لكل بند جديد&nbsp;— هو المؤشر الأصعب على الخصوم ومؤشر الوحدة الحاكم هنا.</div>
+
+<!-- ===== 11 المخاطر ===== -->
+<div class="chapter-header">
+  <div class="sec-row"><div class="sec-num">11</div><h2>المخاطر والتخفيف</h2></div>
+  
+</div>
+<p>كل خارطة طريق تنطوي على مخاطر، والفرق أن هذه الخارطة تُسميها بدقة لأن منهجية المستودع وثّقت أصلًا أخطر دروسها التشغيلية حيًّا (الزومبي الصامت، وسمّ البيئة، والقافل البيئي). المخاطر الستة أدناه هي الأعلى احتمالاً وأثراً على المسار، ولكلٍّ تخفيف مستند إلى درس موجود لا إلى أمنية.</p>
+<table>
+  <colgroup><col style="width:24%"><col style="width:14%"><col style="width:14%"><col style="width:48%"></colgroup>
+  <thead><tr><th>الخطر</th><th>الأثر</th><th>الاحتمال</th><th>التخفيف</th></tr></thead>
+  <tbody>
+    <tr><td>تعثر بنود المرحلة صفر الخارجية (شهادات/حسابات/عتاد)</td><td><span class="tag hi">عالٍ</span></td><td><span class="tag md">متوسط</span></td><td>فصل تام بينها وبين التطوير المحلي: كل ما بعدها قابل للبناء والتدريب على بيئات مرحلية، والقرارات موثقة بأثرها لا بمواعيدها</td></tr>
+    <tr><td>فقدان أو تسرب مفاتيح الناشر</td><td><span class="tag hi">عالٍ</span></td><td><span class="tag lo">منخفض</span></td><td>المفاتيح لا تغادر العملية والبصمات حصراً (§35.أ) + نسخ تعافٍ مشفر بيد المالك (F9) + تدوير وإبطال لحظي جاهزان في السجل</td></tr>
+    <tr><td>رد فعل سحابي بميزانيات ضخمة لميزات مشابهة</td><td><span class="tag md">متوسط</span></td><td><span class="tag md">متوسط</span></td><td>الخندق بنيوي لا وظيفي: منسوخاتهم ستبقى سحابية في جوهرها؛ السبق في العمق المحلي والثقة القابلة للإثبات هو الرد&nbsp;— لا سباق الميزات</td></tr>
+    <tr><td>تعقيد PKI متعدد الناشرين فوق سجل محكم</td><td><span class="tag md">متوسط</span></td><td><span class="tag md">متوسط</span></td><td>الانتقال تدريجياً بعقد §38 مُصدَّر وفحوص ثنائية المفاتيح قبل أي اعتماد، والسجل القائم مصدر الحقيقة الواحد طوال الانتقال</td></tr>
+    <tr><td>تراكم دروس تشغيلية غير مُدوَّنة مع اتساع الفريق</td><td><span class="tag md">متوسط</span></td><td><span class="tag md">متوسط</span></td><td>قاعدة سجل العمل الملزمة (إدخال بعد كل دورة) + تحويل كل درس إلى فحص E2E دائم كما فُعل بالزومبي والقافل البيئي</td></tr>
+    <tr><td>اعتماديات الإطار (Next/Prisma/Tauri) وكسور ترقيات كبيرة</td><td><span class="tag lo">منخفض</span></td><td><span class="tag hi">عالٍ</span></td><td>أساس E2E الضخم هو شبكة الأمان ذاتها: أي ترقية تُقاس بها فوراً؛ وقفل الإصدارات في مسار الإنتاج مع نافذة ترقية مدروسة لكل دورة</td></tr>
+  </tbody>
+</table>
+
+<!-- ===== 12 القرارات ===== -->
+<div class="chapter-header">
+  <div class="sec-row"><div class="sec-num">12</div><h2>القرارات المطلوبة من المالك الآن</h2></div>
+  
+</div>
+<p class="lead">هذه الخارطة جاهزة للتنفيذ الفوري في كل ما هو محلي، لكنها متوقفة عند خمسة أبواب لا يملك مفتاحها إلا المالك&nbsp;— هي بنود المرحلة صفر ذاتها بصيغة قرار. ترتيبها أدناه بترتيب الأثر المتسلسل: كل قرار يفتح سلسلة بنود لاحقة، وتأجيله يؤجل أثراً كاملاً لا بنداً واحداً.</p>
+<div class="decision"><b><span class="dnum">قرار 1:</span> فتح حساب شهادات التوقيع M0.1</b><p>يفتح: التحديث الذاتي الموقع (م1-1) وحزم التوزيع (م1-4) وحضور المتاجر. تأجيله يجمّد المرحلة 1 كلها عند مسار التنزيل اليدوي.</p><span class="cost">التكلفة: 300–500 دولار سنوياً تقريباً</span></div>
+<div class="decision"><b><span class="dnum">قرار 2:</span> شراء نطاق المشروع</b><p>يفتح: مركز التوثيق والتنزيل الموقع، وشرط مسبق لبنود F1/F2 ثم TLS المؤسسي في المرحلة 3.</p><span class="cost">التكلفة: 10–20 دولار سنوياً</span></div>
+<div class="decision"><b><span class="dnum">قرار 3:</span> فتح حساب Flathub</b><p>يفتح: قناة التوزيع الأوسع لمنصات لينكس بحساب ناشر موثق. بلا تكلفة مالية&nbsp;— قرار تحقق وحده.</p><span class="cost">التكلفة: مجاني (زمن تحقق الناشر)</span></div>
+<div class="decision"><b><span class="dnum">قرار 4:</span> توفير عتاد Mac G-38</b><p>يفتح: الذراع الرابع للمصفوفة (DMG موقّع ودورة خضراء كاملة) وجاهزية OEM لاحقاً.</p><span class="cost">التكلفة: عتاد حسب المواصفات</span></div>
+<div class="decision"><b><span class="dnum">قرار 5:</span> البتّ في backup-pre-rewrite.bundle</b><p>يغلق: آخر بند تاريخي مفتوح في الخارطة كلها. بعده يصبح سجل البنود المعلقة صفراً بلا استثناء موثق.</p><span class="cost">التكلفة: قرار توثيقي فقط</span></div>
+<p>بعد هذه القرارات الخمسة، لا يوجد في المسار كله بابٌ واحد ينتظر قراراً ثانياً: المرحلة 1 تنطلق فور غلق بنودها الخارجية، والمرحلتان 2 و3 تعتمدان إغلاق سابقتيهما بمؤشرات القسم العاشر لا بتواريخ أمنيات. إنها خارطة صادقة لمنتج صادق: كل وعدها إما منفذ مفحوص أو مسند إلى حد موثق يسميه باسمه.</p>
+</div>
+
+<!-- ==================== ENDING ==================== -->
+<div class="ending">
+  <div class="end-l1"></div>
+  <div class="end-line"></div>
+  <div class="end-quote">الجهاز هي الحدود.</div>
+  <div class="end-sub">عقدٌ مُصدَّر حتى §37، وأساس اختبارات يُعاد إثباته مرتين متتاليتين، وبيانات لا تغادر الجهاز بالفيزياء لا بالوعد&nbsp;— هذا هو الأساس الذي ستُبنى عليه المراحل الأربع، وما يفصل NexusLink عن كل منافسٍ يبيع الخصوصية بعد أن باع البيانات.</div>
+  <div class="end-meta">
+    <b>NexusLink&nbsp;— خارطة الطريق الشاملة · الإصدار 1.0</b>
+    <span>CTO-DRS · أكتوبر 2026</span>
+  </div>
+</div>
+</body>
+</html>

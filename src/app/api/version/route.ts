@@ -2,11 +2,12 @@ import { NextResponse } from "next/server"
 
 // /api/version — الإصدار + سجل الإصدارات الحقيقي (عقد §16 بند 2 + §23).
 // ============================================================
-// الإصدار موحّد 1.2.0 عبر كل المنصات (tauri.conf.json/Cargo.toml/pubspec/package.json
-// — منظومة الروتينات الذكية × مشغّلات الصحة التاريخية اكتملت فوق 1.1.0 ووسم v1.2.0 هو إصدارها).
+// الإصدار موحّد 2.0.0 عبر كل المنصات (tauri.conf.json/Cargo.toml/pubspec/package.json
+// — المنظومة المفتوحة SDK 2.0 + الذكاء المحلي + عمق ما بعد M3 والعميل الوِب والوصول البعيد
+// اكتملت فوق 1.2.0 ووسم v2.0.0 هو إصدارها — ترقيم M3 المعتمد في ROADMAP).
 // سجل الإصدارات = GitHub Releases للمستودع العام (كاش 10 دقائق) — بلا
 // مفاتيح API، وفشل الجلب (أوفلاين/معدل) يعيد قائمة من الإصدار المحلي وحده.
-const CURRENT = "1.2.0"
+const CURRENT = "2.0.0"
 const RELEASES_API = "https://api.github.com/repos/CTO-DRS/NexusLink/releases?per_page=12"
 
 type HistoryEntry = { version: string; tag: string; date: string; items: string[] }
@@ -18,6 +19,19 @@ function localHistory(): HistoryEntry[] {
   return [
     {
       version: CURRENT,
+      tag: "v2.0.0",
+      date: "2026-10-21",
+      items: [
+        "الذكاء المحلي كاملًا: بحث موحد عبر 8 مخازن + مساعد على الجهاز (حتمي + LLM محلي اختياري بحرس 127.0.0.1) + رؤى 14 يومًا",
+        "المنظومة المفتوحة: SDK 2.0 صفر-اعتماد + واجهات REST عامة + سوق 10 تكاملات موقعة + CLI 16 أمرًا",
+        "عمق ما بعد M3: قناة الناشر المركزية بتوقيع ثنائي + الفرض اللحظي للقدرات + التنبؤ الاستباقي الحتمي",
+        "العميل الوِب المستقل: PWA قابل للتثبيت ووضع TV — صفر بايت خارجي مفحوص فوق الأسطح الثمانية",
+        "الوصول البعيد برمز اقتران: حسم زمن-ثابت + حجب تجريبي + إدارة loopback — البوابة OFF افتراضيًا",
+        "إدارة وحسم وقراءة عبر API: /api/remote-access (تمكين/تدوير/تعطيل) و/api/predictions و/api/pair-metrics — بيانات وصفية حرس F6 متوافق",
+      ],
+    },
+    {
+      version: "1.2.0",
       tag: "v1.2.0",
       date: "2026-10-19",
       items: [
@@ -64,7 +78,7 @@ async function fetchHistory(): Promise<HistoryEntry[]> {
     const r = await fetch(RELEASES_API, {
       signal: ctrl.signal,
       cache: "no-store",
-      headers: { "User-Agent": "NexusLink-Server/1.2.0", Accept: "application/vnd.github+json" },
+      headers: { "User-Agent": "NexusLink-Server/2.0.0", Accept: "application/vnd.github+json" },
     })
     clearTimeout(timer)
     if (!r.ok) throw new Error(`HTTP ${r.status}`)

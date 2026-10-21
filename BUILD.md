@@ -3,16 +3,18 @@
 كل ما تحتاجه لبناء حزم المنصات الخمس محليًا أو عبر CI — نفس الخطوات التي ينفذها
 `.github/workflows/release.yml` حرفيًا (وصفة مجرّبة أخضر 3/3).
 
-**رقم الإصدار موحّد وموحّد: `1.1.0`** — يُصرَّح به في 4 ملفات يجب أن تبقى متطابقة:
+**رقم الإصدار موحّد وموحّد: `2.0.0`** — يُصرَّح به في 5 ملفات يجب أن تبقى متطابقة:
 
 | الملف | الحقل | القيمة |
 |---|---|---|
-| `apps/desktop/src-tauri/tauri.conf.json` | `version` | 1.1.0 |
-| `apps/desktop/src-tauri/Cargo.toml` | `package.version` | 1.1.0 |
-| `nexuslink_mobile/pubspec.yaml` | `version` | 1.1.0+2 |
-| `package.json` (الجذر) | `version` | 1.1.0 |
+| `apps/desktop/src-tauri/tauri.conf.json` | `version` | 2.0.0 |
+| `apps/desktop/src-tauri/Cargo.toml` | `package.version` | 2.0.0 |
+| `nexuslink_mobile/pubspec.yaml` | `version` | 2.0.0+4 |
+| `package.json` (الجذر) | `version` | 2.0.0 |
+| `.github/workflows/release.yml` | `env.VERSION` | 2.0.0 |
 
-> قاعدة صارمة: أي تغيير مستقبلي للإصدار يتم في الملفات الأربعة معًا وبإنشاء وسم
+> قاعدة صارمة: أي تغيير مستقبلي للإصدار يتم في الملفات الخمسة معًا (الأربعة
+> أعلاه + `env.VERSION` في سير الإصدار) وبإنشاء وسم
 > `v*` جديد — لا تُعدّل أصول إصدار منشور أبدًا (تواقيع `latest.json` تُبنى على
 > محتوى الملفات الحالي).
 
