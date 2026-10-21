@@ -1,0 +1,1167 @@
+== cleanup stale ports ==
+== [1] next standalone on :3000 ==
+   [next] ✓ Ready in 64ms
+✅ next: عملية الخادم حيّة (لا EADDRINUSE صامت من زومبي) — exit=null
+✅ next: /api/health يعمل — uptime=1s
+== [2] /api/desktop/status (ensure all bridges) ==
+✅ جسر الوسائط 3005 مُقلعاً
+✅ جسر الحماية 3006 مُقلعاً
+✅ جسر الإنتاجية 3007 مُقلعاً
+✅ جسر التحكم 3004 مُقلعاً
+✅ قناة الأمان 3009 مُقلعة
+✅ الهاتف غير متصل مبدئياً (tray=منتظر) — state=near
+== [3] gateway.cjs (81 أو fallback) ==
+   [gateway] [gateway] :81 blocked (EACCES) → falling back to :8180
+   [gateway] [gateway] NexusLink gateway on :8180 → rest:3000 (+ ?XTransformPort=<port>)
+   [gateway] [gateway] PORT=8180
+✅ gateway: /__gw/health — port=8180
+✅ gateway: تمرير REST إلى 3000
+✅ gateway: XTransformPort=3003 → /status للcomms (سيُثبت بعد إقلاع comms) — port=8180
+== [4] comms.cjs on :3003 (+ mDNS) ==
+   [comms] NexusLink Comms Bridge (virtual phone) on port 3003
+✅ comms: /status يعمل — sockets=0
+   [comms] [mdns] advertising _nexuslink._tcp (port 8180)
+✅ comms: إعلان mDNS — gateway المعلن=8180
+✅ gateway→comms: /status عبر XTransformPort
+== [5] simulated phone via gateway (guard beacon) ==
+✅ الهاتف: socket.io عبر 81?XTransformPort=3006 (polling+WS)
+✅ الهاتف: منارة حقيقية → phone.online=true (tray=متصل) — rssi=-52 state=near
+✅ الهاتف: ترقية WS عبر نفق البوابة
+✅ جسر التحكم 3004 عبر البوابة
+✅ قناة الأمان 3009 عبر البوابة
+== [6] native layer: shortcuts + status.desktop + send-file ==
+✅ desktop/shortcuts: PUT يقبل الخريطة
+✅ desktop/shortcuts: GET يعيد نفس المخزن
+✅ status.desktop.shortcuts موجودة
+✅ status.desktop.agentId حقل معلن
+✅ status.desktop.transfers قائمة
+✅ status.desktop.notifs قائمة
+✅ devices/send-file: قبول ملف سحب-وإفلات — job=tx_mvhci01r_ne3ls
+✅ المهمة ظهرت في قائمة النقل
+✅ prod/clipboard: POST حافظة موحدة (مسار Ctrl+Shift+N)
+✅ comms/notifications: إشعار قابل للتفاعل
+✅ status.desktop.notifs يتضمن الإشعار الجديد
+== [6f] clipboard-sync contract ==
+✅ desktop/shortcuts: GET يحمل clip افتراضي — mode=auto max=1048576
+✅ desktop/shortcuts: PUT clip يحدّث الحد (128KB)
+   [next] ⨯ Error [PrismaClientKnownRequestError]: 
+❌ status.desktop.clip: mode من prodState + الحد من المخزن — mode=auto max=131072
+   [next] ⨯ Error [PrismaClientKnownRequestError]: 
+✅ prod/clipboard: السجل ≤ 50 وبشكل سليم — n=1
+✅ clip:push من الهاتف → مخزّن ومبثوث (§11.أ)
+✅ prodEmit clip:new يصل العملاء ويتضمن deviceId (حرس §11.ج) — pc=true phone=true events=2
+✅ prod/clipboard: صورة dataURL تُقبل وتُبث
+✅ prod/clipboard: اقتراح نقل kind=file
+✅ PUT clip: استلام فعلي → نسخ إلى pc-fs/Downloads — name=e2e-clipfile.txt bytes=38
+== [6g] FA-power: system commands + real WOL packet + auto-lock ==
+✅ FA-power: إعلان MAC عبر desktop:register → rc:hello للأجهزة اللاحقة — mac=AA:BB:CC:DD:EE:FF
+✅ FA-power: rc:power logout من هاتف موثوق يُرحّل للكمبيوتر مع __src=controller — got={"action":"logout","__src":"controller"}
+✅ FA-power: rc:wol بMAC غير صالح → rc:rejected(mac) — reason=mac
+✅ FA-power: rc:wol والكمبيوتر يعمل → rc:rejected(already-on) — reason=already-on
+✅ FA-power: حزمة WOL السحرية أُرسلت فعليًا (UDP = 102 بايت 6×FF+MAC×16) — len=102 head=ffffffffffffaabbccddeeff
+✅ FA-power: بث desktop:wake {source:wol, packet} — mac=AA:BB:CC:DD:EE:FF
+✅ FA-power: بلا منارة → pc:lock تلقائي بعد مهلة السماح (§12.ج) — reason=no-beacon
+✅ FA-power: PUT security.autoLock=false يقبل
+✅ status.desktop.security يعكس المخزن
+✅ status.desktop.connections عدّاد رقمي — n=4
+✅ status.desktop.power {state, mac, name} من جسر التحكم — state=on mac=AA:BB:CC:DD:EE:FF
+✅ العقد: §12 موثق (أوامر النظام/الإيقاظ/القفل التلقائي)
+== [6h] FA-input: trusted control session + __src injection ==
+✅ FA-input: status.desktop.input {active:false} افتراضيًا — input={"active":false,"deviceId":null,"name":null,"at":0}
+✅ FA-input: جلسة من جهاز غير موثوق → rc:rejected(untrusted) — reason=untrusted
+   [comms] [phone] مكالمة واردة من 0565790447
+✅ FA-input: جلسة موثوقة (galaxy-s24) → بث active:true باسم المتحكم — got={"active":true,"controller":{"deviceId":"galaxy-s24","name":"Galaxy S24"},"at":1792540800000}
+✅ FA-input: status.desktop.input.active=true بعد البدء — input={"active":true,"deviceId":"galaxy-s24","name":"Galaxy S24","at":1792540800000}
+✅ FA-input: جلسة ثانية → rc:rejected(busy) — reason=busy
+✅ FA-input: rc:move من موثوق → __src=controller — src=controller dx=25
+✅ FA-input: rc:key من سوكِت مجهول → __src=unknown + عربي UTF-8 سليم — src=unknown ch=مرحبا
+✅ FA-input: rc:presenter start (F5) يُرحّل — got={"action":"start","__src":"controller"}
+✅ FA-input: rc:media volume 70 يُرحّل — got={"action":"volume","value":70,"__src":"controller"}
+✅ FA-input: فقدان النبض → بث {active:false, reason:timeout} — got={"active":false,"reason":"timeout","at":1792540807063}
+✅ FA-input: status.desktop.input.active=false بعد timeout
+✅ FA-input: إعادة بدء الجلسة بعد timeout مقبول — got={"active":true,"controller":{"deviceId":"galaxy-s24","name":"Galaxy S24"},"at":1792540807678}
+✅ FA-input: القطع الفوري من الكمبيوتر → بث desktop-stop يصل الهاتف — got={"active":false,"reason":"desktop-stop","at":1792540807683}
+✅ العقد: §13 موثق (enigo/جلسة التحكم/حقن __src/عربية)
+== ] R4: NexusLive live UDP channel ==
+✅ R4 §18: rc:live-hello بلا جلسة/ثقة → rc:rejected(untrusted) — got={"reason":"untrusted","ev":"rc:live-hello"}
+✅ R4 §18: rc:live-ready (port=3010 · key 16-hex · mtu=128 · proto=1) — got={"port":3010,"key":"4ab44fa28e8c0a76","mtu":128,"proto":1,"at":1792540808397}
+✅ R4 §18: ping → pong (نفس seq + ts الجسر) وRTT loopback < 100ms — rtt=1ms seq=4242
+✅ R4 §18: 3 حزم touch → الحوض (loopback 3011) تستلم كما هي — sink=3
+✅ R4 §18: إحصاء التدفق الجديد (received=5 · lost=2 · reorder=1 · dup=1) — stats={"received":5,"forwarded":5,"lost":2,"reorder":1,"dup":1,"pings":0}
+✅ R4 §18: sinkPort=3011 في الإحصاء + التدفق مثبت بعنوان — bound=127.0.0.1:38367
+✅ R4 §18: الفاسد والمفتاح المجهول يُرفضان (malformed≥1 · noKey≥1) — global={"droppedMalformed":1,"droppedNoKey":1,"droppedAddr":0,"forwardErrors":0,"pongErrors":0}
+✅ R4 §18: حزمة من عنوان آخر بمفتاح سليم → droppedAddr — global={"droppedMalformed":1,"droppedNoKey":1,"droppedAddr":1,"forwardErrors":0,"pongErrors":0}
+✅ R4 §18: نهاية الجلسة تموت التدفق (لا حزم جديدة للحوض + مفتاح ميت مرفوض) — sinkDelta=0 noKey=2 flows=0
+✅ R4 §18: العقد موثق (topology/protocol/events/verify) — contract §18
+✅ R4 §18: الجسران متطابقان (hello/ready/stats/relay 3010→3011) — bridges
+✅ R4 §18: Rust حوض loopback حصري + نواة صارمة (bind 127.0.0.1 · HEADER_LEN=22 · coalesce) — rust
+✅ R4 §18: عميل Flutter (UDP · إعادة اتصال · RTT · رأس 22) — flutter
+✅ R4 §18: ترجمات rctl.live في القاموسين (ar/en) — i18n
+== R4 §18-ت: توسعة NexusLive (متجهات ثنائية + ثوابت + مرايا) ==
+✅ R4 §18-ت: ثوابت النواة (MAGIC 0x4E58 · VERSION=1 · HEADER_LEN=22 · MAX_DATAGRAM=128) — live_core.rs
+✅ R4 §18-ت: أنواع الحزم الستة (pen=1 mouse=2 gyro=3 touch=4 pong=0x7E ping=0x7F) — live_core.rs
+✅ R4 §18-ت: أطوار القلم الأربعة + إجراءات المؤشر الستة — live_core.rs
+✅ R4 §18-ت: دمج حي في النواة (coalesce — الأحدث يغلب بلا تخزين مؤقت) — live_core.rs
+✅ R4 §18-ت: بنية pen تحمل الضغط/الميل/الطور/الأزرار/الأداة (تحليل الحمولة الحرفي) — live_core.rs
+✅ R4 §18-ت: متجه pen = 32B (22+10) — pressure u16be=65535 وtilt i8 والطور/الأزرار كما كُتبت (حمولة sendPen الحرفية) — len=32
+✅ R4 §18-ت: متجه mouse نسبي = 30B — flags bit0 + dx/dy i16be (±500) + wheel i16be سالب — len=30
+✅ R4 §18-ت: seq u32be على حافة الالتفاف (0xFFFFFFFE ← تغليف 0xFFFFFFFF+1 = 0) — seq=4294967294
+✅ R4 §18-ت: متجه gyro = 34B (22+12) milli-g/milli-dps + أزرار A+B+إمساك — أوسع حمولة تعاقدية — len=34
+✅ R4 §18-ت: متجه touch=30B (click=3 · pointerId=0) وping=22B (رأس حصرًا) — حدث = داتاجرام واحد دائمًا — touch=30 ping=22
+✅ R4 §18-ت: فك الرأس — magic/version/type/seq/ts/key تُقرأ كما كُتبت (big-endian) — header roundtrip
+✅ R4 §18-ت: قياس الطرف-إلى-طرف بلفّ u32 آمن (wrapping_sub) + P50/P95 من live.rs — live.rs e2e
+✅ R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms epoch & 0xFFFFFFFF — إزاحة NTP عبر pong) — ts mask
+✅ R4 §18-ت: live.rs يرتبط 127.0.0.1 حصرًا على NEXUS_LIVE_SINK_PORT (3011) بمحاولات إعادة + P50/P95 — live.rs sink
+✅ R4 §18-ت: الجسر — NEXUS_LIVE_PORT/3010 + SINK/3011 بيئيتان بالافتراض التعاقدي — remote-bridge
+✅ R4 §18-ت: عدادات الجسر العالمية الخمسة (malformed/noKey/addr/forward/pong) — remote-bridge global
+✅ R4 §18-ت: لقطة الإحصاء (port/sinkPort/flows/global) تبث rc:live-stats مع التدفقات النشطة — remote-bridge stats
+✅ R4 §18-ت: مفتاح 8B عشوائي لكل تدفق + تثبيت عنوان المرسل (أول حزمة تُثبّت) — remote-bridge key/bound
+✅ R4 §18-ت: نهاية الجلسة/الانقطاع تمحو التدفق فورًا (liveFlows.delete) — remote-bridge teardown
+✅ R4 §18-ت: الجسران متطابقان حرفيًا في التدفق الحي (mirror: hello/ready/3011/NEXUS_LIVE_PORT) — remote-service mirror
+✅ R4 §18-ت: عميل Flutter — RawDatagramSocket + رأس 22 محجوز=0 + مفتاح 8B في كل حزمة — live_channel.dart
+✅ R4 §18-ت: ping كل 500ms → RTT بـEMA (0.7/0.3) + مزامنة إزاحة NTP-نمط (serverTs − منتصف الرحلة) — live_channel.dart
+✅ R4 §18-ت: إعادة اتصال بتراجع أُسي 500ms→8s + watchdog بلا pong 3ث — live_channel.dart
+✅ R4 §18-ت: العقد §18 بالحقائق الثنائية (0x4E58 · NTP · 3010/3011) — contract §18
+✅ R4 §18-ت: القاموسان — رقاقة القناة الحية (UDP حي · {rtt}ms / قناة TCP) بالعربيتين — i18n §18
+✅ R4 §18-ت: القائمة الميدانية §12 (10 خطوات NexusLive — UDP حي + إعادة فتح ذاتية + بلا تراكم) — e2e-checklist §12
+== R4 §19: الشاشة الثانية (secondscreen/vdisplay) ==
+✅ R4 §19: screen:req target=screen:virtual يصل الكمبيوتر حرفيًا — {"at":1792540812950,"action":"start","fps":60,"target":"screen:virtual","from":"phone"}
+✅ R4 §19: target فاسد (نمط غريب/نافذة عبر screen:req) يُرفض صامتًا
+✅ R4 §19: secondscreen:cmd enable يصل الكمبيوتر (1080×2400 @30 high) — {"action":"enable","at":1792540814155,"w":1080,"h":2400,"fps":30,"quality":"high","from":"phone"}
+✅ R4 §19: secondscreen:cmd فاسد (إجراء/أبعاد/fps) يُرفض صامتًا
+✅ R4 §19: secondscreen:state من pc تصل الهاتف (active/target/w/h) — {"at":1792540815361,"active":true,"target":"screen:1","w":1080,"h":2400}
+✅ R4 §19: secondscreen:state من دور phone يُرفض (لا انتحال حالة)
+✅ R4 §19: انقطاع الهاتف يبث media:phone-offline (مشغّل إطفاء الشاشة الافتراضية) — {"at":1792540817571}
+✅ R4 §19: desktop-bridge يربط الدورة كاملة (vdisplay_enable → media_screen_start → state / disable + phone-offline) — desktop-bridge.tsx
+✅ R4 §19: Rust CCD ويندوز (QueryDisplayConfig/SetDisplayConfig بلا مدير) + change_mode — vdisplay.rs
+✅ R4 §19: Rust لينكس xrandr (newmode/addmode/right-of) + ماك حد صادق — vdisplay_core.rs + vdisplay.rs
+✅ R4 §19: عقد الفهرس — أصول ويندوز الحقيقية من EnumDisplayMonitors (نفس ترتيب windows-capture) — media.rs origins fix
+✅ R4 §19: النواة النقية (validate/patch/xrandr/cvt) + جلسة «ما فعلناه نحن» — vdisplay_core.rs
+✅ R4 §19: NSIS hooks (شهادات من mttvdd.cat → TrustedPublisher + nefconc install RootMttVDD + remove عند الإزالة + غير حاجز) — installer-hooks.nsh
+✅ R4 §19: bundle.resources يحمل vdd (resolve_resources §17.ب → $INSTDIR\vdd) — tauri.conf.json
+✅ R4 §19: أصل السائق مرفق: MttVDD.inf — حزمة §19
+✅ R4 §19: أصل السائق مرفق: MttVDD.dll — حزمة §19
+✅ R4 §19: أصل السائق مرفق: mttvdd.cat — حزمة §19
+✅ R4 §19: أصل السائق مرفق: nefconc.exe — حزمة §19
+✅ R4 §19: أصل السائق مرفق: vdd_settings.xml — حزمة §19
+✅ R4 §19: أصل السائق مرفق: LICENSE-VirtualDisplayDriver — حزمة §19
+✅ R4 §19: XML المرفق يحمل الأوضاع التعاقدية (1080×2400 + 2400×1080 @60) — vdd_settings.xml
+✅ R4 §19: محرك vdisplay-verify يضمّن vdisplay_core.rs حرفيًا (نمط live-verify) — scripts/vdisplay-verify
+✅ R4 §19: العقد موثق (منصات/تثبيت/أحداث/دورة/تحقق) — contract §19
+✅ R4 §19: ترجمات seconds.* في القاموسين (ar/en) — i18n
+✅ R4 §19: Flutter خدمة (secondScreenCmd + secondscreen:state مصدر الحقيقة + target في requestScreen) — media_service.dart
+✅ R4 §19: Flutter شاشة العرض تمرر الهدف وتطفئ الافتراضية عند الإغلاق (البند 8) — pc_screen_screen.dart
+✅ R4 §19: بطاقة الشاشة الثانية + ورقة الإعدادات (دقة/اتجاه/fps/جودة — البند 7) — media_screen.dart
+== R4 §19-ت: توسعة الشاشة الثانية (vdisplay) ==
+✅ R4 §19-ت: الأوضاع الأربعة المضمنة (1080×2400 · 2400×1080 · HD · portrait-HD) — vdisplay_core PRESET_MODES
+✅ R4 §19-ت: النواة النقية الستة (validate_mode/xrandr_mode_name/build_settings_xml/patch_settings_xml/modes_present/parse_xrandr_query) — vdisplay_core
+✅ R4 §19-ت: ويندوز CCD بلا مدير (QueryDisplayConfig/SetDisplayConfig) + تبديل الوضع ChangeDisplaySettingsExW + EnumDisplaySettingsW — vdisplay.rs win
+✅ R4 §19-ت: عقد الفهرس مع windows-capture (EnumDisplayMonitors — تحقق من مصدر الكرِيت) — vdisplay.rs monitors
+✅ R4 §19-ت: الجلسة «ما فعلناه نحن» حصرًا (session_active في النواة + ssActive في الويبفيو) — vdisplay + webview
+✅ R4 §19-ت: انقطاع الهاتف يبث media:phone-offline (مشغّل إطفاء الشاشة الافتراضية — الويبفيو وجسر الوسائط) — desktop-bridge
+✅ R4 §19-ت: الويبفيو يربط الدورة كاملة (vdisplay_enable → media_screen_start → state / disable+phone-offline → stop) — desktop-bridge
+✅ R4 §19-ت: NSIS — شهادات mttvdd.cat → TrustedPublisher (تدفق silent-install.ps1 الرسمي) — installer-hooks §19
+✅ R4 §19-ت: NSIS — إعداداتنا إلى C:\VirtualDisplayDriver (confpath من Driver.cpp:94) + nefconc install — installer-hooks §19
+✅ R4 §19-ت: NSIS — إزالة نظيفة عند uninstall (nefconc remove عند FileExists) — installer-hooks §19
+✅ R4 §19-ت: أصول السائق مرفقة بتراخيصها (SHA256SUMS + MIT للسائق وnefcon) — vdd bundle
+✅ R4 §19-ت: XML السائق المرفق يحمل الأوضاع التعاقدية (1080 و2400) — vdd_settings.xml
+✅ R4 §19-ت: التشخيص الأصلي — سطر «الشاشة الثانية (سائق العرض الافتراضي)» عبر vdisplay_status — tools diag
+✅ R4 §19-ت: Flutter خدمة — secondScreenCmd + secondscreen:state مصدر الحقيقة + target في requestScreen — media_service
+✅ R4 §19-ت: Flutter شاشة العرض — تمرير الهدف وإطفاء الافتراضية عند الإغلاق — pc_screen_screen
+✅ R4 §19-ت: أوامر Tauri الثلاثة مسجلة (vdisplay_status/enable/disable) — main.rs §19
+✅ R4 §19-ت: القاموسان seconds.* (ar/en) — شاشة ثانية — i18n §19
+✅ R4 §19-ت: العقد §19 (منصات بإثبات المصدر + MttVDD + دورة phone-offline كاملة) — contract §19
+✅ R4 §19-ت: القائمة الميدانية §13 (10 خطوات + Root\MttVDD + إطفاء عند الانقطاع + لينكس xrandr) — e2e-checklist §13
+✅ R4 §19-ت: محرك vdisplay-verify يضمّن النواة حرفيًا ويغطي XML/xrandr-parse — vdisplay-verify
+✅ R4 §19-ت: جسر الوسائط يمرر secondscreen:cmd/state منقّيين (عقد §19.ج) والويبفيو يدير الدورة — media-bridge + webview
+== R4 §20: لوحة الرسم (rc:tablet:cmd/state + pen tool flags) ==
+✅ R4 §20: rc:tablet:cmd بلا جلسة/ثقة → rc:rejected(untrusted) — got={"reason":"untrusted","ev":"rc:tablet:cmd"}
+✅ R4 §20: جلسة لوحة الرسم نشطة — {"active":true,"controller":{"deviceId":"galaxy-s24","name":"Galaxy S24"},"at":1792540817603}
+✅ R4 §20: rc:tablet:cmd get يصل الكمبيوتر (__src=controller) — {"cmd":"get","__src":"controller"}
+✅ R4 §20: rc:tablet:state من دور pc تصل الهاتف (مصدر الحقيقة) — {"mode":"mouse","available":false,"note":"e2e","brush":{},"stats":{},"at":1}
+   [comms] [phone] لم يُرد على مكالمة 0565790447
+✅ R4 §20: rc:tablet:state من دور phone يُرفض (لا انتحال حالة) — null
+✅ R4 §20: set سليم يمرر الحقول المنقاة (mode/pressure/keys/levels حرفيًا) — {"cmd":"set","mode":"tablet","pressure":"keys","decKey":"[","incKey":"]","levels":24,"__src":"controller"}
+✅ R4 §20: أمر فاسد يُرفض كله: {"cmd":"set","mode":"hacked"} — null
+✅ R4 §20: أمر فاسد يُرفض كله: {"cmd":"set","pressure":"evil"} — null
+✅ R4 §20: أمر فاسد يُرفض كله: {"cmd":"set","decKey":"ab"} — null
+✅ R4 §20: أمر فاسد يُرفض كله: {"cmd":"set","decKey":"\u0007"} — null
+✅ R4 §20: أمر فاسد يُرفض كله: {"cmd":"set","levels":65} — null
+✅ R4 §20: أمر فاسد يُرفض كله: {"cmd":"set","levels":1.5} — null
+✅ R4 §20: أمر فاسد يُرفض كله: {"cmd":"set","modifier":"win"} — null
+✅ R4 §20: أمر فاسد يُرفض كله: {"cmd":"frobnicate"} — null
+✅ R4 §20: قناة حية جديدة (مفتاح 16-hex) — {"port":3010,"key":"b6c6816d58a62815","mtu":128,"proto":1,"at":1792540829744}
+✅ R4 §20: حزم pen بالأداة تمر للحوض كما هي (eraser/finger/pen — flags bits1-2 محفوظة) — got=2,4,0
+✅ R4 §20: العقد موثق (منصات بإثبات المصدر/بروتوكول الأداة/أحداث/فرشاة/تحقق) — contract §20
+✅ R4 §20: الجسران متطابقان (تنقية cmd + بوابة الجلسة + state من دور pc حصرًا) — remote-bridge + remote-service mirror
+✅ R4 §20: الويبفيو يربط الأوامر بأوامر Tauri ويبث الحالة — desktop-bridge.tsx
+✅ R4 §20: النواة — الأداة في flags bits1-2 (TOOL_PEN/ERASER/FINGER + tool_name + توافق أمامي) — live_core.rs
+✅ R4 §20: محرك الفرشاة النقي (تكميم/خطوات/إيقاع/القلم حصرًا) — input_exec.rs
+✅ R4 §20: اللوحة الافتراضية — uinput ديجيتايزر كامل + بوابة الجلسة/التوفر + قيد ويندوز/ماك بصدق — tablet.rs + tablet_uinput.rs
+✅ R4 §20: Flutter عميل (أداة في flags bits1-2 + ممررة عبر الخدمة) — live_channel + controller_service
+✅ R4 §20: شاشة اللوحة (التقاط خام بالسلسلة + تجميع ذكي + رفض راحة اليد + معاينة فورية) — tablet_screen.dart
+✅ R4 §20: القاموسان tablet.* (ar/en) — 34 مفتاحًا — i18n
+✅ R4 §20: محركا التحقق يضمّنان الملفات حرفيًا (أداة + فرشاة + uinput نقي) — live-verify + tablet-verify
+✅ R4 §20: ربط الوحدة — input_exec عليا واحدة (main) وإعادة تصدير exec (input) — بلا تضمين مزدوج/statics منشقة — main.rs + input.rs wiring
+✅ R4 §20: الفحص الميداني موثق (e2e-checklist §14 — Krita قلم حقيقي) — e2e-checklist §14
+== R4 §20-ت: توسعة لوحة الرسم (فرشاة + uinput + التقاط خام) ==
+✅ R4 §20-ت: الفرشاة الافتراضية Krita/Photoshop — [ يصغّر و] يكبّر بـ24 مستوى — input_exec BrushCfg default
+✅ R4 §20-ت: سقف إيقاع الحقن 30ms (≤33 مفتاح/ث — إغراق التطبيق الرسمي ممنوع) — input_exec pace
+✅ R4 §20-ت: محرك الفرشاة النقي — brush_level (تكميم) + brush_steps (اتجاه/حافة) — input_exec brush
+✅ R4 §20-ت: BRUSH_CFG واحدة يكتبها tablet.rs ويقرأها المنفّذ (بلا statics منشقة) — single brush static
+✅ R4 §20-ت: عجلة التمرير بمعدّل Ctrl (Press/Release حول enigo.scroll — للمتصفح/PowerPoint) — input_exec ctrl+scroll
+✅ R4 §20-ت: عميل القلم — حمولة 10B الحرفية (nx2+ny2+pressure2+tilt1+tilt1+phase1+buttons1) وتثبيت الأداة في flags — live_channel sendPen
+✅ R4 §20-ت: الأداة في flags bits1-2 (TOOL_PEN=0 · TOOL_ERASER=1 · TOOL_FINGER=2) — توافق أمامي — live_core tool bits
+✅ R4 §20-ت: uinput — ثوابت ioctl الأربعة (UI_SET_EVBIT/KEYBIT/ABSBIT/PROPBIT) — tablet_uinput ioctl
+✅ R4 §20-ت: uinput — نطاقات الديجيتايزر (X/Y 32767 · PRESSURE 2047 · TILT ±127) + INPUT_PROP_DIRECT — tablet_uinput ranges
+✅ R4 §20-ت: uinput — أدوات HID كاملة (BTN_TOOL_PEN/RUBBER/TOUCH/STYLUS) + UI_DEV_CREATE — tablet_uinput tools
+✅ R4 §20-ت: تحويل نقية — map_sample/build_setup (نقية قابلة للاختبار بلا /dev/uinput) — tablet_uinput pure
+✅ R4 §20-ت: consume_pen ببوابة الجلسة §13 والتوفر (!is_active || !engine_available → تدهور رشيق) — tablet.rs gate
+✅ R4 §20-ت: رفض راحة اليد أصليًا — الإصبع (tool=="finger") لا يُحقن فرشاةً — input_exec finger reject
+✅ R4 §20-ت: قيد ويندوز/ماك بتحقق المصدر (vigem-client = يد ألعاب · vmulti آخر دفع 2016) موثق في الكود — tablet.rs limits
+✅ R4 §20-ت: العقد §20 — bits1-2 + تكميم 2..64 + vigem/vmulti + امتداد توافق أمامي — contract §20
+✅ R4 §20-ت: التقاط خام — PlatformDispatcher.onPointerDataPacket (كل عينة للمحرك قبل التجميع الإطاري) — tablet_screen raw capture
+✅ R4 §20-ت: تجميع ذكي PenSampler (hover الأحدث-يغلب + تلامس بالترتيب + إزالة مكرر مكمم) — tablet_screen sampler
+✅ R4 §20-ت: رفض راحة اليد في الشاشة (_palmRejection — الأصبع يُرفض + جهاز واحد نشط) — tablet_screen palm
+✅ R4 §20-ت: معاينة محلية فورية بسماكة الضغط (RepaintBoundary + سقف رسم 80fps) — tablet_screen preview
+✅ R4 §20-ت: live.rs يوجه القلم للمستهلك (consume_pen بالأداة) — بلا مسار حقن موازٍ — live.rs pen
+✅ R4 §20-ت: ورقة الفرشاة من الكمبيوتر (الحالة مصدر الحقيقة — decKey/incKey/levels/modifier الافتراضية) — tablet_screen brush sheet
+✅ R4 §20-ت: القاموسان tablet.* (ar/en) — لوحة الرسم/رفض راحة اليد/Palm rejection/المستويات — i18n §20
+✅ R4 §20-ت: القائمة الميدانية §14 (Krita + ممحاة + عجلة التمرير + راحة اليد + كمون <25ms) — e2e-checklist §14
+✅ R4 §20-ت: محرك tablet-verify يقيس uinput الفعلي (ABS_PRESSURE=2047 + ضغط 0.5→1024 + hover صفر) — tablet-verify pressure
+✅ R4 §20-ت: النواة تحمل الضغط للمحلّق (pen → kind=pointer + pressure محمولة) — أساس محرك الفرشاة — live_core pressure carry
+== R4 §21: التحكم المتقدم (rc:gyro:cmd/state + gyro flags) ==
+✅ R4 §21: rc:gyro:cmd بلا جلسة/ثقة → rc:rejected(untrusted) — got={"reason":"untrusted","ev":"rc:gyro:cmd"}
+✅ R4 §21: جلسة التحكم المتقدم نشطة — {"active":true,"controller":{"deviceId":"galaxy-s24","name":"Galaxy S24"},"at":1792540831305}
+✅ R4 §21: rc:gyro:cmd get يصل الكمبيوتر (__src=controller) — {"cmd":"get","__src":"controller"}
+✅ R4 §21: rc:gyro:state من دور pc تصل الهاتف (مصدر الحقيقة) — {"mode":"off","template":"platformer","map":{},"stats":{},"calibrated":false,"at":2}
+✅ R4 §21: rc:gyro:state من دور phone يُرفض (لا انتحال حالة) — null
+✅ R4 §21: set سليم يمرر الحقول المنقاة (mode/template/deadzone/sens/keys/tilt/laser/calibrate حرفيًا) — {"cmd":"set","mode":"gamepad","template":"racing","deadzoneDeg":22,"sens":2.5,"tiltDeg":30,"laser":true,"calibrate":true,"keyA":" ","keyB":"l","__src":"controller"}
+✅ R4 §21: أمر فاسد يُرفض كله: {"cmd":"set","mode":"hacked"} — null
+✅ R4 §21: أمر فاسد يُرفض كله: {"cmd":"set","template":"evil"} — null
+   [comms] [mirror] whatsapp - أحمد الغامدي
+✅ R4 §21: أمر فاسد يُرفض كله: {"cmd":"set","deadzoneDeg":90} — null
+✅ R4 §21: أمر فاسد يُرفض كله: {"cmd":"set","sens":9} — null
+✅ R4 §21: أمر فاسد يُرفض كله: {"cmd":"set","keyA":"ab"} — null
+✅ R4 §21: أمر فاسد يُرفض كله: {"cmd":"set","keyA":"\u0007"} — null
+✅ R4 §21: أمر فاسد يُرفض كله: {"cmd":"set","keyB":"capslock"} — null
+✅ R4 §21: أمر فاسد يُرفض كله: {"cmd":"set","tiltDeg":70} — null
+✅ R4 §21: أمر فاسد يُرفض كله: {"cmd":"set","laser":3} — null
+✅ R4 §21: أمر فاسد يُرفض كله: {"cmd":"frobnicate"} — null
+✅ R4 §21: قناة حية جديدة (مفتاح 16-hex) — {"port":3010,"key":"7801bcea143db8e1","mtu":128,"proto":1,"at":1792540845841}
+✅ R4 §21: حزم gyro بأزرارها تمر للحوض كما هي (bits0-5 + bit6 الإمساك محفوظة) — got=67,68,0
+✅ R4 §21: العقد موثق (أزرار flags/قوالب/عصا/صفير/إيماءة/أحداث/تحقق) — contract §21
+✅ R4 §21: الجسران متطابقان (تنقية cmd + بوابة الجلسة + state من دور pc حصرًا) — remote-bridge + remote-service mirror
+✅ R4 §21: الويبفيو يربط أوامر gyro بأوامر Tauri ويبث الحالة — desktop-bridge.tsx
+✅ R4 §21: النواة النقية — أزرار flags + خرائط/قوالب + عصا موقّعة + صفير/فلتر + إيماءة — gyro_core.rs
+✅ R4 §21: المستهلك — بوابة الوضع/الجلسة + حواف الحالة الكاملة + تفكيك حتمي — gyro.rs
+✅ R4 §21: live.rs يوجه gyro للمستهلك (بلا مسار حقن موازٍ — نفس الدفعة) — live.rs
+✅ R4 §21: apply_key بضغط/إفلات الجيمباد (state press/release — توافق §13) — input_exec.rs
+✅ R4 §21: نهاية الجلسة تفكك المفاتيح (input.rs ResetDrag → gyro::session_ended) — input.rs + main.rs
+✅ R4 §21: Flutter عميل (أزرار flags + إمساك + بث 100Hz نشط حصرًا) — live_channel + controller_service
+✅ R4 §21: شاشة التحكم المتقدم (ثلاثة أوضاع + معايرة + إمساك + مؤقت باهتزاز) — gyro_screen.dart
+✅ R4 §21: المقدمون وبطاقة الدخول والأحداث التعاقدية — providers + controller_screen + protocol
+✅ R4 §21: القاموسان gyro.* (ar/en) — i18n
+✅ R4 §21: محرك التحقق يضمّن النواة والمستهلك حرفيًا (تجريد #[tauri::command]) — gyro-verify
+✅ R4 §21: الفحص الميداني موثق (e2e-checklist §15 — جيمباد/ماوس/عرض حقيقي) — e2e-checklist §15
+== R4 §21-ت: توسعة التحكم المتقدم (gyro) ==
+✅ R4 §21-ت: أزرار الجيمباد الستة (A/B/X/Y/L/R) + BTN_COUNT=6 — gyro_core buttons
+✅ R4 §21-ت: FLAG_GRAB=0b0100_0000 (bit6 الإمساك) + BTN_MASK=0b0011_1111 (bits0-5) — الحزم كما هي — gyro_core flags
+✅ R4 §21-ت: الأوضاع الأربعة (off/gamepad/airmouse/presenter) بأسمائها — gyro_core modes
+✅ R4 §21-ت: القوالب الأربعة بأسمائها (platformer/racing/fighting/custom) — gyro_core templates
+✅ R4 §21-ت: النافذة الميتة — افتراضي 18.0° ونطاق مقبول 5..45° — gyro_core deadzone
+✅ R4 §21-ت: حساسية الماوس الهوائي 0.5..5.0 مقيدة — gyro_core sens
+✅ R4 §21-ت: تنقية المفاتيح — محرف ASCII مرئي واحد (33..126) أو مسافة حصرًا — gyro_core key sanitize
+✅ R4 §21-ت: مفاتيح مسماة معتمدة (ctrl/pageup/pagedown/home/end/f5/f11) — gyro_core named keys
+✅ R4 §21-ت: axis_step نقية — حافة واحدة لكل اتجاه (بلا رجفان ولا ضغط مزدوج) — gyro_core axis
+✅ R4 §21-ت: عصا التقليب flip_step بهيستيريسيس (0.6× النافذة — بلا حواف عمياء) — gyro_core flip
+✅ R4 §21-ت: calibrate_zero نقية (نقطة صفير من عينات ساكنة) — gyro_core zero
+✅ R4 §21-ت: فلتر الهواء air_filter (تنعيم أُسي حول نقطة الصفير) — gyro_core filter
+✅ R4 §21-ت: إيماءة المعصم tilt_gesture + حالة مسلحة (تبريد يمنع التتابع الأعمى) — gyro_core gesture
+✅ R4 §21-ت: الليزر إعداد presenter (Ctrl+L عند البدء — PowerPoint 2010+) ورفض قيمة غير منطقية — gyro_core laser
+✅ R4 §21-ت: بوابة المستهلك المزدوجة (MODE_OFF || !is_active → لا أحداث خارج جلسة موثوقة) — gyro.rs gate
+✅ R4 §21-ت: الضغط المستمر press/release على الحافة (استمرار = تكرار حقيقي في اللعبة) — gyro.rs edge
+✅ R4 §21-ت: التفكيك الحتمي — release_all_events + session_ended (نهاية الجلسة تفكك كل ضغط) — gyro.rs teardown
+✅ R4 §21-ت: apply_presenter — next→PageDown · prev→PageUp · start→F5 · stop→Esc · black→b — input_exec presenter
+✅ R4 §21-ت: خريطة المفاتيح المسماة للتنفيذ (PageUp/PageDown/F5 → enigo) — input_exec key map
+✅ R4 §21-ت: شاشة التحكم — الأوضاع الثلاثة كثوابت + معايرة + اهتزاز إنجاز — gyro_screen
+✅ R4 §21-ت: بث الحساسات — القناة النظامية 50ms للمعاينة والبث الحي منفصل (sendGyroRaw) — controller_service sensors
+✅ R4 §21-ت: البث النشط حصرًا فوق القناة الحية (!sessionReadyForLive — لا إغراق فوق TCP) — controller_service live gate
+✅ R4 §21-ت: العقد §21 — 100Hz + هيستيريسيس + rc:gyro:cmd/state في بروتوكول Flutter — contract + protocol.dart
+✅ R4 §21-ت: القائمة الميدانية §15 (SuperTux/SuperTuxKart + PowerPoint + لا مفتاح عالق + Impress بصدق) — e2e-checklist §15
+✅ R4 §21-ت: القاموسان gyro.* (ar/en) — عصا التقليب/نقطة الصفير/معايرة/zero point — i18n §21
+✅ R4 §21-ت: محرك gyro-verify يختبر flip/axis/صفير فعليًا (متجهات النواة النقية) — gyro-verify vectors
+✅ R4 §21-ت: اختبارات وحدة داخل gyro_core (نقية — تعمل في CI بلا عتاد) — gyro_core unit tests
+✅ R4 §21-ت: live.rs يوجه gyro للمستهلك بالدفعة نفسها (batch.extend — بلا مسار موازٍ) — gyro path
+✅ R4 §21-ت: نهاية الجلسة تستدعي gyro::session_ended من input.rs (مسار ResetDrag) — gyro.rs signature
+== §22: الأجهزة الافتراضية (cast:state + /tv + حزمة الكاميرا + التشخيص) ==
+✅ §22: cast:state من دور pc يصل دور tv (media/target/playing كما هي) — {"active":true,"target":"tv","sender":"Galaxy-S24","playing":true,"volume":90,"muted":false,"media":{"device":"galaxy-s24","path":"/Movies/e2e-cast.mp4","name":"E2E Cast","kind":"video"},"at":1792540847810}
+✅ §22: cast:cmd يمر للمستقبل (seek/value/target كما أُرسلت) — {"action":"seek","value":12,"target":"tv","at":1792540847815}
+✅ §22: GET /tv → 200 وشاشة الاستقبال (النص + الوجهة Nexus-TV) — len=11249
+✅ §22: مثبّت akvirtualcamera الرسمي ملتزم (vcam/ — NSIS 9.3.1 غير معدَّل) — bytes=3765589
+✅ §22: GPL-3.0 + SHA256 + provenance مع الحزمة — vcam/ bundle
+✅ §22: tauri.conf resources تشمل vcam — ["resources/server","resources/comms","resources/gateway","vdd","vcam"]
+✅ §22: hook التثبيت — /S صامت + غير حاجز داخل RunningX64 — installer-hooks §22
+✅ §22: hook التوفير — السجل (installPath) ثم add-device -i NexusLinkCam + add-format YUY2 ×3 + update — provision §22
+✅ §22: أوامر Tauri الثلاثة مسجلة (vcam_install + open_player + open_sound_settings) — main.rs §22
+✅ §22: media.rs — التوفير المعادلي + تحقق SHA256 (certutil) + m3u + سلالم السلامة — media.rs §22
+✅ §22: media.rs — كشف السجل أولًا (installPath) + نسخة -v + OBS + devices -p — media.rs detection
+✅ §22: media_core.rs — الاسم التعاقدي + الصيغ + خطة argv مهيكلة (الوصف وسيط واحد) + لا load — media_core §22
+✅ §22: cast-tab — «افتح في مشغل النظام» (media_open_player) + توثيق /tv والحد الصادق — cast-tab §22
+✅ §22: media-store يعلن cast:state (بداية/نهاية/تشغيل/صوت/موضع مقيّد) — media-store §22
+✅ §22: لوحة الأدوات — تبويب vdev + فحصا التشخيص + زر التثبيت + إعدادات الصوت — tools §22
+✅ §22: صفحة /tv — دور tv + بناء تيار /api/preview + استجابة cast:cmd — /tv page
+✅ §22: جسر 3005 يمرر cast:state/cast:cmd (القناة الشفافة القائمة) — media-bridge §22
+✅ §22: العقد موثق (الحزمة/التوفير/السجل/-v/OBS/m3u//tv/التشخيص) — contract §22
+✅ §22: e2e-checklist §16 — اختبار Meet الميداني موثق خطوة-خطوة — checklist §16
+✅ §22: القاموسان — مفاتيح اللوحة الجديدة مترجمة (ar→en) — i18n §22
+✅ §22: media-verify يضمّن media_core حرفيًا ويغطي §22 (خطة/سجل/نسخة/m3u/v2) — media-verify §22
+== R4 §22-ت: توسعة الأجهزة الافتراضية (vcam/vmic/m3u) ==
+✅ R4 §22-ت: صيغ الكاميرا الثلاث المعلنة (YUY2 720p30 · 1080p30 · 480p30 — الأول افتراضي) — media_core formats
+✅ R4 §22-ت: خطة التوفير idempotent — إن الاسم موجود لا شيء؛ وإلا add-device ثم @NEW@ يُستبدل بمعرف add-device -p ثم add-format ×3 ثم update — media_core plan
+✅ R4 §22-ت: akvcam_stream_args — بروتوكول stdin الحرفي (stream -f FPS DEVICE YUY2 W H) — media_core stream args
+✅ R4 §22-ت: محللات الأجهزة النقية (parse_akvcam_devices + parse_v4l2_entries + match_audio_output) — media_core parsers
+✅ R4 §22-ت: m3u مؤقت — #EXTM3U + #EXTINF باسم معقّم (لا حقن أسطر) — media_core m3u
+✅ R4 §22-ت: الكشف — السجل أولًا (HKLM installPath) ثم المسارات + نسخة -v + OBS (obs64.exe) + modinfo v4l2loopback — media.rs detection
+✅ R4 §22-ت: التثبيت ببصمة إلزامية — certutil SHA256 يرفض عند الاختلاف + UAC (Verb RunAs /S) + ماك يفتح pkg + لينكس خطأ صادق — media.rs install
+✅ R4 §22-ت: مشغل النظام عبر m3u في temp — start (ويندوز) / open (ماك) / xdg-open (لينكس) — media.rs player
+✅ R4 §22-ت: إعدادات صوت النظام لكل منصة (ms-settings:sound / Sound.prefPane / pavucontrol) — media.rs sound
+✅ R4 §22-ت: الضمانة المشتركة — provision_camera_now (بداية الويب كام + بعد التثبيت) واختيار وصفنا حصرًا — media.rs guarantee
+✅ R4 §22-ت: قائمة أوامر cam:cmd البيضاء العشرة (cam-start…watch-stop) — media-bridge CAM_CMDS
+✅ R4 §22-ت: تنقية cam:cmd — الحقول الاختيارية محدودة (camera front/back · on · sensitivity 0.01..1) — media-bridge sanitize
+✅ R4 §22-ت: كتم تكرار cast — castLastPos (موضع مكرر ضمن 1 وحدة لا يُبث) — media-store clamp
+✅ R4 §22-ت: لوحة الأدوات — تبويب «الأجهزة الافتراضية» بعنوانه وحالته وزر التثبيت — tools vdev
+✅ R4 §22-ت: حزمتا الأجهزة الافتراضية مرفقتان ببصمات الشحن (vcam/SHA256SUMS + vdd/SHA256SUMS) — bundle checksums
+✅ R4 §22-ت: مثبّت akvirtualcamera الرسمي بحجم حقيقي (>3MB — 9.3.1 غير معدَّل) — bytes=3765589
+✅ R4 §22-ت: العقد §22 — stream -f (بروتوكول stdin) + idempotent موثقة — contract §22
+✅ R4 §22-ت: القائمة الميدانية §16 (Meet + أزرار /tv + v4l2loopback لينكس) — e2e-checklist §16
+✅ R4 §22-ت: media-verify يغطي m3u والخطة (9 مواضع) — الإثبات التنفيذي للنقية — media-verify m3u
+✅ R4 §22-ت: media.rs لا يستخدم AkVCamManager load المدمّر أبدًا (يمسح كل أجهزة المستخدم) — no destructive load
+✅ R4 §22-ت: vcam_driver_status_v2 — النسخة/الواجهة/الأجهزة/OBS/loopback بحقول v1 محفوظة — media.rs status v2
+== ] FA-files: OS file integration ==
+✅ FA-files: realpath يعيد مسارًا حقيقيًا موجودًا — {"ok":true,"device":"pc-office","path":"/Inbox/e2e-reveal.txt","realPath":"/home/z/nexuslink/.next/s
+✅ FA-files: جهاز غير معروف → 404 — status=404
+✅ FA-files: hello-phone media يُسجّل النقطة (ip/port/token) — {"deviceId":"e2e-files-agent","lanIp":"127.0.0.1","port":3010,"token":"abcdef1234567890abcdef1234567890","at":1792540847889}
+✅ FA-files: guard:media يحدّث النقطة بعد إعادة تشغيل الخدمة — {"deviceId":"e2e-files-agent","lanIp":"127.0.0.1","port":3011,"token":"fedcba0987654321fedcba0987654321","at":1792540848595}
+✅ FA-files: send-file من /Outbox عرض حي للوكيل (queued) — {"id":"tx_mvhcjf83_jirub","deviceId":"e2e-files-agent","deviceName":"e2e-files-agent","direction":"out","fileN
+✅ FA-files: tx:offer وصل بـ srcVPath مزامنة صحيح — {"id":"tx_mvhcjf83_jirub","fileName":"file.txt","size":30,"mime":"text/plain","from":"PC-OFFICE","srcDeviceId":"pc-offic
+✅ FA-files: دورة العرض كاملة (accept→state) → مهمة done — {"id":"tx_mvhcjf83_jirub","deviceId":"e2e-files-agent","deviceName":"e2e-files-agent","direction":"out","fileName":"file
+✅ FA-files: /api/preview يلبّي Range 206 — status=206 len=5
+✅ FA-files: PUT sync يقبل وينقّي الفاسد — {"pairs":[{"id":"e2e-pair","name":"تجربة","localDir":"/tmp/nexus-sync-e2e","phoneDir":"/Sync/e2e-pair","enabled":true}]}
+✅ FA-files: status.desktop.sync يعرض الزوج للمراقب الأصلي — {"pairs":[{"id":"e2e-pair","name":"تجربة","localDir":"/tmp/nexus-sync-e2e","phoneDir":"/Sync/e2e-pair","enabled":true}]}
+✅ FA-files: انقطاع الهاتف يمحو نقطة الوسائط — null
+✅ العقد: §14 موثق (قائمة الزر الأيمن/Services/السحب الخارجي/الإظهار/البث/المزامنة)
+
+== FA-media: عرض الشاشة (screen:req/offer/answer/ICE) والويب كام ==
+✅ FA-media: screen:req من الهاتف يصل الكمبيوتر مع fps=60 — {"at":1792540851261,"action":"start","fps":60,"from":"phone"}
+✅ FA-media: screen:req بـ fps=90 يُرفض صامتًا
+✅ FA-media: rtc:offer kind=screen يرحّل للهاتف مع from=pc — {"kind":"screen","sdp":{"type":"offer","sdp":"v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\n"},"from":"pc"}
+✅ FA-media: rtc:answer kind=screen يرحّل للكمبيوتر — {"kind":"screen","sdp":{"type":"answer","sdp":"v=0\r\no=- 2 2 IN IP4 127.0.0.1\r\n"},"from":"phone"}
+✅ FA-media: rtc:ice (trickle) يرحّل — {"kind":"screen","candidate":{"candidate":"candidate:1 1 UDP 2122252543 192.168.1.9 50000 typ host","sdpMid":"0","sdpMLi
+✅ FA-media: cam:cmd cam-start يصل الهاتف (البند 4) — {"action":"cam-start","at":1792540852479}
+✅ FA-media: rtc:offer kind=cam (فيديو+صوت الهاتف) يرحّل للكمبيوتر — {"kind":"cam","sdp":{"type":"offer","sdp":"v=0\r\no=- 3 2 IN IP4 127.0.0.1\r\n"},"from":"phone"}
+✅ FA-media: screen:state on/w/h يبث للهاتف — {"at":1792540852490,"action":"state","fps":60,"quality":"high","on":true,"w":1920,"h":1080,"name":"E2E-PC","from":"pc"}
+✅ FA-media: PUT media يقبل الحالة الصالحة — {"screen":{"on":true,"fps":60,"quality":"ultra"},"vcam":{"video":true,"audio":true,"driver":"akvirtualcamera"}}
+✅ FA-media: PUT media fps=91 يُرفض ويُبقي آخر قيمة صالحة (60) — {"screen":{"on":true,"fps":60,"quality":"ultra"},"vcam":{"video":true,"audio":true,"driver":"akvirtualcamera"}
+✅ FA-media: status.desktop.media يعرض الحالة للشريط/الهاتف — {"screen":{"on":true,"fps":60,"quality":"ultra"},"vcam":{"video":true,"audio":true,"driver":"akvirtualcamera"}}
+✅ FA-media: rc:pointer صالح يمرر مع __src=controller + مطبّع — {"nx":0.5,"ny":0.25,"action":"move","__src":"controller"}
+✅ FA-media: rc:pointer فاسد (nx>1 + إجراء غريب) يُرفض صامتًا — got="__none__"
+✅ العقد: §15 موثق (kind=screen + scap/x11rb + v4l2loopback/akvirtualcamera + VB-CABLE/BlackHole + rc:pointer)
+
+== R5 §24: هاتف→هاتف (ثقة + جلسة + توجيه + قطع فوري + مرآة) ==
+✅ §24: guard:agents يبث الهاتفين معرفةً (تعدد وكلاء) + sessions مصفوفة — [{"deviceId":"galaxy-s24","name":"Galaxy-S24"},{"deviceId":"redmi-note13","name":"Redmi-Note13"}]
+✅ §24: طلب بلا مطابقة هوية السوكِت → identity (ربط الهوية)
+✅ §24: لا هاتف يتحكم بنفسه أبدًا → self
+✅ §24: هدف غير مقترن → target-untrusted
+✅ §24: هدف مقترن لكنه غير حي (بلا سوكِت) → target-offline
+✅ §24: p2p:ctl-start موثوق → dev:ctl-start {from,p2p:true} يصل الهدف — {"from":"galaxy-s24","name":"Galaxy-S24","p2p":true,"at":1792540855368}
+✅ §24: تأكيد الهدف → جلسة موثقة وحالة موجهة {active,target} للمتحكم — {"active":true,"reason":"confirmed","controller":"galaxy-s24","name":"Galaxy-S24","at":1792540855370,"target":"redmi-not
+✅ §24: dev:touch tap يُوجّه للهدف داخل الجلسة (بلا صدى) — clampCoord: 0.25→0.3 (Math.round نصفه لأعلى حرفيًا) — {"op":"tap","seq":7,"x":0.5,"y":0.3}
+✅ §24: تنقية clampCoord على مسار الهاتف (1 عشري + السالب→0) — {"op":"move","x":100.5,"y":0}
+✅ §24: op خارج القائمة البيضاء (TOUCH_OPS) يُرفض صامتًا
+✅ §24: dev:text عربي UTF-8 سليم عبر التوجيه — {"text":"مرحبا من الهاتف","at":1792540856589}
+✅ §24: dev:key (back) يمر عبر KEY_ACTIONS
+✅ §24: dev:touch-ack من الهدف يُوجّه للمتحكم حصرًا — {"seq":7,"ok":true,"at":1792540856595}
+✅ §24: هاتف بلا جلسة (الهدف نفسه) → no-session (حاجز التحكم الذاتي)
+✅ §24: هدف محكوم به من جلسة قائمة → target-busy
+✅ §24: متحكم له جلسة قائمة → already-controlling
+✅ §24: p2p:ctl-stop → dev:ctl-stop{controller-stop} للهدف فورًا
+✅ §24: حالة النهاية {active:false,controller} تعود للمتحكم
+✅ §24: بعد القطع لا جلسة — الإدخال مرفوض مجددًا (حذف فعلي)
+✅ §24: انقطاع الهدف → {active:false, target-disconnected} للمتحكم فورًا
+✅ §24: انقطاع المتحكم → dev:ctl-stop{controller-disconnected} للهدف فورًا (لا جلسة يتيمة)
+✅ §24: dev:screen من وكيل ثالث → guard:screen موسوم deviceId=ipad-pro — {"w":2048,"h":2732,"density":264,"deviceId":"ipad-pro","at":1792540858472}
+✅ §24: وسم المرسل نفسه (1080×2400 @440 → deviceId=redmi-note13)
+✅ §24: rtc:offer kind=mirror من الناشر يصل العارض الهاتفي (from=phone) — {"kind":"mirror","sdp":{"type":"offer","sdp":"v=0\r\no=- 9 2 IN IP4 127.0.0.1\r\n"},"from":"phone"}
+✅ §24: rtc:answer kind=mirror من العارض يعود للناشر (أول إجابة §4.3)
+✅ §24: rtc:ice kind=mirror يرحّل بين الهاتفين — {"kind":"mirror","candidate":{"candidate":"candidate:9 1 UDP 2122252543 192.168.1.20 50009 typ host"
+✅ §24/§25: العقد موثق (## 24. هاتف→هاتف + ## 25. مركز رفع القيود)
+✅ §24: P2pEvents — الهاتف يستخدم أسماء أحداث الويب نفسها (p2p:ctl-start/dev:touch/dev:text/dev:key)
+✅ §24: الجسر يوجّه (p2p:ctl-start + no-session + teardown ثنائي) — مصدر واحد للتوجيه
+✅ §24: وحدة التحكم الهاتفية — حاجز ذاتي ثانٍ (targetId==deviceId) + بوابة sessionActive للإدخال
+✅ §24: ScreenShareService في المانيفست — FGS بنوع mediaProjection وغير مُصدَّرة
+✅ §24: خدمة المشاركة — FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION + إيقاف صريح (ACTION_STOP)
+✅ §24/§25: MainActivity — startScreenShareService + openAppDetails + restrictedSettingsStatus (AppOps الحرفي)
+✅ §24: مسار المشاركة التعاقدي — موافقة النظام أولًا ثم FGS ثم getDisplayMedia (بلا حوار ثانٍ)
+✅ §24: عارض الويب يتجاهل kind=mirror حرفيًا (الكمبيوتر ليس عارض المرآة)
+✅ §25: مركز رفع القيود — فحص AppOps + زر صفحة التطبيق + خطوات الفك
+✅ §24/§25: ترجمات AR/EN متوازية لكل مفاتيح الجولة 5 (p2p/unblock/mirror/settings)
+✅ §24/§25: القائمة الميدانية — اختبار هاتفين حقيقيين + خطوات الفك على جهاز 13+
+✅ §16: GET /api/desktop/settings يعيد appLock+idle+updater — {"ok":true,"appLock":{"enabled":false,"idleLockMin":0,"biometric":false,"hasPin":false},"idle":{"optMinutes":5
+✅ §16: PUT صالح يُحفظ ويُعاد (نفس SQLite) — {"ok":true,"appLock":{"enabled":true,"idleLockMin":15,"biometric":false,"hasPin":false},"idle":{"optMinutes":3,"reducePolling":tru
+✅ §16: فاسد يُنقى (خارج النطاق ⇒ افتراضي — رفض لا حصر) — {"ok":true,"appLock":{"enabled":true,"idleLockMin":0,"biometric":false,"hasPin":false},"idle":{"optMinutes":5,"reducePolling":true
+✅ §16: POST /api/desktop/audit يقبل native-* — {"ok":true}
+✅ §16: فعل غير native يُرفض من المسار الأصلي (400) — HTTP 400
+✅ §16: GET يعيد الحدث المدقق (مرشح severity=info) — count=7
+   [audit-probe] ok=true err=-
+✅ §16: نقل مسار السيرفر يُدقَّق (transfer مرئي في واجهة المراجعة) — before=2 after=3
+✅ §16: DELETE يمسح native-* فقط (تدقيق FA-10 لا يُمس) — {"ok":true,"deleted":1}
+✅ §16: status.desktop.hardening (appLock/idle/updater) — {"appLock":{"enabled":false,"idleLockMin":0,"biometric":false,"hasPin":false},"idle":{"optMinutes":5,"reducePolling":tru
+✅ §16: /api/version — current موحّد مع package.json + سجل إصدارات حقيقي — {"current":"1.2.0","pkg":"1.2.0","entries":3}
+✅ §16: diag يفحص منافذ §1 الثمانية (النواة + البوابة حياة) — 3000:✓ 3003:✓ 3004:✓ 3005:✓ 3006:✓ 3007:✓ 3009:✓ 81:✓
+✅ §16: tauri.conf — updater endpoints+pubkey+createUpdaterArtifacts+إصدار موحّد مع package.json — tauri=1.2.0 pkg=1.2.0
+✅ §16: lock.html ضمن frontendDist ويستدعي أوامر القفل — lock.html
+✅ §16: بادئة native- حصرية للطبقة الأصلية (المسار السيرفي بلا بادئة) — desktop-hardening.ts
+✅ العقد: §16 موثق (قفل PIN+بصمة + محدّث موقّع + تدقيق native-* + خمول + تشخيص أصلي + نفس SQLite)
+✅ §17: release.yml — أمر بناء Tauri حقيقي (لا echo) بوصفة standalone+resources+sidecar
+✅ §17: release.yml — مصفوفة الصيغ: win(nsis msi) · linux(deb appimage) · mac(dmg app)
+✅ §17: release.yml — NO_STRIP (linuxdeploy .relr.dyn) + تفعيل VBScript (WiX ICE على runners 2026)
+✅ §17: G-28 — حذف متغيرات musl من node_modules المضمنة (linuxdeploy يفشل على ELF musl)
+✅ §17: وصفا الحزمة ASCII نقيان (LGHT0311: قاعدة MSI code page 1252 لا تشفر العربية)
+✅ §17: G-30 — procman data_root + NEXUS_DATA_ROOT للعمليات الثلاث + فك data/ في notify
+✅ §17: G-30 — data-root.ts (env مع fallback cwd/data) + مستهلكو nexusStorageRoot
+✅ §17: G-29 — تقليم standalone بkeep-list (تسرّب شجرة المستودع + أسماء صينية كسرت MSI)
+✅ §17: release.yml — خطوة Portable ZIP (تجميع بنفس تخطيط NSIS + bsdtar + README)
+✅ §17: release.yml — توقيع updater شرطي + latest.json على الوسوم + SHA256SUMS
+✅ §17: release.yml — dispatch = artifacts فقط (إرفاق يدوي opt-in) والوسم = إرفاق تلقائي
+✅ §17: release.yml — env لينكس المجرّبة (APPIMAGE_EXTRACT_AND_RUN + CMAKE_POLICY_VERSION_MINIMUM=3.5)
+✅ §17: tauri.conf targets الخمسة (deb nsis msi appimage dmg) + إصدار موحّد مع package.json — deb,nsis,msi,appimage,dmg tauri=1.2.0 pkg=1.2.0
+✅ §17: procman resolve_resources — <rd>/resources/server/server.js أولًا (الحزم المثبتة) ثم المسطّح ثم exe_dir ثم التطوير
+✅ §17: PORTABLE-README.txt — فك وشغّل + متطلب WebView2 + بلا Registry
+✅ §17: BUILD.md — NSIS+MSI+Portable وAppImage+deb وDMG بأوامر حقيقية
+✅ §17: BUILD.md — توقيع ماك (Developer ID + codesign + notarytool) + مفاتيح updater
+✅ §17: BUILD.md — جدول توحيد الإصدار بالملفات الأربعة + قاعدة عدم استبدال أصول منشورة
+✅ §17: README §0 — المركز يعمل فور الإقلاع + جدول حزم Releases + QR + portable
+✅ §17: e2e-checklist — اختبار التثبيت النظيف + أقسام كل الميزات مع عمود نتيجة
+✅ §17: توحيد الإصدار — tauri.conf + Cargo.toml + pubspec + package.json على إصدار واحد — tauri=1.2.0 cargo=1.2.0 pubspec=1.2.0 pkg=1.2.0
+✅ العقد: §17 موثق (مصفوفة الحزم + تخطيط الموارد بالبادئة + resolve_resources + latest.json + dispatch opt-in)
+✅ §23: توحيد الإصدار — package.json + tauri.conf + Cargo.toml + Cargo.lock + pubspec + gradle fallback على إصدار واحد — pkg=1.2.0 tauri=1.2.0 cargo=1.2.0 lock=1.2.0 pub=1.2.0
+✅ §23: versionCode أندرويد تقدّم مع الإصدار (pubspec يحمل VER+code بترقية صحيحة) — code=3 ver=1.2.0
+✅ §23: /api/version — CURRENT مطابق للإصدار الموحّد + سجل محلي يحوي الإصدار الحالي وأقدم منه — ver=1.2.0 tags=tag: "v1.2.0,tag: "v1.1.0,tag: "v1.0.0
+✅ §23: updater.rs — User-Agent من CARGO_PKG_VERSION (بلا إصدار مثبت يدويًا) — updater UA
+✅ §23: ملاحظات الإصدار v1.1.0 — قسمي العربية وEnglish بميزات الجولة 4 الحقيقية — release notes
+✅ §23: ملاحظات الإصدار توثق مسار الترقية 1.0.0 → 1.1.0 وحفظ الإعدادات — release notes upgrade
+✅ §23: release.yml — VERSION مطابق للإصدار الموحّد + وسم الإرفاق اليدوي عليه — ver=1.2.0
+✅ §23: release.yml — حارس ملاحظات الإصدار (فشل مبكر بلا العربية/English) + body_path على الوسم — release.yml notes
+✅ §23: release.yml — توليد latest.json من توقيعات البناء (3 منصات) + SHA256SUMS + مسودة — release.yml latest.json
+✅ §23: db.ts — ضمان ترقية إضافي (CREATE TABLE IF NOT EXISTS DesktopSetting) بلا مساس بالبيانات — db.ts ensure
+✅ §23: مسار الإعدادات ينتظر الضمان قبل القراءة والكتابة (ترقية 1.0.0 → بلا تلف) — hardening dbReady
+✅ §23: قاعدة المستخدم تُزرع مرة واحدة ولا تُستبدل عند التحديث (if !db_path.exists → seed) — procman seed
+✅ §23: بذرة الحزمة تُبنى من db/custom.db (build-resources) — 1.1.0 يأتي بجدول الإعدادات جاهزًا — seed copy
+✅ §23: build-latest-json-v1.1.0.sh — توقيع الأصول الثلاثة وبناء latest.json بنفس النمط الأخضر — latest.json builder
+✅ §23: updater-path-verify.mjs — نقطة الفحص الحية + minisign ضد pubkey + semver + محاكاة قاعدة قديمة — updater path verify
+✅ §23: updater.rs الإقلاعي — الفحص الوحيد للخارج خلف بوابة autoCheck من المخزن المشترك — updater startup gate
+✅ §23: حارس release.yml يفشل مبكرًا بلا قسمي العربية وEnglish حرفيًا — notes guard literals
+✅ §23: العقد §23 موثق (توحيد الإصدار + ملاحظات + latest.json + مسار الترقية + ضمان الإعدادات) — contract §23
+✅ §23: القائمة الميدانية §17 — اختبار الترقية الحقيقي (1.0.0 → إشعار → ترقية → إعدادات سليمة) — checklist §17
+
+== G-1: pairing secret verification ==
+✅ G-1: pair قبل إصدار أي رمز → 403 reason=no-window (لا اقتران أعمى) — HTTP 403 reason=no-window
+✅ G-1: QR يعيد ttlMs=600000 وexpiresAt مستقبليًا — exp-in=599926ms
+✅ G-1: QR الحمولة تحمل السر كاملًا (32 hex) للعميل الممسِك — code=231586
+✅ G-1: pair بلا سر (نافذة نشطة) → 403 reason=missing — HTTP 403
+✅ G-1: pair بسر فاسد → 403 reason=invalid — HTTP 403
+✅ G-1: pair بسر QR الصحيح → 200 ok:true — HTTP 200
+✅ G-1: الجهاز المقترن بسر صحيح trusted:true (سلسلة الثقة §13/§24 سليمة)
+✅ G-1: إعادة تسجيل نفس الجهاز بسر صحيح → 200 (idempotent بعد التحقق) — HTTP 200 battery=65
+✅ G-1: إعادة تسجيل بلا سر → 403 (منع اختطاف هوية جهاز معروف) — HTTP 403
+✅ G-1: pair بالسر القديم بعد إصدار رمز جديد → 403 reason=invalid (تدوير) — HTTP 403
+✅ G-1: تدقيق pairing-reject مرئي (≥5 رفض بأسبابها — severity warn) — rejects=5
+✅ G-1: تدقيق pairing مرئي (≥2 نجاح — جديد + إعادة تسجيل) — accepts=2
+✅ G-1: تفاصيل الرفض تحمل السبب الآلي (reason) للمطابقة — reasons in detail
+✅ G-1: devices.ts — PAIRING_TTL_MS + timingSafeEqual + أسباب الرفع الأربعة — verifier source
+✅ G-1: route.ts — التحقق أعلى pair (قبل مسارَي الجديد والموجود) + 403 مسبب + تدقيق — pair route source
+✅ G-1: qr/route.ts — ttlMs/expiresAt في الاستجابة (شفافية النافذة) — qr source
+✅ G-1: PairDialog — يرسل السر ويعالج الرفض بإعادة إصدار تلقائية — dialog source
+✅ G-1: Flutter api — معامل secret + 403 → PairingRejectedException — flutter api
+✅ G-1: Flutter connect — الإدخال اليدوي يجلب السر من QR (عقد §7) ويمرره لـ pair — flutter provider
+✅ G-1: audit route — مفردات pairing في SERVER_ACTIONS (مرئية في المراجعة) — audit visibility
+✅ G-1: العقد §6 — صف الفجوة G-1 موثق كمُصلح مع البروتوكول — contract §6
+
+== G-37: live quality switch (smooth, no stop->req) ==
+✅ G-37: خلية LiveQoS — Arc<AtomicU32> fps + Arc<Mutex<String>> quality بـ set/snapshot — live qos cell
+✅ G-37: ScreenSess تحمل qos: LiveQoS (القيم المعروضة fps/quality تبقى مصدر screen:state) — session carries cell
+✅ G-37: حلقات الالتقاط الثلاث بلا تمريرة بالقيمة (qos: LiveQoS ×3 — لا quality: String في التواقيع) — 3 loops signature
+✅ G-37: الحلقات الثلاث تقرأ snapshot أعلى كل دورة خارجية (إعادة بناء بالقيم الجديدة) — 3 snapshot reads
+✅ G-37: media_screen_start ينشئ LiveQoS ويشاركه مع الخيط والجلسة — start wires cell
+✅ G-37: media_screen_set حي — qos.set + تحديث المعروض + rebuild مشروط + live:true + w/h للاذاعة — set is live
+✅ G-37: ملاحظة «يطبق عند إعادة البث» القديمة زالت (الحد الموثق مرفوع) — old limit gone
+✅ G-37: جسر الويب — screen:set يستدعي media_screen_set ويذيع screen:state محدثًا عند live — bridge broadcast
+✅ G-37: Flutter — الجلسة الحية ترسل screen:set (setScreenQuality) بلا stop→req — flutter smooth path
+✅ G-37: تدقيق الجولة 4 — صف الفجوة موثق كمُصلح مع خلية LiveQoS — audit row
+✅ G-37: العقد §15 — التبديل الحي موثق (LiveQoS بلا stop→req) وحد target الصادق باقٍ — contract §15
+
+== A-1: automation engine (rules over existing channels) ==
+✅ A-1: جسر الروتينات يُقلع داخل عملية Next (:3008) idempotent — بذرة القواعد ≥ 3 — rules=4
+   [comms] [mirror] youtube - YouTube
+✅ A-1: عميل auto متصل + بذرة القواعد والإحصاءات تصل (auto:state) — seed=4
+✅ A-1: سلوك — clip:push على prod (:3007) يولّد حقيقة داخل العملية ويُطلق القاعدة (auto:fired) — وصل محتوى نص من E2E-Phone إلى الحافظة — إشعار أُذيع للواجهة: e2e
+✅ A-1: التشغيل اليدوي run-now يعمل (manual:true) وينفّذ الفعل فعليًا — manual run
+✅ A-1: التعطيل يحجب مسار الحقيقة — حقنة بعد التعطيل بلا إطلاق تلقائي — enabled gate
+✅ A-1: مشغّل time.once — مؤقت المحرك يلتقط الموعد ويُطلق مرة واحدة — time.once
+✅ A-1: تعقيم المدخلات — قاعدة wol بـ MAC فاسد تُرفض برسالة (auto:rejected) — عنوان MAC يجب أن يطابق XX:XX:XX:XX:XX:XX
+✅ A-1: الحذف — القاعدتان الاختباريتان زالتا من آخر auto:state — rules deleted
+✅ A-1: المصدر — الجسر :3008 داخل Next idempotent (نمط guard) ومشغلات §26 الستة معرّفة — bridge source
+✅ A-1: المصدر — الأفعال الأربعة تعبر القنوات القائمة حرفيًا (dev:ring / clip:new / UDP WoL / auto:fired) — actions reuse channels
+✅ A-1: المصدر — ناقل حقائق داخل العملية وprod ينشر clip.received بلا أي تغيير سلكي — facts bus
+✅ A-1: المصدر — نظافة المحرك: مانع تكرار 20s + حافة بطارية بإعادة تسليح + تعقيم (MAC/طوابع/حدود) — engine hygiene
+✅ A-1: الواجهة — boot route + dock «الروتينات» + ViewId + تركيب الجذر والعرض — ui wiring
+✅ A-1: الواجهة — محرر كامل (مشغل/فعل) + تشغيل يدوي + سجل + حدود صادقة معروضة — ui editor
+✅ A-1: i18n — مفاتيح EN للتبويب في القاموس المشترك — i18n
+✅ A-1: التوثيق — العقد §26 والقائمة الميدانية — docs
+
+== HEALTH: device health center (telemetry + alerts, contract §27) ==
+✅ HEALTH: مخطط Prisma — NexusHealthSample + NexusHealthEvent بفهارس [deviceId,createdAt] و[createdAt] — schema
+✅ HEALTH: المحرك — خانقة 30ث + احتفاظ 24h + تنقية 5min + عتبات (15/150/90) — engine params
+✅ HEALTH: كشف العبورات — offline/online edge-triggered + بطارية/استجابة/تخزين مرة لكل عبور + ترسيخ أول تكة بلا أحداث — transitions
+✅ HEALTH: الربط — النبضة تشغل تكة (استيراد ديناميكي) + مسارات حالة الأجهزة تجبر تكة force — heartbeat wiring
+✅ HEALTH: المسار — GET لقطة + POST force-sample + POST report بقصّ battery 0..100 وrtt ≥ 0 — route contract
+✅ HEALTH: الواجهة — HealthPanel أعلى صفحة الأجهزة (مخططا خط + محدد نافذة + التقاط عينة + تنبيهات) — panel UI
+✅ HEALTH: الترقية الآمنة — CREATE TABLE IF NOT EXISTS للجدولين في db.ts (نمط §23 بلا مساس بالبيانات) — upgrade-safe schema
+✅ HEALTH: العقد §27 موثق (عينات/عبورات/report الحقيقي/حدود صادقة) + مؤشر §3.5 — contract §27
+✅ HEALTH: force-sample يسجل عينات فورية لكل أجهزة البذرة (≥5) بتجاوز الخانقة — recorded=6
+✅ HEALTH: لقطة 1h — سلاسل بطارية غير فارغة + ملخص galaxy-s24 بعينات — samples=4
+✅ HEALTH: report بطارية 9% → عبور low-battery warn ظاهر في التنبيهات — low-battery alert
+✅ HEALTH: تقرير مطابق ثانٍ → صفر أحداث (مرة واحدة لكل عبور — لا فيض تنبيهات) — events=0
+✅ HEALTH: report استجابة 250ms → عبور rtt-degraded warn — rtt alert
+✅ HEALTH: قطع redmi-note13 → انتقال offline warn مرصود — offline event
+✅ HEALTH: إعادة الاتصال → انتقال online info + الإتاحة محسوبة 0..100 — uptime=80
+✅ HEALTH: فلتر جهاز واحد + نافذة 6h — جهاز واحد فقط وعيناته — device filter
+✅ HEALTH: سقف النقاط ≤120 لكل جهاز + نافذة 24h مقبولة بشكل سليم — downsample cap
+
+== AUTO-HEALTH: routines × historical health triggers (§26.و) ==
+✅ AUTO-HEALTH: جسر الروتينات حي — البذرة صارت رباعية (بذرة تاريخية توضيحية معطلة) — rules=4
+✅ AUTO-HEALTH: المصدر — ثلاثة أنواع تاريخية في TriggerKind/TRIGGER_KINDS + SUSTAINED_TRIGGER_KINDS + isSustainedTrigger (وحدة آمنة للعميل) — types
+✅ AUTO-HEALTH: المصدر — المقيّم: سلسلة الدليل (مرساة/نافذة/فجوة/تقادم) + سقف 1440 + الصمت لمعروف الإبلاغ — evaluator
+✅ AUTO-HEALTH: المصدر — الجسر: تكة 15 ثانية + تسليح الحقب (sustainedArmed) + باب run-now للمستمر + تنظيف الحذف — bridge wiring
+✅ AUTO-HEALTH: الواجهة — حقل المدة + شارة «تاريخي» + الأنواع الثلاثة في المحرر — ui editor
+✅ AUTO-HEALTH: i18n — مفاتيح EN في القاموس المشترك — i18n
+✅ AUTO-HEALTH: التوثيق — العقد §26.و (سلسلة الدليل + التسليح) + القائمة الميدانية — docs
+   [comms] [mirror] youtube - YouTube
+✅ AUTO-HEALTH: القواعد الست المستمرة قُبلت وظاهرة في auto:state — everNamed=6
+✅ AUTO-HEALTH: تعقيم المدة — durationMin=2000 مرفوض مسببًا (سقف تاريخ §27 = 1440) — المدة بالدقائق يجب أن تكون بين 1 و 1440 (سقف تاريخ §27)
+❌ AUTO-HEALTH: بطارية ≤15% لمدة 60 دقيقة (تاريخ مزروع 66 دقيقة) → أُطلقت بتفصيل «مستمر» — no fire
+✅ AUTO-HEALTH: عينة مخالفة داخل المدة (80% قبل 12د) → لا إطلاق + رفض مسبب في السجل (ok=false يدوي) — fires=0 refusal=true
+✅ AUTO-HEALTH: فجوة عينات 46د > التسامح 15د → لا إطلاق (الاستمرارية غير مثبتة) — fires=0
+❌ AUTO-HEALTH: استجابة ≥200ms لمدة 60 دقيقة → أُطلقت — no fire
+❌ AUTO-HEALTH: صمت 45 دقيقة (عينة قديمة 3 ساعات) → أُطلق للجهاز المعروف الإبلاغ — no fire
+❌ AUTO-HEALTH: deviceId=null (أي جهاز) — الصمت التاريخي يجد المرشح القديم ويُطلق — no fire
+❌ AUTO-HEALTH: إعادة التسليح — صفر إطلاق خلال حقبة المخالفة + إطلاق ثانٍ بعد زوالها — total=0 inEra=0 after=0
+✅ AUTO-HEALTH: التنظيف — قواعد AH-E2E زالت من آخر auto:state — rules deleted
+✅ AUTO-HEALTH: العينات المزروعة (أجهزة الأشباح) زالت من قاعدة §27 — بلا تلويث للتاريخ الحقيقي — leftover=0
+
+== BATTERY-ABOVE: battery rising-edge trigger (§26.أ) ==
+✅ BATTERY-ABOVE: جسر الروتينات حي قبل الفحوص — rules=4
+✅ BATTERY-ABOVE: المصدر — battery.above في TriggerKind/TRIGGER_KINDS + فرع الجسر (حافة صاعدة + إعادة تسليح −5) + تعقيم العتبة للنوعين — types+bridge+sanitize
+✅ BATTERY-ABOVE: الواجهة — TRIGGER_META بأيقونة الشحن + ملخص ≥ + صف العتبة المشترك + الافتراضي 80 عند الاختيار — view
+✅ BATTERY-ABOVE: i18n — مفتاح EN في القاموس المشترك — i18n
+✅ BATTERY-ABOVE: التوثيق — العقد §26.أ (المشغلات الأحد عشر + صف الحافة الصاعدة) + القائمة الميدانية §25 — docs
+   [comms] [mirror] gmail - Gmail
+   [comms] [mirror] slack - #فريق-التطوير
+✅ BATTERY-ABOVE: عبور صاعد 70→85 عبر عتبة 80 → إطلاق بتفصيل «بلغت (العتبة 80%)» — البطارية: «galaxy-s24» بلغت 85% (العتبة 80%) — إشعار أُذيع للواجهة: BA-E2E
+✅ BATTERY-ABOVE: إعادة التسليح — هبوط 70 (تحت −5) ثم صعود 85 → إطلاق ثانٍ — fires=2
+✅ BATTERY-ABOVE: بلا عبور (86 بعد 85) — لا إطلاق ثالث (الحافة لا تعيد بلا هبوط −5) — fires=2
+✅ BATTERY-ABOVE: التنظيف — قاعدة BA-E2E زالت من آخر auto:state — rule deleted
+
+== AUTO-PERSIST: rule persistence in SQLite (§26.ز) ==
+✅ AUTO-PERSIST: جسر الروتينات حي قبل فحوص الترسيخ — rules=4
+✅ AUTO-PERSIST: المصدر — نموذج NexusAutomationRule في المخطط (payload JSON + id = معرف الذاكرة) + ترقية آمنة CREATE IF NOT EXISTS في db.ts — schema+db.ts
+✅ AUTO-PERSIST: المصدر — وحدة الترسيخ: استعادة بتحقق هيكلي (revive) + تنقية الصفوف الفاسدة + upsert/delete idempotent — persist module
+✅ AUTO-PERSIST: المصدر — الجسر: الاستعادة غير الحاجبة عند الإقلاع + ترسيخ upsert/toggle/delete + إحصاءات الإطلاق على القاعدة الحية + استهلاك time.once الماضي — bridge wiring
+✅ AUTO-PERSIST: الواجهة — بطاقة الحدود توثق الترسيخ والسجل وحده بذاكرة — ui limits
+✅ AUTO-PERSIST: i18n — مفتاحا الترسيخ في القاموس والمفتاح المهجور زال — i18n
+✅ AUTO-PERSIST: التوثيق — العقد §26.ز (الاستعادة/الدلالات) + القائمة الميدانية §22 — docs
+✅ AUTO-PERSIST: البذور الربع مرسوخة في SQLite (أول إقلاع بعد الترقية يرسّخها) — dbRows=4
+❌ AUTO-PERSIST: rule:upsert عبر المقبس → صف فوري في SQLite (id = معرف الذاكرة + payload يحمل المشغل/الفعل) — no row
+❌ AUTO-PERSIST: rule:toggle → enabled=false ترسيخًا في الصف — enabled=undefined
+❌ AUTO-PERSIST: run-now → fireCount=1 مرسوخ في الصف (الإحصاءات تعيش عبر إعادة التشغيل) — fireCount=none
+✅ AUTO-PERSIST: rule:delete → الصف زال من SQLite (الحذف رسوخًا — البذور المحذوفة لا تعود) — deleted
+✅ AUTO-PERSIST: النهاية — لا صفوف PERSIST-E2E متبقية والبذور سليمة — rows=4
+
+== SERVICE-PULSE: autonomous service pulse (§27.هـ) ==
+✅ SERVICE-PULSE: المصدر — ensureServicePulse (حارس globalThis + علم قبل المؤقت + unref) + getServicePulse + SERVICE_PULSE_MS=4000 — devices.ts
+✅ SERVICE-PULSE: المصدر — الإشعال من كل المصادر: heartbeatBump + recordHealthTick + إقلاع جسر الروتينات — ignition wiring
+✅ SERVICE-PULSE: المصدر — لقطة الصحة تصدر pulse {active, intervalMs, startedAt} — health route
+✅ SERVICE-PULSE: الواجهة — شارة النبض الحية في الترويسة + الحد الصادق أسفل اللوحة — health panel
+✅ SERVICE-PULSE: الواجهة — بطاقة حدود الروتينات توثق النبض الذاتي — automation view
+✅ SERVICE-PULSE: i18n — المفاتيح الثلاثة في القاموس — i18n
+✅ SERVICE-PULSE: التوثيق — العقد §27.هـ (الميكانيكا/الإشعال/الحدود) + تحديث حد §26.و + القائمة الميدانية §23 — docs
+✅ SERVICE-PULSE: حقل pulse في اللقطة — نشط بفاصل 4 ث (أُشعل من إقلاع الجسر بلا أي واجهة) — {"active":true,"intervalMs":4000,"startedAt":1792540859876}
+   [SERVICE-PULSE] نافذة صمت 42 ثانية — لا استدعاءات ولا متصفح…
+   [comms] [mirror] whatsapp - أحمد الغامدي
+   [comms] [phone] SMS وارد من الهلال الأحمر: تذكير: موعدك غداً الساعة 10:00 صباحاً. ل
+❌ SERVICE-PULSE: عينات وُلدت خلال صمت 42 ث — لا واجهة مفتوحة ولا استدعاءات من الحزمة (التوليد من الخادم) — fresh=0
+❌ SERVICE-PULSE: العينات الذاتية تغطي عدة أجهزة (التكة تجول على سجل الأجهزة كله) — devices=
+
+== DURABLE-ALERTS: durable fire log + unseen alerts (§26.ح) ==
+✅ DURABLE-ALERTS: جسر الروتينات حي قبل فحوص التنبيهات المرسوخة — port=3008
+✅ DURABLE-ALERTS: المصدر — نموذج NexusAutomationFire (seenAt nullable + فهارس at/ruleId) في المخطط + ترقية آمنة CREATE IF NOT EXISTS في db.ts — schema+db.ts
+✅ DURABLE-ALERTS: المصدر — وحدة الترسيخ: persistFire (إدخال + تنقية سقف 200) + loadPersistedFires (إحياء + تنقية الفاسد) + markFiresSeenDb (updateMany) — persist module
+✅ DURABLE-ALERTS: المصدر — الجسر: مرآة fireLog + ترسيخ عند كل إطلاق + رؤية عند التسليم (clientsCount) + alerts في buildState + استعادة غير حاجبة + alerts:mark-seen — bridge wiring
+✅ DURABLE-ALERTS: المصدر — الأنواع: AutoFireEntry + AutoAlertsPayload في auto:state — types
+✅ DURABLE-ALERTS: الواجهة — شارة غير مرئية + زر تعليم كمقروء + السجل الدائم + ملخص عودة من الخطاف (مرة لكل اتصال) + بند حدود صادق — ui+hook
+✅ DURABLE-ALERTS: i18n — مفاتيح التنبيهات المرسوخة في القاموس — i18n
+✅ DURABLE-ALERTS: التوثيق — العقد §26.ح (الرؤية/السقف/الحدود) + القائمة الميدانية §24 — docs
+✅ DURABLE-ALERTS: قاعدة الاختبار (موعد بعد 1.2ث) مُنشأة عبر المقبس — id=86ntcwye
+   [comms] [mirror] whatsapp - مجموعة العائلة
+❌ DURABLE-ALERTS: إطلاق بلا أي عميل متصل → صف في SQLite بـ seenAt=null (غير مرئي — التنبيه انتظر لا تبخّر) — no row
+✅ DURABLE-ALERTS: عودة الواجهة → auto:state يحمّل alerts.unseen ≥ 1 (ملخص العودة) — unseen=1 total=8
+❌ DURABLE-ALERTS: alerts:mark-seen → unseen=0 في الحالة + seenAt مرسوخ في SQLite — dbSeen=0 stateUnseen=0
+❌ DURABLE-ALERTS: run-now بعميل متصل → الإطلاق مرسوخ بـ seenAt != null (رؤية عند التسليم — لا شارة زائفة لما رأيته) — no row
+❌ DURABLE-ALERTS: السقف — بعد 205 صفوف مضافة + إطلاق → التنقية التلقائية تحافظ على ≤ 200 صف — count=240
+✅ DURABLE-ALERTS: تنظيف E2E — لا صفوف اختبارية متبقية والجدول سليم — remaining=35 del1=0 del2=205
+
+== STORAGE-SUSTAINED: storage sustained trigger (§26.ط) ==
+✅ STORAGE-SUSTAINED: جسر الروتينات حي قبل الفحوص — rules=4
+✅ STORAGE-SUSTAINED: المصدر — health.storage.sustained في الأنواع (TriggerKind/SUSTAINED/TRIGGER_KINDS = 11) + تقييم التخزين (condMet متصل فقط + describeCond + sampleValue) — types+evaluator
+✅ STORAGE-SUSTAINED: الأرشفة — عمود storagePct في المخطط + ترقية محروسة PRAGMA في db.ts + تسجيله في كل عينة — archive
+✅ STORAGE-SUSTAINED: تعقيم الجسر — المدة للمشغلات الأربع + عتبة التخزين افتراضي 90 مقصوصة 1..100 — bridge sanitize
+✅ STORAGE-SUSTAINED: الواجهة — أيقونة HardDrive + ملخص ≥ % + الافتراضي 90 عند الاختيار + صف العتبة — view
+✅ STORAGE-SUSTAINED: i18n — مفتاح EN في القاموس المشترك — i18n
+✅ STORAGE-SUSTAINED: التوثيق — العقد §26.أ (الأحد عشر) + §26.ط كاملًا + القائمة الميدانية §26 — docs
+   [comms] [mirror] whatsapp - مجموعة العائلة
+   [comms] [mirror] telegram - محمد الحربي
+   [comms] [mirror] instagram - إنستغرام
+   [comms] [phone] SMS وارد من أحمد الغامدي: أخي وين وصلت؟ الكل انتظرك
+   [comms] [phone] SMS وارد من أحمد الغامدي: أخي وين وصلت؟ الكل انتظرك
+   [comms] [mirror] telegram - محمد الحربي
+✅ STORAGE-SUSTAINED: قاعدة 75% على جهاز 80% → إطلاق من التاريخ بتفصيل «مستمر منذ … وفق التاريخ المسجل» — تخزين «redmi-note13» فوق 75% مستمر منذ 1 دقيقة وفق التاريخ المسجل (3 عينة دليل) — إشعار أُ
+✅ STORAGE-SUSTAINED: لا إطلاق لقاعدة 85% (80% < 85) — التاريخ الصادق يمنع الزائف — fires=SS-E2E-full:true
+✅ STORAGE-SUSTAINED: run-now لقاعدة 85% → رفض صادق ok=false في السجل بتفصيل «مخالف (80%)» (يُرى من auto:state — نمط AUTO-HEALTH) — تشغيل يدوي: التاريخ الحالي لا يثبت استمرار الشرط — تخزين «redmi-note13» فوق 85%:
+✅ STORAGE-SUSTAINED: تعقيم المدة — 5000 دقيقة مرفوضة بتفصيل السقف 1440 — المدة بالدقائق يجب أن تكون بين 1 و 1440 (سقف تاريخ §27)
+❌ STORAGE-SUSTAINED: الأرشفة الحية — آخر عينات redmi-note-13 كلها تحمل storagePct=80 (تُكتب مع كل عينة) — n=0 vals=
+✅ STORAGE-SUSTAINED: التنظيف — قاعدتا SS-E2E زالتا من آخر auto:state — rules deleted
+
+== TEST-TRIGGER: live history test from the editor (§26.ي) ==
+✅ TEST-TRIGGER: جسر الروتينات حي قبل الفحوص — rules=4
+✅ TEST-TRIGGER: المصدر — الجسر: معالج rule:test (حارس النوع التاريخي + sanitizeTrigger المشترك + evalSustainedTrigger) ونتيجة auto:test-result للمطالب حصرًا بلا بث — bridge handler
+✅ TEST-TRIGGER: المصدر — دلالة «لا أثر»: معالج rule:test لا يحتوي pushLog ولا persistFire ولا broadcastState ولا مسًّا للتسليح — no-trace semantics
+✅ TEST-TRIGGER: المصدر — الأنواع: AutoTestResult (ok/satisfied/reason/evidence) في وحدة آمنة للعميل + العميل autoTestTrigger يبث rule:test — types+client
+✅ TEST-TRIGGER: الواجهة — زر الفحص + لوحة النتيجة (حكم/سبب/رقائق) + شارة القِدم + قائمة الأجهزة المنسدلة والمعرّف اليدوي — view
+✅ TEST-TRIGGER: i18n — مفاتيح EN في القاموس المشترك — i18n
+✅ TEST-TRIGGER: التوثيق — العقد §26.ي كاملًا + بند §26.د + القائمة الميدانية §27 — docs
+❌ TEST-TRIGGER: فحص تاريخ مستوفى — satisfied=true بتفصيل «مستمر منذ … وفق التاريخ المسجل» + دليل 3 عينات — بطارية «tt-e2e-full» تحت 15%: لا دليل تاريخي يسبق بداية المدة — لا يمكن إثبات الاستمرارية 
+❌ TEST-TRIGGER: عينة مخالفة داخل المدة — satisfied=false بسبب صادق «عينة مخالفة (90% قبل 0 دقيقة)» — بطارية «tt-e2e-mixed» تحت 15%: لا دليل تاريخي يسبق بداية المدة — لا يمكن إثبات الاستمرارية
+✅ TEST-TRIGGER: جهاز بلا عينات — satisfied=false بسبب «لا دليل تاريخي يسبق بداية المدة» (حد §26.و ظاهر لا مخفي) — بطارية «tt-e2e-empty» تحت 15%: لا دليل تاريخي يسبق بداية المدة — لا يمكن إثبات الاستمرارية
+✅ TEST-TRIGGER: رفض التعقيم — مدة 5000 دقيقة ok=false بتفصيل السقف 1440 — المدة بالدقائق يجب أن تكون بين 1 و 1440 (سقف تاريخ §27)
+✅ TEST-TRIGGER: رفض النوع — مشغل لحظي ok=false «فحص التاريخ متاح للمشغلات التاريخية المستمرة فقط» — فحص التاريخ متاح للمشغلات التاريخية المستمرة فقط
+✅ TEST-TRIGGER: دلالة «لا أثر» حية — الحالة قبل/بعد الفحوص متطابقة حرفيًا (لقطة عبر اتصال جديد) + صفر بث auto:state أثناء الفحوص — before={"rules":4,"log":20,"total":11} after={"rules":4,"log":20,"total":11} broadcasts=0
+✅ TEST-TRIGGER: التنظيف — عينات أجهزة tt-e2e-* زالت بلا بقايا (لا قواعد أُنشئت أصلًا — الفحص قراءة محضة) — deleted=6 leftover=0
+== [SEC] security hardening: gateway allowlist + trust gates + CORS ==
+✅ SEC/source: البوابة بقائمة سماح (GATEWAY_ALLOW + ALLOW.has — لا قفز لأي منفذ) — mini-services/gateway/index.cjs
+✅ SEC/source: البوابة تمرر x-gw-client-ip في HTTP وWS upgrade (استبدال حرفيًا — لا ثقة بترويسة عميل) — proxyHttp + proxyUpgrade
+✅ SEC/source: الجسر المدمج — desktop:register لعميل محلي حصرًا (isLocalSocket → local-only) — remote-bridge.ts
+✅ SEC/source: الجسر المدمج — rc:power/rc:wol يحقنان __src ويرفضان المجهول (نمط §13) — remote-bridge.ts
+✅ SEC/source: الجسر المدمج — rc:handoff بوابة ثقة (مقترن/واجهة الكمبيوتر حصرًا) — remote-bridge.ts
+✅ SEC/source: المرآة المستقلة — نفس البوابات (local-only + __src + originAllowed بلا *) — remote-service/index.ts
+✅ SEC/source: نقطة التنفيذ (webview) — onRcPower يبوّب __src بنفس دلالات onRcInput — desktop-bridge.tsx
+✅ SEC/source: صفر origin:"*" في الجسور الثمانية (socketCors/allowlist في كلها) — remaining=0
+✅ SEC/live: البوابة ترفض XTransformPort=22 (خارج قائمة السماح) بـ 403 port-not-allowed — code=403
+✅ SEC/live: البوابة ترفض منفذًا اعتباطيًا آخر (9300) — لا نفق مسح شبكة — code=403
+✅ SEC/live: المسار المشروع سالم — XTransformPort=3003/status → role=comms — role=comms
+✅ SEC/live: مصافحة comms بـ Origin خارجي — لا ترويسة سماح له (المتصفح يحجب) — acao=null code=200
+✅ SEC/live: مصافحة comms بـ Origin محلي — مسموحة بترويسة صريحة — acao=http://127.0.0.1:8180
+✅ SEC/live: سوكِت مجهول → rc:power {shutdown} → rc:rejected(untrusted) حصرًا له — {"reason":"untrusted","ev":"rc:power"}
+✅ SEC/live: صفر ترحيل — دور الكمبيوتر المسجل لا يستقبل rc:power من المجهول إطلاقًا — no relay
+✅ SEC/live: انتحال desktop:state {power:off} من المجهول يُتجاهل — الحالة تبقى on — power=on
+✅ SEC/live: سوكِت من عنوان الشبكة (محاكاة LAN) → desktop:register → رفض local-only — ip=21.0.21.170 got={"reason":"local-only","ev":"desktop:register"}
+✅ SEC/live: تزييف x-gw-client-ip عبر البوابة من عميل شبكي — البوابة تستبدلها فالرفض local-only قائم — got={"reason":"local-only","ev":"desktop:register"}
+== [SEC-F6] unified clipboard over the E2EE channel ==
+✅ SEC-F6/source: بث الحافظة بقواعد هوية — broadcastClip تفرّق isLocalSocket (كامل للجهاز المحلي / بيانات وصفية للشبكة) — productivity-bridge.ts
+✅ SEC-F6/source: المسارات الثلاثة عبر البث الموحد — clip:push وprodInjectClip وprodEmitClip (لا io.emit خام للحافظة) — productivity-bridge.ts
+✅ SEC-F6/source: REST POST لا يبث clip:new خامًا — prodEmitClip في المسار — api/prod/clipboard/route.ts
+✅ SEC-F6/source: مُرحّل الإرسال المشفر — مقاطع pc-office النصية → sendSecureClip هادئًا (لا تمرير لما أصله الهاتف) — use-prod-bridge.ts
+✅ SEC-F6/source: مستقبل clip ببوابة صلاحية clipboard — رفض perm-denied + تدقيق — use-sec-bridge.ts
+✅ SEC-F6/source: الهاتف الحقيقي — SecChannel يكتب الحافظة المشفرة فورًا + حرس الحلقة clipLastFromPc + applied — SecChannel.kt
+✅ SEC-F6/live: دفع REST سليم (المسار الموحد prodEmitClip) — id=cmvhcrnwb006rszmucem1cfuh
+✅ SEC-F6/live: العميل المحلي (loopback) يستلم المحتوى الكامل — سلوك الحافظة الموحدة سليم — len=34
+✅ SEC-F6/live: سوكِت الشبكة (LAN) بيانات وصفية حصرًا — content:"" + encrypted:true + delivery:"e2ee" — {"content":"","encrypted":true,"delivery":"e2ee"}
+✅ SEC-F6/live: صفر تسريب — الإطار الواصل للشبكة لا يحمل الإبرة بأي شكل — wire truth
+✅ SEC-F6/live: مصافحة X25519 عبر البوابة — المفاتيح رُحّلت للطرفين الموثوقين حصرًا — pc↔galaxy-s24 · ph↔pc-office
+✅ SEC-F6/live: الإطار المشفر رُحّل للهدف المقترن حصرًا (to=galaxy-s24) — from=pc-office kind=clip
+✅ SEC-F6/live: فك التشفير على المستقبل — النص مطابق (X25519+HKDF+AES-256-GCM حية عبر السلك) — len=42
+   [comms] [phone] SMS وارد من الهلال الأحمر: تذكير: موعدك غداً الساعة 10:00 صباحاً. ل
+✅ SEC-F6/live: سوكِت استطلاع بلا إعلان على 3009 لا يسمع الإطارات إطلاقًا — silence
+== [SEC-F9] directed delivery of control-channel clipboard ==
+✅ SEC-F9/source: الجسر المدمج — توجيه مزدوج (الجلسة النشطة حصرًا ثم جمهور المحليين/الموثوقين) — remote-bridge.ts
+✅ SEC-F9/source: الجسر المدمج — الانضمام للجمهور بالمحلية أو الهوية الموثوقة (موضعان) — joins=2
+✅ SEC-F9/source: المرآة المستقلة — نفس التوجيه المزدوج ونفس شرط الانضمام — remote-service/index.ts
+✅ SEC-F9/source: صفر توجيه عام للحافظة في الجسرين (لا إذاعتها للكل أبدًا) — no fan-out
+✅ SEC-F9/live: بلا جلسة — العميل المحلي (جمهور موثوق) يستلم النص كاملًا — len=28
+✅ SEC-F9/live: استطلاع LAN على 3004 لا يسمع النص إطلاقًا (بلا هوية ولا محلية) — silence
+✅ SEC-F9/live: أثناء الجلسة — النص يصل لوحدة التحكم المقترنة حصرًا (galaxy-s24) — paired=ok
+✅ SEC-F9/live: أثناء الجلسة — المحلي الآخر (جمهور بلا اقتران) لا يسمع النص — silence
+✅ SEC-F9/live: أثناء الجلسة — استطلاع LAN صامت تمامًا (التوجيه للزوج حصرًا) — silence
+== [UPD] self-update & version registry ==
+✅ UPD/live: channel=stable + portable=true (سير الإصدار القياسي) — channel=stable
+✅ UPD/live: التوقيع موثق — minisign (Ed25519) عبر tauri-plugin-updater — minisign (Ed25519) — tauri-plugin-update
+✅ UPD/live: latest إصدار صالح دلاليًا ولا يتخلف عن الحالي — latest=1.2.0 current=1.2.0
+✅ UPD/live: updatedAt بصيغة تاريخ ISO قصير (YYYY-MM-DD) — 2026-10-19
+✅ UPD/live: سجل الإصدارات ≥3 مدخلات (تاريخ ترقية حقيقي 1.0→1.1→1.2) — entries=3
+✅ UPD/live: أول مدخل = latest (الترتيب تنازلي) — 1.2.0 vs 1.2.0
+✅ UPD/live: كل مدخل مكتمل — version+tag+date حرفيًا — all fields
+✅ UPD/live: ملاحظات كل إصدار قائمة نصوص غير فارغة ≤10 (عقد العرض) — 6/6/4
+✅ UPD/live: كل إصدارات السجل صالحة دلاليًا (semver كامل بلا استثناء) — 1.2.0 · 1.1.0 · 1.0.0
+✅ UPD/live: سجل يضم الإصدار الحالي نفسه (الإصدار لا يختفي من سجلّه) — current in log: true
+✅ UPD/live: كاش 10 دقائق حي — استدعاءان متتاليان سجل متطابق + no-store — cache-control=no-store
+✅ UPD/source: route — كاش 10 دقائق + مهجرة 4ث (الصدق دون اتصال) — route
+✅ UPD/source: route — الفشل لا يُخزّن ويكفيه الإصدار المحلي بصدق — fallback
+✅ UPD/source: route — المسودات drafts مفلترة + سقف 12 إصدارًا — filter
+✅ UPD/source: route — التاريخ المحلي يضم 1.1.0 و1.0.0 (مسار الترقية موثق حتى بلا شبكة) — local history
+✅ UPD/source: route — ثابت CURRENT موحّد مع package.json (مصدر الحقيقة) — CURRENT=1.2.0
+✅ UPD/source: توحيد الإصدار عبر المنصات — tauri.conf + Cargo.toml + pubspec + gradle == package.json — all=1.2.0
+✅ UPD/source: updater_state — version+autoCheck+endpoint+history (قياسي قابل للتسلسل) — state
+✅ UPD/source: updater_check_now — تدقيق updater (warn عند توفر تحديث + info عند الأحدث) + بث desktop://update — check_now
+✅ UPD/source: فشل الفحص بلا انكسار — {ok:false,error} بصدق — honest error
+✅ UPD/source: updater_install — download_and_install والتوقيع يتحقق قبل التثبيت — install
+✅ UPD/source: سجل Rust — كاش 600ث + ureq 8ث + User-Agent من CARGO_PKG_VERSION — rust cache
+✅ UPD/source: سجل Rust — حقول المدخل خمسة (tag+name+notes+date+prerelease) من Releases — rust entry shape
+✅ UPD/source: سجل Rust — المسودات متخطاة + سقف 12 + حقل prerelease — rust filter
+✅ UPD/source: فحص الإقلاع — ينتظر جاهزية السيرفر (90ث) ثم يقرأ autoCheck والأوفلاين تخطٍ — boot gate
+✅ UPD/source: main.rs — البرنامج المساعد مسجل + الأوامر الثلاثة في المعالج + startup_check — main.rs wiring
+✅ UPD/source: settings.rs — updater_auto_check في المخزن المشترك (SQLite — بند 6) بقيمة افتراضية true — shared store
+✅ UPD/source: tauri.conf.json — plugins.updater بpubkey وendpoints (تحقق minisign) — endpoints=1
+✅ UPD/source: بيان التحديث — توقيع minisign لكل أصل (signer sign + .sig) — sign flow
+✅ UPD/source: بيان التحديث — أصول المنصات المكتبية الثلاثة تُوقّع بالتتابع — assets=3
+✅ UPD/source: بيان التحديث — يُرفع إلى Release عبر uploads.github.com (نقطة الفحص releases/latest) — upload target
+✅ UPD/source: بيان التحديث — الإصدار مقفول في latest.json (لا حلقة ترقية/تخفيض) — locked version
+✅ UPD/source: بطاقة الإعدادات — updater_check_now + updater_state (أصلي أولًا) — native first
+✅ UPD/source: بطاقة الإعدادات — مسار ويب بديل: current===latest → «أنت على أحدث إصدار» — web fallback
+✅ UPD/source: بطاقة الإصدار في الإعدادات — setVerInfo بمنطق latest===current (مسار ثانٍ مستقل) — version card
+✅ UPD/source: مفتاح autoCheck يكتب عبر putHardening (roundtrip §16) — toggle
+✅ UPD/source: الأدوات — أمر الإصدار في الـCLI واللوحة يستهلكان /api/version — tools consumers
+== [DEV-LC] pairing depth & device lifecycle ==
+✅ DEV-LC/live: QR عبر البوابة (:81) — host يُشتق من ترويسة Host فعليًا (G-2 حي) — host=192.168.7.7:81
+✅ DEV-LC/live: QR مباشر (:3000) — المنفذ المشتق يطابق الواصل — host=127.0.0.1:3000
+✅ DEV-LC/live: خريطة منافذ §1 كاملة داخل الحمولة (الوكيل يعرف أين يتصل) — ports map
+✅ DEV-LC/live: صورة QR حقيقية — data URL بترميز PNG — png data url
+✅ DEV-LC/live: الرمز المختصر = أول 6 hex من السر بأحرف كبيرة — code=BB8489
+✅ DEV-LC/live: الحمولة تحمل البروتوكول واسم الكمبيوتر (Nexus/1.2 — NEXUS-PC) — proto+name
+✅ DEV-LC/live: إعادة الإصدار تُقدّم نافذة الصلاحية (expiresAt يتقدم — تدوير حي) — delta=29ms
+✅ DEV-LC/live: رفض بلا سر لا يستهلك النافذة — القبول بالسر الصحيح يعمل بعده — rejected=403 then ok=true
+✅ DEV-LC/live: جهازان في نفس النافذة — كلاهما مقبول (تعدد أجهزة سليم) — A=true B=true
+✅ DEV-LC/live: حقول الجهاز محفوظة كما أُرسلت — البطارية مشدودة 0-100 + mode=wifi + state=connected — A.bat=77 B.bat=100
+✅ DEV-LC/live: pair بلا id — معرف slug من الاسم + بطارية افتراضية في النطاق (60-99) — id=e2e-lc-three bat=71
+✅ DEV-LC/live: نوع حر مقبول ومحفوظ (kind=tablet — لا انحصار في phone) — kind=tablet
+✅ DEV-LC/live: القائمة تعرض الجهازين الجديدين trusted:true (سلسلة الثقة §6→§13) — A=true B=true
+✅ DEV-LC/live: سلسلة الثقة كاملة — جهاز اقترن للتو بسر QR يفتح جلسة تحكم (G-1→§13 حي) — deviceId=e2e-lc-a-mvhcruod
+✅ DEV-LC/live: جهاز ثانٍ موثوق يُرفض busy (جلسة واحدة حصرًا — عقد §13) — {"reason":"busy","ev":"rc:session"}
+✅ DEV-LC/live: الإنهاء من وحدة التحكم — active:false (نظافة السلسلة) — clean stop
+✅ DEV-LC/live: connect → 200 + state=connected — HTTP 200
+✅ DEV-LC/live: connect لجهاز غير موجود → 404 برسالة عربية — HTTP 404
+✅ DEV-LC/live: disconnect → 200 + state=offline — HTTP 200
+✅ DEV-LC/live: disconnect لجهاز غير موجود → 404 — HTTP 404
+✅ DEV-LC/live: forget → 200 والجهاز يزول من القائمة — HTTP 200
+✅ DEV-LC/live: القائمة بعد forget خالية من الجهاز المحذوف (D2 زال وD1 بقي) — D2 removed, D1 kept
+✅ DEV-LC/live: forget مكرر → 200 idempotent (بلا انكسار) — HTTP 200
+✅ DEV-LC/live: connect للمحذوف → 404 (الحذف نهائي) — HTTP 404
+✅ DEV-LC/source: الأفعال الثلاثة كلها تُجبر موجة صحة (forceHealthTick) — ticks=5
+✅ DEV-LC/source: connect/disconnect ترد 404 برسالة «الجهاز غير موجود» — 404 arabic
+✅ DEV-LC/source: pair يبني الجهاز — mode wifi + state connected + trusted true + شدّ البطارية — device shape
+✅ DEV-LC/source: معرف ثابت مطبَّع (slug) لجعل إعادة التسجيل idempotent — slug id
+✅ DEV-LC/source: اشتقاق Host — lastIndexOf(':') + حراسة sep>0 + سقوط إلى 81 (G-2) — host derive
+✅ DEV-LC/source: NEXUS_PORTS مطابق لعقد §1 حرفيًا (8 جسور) — §1 map
+✅ DEV-LC/source: المخزن — بذور أجهزة موثوقة + نافذة اقتران null عند الإقلاع النظيف — store seeds
+✅ DEV-LC/source: نوع الجهاز يضم pairedAt وlastSeen (عمر الاقتران والرؤية في الواجهة) — device type
+✅ DEV-LC/source: qr route — اسم الكمبيوتر ثابت DESKTOP_NAME=NEXUS-PC (متسق مع الجسر) — desktop name
+✅ DEV-LC/source: واجهة الأجهزة — رسائل تأكيد الأفعال الثلاثة (توستات عربية) — toasts
+✅ DEV-LC/source: واجهة الأجهزة — أفعال الحياة في الـUI (connect/disconnect/forget) — ui actions
+✅ DEV-LC/source: Flutter api — الوكيل يقرأ قائمة الأجهزة (GET /api/devices → devices) — flutter api
+✅ DEV-LC/source: العقد §6 — G-2 (العنوان الحقيقي في QR) موثقة كمُصلحة — contract G-2
+== [SYNC] M1.2 offline-first ops log ==
+✅ SYNC/source: وحدة السجل — ترسيخ/رأس/استئناف/قر + سقفا الدفعة والأرضية — oplog.ts
+✅ SYNC/source: جدول ProdOpLog بنمط الترقية الآمنة §23 — seq رتيب + تفرد opId بفهرس مسمّى بتوقيع Prisma (idempotent) — db.ts
+✅ SYNC/source: النموذج موثق بالمخطط — ProdOpLog بمفتاح رتيب ومعرّف وحيد (بلا فهرس زائد فوق القيد) — schema.prisma
+✅ SYNC/source: الجسر يُرسّخ العمليات الأربع (clip:new/cleared + hand:new/opened) — appendOp=4
+✅ SYNC/source: prod:resume + prod:ack على الجسر + رأس السجل في prod:hello — handlers
+✅ SYNC/source: حرس F6 على الاستئناف — عميل شبكي بيانات وصفية حصرًا (content:"" + e2ee) — F6 guard on replay
+✅ SYNC/source: عميل الويب — مؤشر محفوظ + استئناف عند الاتصال + تطبيق idempotent بالمعرف + قر — use-prod-bridge.ts
+✅ SYNC/source: صندوق الصادر المشفر — إدراج عند فشل sendSecureClip + تصريف فور اكتمال المصافحة — clip-outbox wiring
+✅ SYNC/source: الهاتف — أحداث العقد الثلاثة + استئناف بمؤشر shared_preferences + قر يثبّت المؤشر — flutter wiring
+✅ SYNC/live: prod:hello يحمل رأس السجل lastSeq (عدد صحيح ≥ 0) — head0=3
+✅ SYNC/live: العائد يستلم ما فاته كاملًا — 3 حافظات + رابط + فتحه (صفر فقد بعد الانقطاع) — ops=5 clips=3 hands=1 opened=1
+✅ SYNC/live: المحتوى الكامل للعميل المحلي — الإبر الثلاث حرفيًا (سطح ثقة الجهاز كما في REST) — full payload
+✅ SYNC/live: الترتيب صاعد بالتسلسل الرتيب (منظم على الحالة) — 4<5<6<7<8
+✅ SYNC/live: الفتح idempotent — opened-<id> عملية واحدة بمعرّف الرابط الصحيح — id=cmvhcrvvc0
+✅ SYNC/live: استئناف LAN بيانات وصفية حصرًا — content:"" + encrypted + e2ee (حرس F6 على المسار الجديد) — lanOps=5 clips=3
+✅ SYNC/live: صفر تسريب في سجل الاستئناف — الإبر لا تعبر للشبكة بأي شكل — wire truth
+✅ SYNC/live: الاستئناف قابل للتكرار — نفس النافذة تُعاد حرفيًا والعميل يزيل التكرار بالمعرفات — again=5 first=5
+✅ SYNC/live: مؤشر عند الرأس = صفر عمليات (لا إعادة تشغيل تاريخًا مقروءًا) — head=8
+✅ SYNC/live: القر يحترم أرضية الاحتفاظ — since=0 يعيد ≤ 200 بترتيب صاعد (سجل محدود النمو) — tail=8
+✅ SYNC/live: دفع مشفر لهدف منقطع → sec:nack «peer-offline» — مشغل صندوق صادر المرسل (§28) — reason=peer-offline
+✅ SYNC/live: عودة الهاتف — المصافحة تُعاد تلقائيًا بمفاتيح رجيعية جديدة (PFS محفوظ) — fresh ephemerals
+✅ SYNC/live: إعادة الإرسال بعصر حي — الهاتف العائد يفكّ ويستلم النص الفائت (بلا فقد عبر الانقطاع المشفر) — match=true
+== [PERF] M1.3 control latency p95 ==
+✅ PERF/source: مخزن الأداء — نافذة 240 + عتبة 80 + مئين أقرب-رتبة دالٍّ نقي + لقطة موحدة — perf-store.ts
+✅ PERF/source: الأوامر المتقطعة تحمل ختم __m — وعالية التردد (move/scroll/pinch) بلا ختم عمدًا — stamps=8
+✅ PERF/source: تمديدات القياس — سقف المعلق 64 (الأقدم يُطرح) + استهلاك بالمعرف + rcAck للمُقرِّر — measurement plumbing
+✅ PERF/source: وحدة التحكم — rc:ack → عينة تحكم بساعة المرسل (consumeAck) + rc:pong → سلسلة النبض — use-controller-bridge.ts
+✅ PERF/source: جسر الكمبيوتر يُقرّ بعد التطبيق — المتقطعة ثمانيًا وعالية التردد بلا إقرار — acks=8
+✅ PERF/source: المرحّل — rc:ack من دور الكمبيوتر حصرًا (حرس F8) + قصّ mid إلى 64 وev إلى 32 — في النسختين المتطابقتين تعاقديًا (المصغّرة + المدمجة) — remote-service + remote-bridge mirrors
+✅ PERF/source: اللوحة الحية — شارة p95 بحالة العتبة + جدول موسع (الآن/p50/p95/الأقصى × سلسلتين) مدموجة بوحدة التحكم وواجهة الكمبيوتر — perf-panel + shell + remote-view
+✅ PERF/source: الهاتف — حدث rc:ack موثق + أختام __m على كل المتقطعة + نافذة 240 بمئين أقرب-رتبة + رقاقة p95 — stamps=10
+✅ PERF/source: العقد §29 — البروتوكول وحرس F8 والنافذة والعتبة والحدود الصادقة موثقة — contract §29
+✅ PERF/live: مصافحة 3004 عبر البوابة — كمبيوتر + وحدتا تحكم (websocket) — 3 sockets
+✅ PERF/live: 40 أمرًا مقيسًا ذهاب-إياب كاملًا عبر المسار (هاتف→بوابة→مرحّل→جسر→عودة) — كلها مُقرَّة — acked=40/40
+✅ PERF/live: p95 استجابة التحكم أقل من 80ms (عتبة M1.3 — أقرب-رتبة على 40 عينة حية) — p95=3ms max=4ms
+✅ PERF/live: صحة المئين — p50 ≤ p95 ≤ الأقصى (أقرب-رتبة متسقة على العينات الحية) — p50=1ms p95=3ms
+✅ PERF/live: حرس F8 على الإقرارات — rc:ack من دور وحدة تحكم (غير كمبيوتر) لا يُمرَّر إطلاقًا — ghost ack dropped
+✅ PERF/live: إقرار الكمبيوتر يبث لكل العملاء (قناة أخبار) — وmid يُقص إلى 64 — midLen=64
+✅ PERF/live: الحمولة بلا محتوى — مفاتيحها {mid, mt, ev, at} حصرًا (F6 متوافق — لا تسريب بحقل إضافي) — keys=mid,mt,ev,at
+✅ PERF/live: نبض القناة — 5/5 صدى rc:pong والكل أقل من 80ms (سلسلة ping الثانوية) — n=5 max=7ms
+== [PAIR-MET] M1.1 pairing speed metrics ==
+✅ PAIR-MET/source: رياضيات القياس — عتبة 30ث تعاقدية + مئين أقرب-رتبة دالٍّ نقي + لقطة موحدة (آخر زمنًا لا أكبر قيمة) — pair-math.ts
+✅ PAIR-MET/source: سجل القياس — recordPairMetric (t1) + markFirstValue يكمل أحدث معلق داخل نافذة السر 10 دقائق + listPairMetrics — pair-metrics.ts
+✅ PAIR-MET/source: الترسيخ — جدول PairMetric بنمط §23 الآمن + فهرس زمني عادي (بلا فهارس فوق القيود — درس §28) — db.ts
+✅ PAIR-MET/source: المخطط — نموذج PairMetric موثق (عقد §30) ببيانات وصفية حصرًا — schema.prisma
+✅ PAIR-MET/source: ختم t1 — فرعا pair (جديد وإعادة تسجيل) يسجلان qrToPairMs من إصدار آخر QR (المطابَق حصرًا — G-1 يجعل الزمن دقيقًا تعاقديًا) — devices/route.ts
+✅ PAIR-MET/source: ختم t2 (prod) — أول حافظة/تسليم من الجهاز يكمل التسييل — productivity-bridge.ts
+✅ PAIR-MET/source: ختم t2 (control) — أول جلسة تحكم مقبولة تُكمِل التسييل — remote-bridge.ts
+✅ PAIR-MET/source: نقطة القراءة — {ok, targetMs, stats, entries} بيانات وصفية حصرًا بلا محتوى — api/pair-metrics/route.ts
+✅ PAIR-MET/source: اللوحة الحية — شارة عتبة + لوحة موسّعة (طورا الإجمالي + مئين + سجل) بنبض عند الفتح حصرًا — مدموجة بواجهة الأجهزة — pair-panel.tsx + devices-view.tsx
+✅ PAIR-MET/source: الهاتف — pairMetrics() في NexusApi + PairMetricsStats/PairTarget + نبض provider + بطاقة سرعة بقائمة الأجهزة — flutter
+✅ PAIR-MET/source: ترجمتا الهاتف — pair.speed بلساني ar/en — ar/en.json
+✅ PAIR-MET/source: العقد §30 — التسييل بثلاث طوابع + الحدود الصادقة (المدمجتان حصرًا — زمن المسح البصري خارج التعاقد) — contract §30
+✅ PAIR-MET/live: إصدار QR حي — سر + code + نافذة صلاحية (t0 مختم في الخادم) — code=30CF37
+✅ PAIR-MET/live: اقتران حقيقي بسر QR الحي — جهاز موثوق متصل (t1) — id=pair-e2e-mvhcs0q9
+✅ PAIR-MET/live: إدخال معلق بسلسلة نصف مكتملة — qrToPairMs>0 · pairToFirstValueMs=null · pass=null — qrToPair=17ms
+✅ PAIR-MET/live: أول قيمة تكمل التسييل حيًا — pairToFirstValueMs>0 وtotalMs = qrToPair + pairToFirstValue — total=34ms (17+17)
+✅ PAIR-MET/live: العتبة التعاقدية — إجمالي QR→أول قيمة أقل من 30ث وpass=true (prod) — total=34ms < 30000
+✅ PAIR-MET/live: شكل الإدخال بلا محتوى (حرس F6 متوافق) — مفاتيح معروفة حصرًا — keys=10/10
+✅ PAIR-MET/live: الإحصاء — completed≥1 · last<30000 · p95≤max · targetMs=30000 — completed=2 last=34 p95=552 max=552
+✅ PAIR-MET/live: اقتران مرفوض (سر فاسد 403) لا يُقيَّد إطلاقًا — لا إدخال بلا إثبات قرب — entries=7/7
+== [LANG-A11Y] M1.4 six languages + full accessibility ==
+✅ LANG-A11Y/source: سجل اللغات الست المعاقد — ar rtl + en/fr/es/de/ru ltr بمحارف Intl ووحدة سرعة — registry=6/6
+✅ LANG-A11Y/source: سلسلة السقوط التعاقدية lang→en→raw — أي سلسلة غير مُترجَمة تظهر بالإنجليزية لا بالعربية — map(lang)→map(en)→raw
+✅ LANG-A11Y/source: تحميل كسول للمعاجم الأربع + إشارة الجاهزية بعد اكتمال المعجم (عقد §31.أ) — dynamic import ×4 + i18nReady
+✅ LANG-A11Y/source: الماسح لغير العربية كلها (كان en حصرًا) — بنفس تخطيات CODE/PRE/KBD والسمات — sweeper gate non-ar
+✅ LANG-A11Y/source: دورة كاملة سداسية cycleLang (ar→en→fr→es→de→ru→ar) — 6-cycle
+✅ LANG-A11Y/source: معاجم الويب الأربع — fr/es كاملة ≥3,300 وde/ru بتغطية متدرجة موثقة ≥2,100 (نافذة حصة الترجمة أُغلقت عند الإغلاق — المولّد قابل للاستئناف ويستكمل بلا تغيير كود §31.د.1) — fr=3426 es=3426 de=2164 ru=2403
+✅ LANG-A11Y/source: مولّد القواميس بنمط الدروس — حمولات مفهرسة (درس ترجمة المفاتيح المختلطة) + طابور تدوير + قابل للاستئناف — indexed payloads + RR queue + resumable
+✅ LANG-A11Y/source: بطاقة اللغة — ستة أزرار من LANGS.map بأسماء أصلية + aria-pressed + شارة الاتجاه الحي — 6 language buttons
+✅ LANG-A11Y/source: بطاقة حجم الخط — ثلاثة مستويات (أ/أ+/أ++) بمعلق aria-pressed وإعلان (فجوة §31.ب.1 — المخزن كان بلا واجهة) — font-scale UI ×3
+✅ LANG-A11Y/source: زر الشريط العلوي — دورة سداسية بلغة تالية + aria-label مركب — cycle button
+✅ LANG-A11Y/source: onboarding — رقائق الست من LANGS.map في خطوة الترحيب — onboarding 6 chips
+✅ LANG-A11Y/source: الاختصار يُدير دورة الست مع إعلان قارئ الشاشة + رابط التخطي عبر المحرك t() (عقد §31.ب.4) — shortcut 6-cycle + t() skip link
+✅ LANG-A11Y/source: حلقات التركيز مرئية دائمًا 2px وتشتد 3px في وضع قارئ الشاشة (عقد §31.ب.2) — focus-visible always
+✅ LANG-A11Y/source: تطبيق مقياس الخط html.style.fontSize = 16×scale (قائم ويغطيه E2E الآن) — fontSize 16×scale
+✅ LANG-A11Y/source: ملفات الهاتف الأربع بتكافؤ مفاتيح كامل مع ar (619) — ar=619 fr=619 es=619 de=619 ru=619
+✅ LANG-A11Y/source: supportedLocales سداسية في main.dart + منتقي رقائق مشترك بأسماء أصلية سداسية — 6 locales + 6 native chips
+✅ LANG-A11Y/source: منتقي الهاتف مشترك في الإعدادات والترحيب (استُبدل الثنائي الصلب) — shared picker ×2 screens
+✅ LANG-A11Y/live: /api/i18n-status حي — عقد §31 + سلسلة السقوط + ست لغات — langs=6
+✅ LANG-A11Y/live: الاتجاهات المعاقدة — ar rtl حصرًا والخمس الباقية ltr — 1 rtl + 5 ltr
+✅ LANG-A11Y/live: عدّادات المعاجم حية — en كامل ≥3,400 وfr/es ≥3,300 وde/ru متدرجة ≥2,100 وar بلا معجم (المفاتيح نفسها) — en=3589 fr=3426 es=3426 de=2164 ru=2403
+✅ LANG-A11Y/live: الأسماء الأصلية بالسجل المعاقد (بيانات وصفية بلا محتوى ترجمة — F6) — natives match
+== [SYNC-DEEP] ops-log depth audit (§28) ==
+✅ SYNC-DEEP/source: الثوابت التعاقدية الثلاثة — دفعة 200 · أرضية 400 · سقف صلب 2000 (§28.ب) — REPLAY_LIMIT/KEEP_FLOOR/HARD_CAP
+✅ SYNC-DEEP/source: ackUpto يحصر المؤشر بين 0 ورأس−400 — لا قص فوق الأرضية مهما كبر upto — ack clamp
+✅ SYNC-DEEP/source: opsSince يطهر المؤشر (سالب/نص/عائم → أرضية 0) ويسقف الحد الداخلي بـ1000 — since sanitize + limit cap
+✅ SYNC-DEEP/source: appendOp يعيد 0 عند تعارض opId الوحيد — idempotent بالتصميم (إعادة فتح رابط) — unique opId → 0
+✅ SYNC-DEEP/source: capTotal إطفائي بعد كل ترسيخ — السقف الصلب يمنع النمو بلا نهاية — cap on append
+✅ SYNC-DEEP/source: الجسر يطهر since وupto بنفس الأرضية قبل الاستدعاء (دفاع ثانٍ فوق الوحدة) — bridge double sanitize
+✅ SYNC-DEEP/source: prod:replay يعلن truncated وlocal — الدفعة المقطوعة مُعلنة ومستوى الثقة موثوق — truncated+local flags
+✅ SYNC-DEEP/source: حرس F6 لكل عملية — opForClient يفرق المحلي/الشبكي قبل إرسال الاستئناف — per-op guard
+✅ SYNC-DEEP/source: صندوق الصادر يُصرّف بعد المصافحة عبر sendFrame — استخدام حقيقي في جسر الأمان — flush wiring
+✅ SYNC-DEEP/source: Flutter — المؤشر من shared_preferences والقر يثبّته (استئناف هاتفي كامل) — flutter cursor
+✅ SYNC-DEEP/live: نافذة الأساس since=0 صالحة — مصفوفة بترتيب رتيب صاعد — len=9
+✅ SYNC-DEEP/live: resume بلا حزمة = since 0 — نفس النافذة حرفيًا — 9==9
+✅ SYNC-DEEP/live: since نص شطد «abc» → أرضية 0 — نفس النافذة (تعقيم مزدوج) — 9==9
+✅ SYNC-DEEP/live: since سالب → أرضية 0 — نفس النافذة — 9==9
+✅ SYNC-DEEP/live: since عائم 12.9 → floor 12 — كل العائد seq≥13 — n=0
+✅ SYNC-DEEP/live: since فوق الرأس بكثير → صفر عمليات (لا إعادة تشغيل تاريخًا) — n=0
+✅ SYNC-DEEP/live: ack بلا حزمة لا يضر — الرأس ثابت (حرس try + أرضية 0) — head stable
+✅ SYNC-DEEP/live: ack سالب لا يقص شيئًا — الرأس ثابت — head stable
+✅ SYNC-DEEP/live: ack فوق الرأس لا يغير الرأس أبدًا (القص للأرضية لا للرأس) — head stable
+✅ SYNC-DEEP/live: بعد ack الأقصى — المحفوظ الكامل = min(الرأس، 400) بالضبط (أرضية الاحتفاظ تعاقديًا) — kept=9 head=9
+✅ SYNC-DEEP/live: إبرة واحدة = رأس +1 بالضبط (ترسيخ واحد لكل طفرة) — +1
+✅ SYNC-DEEP/live: فتح الرابط مرتين بنفس المعرف → عملية واحدة (appendOp idempotent بالسجل) — opened=1
+✅ SYNC-DEEP/live: عميل بمؤشر قديم يستلم الإبرة الجديدة — old client got it
+✅ SYNC-DEEP/live: عميل انضم بعد آخر عملية — استئنافه من رأسه صفر عمليات (لا إعادة تاريخ) — n=0
+✅ SYNC-DEEP/live: علامة local موثوقة في replay للعميل المحلي — local=true
+✅ SYNC-DEEP/live: الدفعة الكبيرة رَسَّخت 205 عمليات — الرأس تقدم بالضبط (سجل رتيب) — 218==13+205
+✅ SYNC-DEEP/live: أول دفعة استئناف = 200 بالضبط + truncated معلن (سقف الدفعة التعاقدي) — first=200
+✅ SYNC-DEEP/live: التفريغ الكامل بعد الدفعة = المحفوظ + 209 (الإبر الوسيطة الأربع + الدفعة) بالضبط — 218==9+209
+✅ SYNC-DEEP/live: الاتصال العالمي — سلسلة seq متصلة بلا فجوة عبر كل الدفعات — contiguous 218
+✅ SYNC-DEEP/live: الدفعة الأخيرة أقصر من السقف — الاستئناف بالمؤشر ينتهي طبيعيًا — tail=18
+✅ SYNC-DEEP/live: كل الإبر الـ205 كاملة وفريدة في السجل — صفر فقد في الدفعة الكبيرة (ترتيب الإدراج باكتمال المعالجة) — bulk=205 unique=205
+✅ SYNC-DEEP/live: دفعة 200 لعميل LAN ببيانات وصفية حصرًا — حرس F6 يمتد للسقف الكامل — clips=196
+✅ SYNC-DEEP/live: truncated معلن لعميل LAN + صفر إبر على السلك — meta-only batch
+== [PERSIST] server restart durability ==
+✅ PERSIST/pre: لقطة قبل الإيقاف — رأس ونافذة كاملة مرصودة — head=218 window=218
+✅ PERSIST/reboot: الخادم عاد بعد الإيقاف العنيف (SIGKILL → standalone up) — health ok
+✅ PERSIST/reboot: الجسور أعيد إقلاعها مع الخادم الجديد — prod booted
+✅ PERSIST/reboot: جسر الإنتاجية يقبل الاستئناف مجددًا — socket ready
+✅ PERSIST/durability: الرأس بعد الإقلاع = الرأس قبل الإيقاف حرفيًا — السجل لم يفقد ولا عملية — 218==218
+✅ PERSIST/durability: نافذة الاستئناف بعد البقاء مطابقة حرفيًا لقبل الإيقاف (نفس seqs بالترتيب) — pre=218 post=218
+✅ PERSIST/durability: الإبرة بعد البقاء رأسها تقدم بالضبط — السجل حي لا قراءة أرشيف فقط — +1 after reboot
+✅ PERSIST/durability: الأجهزة المقترنة بقيت بعد الإقلاع (مخزن SQLite) — devices=5
+✅ PERSIST/durability: قياسات الاقتران بقيت بعد الإقلاع (ترسيخ PairMetric) — pair metrics alive
+== [PERF-DEEP] percentile math depth (§29) ==
+✅ PERF-DEEP/math: pct فارغة → null (لا انهيار على قناة صامتة) — null empty
+✅ PERF-DEEP/math: عنصر واحد — أي مئين يعيده حرفيًا — singleton
+✅ PERF-DEEP/math: p95 من 100 = العنصر 95 (أقرب رتبة — تعاقد §29) — nearest-rank 95
+✅ PERF-DEEP/math: p50 من 100 = العنصر 50 — nearest-rank 50
+✅ PERF-DEEP/math: p0 → الأول (rank حد أدنى 1) — rank floor 1
+✅ PERF-DEEP/math: p100 → الأخير — rank 100
+✅ PERF-DEEP/math: مئين فوق 100 → يحصر عند الذيل (لا خروج بالمصفوفة) — clamped tail
+✅ PERF-DEEP/math: مصفوفة قصيرة [10,20] p95 → rank=ceil(1.9)=2 → 20 — ceil rank
+✅ PERF-DEEP/math: [1..4] p95 → rank=ceil(3.8)=4 → 4 (المتطرف يحكم) — tail rules
+✅ PERF-DEEP/math: مكررات [5,5,5] p95 → 5 — duplicates
+✅ PERF-DEEP/math: عينات إنتاجية [12,40,80,120,200] p95 → 200 (أبطأ 5% يحكم العتبة) — real window
+✅ PERF-DEEP/math: سلسلة فارغة — كل الحقول null وn=0 — empty series
+✅ PERF-DEEP/math: last = الأخير زمنيًا لا الأصغر (10 وصل ثانٍ — الأخير 50) — last is chronological
+✅ PERF-DEEP/math: max = الأكبر قيمة (200) وp50 = 50 المصنفة — max vs p50
+✅ PERF-DEEP/math: p95 على الثلاث = 200 (rank=ceil(2.85)=3) — p95 of 3
+✅ PERF-DEEP/math: فصل القناتين — ping بطيء لا يلوث control — channel split
+✅ PERF-DEEP/math: ping يُحسب في سلسلته (p95=500) — ping series
+✅ PERF-DEEP/math: 4 عينات سريعة فقط → pass=false (حد أدنى 5) — min 5 samples
+✅ PERF-DEEP/math: 5 سريعات → pass=true — pass at 5
+✅ PERF-DEEP/math: عتبة 79 حيّة و80 مرفوضة — الحد < حصرًا (تعاقد) — 79 pass / 80 reject
+✅ PERF-DEEP/math: ذيل واحد 100 من 5 → p95=100 → pass=false (الأبطأ 5% يحكم) — tail governs
+✅ PERF-DEEP/math: minControl مخصص 3 — ثلاث سريعات تكفي — custom min
+✅ PERF-DEEP/math: ping حصرًا → control فارغة → pass=false — control empty
+✅ PERF-DEEP/source: النافذة المنزلقة 240 عينات — سقف الذاكرة التعاقدي — window 240
+✅ PERF-DEEP/source: التطبيق slice(-PERF_WINDOW) — النافذة تقص الأقدم — sliding slice
+✅ PERF-DEEP/source: رفض العينات غير المنتهية والسالبة (Number.isFinite + rtt<0) — reject bad rtt
+✅ PERF-DEEP/source: العتبة التعاقدية 80 نصًا في المصدر (PERF_TARGET_MS) — target 80
+✅ PERF-DEEP/source: ختم __m على الأوامر المتقطعة وإقرار rc:ack من الجسر (مرآة §29) — stamped acks
+== [PAIR-DEEP] pair metric depth (§30) ==
+✅ PAIR-DEEP/source: العتبة التعاقدية 30_000ms نصًا (M1.1) — 30s target
+✅ PAIR-DEEP/source: مئين أقرب-رتبة shared مع نفس الدلالات (rank max/ceil/min) — nearest-rank shared
+✅ PAIR-DEEP/source: last = الأحدث زمنًا (reduce بأكبر at) لا الأكبر قيمة — درس §30 الموثق — last is newest not max
+✅ PAIR-DEEP/source: avg مقرّب (Math.round) على المكتملة حصرًا — rounded avg
+✅ PAIR-DEEP/source: pass يطلب الكل مكتملًا اجتيازًا وبحد أدنى (passRate=1 + minCompleted) — strict pass
+✅ PAIR-DEEP/source: سجل فارغ → nulls كاملة وpass=false وcompleted=0 (بلا انهيار) — empty snapshot
+✅ PAIR-DEEP/source: t1 — recordPairMetric يقصّ المعرفات 120 ويرسّخ qrToPairMs موجبًا — t1 record
+✅ PAIR-DEEP/source: t2 — markFirstValue يبحث المعلق بنافذة 10 دقائق بترتيب الأحدث — t2 pending window
+✅ PAIR-DEEP/source: totalMs = qrToPair + pairToFirst — الجمع التعاقدي الثلاثي — tri-stamp sum
+✅ PAIR-DEEP/source: pass = totalMs < العتبة حصرًا (حد صارم) — strict <
+✅ PAIR-DEEP/source: فشل الترسيخ صامت — القياس لا يعطل الاقتران ولا تدفق القيم أبدًا — silent measurement
+✅ PAIR-DEEP/source: القراءة الأحدث أولًا بسقف 200 إدخال (listPairMetrics) — read window
+✅ PAIR-DEEP/source: تسييل prod — جسر الإنتاجية يختم أول قيمة — prod t2
+✅ PAIR-DEEP/source: تسييل control — جسر التحكم يختم أول جلسة مقبولة — control t2
+✅ PAIR-DEEP/live: /api/pair-metrics — ok + targetMs=30000 + stats + entries مصفوفة — api shape
+✅ PAIR-DEEP/live: اتساق رياضي — p95 ≤ max دائمًا (أقرب رتبة على المصنفة) — p95=552 max=552
+✅ PAIR-DEEP/live: completed ≤ n دائمًا — completed=2 n=7
+✅ PAIR-DEEP/live: passRate ∈ [0,1] أو null (بلا مكتملة) — passRate=1
+✅ PAIR-DEEP/live: pass=true ⇒ passRate=1 حصرًا (كل المكتملة اجتازت) — pass implies rate 1
+✅ PAIR-DEEP/live: حقول الإدخال العشرة المعاقدة كاملة (id/device/…/firstValueKind/pass/at) — entry keys ×10
+✅ PAIR-DEEP/live: أزمنة سليمة — at رقم >0 وqrToPairMs ≥ 0 والأنواع المعاقدة فقط — entry sanity
+✅ PAIR-DEEP/live: الحد الصادق موثق بالعقد — التسييل بثلاث طوابع والمدمجتان حصرًا (درس §29 الموثق في §30) — contract §30 documented
+== [LANG-DEEP] dictionaries & a11y depth (§31) ==
+✅ LANG-DEEP/dict: fr — ≥3300 مفتاحًا و≥99.5% قيم مُترجَمة نظيفة (بلا عربية ولا فراغ) — n=3426 bad=0
+✅ LANG-DEEP/dict: es — ≥3300 مفتاحًا و≥99.5% نظيفة — n=3426 bad=3
+✅ LANG-DEEP/dict: de — ≥2100 (تغطية متدرجة موثقة §31.د.1) و≥99.5% نظيفة — n=2164 bad=1
+✅ LANG-DEEP/dict: ru — ≥2100 (تغطية متدرجة) و≥99.5% نظيفة — n=2403 bad=1
+✅ LANG-DEEP/dict: المفتاحان المحوريان «الأجهزة» و«الإعدادات» موجودان بالأربع كلها — core keys ×4
+✅ LANG-DEEP/dict: قيمة «الإعدادات» متمايزة فعلًا بين اللغات (ترجمة حقيقية لا نسخ) — fr=Paramètres es=Configuración de=Einstellungen
+✅ LANG-DEEP/phone: fr للهاتف — صفر بقايا عربية وصفر قيم فارغة (619/619 نظيفة) — vals=619 residue=0 empty=0
+✅ LANG-DEEP/phone: es للهاتف — صفر بقايا عربية وصفر قيم فارغة (619/619 نظيفة) — vals=619 residue=0 empty=0
+✅ LANG-DEEP/phone: de للهاتف — صفر بقايا عربية وصفر قيم فارغة (619/619 نظيفة) — vals=619 residue=0 empty=0
+✅ LANG-DEEP/phone: ru للهاتف — صفر بقايا عربية وصفر قيم فارغة (619/619 نظيفة) — vals=619 residue=0 empty=0
+✅ LANG-DEEP/phone: قاموس ar للهاتف عربي الطابع (≥600 قيمة عربية من 619 — البقية أرقام ومتغيرات) — arabic=613/619
+✅ LANG-DEEP/fallback: مفاتيح غائبة عن de موجودة بسجل en — السقوط map(en) يغطيها بياناتًا — raw=3591 missingInDe=1425
+✅ LANG-DEEP/source: الثبات nexus-lang في LS (setItem + getItem عند initLang) — persisted lang
+✅ LANG-DEEP/source: تطبيق الاتجاه واللغة على html — dir من langMeta وlang مباشرة — html dir+lang
+✅ LANG-DEEP/source: إشارة i18nReady تُضبط وتُمسح — الماسح لا يجري على معجم ناقص — ready signal toggle
+✅ LANG-DEEP/source: announce عبر aria-live (إعلان قارئ الشاشة بالمحرك نفسه) — aria-live announce
+✅ LANG-DEEP/source: Intl لكل لغة — تاريخ ووحدة سرعة بثقافة اللغة (fmtDateLang/speedUnit) — locale-aware fmt
+✅ LANG-DEEP/source: ثبات الإتاحة — fontScale وsr ومقارنة وحركة كلها localStorage (تجاوز إعادة التشغيل) — a11y persisted
+✅ LANG-DEEP/source: إتاحة الحركة — prefers-reduced-motion موجودة في CSS — reduced motion
+✅ LANG-DEEP/source: حلقات التركيز الدائمة تُطبق على كل شيء (focus-visible عالمي لا على حقول حصرًا) — global focus ring
+== [EDGE-NEG] gateway & endpoint edges ==
+✅ EDGE-NEG/gw: XTransformPort=3000 مرفوض 403 — REST الحقيقي لا يُعرض عبر البوابة (سطح محصور) — status=403
+✅ EDGE-NEG/gw: 3001 خارج النطاق → 403 — 403
+✅ EDGE-NEG/gw: 3010 فوق النطاق → 403 — 403
+✅ EDGE-NEG/gw: 8180 (البوابة نفسها) غير معروضة عبر نفسها → 403 — 403 self
+✅ EDGE-NEG/gw: منفذ غير رقمي «abc» → 403 (تحليل آمن) — status=403
+✅ EDGE-NEG/gw: 3008 ضمن السماح 3003-3009 لكن بلا مستمع → upstream وليس 403 (السماح ≠ الوجود) — status=502
+✅ EDGE-NEG/gw: مسار شطد بلا XTransformPort يمرّ لـ3000 الافتراضي (لا 403 ولا 502) — status=404
+✅ EDGE-NEG/gw: 3004 مسموح — الرد من الجسر (ليس 403) مهما كان شكل المسار — status=400
+✅ EDGE-NEG/bridge: الجسر يرحب عند الاتصال (hello بlastSeq ≥0) — head=219
+   [comms] [mirror] whatsapp - أحمد الغامدي
+✅ EDGE-NEG/bridge: حافظة بمحتوى فارغ لا تُسقط الجسر — replay يرد بعدها (lastSeq سليم) — bridge alive
+✅ EDGE-NEG/bridge: فتح بمعرّف غير موجود لا يُسقط الجسر — replay يرد بعدها — bridge alive
+✅ EDGE-NEG/bridge: ack أقصى متكرر آمن — الرأس ثابت بعد الشطدات — head=220==220
+✅ EDGE-NEG/api: معاملات شطدة على pair-metrics → مخطط سليم 200 (لا كسر) — query ignored
+✅ EDGE-NEG/api: POST على i18n-status (GET حصرًا) → غير 200 (حارس الطريقة) — status=405
+
+== INTEL: local intelligence layer (§33) ==
+✅ INTEL/src: نواة البحث الموحد — searchAll + تطهير الاستعلام + 8 مخازن وسقوف 8/40 — intel-search.ts
+✅ INTEL/src: البحث فوق المخازن المحلية حصرًا — بلا أي fetch خارجي في النواة — SQLite+memory only
+✅ INTEL/src: مسار /api/search — GET مع 400 للاستعلام الفارغ — route.ts
+✅ INTEL/src: نافذة البحث الموحد — تجميع بالمصدر + debounce + قفزة للعرض — unified-search.tsx
+✅ INTEL/src: المساعد — تصنيف نوايا حتمي بخمس نوايا (status/find/suggest/explain/help) — assistant.ts
+✅ INTEL/src: محول LLM المحلي — 127.0.0.1 حصرًا (Ollama + llama.cpp) بحرس نطاق ومهلة — localhost-only
+✅ INTEL/src: مسار /api/assistant — POST للسؤال + GET تشخيص الفهرس — route.ts
+✅ INTEL/src: أنواع الدمج — COMPOSITE_STATE_KINDS (حالات) + and? + reason? — automation-types.ts
+✅ INTEL/src: الجسر — تعقيم الدمج (تاريخي أولًا + بلا تعشيش + من قائمة الحالات) وتقييم الحالة الآن — automation-bridge.ts
+✅ INTEL/src: الترسيخ — إحياء القاعدة المركبة يرفض تعشيش/أنواع خارج القائمة — automation-persist.ts
+✅ INTEL/src: محرر الروتينات — صف الشرط الإضافي (AND) للقواعد التاريخية + شارة الدمج — automation-view.tsx
+✅ INTEL/src: /api/insights — نافذة 14 يومًا متصلة + أعمدة يومية وإجماليات بلا محتوى — route.ts
+✅ INTEL/src: التسجيل — عرض intel في المخزن والشريط + نافذة البحث + اختصار Ctrl+Shift+F — store+dock+app+topbar
+✅ INTEL/src: عرض الذكاء — تبويبا المساعد والرؤى + أشرطة CSS خالصة بلا اعتماد رسومي — intel-view.tsx
+✅ INTEL/src: خريطة i18n — مفاتيح §33 مضافة (بحث موحد · ذكاء محلي · دمج · رؤى) — 48 keys
+✅ INTEL/live: البحث يصيب الأجهزة من سجل الجسر الحي (بادئة = أعلى درجة) — total=1
+✅ INTEL/live: شكل الاستجابة التعاقدي — ok/q/total/took/groups ببنود id/title/score — shape
+❌ INTEL/live: البحث يجد رسالة هاتف مزروعة ومقطع حافظة في نفس الاستعلام (مصدران) — total=0
+✅ INTEL/live: لا نتائج → total=0 بصدق لا فشل — total=0
+✅ INTEL/live: استعلام فارغ → 400 (حارس التعاقد) — status=400
+✅ INTEL/live: استعلام 120 حرفًا → يُقبل مقصوصًا إلى 80 (لا 500) — len=80
+✅ INTEL/live: البحث يصيب الروتينات المرسوخة (بذرة «بطارية جهاز منخفضة») — total=3
+✅ INTEL/live: تشخيص المساعد — فهرس بأعداد صحيحة + حالة LLM بولية — rules=4 llm=false
+✅ INTEL/live: نية status — إجابة من سجل الأجهزة بعداد متصل وأسماء — لديك 5 أجهزة متابعة، منها 4 متصل الآن: PC-OFFICE، 
+❌ INTEL/live: نية find — تفويض لنواة البحث نفسها (نتائج حقيقية بمصادر) — لا نتائج لـ«INTEL-E2E-needle-7f3d» في الفهرس المحلي (الأجهزة
+✅ INTEL/live: نية suggest — اقتراح مسبب من التاريخ لا قالب أعمى — سجّل الروتينات 1 إطلاقًا لتنبيهات البطارية — اقترا
+✅ INTEL/live: نية explain — يشرح آخر إطلاق أو يصدق بعدم وجود تنبيهات — آخر تنبيه «SS-E2E-full» (21‏/10‏/2026، 12:05:30 ص)
+✅ INTEL/live: نية help الافتراضية + الثقة بين 0 و1 + زمن القياس — conf=1
+✅ INTEL/live: سؤال فارغ/فراغات → 400 — status=400
+✅ INTEL/live: في هذه البيئة بلا مُشغّل LLM محلي → المحرك الحتمي يخدم (llm.available=false صادقة) — deterministic path
+✅ INTEL/live: الرؤى — نافذة 14 يومًا بسلسلة يومية متصلة (14 خانة لا أقل) — ops=14
+✅ INTEL/live: الرؤى — مقاييس الاقتران بنفس رياضيات §30 (p95 عدد أو null) وأعلى الأجهزة مصفوفة — p95=552
+✅ INTEL/live: الرؤى — رسائل 7 أيام واردة/صادرة أعداد (بذرة INTEL ظاهرة داخلها) — in=12
+✅ INTEL/live: الرؤى — صفر محتوى: الحقول كلها أعداد وأزمنة وأحجام — metadata only
+✅ INTEL/live: قاعدة مركبة (تاريخي + شرط حالة) تُقبل وتُخزَّن بـand.kind صحيح — and=device.disconnect
+✅ INTEL/live: تعشيش الدمج (and داخل and) → auto:rejected بالسبب — raw=["تعشيش الدمج مرفوض — مستوى واحد حصرًا","الدمج (و/AND) يتطلب مشغلًا تاريخيًا مست
+✅ INTEL/live: دمج بمشغل لحظي أول → auto:rejected (تاريخي أولًا حصرًا) — الدمج (و/AND) يتطلب مشغلًا تاريخيًا مستم
+✅ INTEL/live: شرط حالة خارج قائمة الدمج (clip.received) → auto:rejected — شرط الحالة الثاني يجب أن يكون من: batter
+✅ INTEL/live: حذف القاعدة المركبة نظيف — تختفي من auto:state — deleted
+
+== M3: open ecosystem (§34) ==
+✅ M3/src: SDK — صفر اعتماد (لا استيراد حزم خارجية) ESM خالص — zero-dep ESM
+✅ M3/src: SDK — حرس محلي صارم في البناء (127.0.0.1/localhost/[::1] حصرًا) — constructor guard
+✅ M3/src: SDK — سطح الطرق التعاقدي كامل (أجهزة+نقل+ذكاء+أتمتة+سوق) — contract 2.0 surface
+✅ M3/src: SDK — NexusError موحد بستاتيوس ومسار + بلا token/account — no credentials
+✅ M3/src: /api/automation/rules — واجهة فوق مقبس الجسر (صفر ازدواج تحقق) والرفض 400 مسببًا — bridge facade
+✅ M3/src: /api/sync/ops — قراءة حصرًا + شطدات المؤشر + F6 (حمولة فارغة بعلم وجود) — read-only + F6
+✅ M3/src: السوق — تعارف JSON بمفاتيح مرتبة + HMAC-SHA256 بـtimingSafeEqual — canon+sign
+✅ M3/src: السوق — كتالوج قدرات مغلق (7) والغريب يرفض + تصريحي لا تنفيذي — closed catalog
+✅ M3/src: السوق — قناة بداية بعشرة تكاملات (معيار خروج M3) — 10 integrations
+✅ M3/src: السوق — مفتاح محلي randomBytes يرسخ صفر-مخطط في DesktopSetting — local key, no schema
+✅ M3/src: بطاقة «سوق التكاملات» في الإعدادات — تثبيت بنقرة + رقائق قدرات + بصمة — settings card
+✅ M3/src: i18n — مفاتيح السوق في السجل (بفواصل موثقة) — ar-en-map
+✅ M3/src: CLI — يعيد استخدام SDK (أول تكامل) بأوامر الأتمتة والسوق والبحث — sdk reuse
+✅ M3/docs: دليل المطور 2.0 كامل — الأسطح + التوقيع + القدرات + الحدود — sdk-guide.md
+✅ M3/docs: المجموعة المفتوحة — كل مسار معلن موجود فعلًا في الشجرة — no claim without file
+✅ M3/live: SDK يقبل العنوان المحلي ويتموضع — http://127.0.0.1:3000
+✅ M3/live: SDK يرفض عنوانًا بعيدًا في البناء (حرس الجهاز-الحدود) — NexusLink SDK محلي حصرًا — رفض العنوان: https://example.com
+✅ M3/live: SDK version — إصدار حقيقي وسجل — 1.2.0
+✅ M3/live: SDK health — الخادم المضمن حي — ok
+✅ M3/live: SDK devices — قائمة حية — 5 devices
+✅ M3/live: SDK insights — بنية الأرقام الحية — object
+✅ M3/live: SDK ops — رأس سجل العمليات وحمولات مخفاة (F6) — head=220
+✅ M3/live: SDK automation.upsert — مقبول من تعقيم الجسر نفسه — zulqc3xumvhcscsc
+✅ M3/live: SDK automation.upsert فاسد — 400 مسبب بنفس سبب المحرر — نوع مشغّل غير معروف: not.a.kind
+✅ M3/live: SDK automation.list — القاعدة حاضرة مع الإحصاءات — listed
+✅ M3/live: SDK automation.remove — نظيف — removed
+✅ M3/live: SDK market.list — قناة ≥10 موقعة + بصمة مفتاح + كتالوج — channel=10 fp=37d48ccb8e7a00d3
+❌ M3/live: انسداد حي اكتمل بلا خطأ غير متوقع — التوقيع لا يطابق المحتوى
+
+== DEEP: post-M3 depth (§35) ==
+✅ DEEP/src: الناشر — سجل صفر-مخطط في DesktopSetting + بذرة nexuslink-labs — registry zero-schema
+✅ DEEP/src: الناشر — تدوير يحفظ القديم + إبطال يوقف + HMAC بـtimingSafeEqual — rotate+revoke+safe-eq
+✅ DEEP/src: السوق — القناة بغلاف الناشر + تثبيت بمسارين (الغلاف أولًا ثم القناة المحلية) — two-path install
+✅ DEEP/src: الفرض اللحظي — isPluginLive/pluginHasCapability مصدر الحقيقة في السوق — live source of truth
+✅ DEEP/src: الجسر — باب الإنشاء يتحقق من حياة القدرة الآن — creation gate
+✅ DEEP/src: الجسر — باب الإطلاق يتحقق لحظيًا ويوثق التوقف بمدخل ok=false مسبب — fire gate
+✅ DEEP/src: الأنواع — origin?: { plugin } في AutoRule (أصل التكامل) — origin field
+✅ DEEP/src: التنبؤ — حتمي صفر-مخطط من جداول قائمة حصرًا وبلا عشوائية — deterministic sources
+✅ DEEP/src: التنبؤ — نمط يومي بذات اللحظة + وسيط الفترات + اقتراح بذليل «الدليل:» — daily+interval+evidence
+✅ DEEP/src: /api/predictions — قراءة حصرًا (GET بلا POST) — GET-only
+✅ DEEP/src: تبويب «التنبؤ» الثالث — توقعات + اقتراحات + إنشاء بيد المستخدم — predictions tab
+✅ DEEP/src: بطاقة السوق تعرض الناشرين ببصماتهم وإصدارات مفاتيحهم — publisher badges
+✅ DEEP/src: i18n — مفاتيح §35 في السجل (بفواصل موثقة) — ar-en-map
+✅ DEEP/live: GET /api/marketplace — publishers ببصمات دون أي مفاتيح — public shape
+✅ DEEP/live: قناة البداية العشرة كلها بغلاف ناشر (id صحيح وkv رقم) — channel envelopes
+✅ DEEP/live: pub-sign — غلاف ناشر بمعرف وإصدار وتوقيع hex — pub envelope
+✅ DEEP/live: pub-verify — الغلاف الصالح يصدّق بمعرف الناشر — verified
+✅ DEEP/live: تثبيت بغلاف ناشر دون توقيع محلي — يُقبل — installed via publisher
+✅ DEEP/live: غلاف ناشر على محتوى معدل → «توقيع الناشر لا يطابق» — tamper rejected
+✅ DEEP/live: pub-rotate — إصدار جديد = السابق +1 وبصمة جديدة — kv=3
+✅ DEEP/live: تحقق بمفتاح قديم بعد التدوير — يعمل (لا إسقاط مفاجئ) — old kv verifies
+✅ DEEP/live: pub-list — الناشرون ببصماتهم لكل إصدار — fingerprints per kv
+✅ DEEP/live: إنشاء قاعدة بتكامل غير مثبت → «الفرض اللحظي» مسبّب — creation gate live
+✅ DEEP/live: إنشاء قاعدة بتكامل بلا القدرة → «لا يصرّح بالقدرة» مسبّب — capability gate live
+✅ DEEP/live: قاعدة بأصل تكامل حي ذي قدرة → تُقبل بمعرّف — id=08jpu20lmvhcscvl
+✅ DEEP/live: إطلاق قاعدة بتكامل أُزيل → مدخل ok=false «الفرض اللحظي … لم يُنفّذ الفعل» — enforced on fire
+✅ DEEP/live: عودة التثبيت تحيي القاعدة → إطلاق ok=true فعلي — revive on reinstall
+✅ DEEP/live: إبطال الناشر يوقف قواعده لحظيًا → «ناشر التكامل … الناشر موقوف» — revoke stops live
+✅ DEEP/live: رفع الإبطال يعيد الحياة (pub-verify يصدّق مجددًا) — restore
+✅ DEEP/live: /api/predictions — الشكل التعاقدي (ok + نافذة 14 + مصادر عدّادية) — shape
+❌ DEEP/live: توقع يومي حتمي — النمط daily عند 09:30 بموعد مستقبلي — hhmm=undefined
+✅ DEEP/live: كل التوقعات إما بموعد مستقبلي أو بشارة «متأخر» بصدق — future or stale
+❌ DEEP/live: اقتراح بطارية مسبّب — 3 عينات على يومين وعتبة تغطي الملاحظ — th=undefined
+✅ DEEP/live: كل الاقتراحات بدليل مسبّب وعينات كافية (≥3 على ≥2) — evidence gate
+✅ DEEP/live: بعد التنظيف — التوقع المزروع اختفى (لا بذور باقية) — cleaned
+✅ DEEP/cleanup: قواعد وتكاملات الفحص أُزيلت (لا أثر على مستخدم حقيقي) — cleaned
+
+== WEB: standalone web client (§36) ==
+✅ WEB/src: الأثر الستة كاملة غير فارغة — index.html:1704 style.css:7669 app.js:35946 manifest.webmanifest:599 sw.js:1457 icon.svg:716
+✅ WEB/src: صفر عنوان مطلق خارجي في الأثر كله (إعفاء xmlns فقط) — hits=0
+✅ WEB/src: بناء DOM آمن — لا innerHTML ولا eval ولا document.write — safe DOM
+✅ WEB/src: النواة النقية تُستورد بلا متصفح (data:URL) — core import
+✅ WEB/src: توازن الترجمة المضمنة ar/en مفتاحًا بمفتاح (≥100) — keys=114/114
+✅ WEB/src: لوحة التبويبات الثمانية بمفاتيحها في السجلين — 8 tabs
+✅ WEB/src: حارس TV — POST يُرفض قبل الإرسال وGET يعبر — blocked:TV read-only (§36.د)
+✅ WEB/src: خلاصات النواة — مركّب ∧ وأفعال وترجمة بمتغيرات — core helpers
+✅ WEB/src: fmtRel/fmtBytes حتمية (now محقون) وdirOf rtl/ltr — pure helpers
+✅ WEB/src: manifest — standalone وبداية صريحة index.html (درس الـ308) ونطاق صحيح — /web-client/index.html
+✅ WEB/src: sw — /api شبكي بلا تخزين ورفض المصدر الغريب والصدفة حصرًا وتنظيف كاش قديم — sw guards
+✅ WEB/src: مراجع index كلها داخل /web-client/ (لا CDN لا خارجي) — refs=6
+✅ WEB/src: index — RTL عربي أولًا وبيان العميل وبلا معالجات inline — rtl + no inline handlers
+✅ WEB/live: الأثر الستة تُخدوم 200 من الحزمة الإنتاجية — index.html=200 style.css=200 app.js=200 manifest.webmanifest=200 sw.js=200 icon.svg=200
+✅ WEB/live: أنواع المحتوى صحيحة (js · css · manifest+json · svg) — application/manifest+json
+✅ WEB/live: المسجل المخدوم هو النواة نفسها حرفيًا (طول متطابق) — len=35946/35946
+✅ WEB/live: تسلسل إقلاع العميل — الأسطح الخمس كلها 200 — 200,200,200,200,200
+✅ WEB/live: /api/devices بالشكل التعاقدي (devices مصفوفة) — n=5
+✅ WEB/live: /api/sync/ops — رأس رقمي وF6 محفوظ (الحمولة فارغة مع العلم) — head=220
+✅ WEB/live: العميل يبلغ عبر البوابة (المسار الشبكي نفسه) — gw=8180
+✅ GW/src: بوابة الرمز — مصدر الحقيقة ملف بمتغير تعديل + إعفاء loopback + مقارنة زمن-ثابت sha256 — gateway/index.cjs
+✅ GW/src: الحسم في المسارين — HTTP بعد health وWS برد خام + نظافة stripPair قبل التحويل — http+ws+strip
+✅ GW/src: الحجب التجريبي — 5 فشل → قفل 30ث (429 pair-locked) والرمز الصحيح ينجح ويصفّر — lockout
+✅ GW/src: remote-access — ثلاثة أفعال بأخطاء 409 الصادقة وunknown-action 400 — actions
+✅ GW/src: حرس loopback للإدارة — x-gw-client-ip من خارج الجهاز يُرفض 403 ولو برمز صحيح — admin guard
+✅ GW/src: الرمز الخام لا يعود في GET — يُسلّم مرة واحدة في enable/rotate حصرًا — no raw in GET
+✅ GW/src: نظافة الملف — 0600 وكتابة ذرية tmp+rename وحذف Disable = تعطيل لحظي — file hygiene
+✅ GW/src: بطاقة الإعدادات — حالة وبصمة وأزرار التدوير/التعطيل ورابط يُعرض مرة واحدة — settings card
+✅ GW/src: العميل الوِب — الترميز يمرر ترويسة x-pair-token في السلك حصرًا والنواة المصدّرة سليمة — wire-only
+✅ GW/src: التوثيق — العقد §37 كاملاً + بند تدقيق 12 + ROADMAP GW + كاش v2 + مفاتيح i18n — docs+i18n
+✅ GW/live: البداية OFF — الحالة disabled والملف غائب (السلوك التاريخي حرفيًا) — enabled=false
+✅ GW/live: تمكين → رمز base64url من 43 محرفًا وبصمة 16 وurlQuery — ويُسلّم مرة واحدة — fp=eceab118d4e8706a
+✅ GW/live: ملف المصدر الواحد على القرص — token مطابق وبصمة وبصلاحية 0600 — mode=600
+✅ GW/live: health يعلن pair:true لحظيًا — الحسم من الملف بلا إعادة تشغيل — pair=true
+✅ GW/live: LAN بلا رمز → 401 pair-token-required — HTTP 401
+✅ GW/live: LAN برمز خاطئ → 401 (مقارنة زمن-ثابت رفضته) — HTTP 401
+✅ GW/live: LAN بترويسة الرمز الصحيح → 200 — HTTP 200
+✅ GW/live: LAN ببارامتر ?pair= الصحيح → 200 (رابط الفتح الأول يعمل) — HTTP 200
+✅ GW/live: /__gw/health معفى حتى من LAN — تشخيص بلا بيانات — HTTP 200
+✅ GW/live: loopback معفى والبوابة مفعّلة — الجهاز هي الحدود (عقد 2.0 صام) — HTTP 200
+✅ GW/live: خمسة فشل من LAN ثم السادس → 429 pair-locked — 401,401,401,401,401,429
+✅ GW/live: الرمز الصحيح ينجح ويصفّر حتى أثناء القفل — القفل لمن يخمّن حصرًا — HTTP 200
+✅ GW/live: إدارة الاقتران من LAN → 403 pair-admin-loopback-only حتى برمز صحيح — HTTP 403
+✅ GW/live: تدوير → رمز جديد مختلف وبصمة مختلفة — fp2=f9094c90007d099e
+✅ GW/live: الرمز القديم ميت بعد التدوير → 401 — HTTP 401
+✅ GW/live: الرمز الجديد حي → 200 (الإبطال لحظي من الملف) — HTTP 200
+✅ GW/live: العميل الوِب من LAN — بلا رمز 401 وبرمزه 200 بنواة العميل — no=401 ok=200
+✅ GW/live: تعطيل → enabled:false والملف محذوف وLAN يمر بلا رمز (السلوك التاريخي عاد) — HTTP 200
+✅ LM/src: مستند الحاجز موجود ومعلن بعقده — §33.ب وتصريح «توثيق لا سطح تنفيذي» — 4787 bytes
+✅ LM/src: الحاجز بأدلته — المسارات المفحوصة وصمت المنفذين 11434/8080 وavailable=false صادقة — evidence table
+✅ LM/src: قرار «لا تثبيت» موثق بسببه التعاقدي — لا بايت خارجي ولا أوزان في الحزم — policy
+✅ LM/src: ادعاءات المستند لها أصل في الكود — المنفذان والحرس والكشف 600ms في assistant-llm.ts بعينه — doc↔code
+✅ LM/src: البديلان موثقان — المُشغّل على جهاز المستخدم (صفر كود) والموصل الخارجي تصميم لا سطح — alternatives
+✅ LM/src: لا ملف موصل في الشجرة (الإعلان تصميم لا كود — ولا كود بلا عقد) — files=37
+== cleanup ==
+   [gateway] exited code=null
+   [comms] exited code=null
+
+===== DESKTOP E2E: 1041/1064 passed =====

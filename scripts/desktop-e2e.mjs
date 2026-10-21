@@ -15,6 +15,19 @@ import { setTimeout as sleep } from "node:timers/promises"
 const ROOT = new URL("..", import.meta.url).pathname
 const RES = new URL("../apps/desktop/src-tauri/resources/", import.meta.url).pathname
 
+// درس CAT3 (بيئة التحقق 2026-10-21): بيئة الاستضافة قد تُصدِّر DATABASE_URL عامًا
+// إلى مساحة عمل أخرى — وspawnProc يمرر process.env فيورثه الخادم متجاوزًا .env
+// (البيئة الحقيقية تتقدم على ملفات .env) فيبني قاعدة بذرية في مكان آخر بينما
+// قراءات المقيّس المباشرة تستهدف قاعدة المستودع — فيفشل كل قسم يعتمد الحالة
+// (دورة 1041/1064 بـ23 فشلًا حقيقيًا بهذا السبب وحده). العلاج بنمط §37.هـ.4
+// (تثبيت المسار المطلق على كل الأطراف): تثبيت URL القاعدة من ROOT/.env في مقدم
+// عملية المقيّس نفسها — فيورثه الخادم والجسور وكل عملاء Prisma للمقيّس مصدرًا
+// واحدًا حرفيًا. محايد في البيئة النظيفة (نفس قيمة .env) وحصين في الملوثة.
+{
+  const envUrl = (await import("node:fs")).default.readFileSync(`${ROOT}.env`, "utf8").match(/^DATABASE_URL=(.*)$/m)?.[1]?.trim()
+  if (envUrl) process.env.DATABASE_URL = envUrl
+}
+
 const results = []
 function check(name, cond, detail = "") {
   results.push({ name, ok: !!cond, detail })
@@ -6671,6 +6684,33 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
       // GW/cleanup: بلا أثر — الملف محذوف حتى لو توقفت الفحوص مبكرًا
       try { fsGW.rmSync(new URL("../.zstate/pair-token.json", import.meta.url).pathname, { force: true }) } catch {}
     }
+  }
+
+  // ================= LM — حاجز النموذج المحلي والبدائل (docs/local-model-barrier.md — الفئة ③.ج) =================
+  // توثيق الحاجز والبدائل — «لا إعلان بلا ملف» من جهتين: لا وعد بلا كود، ولا كود بلا عقد.
+  {
+    const fsLM = (await import("node:fs")).default
+    const readLM = (p) => fsLM.readFileSync(new URL(`../${p}`, import.meta.url), "utf8")
+    let barrier = ""
+    try { barrier = readLM("docs/local-model-barrier.md") } catch { /* غياب المستند نفسه فشل صريح */ }
+    check("LM/src: مستند الحاجز موجود ومعلن بعقده — §33.ب وتصريح «توثيق لا سطح تنفيذي»",
+      barrier.includes("حاجز النموذج المحلي المضمّن والبدائل الموثقة") && barrier.includes("§33.ب")
+      && barrier.includes("الوثيقة توثيق لا سطح تنفيذي"), `${barrier.length} bytes`)
+    check("LM/src: الحاجز بأدلته — المسارات المفحوصة وصمت المنفذين 11434/8080 وavailable=false صادقة",
+      barrier.includes("/usr/local/bin") && barrier.includes("11434") && barrier.includes("8080")
+      && barrier.includes("available=false, runtime=null") && barrier.includes("لا مستمع واحد"), "evidence table")
+    check("LM/src: قرار «لا تثبيت» موثق بسببه التعاقدي — لا بايت خارجي ولا أوزان في الحزم",
+      barrier.includes("لا تثبيت") && barrier.includes("بلا مغادرة أي بايت") && barrier.includes("لا أوزان داخل الحزم"), "policy")
+    const llmLM = readLM("src/lib/nexus/assistant-llm.ts")
+    check("LM/src: ادعاءات المستند لها أصل في الكود — المنفذان والحرس والكشف 600ms في assistant-llm.ts بعينه",
+      llmLM.includes("127.0.0.1:11434/api/tags") && llmLM.includes("127.0.0.1:8080/health")
+      && llmLM.includes("isLocalhostUrl") && llmLM.includes("PROBE_TIMEOUT_MS = 600"), "doc↔code")
+    check("LM/src: البديلان موثقان — المُشغّل على جهاز المستخدم (صفر كود) والموصل الخارجي تصميم لا سطح",
+      barrier.includes("البديل الأول") && barrier.includes("ollama serve") && barrier.includes("llama-server")
+      && barrier.includes("بروتوكول الموصل الخارجي") && barrier.includes("تصميم مقترح غير منفذ"), "alternatives")
+    const nexusDirLM = fsLM.readdirSync(new URL("../src/lib/nexus", import.meta.url).pathname)
+    check("LM/src: لا ملف موصل في الشجرة (الإعلان تصميم لا كود — ولا كود بلا عقد)",
+      !nexusDirLM.some((f) => /connector/i.test(f)), `files=${nexusDirLM.length}`)
   }
 
 } catch (e) {
