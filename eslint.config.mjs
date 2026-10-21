@@ -49,6 +49,8 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "apps/desktop/**", "mini-services/gateway/**",
     // سكربتات صيانة CJS خام في scripts (تنظيف بقايا E2E وما شابه — node خام بلا تحويل)
     "scripts/*.cjs",
+    // مولّد وثيقة خارطة الطريق DOCX — CJS خام بـrequire() صريح ومسار مطلق خارج المستودع (أداة صيانة محلية)
+    "scripts/generate-roadmap-docx.js",
     // مخرجات تحقق مصدر flutter_webrtc المنزّلة — ملفات مولّدة (Dart→JS) لا تُلمس ولا تُراجع
     "scripts/deps-verify/**"]
 }];
