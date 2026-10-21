@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "organization": "اسم مؤسستك هنا",
+  "managed": {
+    "remoteAccess": "force-on",
+    "blockedBridges": []
+  }
+}

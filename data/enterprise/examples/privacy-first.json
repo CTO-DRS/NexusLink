@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "organization": "OEM Privacy Defaults (نمط §38 — وضع «الخصوصية افتراضيًا»)",
+  "managed": {
+    "remoteAccess": "force-off",
+    "blockedBridges": [3005, 3006, 3007]
+  }
+}

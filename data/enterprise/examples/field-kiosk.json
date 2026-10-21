@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "organization": "Field Ops (أجهزة ميدانية/لوحات — رمز شرط دائم ونقل محجوب عن الخارج)",
+  "managed": {
+    "remoteAccess": "force-on",
+    "blockedBridges": [3005]
+  }
+}
