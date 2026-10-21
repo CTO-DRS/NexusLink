@@ -18,7 +18,7 @@ import {
   Accessibility, Keyboard, Gauge, HardDriveDownload, Sparkles, RotateCcw,
   Ear, Volume2, CheckCircle2, AlertTriangle, Rocket, Package, Globe,
   FolderSync, Plus, Trash2, FolderOpen, MonitorPlay, Camera, Mic,
-  Lock, Fingerprint, ScrollText, History, Type, Store, RefreshCw,
+  Lock, Fingerprint, ScrollText, History, Type, Store, RefreshCw, Building2,
 } from "lucide-react"
 import { toast } from "sonner"
 import { pickFolder } from "@/lib/desktop-files"
@@ -434,6 +434,9 @@ export function SettingsView() {
 
       {/* الوصول البعيد برمز اقتران (عقد §37 — إغلاق حد §36.هـ.1) */}
       <RemoteAccessCard />
+
+      {/* الإدارة المؤسسية (عقد §38 — M4.1 النواة المحلية) */}
+      <EnterprisePolicyCard />
 
       {/* اللغة */}
       <Card>
@@ -1157,6 +1160,9 @@ function RemoteAccessCard() {
   const [createdAt, setCreatedAt] = useState("")
   const [issued, setIssued] = useState<{ token: string; urlQuery: string } | null>(null)
   const [busy, setBusy] = useState("")
+  // §38 — تلميح الإدارة المؤسسية: ما تفرضه السياسة (force-on/force-off) —
+  // الأزرار المتعارضة تُخفى بصدق بدل إظهارها لتفشل لاحقًا (القفل في المسار نفسه).
+  const [policy, setPolicy] = useState<{ remoteAccess: string | null; organization: string | null } | null>(null)
 
   const load = useCallback(async () => {
     // كل الترسيخ داخل ردود نداء الوعد (حد استدعاء متزامن) — فشل الجلب يعرض «تعطيل» بصدق §37.د
@@ -1166,6 +1172,7 @@ function RemoteAccessCard() {
         setEnabled(!!j.enabled)
         setFp(String(j.fingerprint ?? ""))
         setCreatedAt(String(j.createdAt ?? ""))
+        setPolicy(j.policy ?? null)
       })
       .catch(() => { /* البقاء صامتًا — بطاقة إعدادات */ setEnabled(false) })
   }, [])
@@ -1199,6 +1206,11 @@ function RemoteAccessCard() {
     try { await navigator.clipboard.writeText(`${window.location.origin}/web-client/index.html${issued.urlQuery}`); toast.success(t("تم النسخ")) } catch { /* حجب الحافظة */ }
   }, [issued, t])
 
+  // §38 — الأزرار المتعارضة مع السياسة تُخفى (لا تُعطَّل بعدم فائدة):
+  // force-off → بلا تفعيل · force-on → بلا تعطيل (التدوير متروك — دورة الرمز بلا فجوة)
+  const forceOff = policy?.remoteAccess === "force-off"
+  const forceOn = policy?.remoteAccess === "force-on"
+
   return (
     <Card data-remote-access-card>
       <CardContent className="p-5 space-y-4">
@@ -1216,6 +1228,11 @@ function RemoteAccessCard() {
           <Badge variant="outline" data-ra-status={enabled ? "on" : "off"}>
             {t("الحالة")}: {enabled === null ? "…" : enabled ? t("مفعّل") : t("معطّل")}
           </Badge>
+          {(forceOn || forceOff) && (
+            <Badge variant="secondary" data-ra-managed={policy?.remoteAccess}>
+              <Building2 className="w-3 h-3" />{t("تُدار بالمؤسسة")}{policy?.organization ? <span data-no-i18n> · {policy.organization}</span> : null}
+            </Badge>
+          )}
           {enabled && fp && (
             <Badge variant="outline" className="gap-1" data-ra-fp={fp}>
               <Fingerprint className="w-3 h-3" />{t("بصمة الرمز")}: <span data-no-i18n>{fp}</span>
@@ -1224,14 +1241,19 @@ function RemoteAccessCard() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!enabled && (
+          {!enabled && !forceOff && (
             <Button size="sm" disabled={busy !== ""} onClick={() => doAction("enable")} data-ra-enable>{t("تفعيل")}</Button>
           )}
           {enabled && (
             <>
               <Button size="sm" variant="outline" disabled={busy !== ""} onClick={() => doAction("rotate")} data-ra-rotate>{t("تدوير الرمز")}</Button>
-              <Button size="sm" variant="destructive" disabled={busy !== ""} onClick={() => doAction("disable")} data-ra-disable>{t("تعطيل")}</Button>
+              {!forceOn && (
+                <Button size="sm" variant="destructive" disabled={busy !== ""} onClick={() => doAction("disable")} data-ra-disable>{t("تعطيل")}</Button>
+              )}
             </>
+          )}
+          {forceOff && (
+            <p className="text-xs text-muted-foreground" data-ra-locked="force-off">{t("الإدارة المؤسسية تغلق الوصول البعيد — التفعيل من مدير مؤسستك حصرًا")}</p>
           )}
         </div>
         {issued && (
@@ -1244,6 +1266,78 @@ function RemoteAccessCard() {
           </div>
         )}
         <p className="text-xs text-muted-foreground">{t("حد صادق: تشفير النقل عبر النفق/البنية الخارجية مسؤولية نشرها — البوابة تحسم الرمز قبل وصول أي طلب للخدمات، والإدارة من خارج الجهاز مرفوضة ولو برمز صحيح")}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
+// الإدارة المؤسسية (عقد §38 — M4.1 «النشر المؤسسي» النواة المحلية): عرض حالة
+// الإدارة وإنفاذها كما يقرأها /api/enterprise/compliance — منظرٌ توصيفي حصرًا
+// (لا إجراءات هنا: التعديل بيد المدير عبر ملف السياسة، والمسار حلقي فقط).
+// غير مُدار = السلوك التاريخي حرفيًا · invalid = تحذير صاخب (فشل-آمن §38.هـ.3).
+function EnterprisePolicyCard() {
+  const { t } = useI18n()
+  const [rep, setRep] = useState<Record<string, unknown> | null>(null)
+  const [state, setState] = useState("loading")
+
+  const load = useCallback(async () => {
+    await fetch("/api/enterprise/compliance")
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j.ok) throw new Error(String(j.error ?? ""))
+        setRep(j)
+        setState(String(j.policyState ?? "unmanaged"))
+      })
+      .catch(() => { /* البقاء صامتًا — بطاقة إعدادات */ setState("unavailable") })
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const enforced = (rep?.enforced ?? {}) as { remoteAccess?: string | null; blockedBridges?: number[] }
+  const org = typeof rep?.organization === "string" ? rep.organization : null
+  const hash = typeof rep?.policyHash === "string" ? rep.policyHash : null
+  const blocked = Array.isArray(enforced.blockedBridges) ? enforced.blockedBridges : []
+
+  return (
+    <Card data-enterprise-card>
+      <CardContent className="p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <SectionTitle
+            icon={Building2}
+            title={t("الإدارة المؤسسية")}
+            desc={t("سياسات مركزية من ملف المؤسسة — المُدار فوق المستخدم، والفرض لحظي بلا إعادة تشغيل")}
+          />
+          <Button variant="ghost" size="sm" onClick={load} aria-label={t("تحديث")}>
+            <RefreshCw className="w-4 h-4" />
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge
+            variant={state === "managed" ? "secondary" : state === "invalid" ? "destructive" : "outline"}
+            data-en-state={state}
+          >
+            {state === "managed" ? t("مُدار بواسطة مؤسستك") : state === "invalid" ? t("ملف سياسة غير صالح — لا فرض حتى يصلحه المدير") : state === "loading" ? "…" : t("غير مُدار")}
+          </Badge>
+          {state === "managed" && org && <Badge variant="outline" data-en-org={org}><Building2 className="w-3 h-3" /><span data-no-i18n>{org}</span></Badge>}
+          {state === "managed" && enforced.remoteAccess && (
+            <Badge variant="outline" data-en-ra={enforced.remoteAccess}>
+              {enforced.remoteAccess === "force-on" ? t("الوصول البعيد مفروض دائمًا برمز") : t("الوصول البعيد مغلق مؤسسيًا")}
+            </Badge>
+          )}
+          {state === "managed" && blocked.length > 0 && (
+            <Badge variant="outline" data-en-blocked={blocked.join(",")}>
+              {t("جسور محجوبة عن الشبكة")}: <span data-no-i18n>{blocked.join(" · ")}</span>
+            </Badge>
+          )}
+          {state === "managed" && hash && (
+            <Badge variant="outline" className="gap-1" data-en-hash={hash}>
+              <Fingerprint className="w-3 h-3" />{t("بصمة ملف السياسة")}: <span data-no-i18n>{hash}</span>
+            </Badge>
+          )}
+        </div>
+        {state === "unmanaged" && (
+          <p className="text-xs text-muted-foreground">{t("غير مُدار: الجهاز بيد مستخدمه بالكامل (الافتراضي) — نشر ملف السياسة يجعل هذا الجهاز قابلًا للإدارة المركزية")}</p>
+        )}
+        <p className="text-xs text-muted-foreground">{t("حد صادق: ملف السياسة مصدر الحقيقة الواحد بلا قراءة سجل النظام، والحجب يمس الخارج حصرًا (loopback معفى — الجهاز هي الحدود)، والقبول المؤسسي الموسع (نشر صامت على عشرات الأجهزة/مدقق SOC 2/عقد OEM) بند خارجي M4")}</p>
       </CardContent>
     </Card>
   )
