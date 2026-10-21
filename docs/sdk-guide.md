@@ -15,7 +15,7 @@ import { NexusLink, NexusError } from "./sdk/index.mjs"
 
 const nx = new NexusLink({ port: 3000 })        // أو { url: "http://127.0.0.1:3000" }
 
-const v = await nx.version()                     // { current: "1.2.0", history: [...] }
+const v = await nx.version()                     // { current: "2.0.0", history: [...] }
 const { devices } = await nx.devices()           // [{ id, name, state, battery… }]
 const r = await nx.search("ملاحظات")             // { ok, total, groups:[{kind,label,items}] }
 const a = await nx.ask("ما حالة أجهزتي؟")        // { ok, intent, answer, sources[] }
