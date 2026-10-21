@@ -1031,15 +1031,17 @@ function MarketCard() {
   const [busy, setBusy] = useState("")
 
   const load = useCallback(async () => {
-    try {
-      const r = await fetch("/api/marketplace")
-      const j = await r.json()
-      setChan(Array.isArray(j.channel) ? j.channel : [])
-      setInstalled(Array.isArray(j.installed) ? j.installed : [])
-      setKeyFp(String(j.keyFp ?? ""))
-      setPublishers(Array.isArray(j.publishers) ? j.publishers : [])
-    } catch { /* البقاء صامتًا — بطاقة إعدادات */ }
-    setLoaded(true)
+    // كل الترسيخ داخل ردود نداء الوعد (حد استدعاء متزامن) — نمط loadHistory المعتمد
+    await fetch("/api/marketplace")
+      .then((r) => r.json())
+      .then((j) => {
+        setChan(Array.isArray(j.channel) ? j.channel : [])
+        setInstalled(Array.isArray(j.installed) ? j.installed : [])
+        setKeyFp(String(j.keyFp ?? ""))
+        setPublishers(Array.isArray(j.publishers) ? j.publishers : [])
+      })
+      .catch(() => { /* البقاء صامتًا — بطاقة إعدادات */ })
+      .finally(() => setLoaded(true))
   }, [])
   useEffect(() => { load() }, [load])
 
@@ -1157,13 +1159,15 @@ function RemoteAccessCard() {
   const [busy, setBusy] = useState("")
 
   const load = useCallback(async () => {
-    try {
-      const r = await fetch("/api/remote-access")
-      const j = await r.json()
-      setEnabled(!!j.enabled)
-      setFp(String(j.fingerprint ?? ""))
-      setCreatedAt(String(j.createdAt ?? ""))
-    } catch { /* البقاء صامتًا — بطاقة إعدادات */ setEnabled(false) }
+    // كل الترسيخ داخل ردود نداء الوعد (حد استدعاء متزامن) — فشل الجلب يعرض «تعطيل» بصدق §37.د
+    await fetch("/api/remote-access")
+      .then((r) => r.json())
+      .then((j) => {
+        setEnabled(!!j.enabled)
+        setFp(String(j.fingerprint ?? ""))
+        setCreatedAt(String(j.createdAt ?? ""))
+      })
+      .catch(() => { /* البقاء صامتًا — بطاقة إعدادات */ setEnabled(false) })
   }, [])
   useEffect(() => { load() }, [load])
 
