@@ -72,7 +72,7 @@ export function PhoneMirror() {
 
 function HomeScreen({ hh, mm, nextAlarm, tiles, brightness }: {
   hh: string; mm: string
-  nextAlarm?: { a: { hour: number; minute: number; label: string }; in: number | null }
+  nextAlarm?: { a: { hour: number; minute: number; label: string; id?: string; days?: number[]; enabled?: boolean }; in: number | null }
   tiles: { on: boolean; Icon: typeof Wifi }[]
   brightness: number
 }) {
@@ -89,7 +89,7 @@ function HomeScreen({ hh, mm, nextAlarm, tiles, brightness }: {
           <AlarmClock className="w-3.5 h-3.5 text-teal-400 shrink-0" />
           <div className="min-w-0">
             <div className="text-[10px] font-bold truncate">{nextAlarm.a.label}</div>
-            <div className="text-[8.5px] text-white/40" dir="ltr">{alarmTime(nextAlarm.a)}</div>
+            <div className="text-[8.5px] text-white/40" dir="ltr">{alarmTime(nextAlarm.a as any)}</div>
           </div>
         </div>
       )}

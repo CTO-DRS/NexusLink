@@ -4,6 +4,7 @@
  * Onboarding تفاعلي لأول تشغيل — المرحلة 11 (بند 2)
  * 5 خطوات: ترحيب + لغة ← صلاحيات بلغة واضحة (طلبات حقيقية) ← الاقتران ← جولة الميزات ← اختصارات وأداء
  */
+import * as React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"

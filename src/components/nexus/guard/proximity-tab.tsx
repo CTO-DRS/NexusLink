@@ -35,7 +35,7 @@ export function ProximityTab() {
 
   const stateText =
     prox.state === "near" ? "الهاتف قريب — الكمبيوتر آمن"
-    : prox.state === "grace" ? `ال هاتف بعيد — قفل بعد ${Math.ceil((prox.leftMs ?? 0) / 1000)} ثانية`
+    : prox.state === "grace" ? `ال هاتف بعيد — قفل بعد ${Math.ceil(((prox.leftMs ?? 0) as number) / 1000)} ثانية`
     : prox.state === "locked" ? "الكمبيوتر مقفل الآن"
     : "مراقبة القرب متوقفة"
 
@@ -46,7 +46,7 @@ export function ProximityTab() {
         title="مراقبة القرب المباشرة"
         icon={RadioTower}
         tone={prox.state === "grace" ? "warn" : prox.state === "locked" ? "danger" : "ok"}
-        extra={<ProxStateBadge state={prox.state} leftMs={prox.leftMs} />}
+        extra={<ProxStateBadge state={prox.state} leftMs={prox.leftMs as number | null} />}
       >
         <div className="flex items-center gap-4">
           <div className={cn(
