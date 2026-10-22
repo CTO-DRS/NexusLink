@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import crypto from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
-import { readEnterprisePolicy } from "@/lib/enterprise-policy"
+import { readEnterprisePolicy, oemPrivacyActive, resolveEffectivePosture, type PostureSource } from "@/lib/enterprise-policy"
 import { appendAudit, observePolicy } from "@/lib/enterprise-audit"
 
 export const dynamic = "force-dynamic"
@@ -65,14 +65,19 @@ export async function GET() {
   const pol = readEnterprisePolicy()
   // §39 — رصد انتقالات السياسة عند القراءات الإدارية (رصد لا فرض)
   await observePolicy(pol)
+  // §40 — وضع OEM «خصوصية افتراضية» للبطاقة: العلم الفعّال ومصدر الفرض الفعلي
+  // (بلا حساسيات — توصيفي حصرًا، وسياسة المؤسسة هي من يحسم عند وجودها)
+  const posture = resolveEffectivePosture(pol)
+  const oemPrivacy = { active: oemPrivacyActive(), source: posture.source as PostureSource }
   const policy = { remoteAccess: pol.remoteAccess, organization: pol.organization }
-  if (!p) return NextResponse.json({ ok: true, enabled: false, policy })
+  if (!p) return NextResponse.json({ ok: true, enabled: false, policy, oemPrivacy })
   return NextResponse.json({
     ok: true,
     enabled: true,
     fingerprint: p.fingerprint,
     createdAt: p.createdAt,
     policy,
+    oemPrivacy,
     // الرمز الخام عمدًا غائب — يُسلَّم مرة واحدة في استجابة enable/rotate حصرًا
   })
 }
@@ -104,6 +109,19 @@ export async function POST(request: Request) {
   const pol = readEnterprisePolicy()
   // §39 — رصد السياسة قبل الحسم (كل قفل/سماح يُوثق في السجل التدقيقي)
   await observePolicy(pol)
+  // §40 — قفل المولود خاصًا: بلا سياسة صالحة + العلم = الخارج مغلق بالتصميم،
+  // فالتفعيل والتدوير بلا معنى للخارج (البوابة ترفضه ولو برمز صحيح) — نرفض
+  // بصدق بدل إصدار رمز وهمي، والفكّ حصرًا بنشر ملف سياسة صالح (المصدر الفعلي
+  // حينئذ "policy" فتُطبَّق أقفال §38 بدلًا من هذا القفل). التعطيل متروك:
+  // حذف رمز لا يزيد تعريضًا أبدًا.
+  const postureForLock = resolveEffectivePosture(pol)
+  if (postureForLock.source === "oem-default" && (action === "enable" || action === "rotate")) {
+    await appendAudit("pair.admin.denied", false, "local", { action, reason: "oem-privacy-default" })
+    return NextResponse.json(
+      { ok: false, error: "oem-privacy-default", hint: "deploy-policy-file" },
+      { status: 403 },
+    )
+  }
   if (pol.state === "managed" && pol.remoteAccess === "force-off" && (action === "enable" || action === "rotate")) {
     await appendAudit("pair.admin.denied", false, "local", { action, reason: "policy-force-off" })
     return NextResponse.json({ ok: false, error: "policy-remote-access-locked", policy: "force-off" }, { status: 403 })

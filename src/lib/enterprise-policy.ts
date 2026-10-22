@@ -19,7 +19,16 @@ import crypto from "node:crypto"
 // /api/remote-access (قفل الإجراءات المتعارضة) — الجهاز هي الحدود (عقد 2.0):
 // loopback معفى دائمًا — الإدارة تحكم التعريض الخارجي حصرًا.
 // هذا الملف مطابق منطقيًا لمنطق البوابة في mini-services/gateway/index.cjs
-// (loadPolicy) — التعديل هنا يستوجب مراجعة هناك (نمط §37: نسختان مطابقتان).
+// (loadPolicy + externalClosedBy + effectiveBlockedBridges) — التعديل هنا
+// يستوجب مراجعة هناك (نمط §37: نسختان مطابقتان).
+//
+// §40 — وضع OEM «خصوصية افتراضية» (M4.3 النواة المحلية):
+// العلم البيئي NEXUSLINK_OEM_PRIVACY=1 تضعه صورة النظام فيُورثه كل العمليات —
+// الجهاز «مولود خاص»: بلا سياسة صالحة يكون الخارج مرفوضًا (حتى برمز صحيح)
+// وكل الجسور محجوبة عن الخارج (دفاع ثانٍ خلف الباب الأمامي المغلق — الخطأ
+// المُلاحَظ للخارج هو رفض الباب حصرًا)، وملف غير صالح يبقى مغلقاً (فشل-مغلق —
+// عكس اتجاه §38 المتعمد في وضع المستخدم) — وسياسة صالحة تفوز كاملة (مسار MDM).
+// resolveEffectivePosture هي مرآة externalClosedBy/effectiveBlockedBridges.
 
 export const BRIDGES = [3003, 3004, 3005, 3006, 3007, 3008, 3009] as const
 
@@ -172,4 +181,43 @@ export function policyStateLabel(p: EnterprisePolicy, ar = true): string {
 }
 
 export const POLICY_CONTRACT = "§38"
+export const OEM_PRIVACY_ENV = "NEXUSLINK_OEM_PRIVACY"
+
+/** §40 — العلم البيئي لوضع OEM «خصوصية افتراضية» — تضعه صورة النظام
+ * (وحدة systemd/launchd/خدمة ويندوز) فيُورثه خادم الويب والبوابة معًا */
+export function oemPrivacyActive(): boolean {
+  return process.env[OEM_PRIVACY_ENV] === "1"
+}
+
+export type PostureSource = "policy" | "oem-default" | "user-default"
+
+export interface EffectivePosture {
+  /** من يملك الفرض الفعلي: ملف سياسة صالح | مولود خاص بالعلم | سلوك المستخدم التاريخي */
+  source: PostureSource
+  remoteAccess: RemoteAccessPolicy
+  blockedBridges: number[]
+  /** الخارج مغلق كليًا (force-off فعلي) — حتى برمز اقتران صحيح */
+  closed: boolean
+}
+
+/** §40 — الفرض الفعلي فوق أي حالة سياسة (مرآة منطق البوابة حرفيًا):
+ * - مُدار: السياسة تفوز كاملة (تخفيف MDM أو تشديد).
+ * - oem-default: بلا سياسة صالحة + العلم = مولود خاص: force-off + كل الجسور —
+ *   ويشمل invalid (فشل-مغلق: الملف التالف لا يفتح جهازًا مولودًا خاصًا).
+ * - user-default: بلا علم = السلوك التاريخي حرفيًا (صفر تغيير — حد §38). */
+export function resolveEffectivePosture(pol: EnterprisePolicy): EffectivePosture {
+  if (pol.state === "managed") {
+    return {
+      source: "policy",
+      remoteAccess: pol.remoteAccess,
+      blockedBridges: pol.blockedBridges,
+      closed: pol.remoteAccess === "force-off",
+    }
+  }
+  if (oemPrivacyActive()) {
+    return { source: "oem-default", remoteAccess: "force-off", blockedBridges: [...BRIDGES], closed: true }
+  }
+  return { source: "user-default", remoteAccess: null, blockedBridges: [], closed: false }
+}
+
 export const POLICY_OS_HINT = `${os.type()} ${os.release()}`
