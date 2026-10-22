@@ -52,8 +52,22 @@ let pairCache = { mtimeMs: -1, size: -1, data: null }
 //    معفى دائمًا (الجهاز هي الحدود — عقد 2.0).
 //  - ملف غير صالح = لا فرض (فشل-آمن نحو سلوك المستخدم) — الحالة تُعلن في
 //    /api/enterprise/compliance (حد §38.هـ.3).
-// هذا المنطق مطابق لمنطق src/lib/enterprise-policy.ts — التعديل هناك يستوجب
-// مراجعة هنا (نمط النسختين المتطابقتين نفسه).
+//
+// §40 — وضع OEM «خصوصية افتراضية» (M4.3 النواة المحلية — docs/protocol-contract.md):
+//  - العلم البيئي NEXUSLINK_OEM_PRIVACY=1 تضعه صورة النظام (وحدة systemd/launchd/
+//    خدمة ويندوز) فيُورثه كل عمليات NexusLink — الجهاز «مولود خاص»: بلا ملف
+//    سياسة صالح يكون الوصول الخارجي مرفوضًا (حتى برمز صحيح) وكل الجسور
+//    (3003..3009) محجوبة عن الخارج — loopback معفى دائمًا كما هو.
+//  - عكس اتجاه §38 المتعمد في وضع المستخدم: §38 فشل-آمن نحو المستخدم (ملف
+//    غائب/غير صالح = لا فرض)، و§40 فشل-مغلق للمولود خاصًا (ملف غير صالح يبقى
+//    مغلقاً + الحالة معلنة) — سياسة صالحة تفوز كاملة فتخفف الوضع (مسار MDM).
+//  - حجب كل الجسور تحت المولود خاصًا دفاع ثانٍ خلف الباب الأمامي: الخطأ
+//    المُلاحَظ للخارج هو رفض الباب الأمامي (remote-access-closed-oem-default)
+//    حصرًا — قائمة الجسور تُلاحَظ تحت سياسة صالحة بقائمة حجب خاصة (خطأ
+//    bridge-blocked-by-policy) كما في §38.
+//  - التشخيص الحي في /__gw/health (oemPrivacy + postureSource).
+// هذا المنطق مطابق لمنطق src/lib/enterprise-policy.ts (resolveEffectivePosture)
+// — التعديل هنا يستوجب مراجعة هناك (نمط النسختين المتطابقتين نفسه).
 const POLICY_FILE_CANDIDATES = [
   process.env.NEXUSLINK_POLICY_FILE,
   process.platform === "win32"
@@ -85,6 +99,31 @@ function loadPolicy() {
     policyCache = { mtimeMs: -1, size: -1, data: null }
     return null
   }
+}
+
+// §40 — العلم البيئي لوضع OEM «خصوصية افتراضية» — تضعه صورة النظام في بيئة
+// العمليات (وحدة systemd/launchd/خدمة ويندوز) فيُورثه البوابة والويب معًا.
+const OEM_PRIVACY_ENV = "NEXUSLINK_OEM_PRIVACY"
+function oemPrivacyActive() {
+  return process.env[OEM_PRIVACY_ENV] === "1"
+}
+
+/** §40 — حسم «الإغلاق الخارجي» الفعلي: "policy" تحت force-off صالح،
+ * "oem-default" للمولود خاصًا (بلا سياسة صالحة + العلم)، وإلا null */
+function externalClosedBy(policy) {
+  if (policy && policy.remoteAccess === "force-off") return "policy"
+  if (!policy && oemPrivacyActive()) return "oem-default"
+  return null
+}
+
+/** §40 — الجسور المحجوبة فعليًا عن الخارج (دفاع ثانٍ خلف الباب الأمامي):
+ * قائمة السياسة تحت ملف صالح، وكل الجسور للمولود خاصًا بلا ملف صالح (لا
+ * تُلاحَظ مالم تُفتح الباب — والباب الأمامي المغلق يرفض قبلها)، ولا شيء
+ * في وضع المستخدم */
+function effectiveBlockedBridges(policy) {
+  if (policy) return policy.blockedBridges
+  if (oemPrivacyActive()) return [...BRIDGE_PORTS]
+  return []
 }
 
 /** تحقق مخطط v1 — null عند أي مخالفة (فشل-آمن بلا فرض) */
@@ -175,11 +214,13 @@ function pairCandidate(req, u) {
 /** حسم البوابة لطلب HTTP — false = رُفض وردّ 401/429 (المتصل loopback معفى دائمًا) */
 function pairGateHttp(req, res, reqUrl) {
   const ip = clientIp(req)
-  // §38 — الفرض المؤسسي قبل حسم الرمز: force-off يلغي معنى الرمز أصلًا
+  // §38/§40 — الفرض المؤسسي قبل حسم الرمز: force-off بالسياسة أو المولود خاصًا
+  // يلغي معنى الرمز أصلًا (خطأ تشخيصي مميز لكل مصدر)
   const policy = loadPolicy()
-  if (!isLoopbackIp(ip) && policy && policy.remoteAccess === "force-off") {
+  const closedBy = externalClosedBy(policy)
+  if (!isLoopbackIp(ip) && closedBy) {
     res.writeHead(403, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" })
-    res.end(JSON.stringify({ ok: false, gateway: true, error: "remote-access-disabled-by-policy" }))
+    res.end(JSON.stringify({ ok: false, gateway: true, error: closedBy === "policy" ? "remote-access-disabled-by-policy" : "remote-access-closed-oem-default" }))
     return false
   }
   const pair = loadPair()
@@ -205,9 +246,10 @@ function pairGateHttp(req, res, reqUrl) {
 function pairGateRaw(req, socket, reqUrl) {
   const ip = clientIp(req)
   const policy = loadPolicy()
-  if (!isLoopbackIp(ip) && policy && policy.remoteAccess === "force-off") {
+  const closedBy = externalClosedBy(policy)
+  if (!isLoopbackIp(ip) && closedBy) {
     try {
-      socket.end("HTTP/1.1 403 Forbidden\r\ncontent-type: application/json\r\n\r\n" + JSON.stringify({ ok: false, gateway: true, error: "remote-access-disabled-by-policy" }))
+      socket.end("HTTP/1.1 403 Forbidden\r\ncontent-type: application/json\r\n\r\n" + JSON.stringify({ ok: false, gateway: true, error: closedBy === "policy" ? "remote-access-disabled-by-policy" : "remote-access-closed-oem-default" }))
     } catch { /* مقبس ميت */ }
     return false
   }
@@ -269,13 +311,16 @@ function targetPort(reqUrl) {
   }
 }
 
-/** §38 — حظر جسور بالسياسة عن الخارج حصرًا: false = رُفض 403 (loopback معفى) */
+/** §38/§40 — حظر الجسور عن الخارج حصرًا: بقائمة السياسة تحت ملف صالح،
+ * وبكل الجسور للمولود خاصًا (دفاع ثانٍ خلف الباب الأمامي المغلق) —
+ * false = رُفض 403 (loopback معفى دائمًا) */
 function policyBridgeGate(req, res, port) {
   if (!port) return true // REST 3000 ليست جسرًا قابلًا للحجب
   const ip = clientIp(req)
   if (isLoopbackIp(ip)) return true
   const policy = loadPolicy()
-  if (!policy || !policy.blockedBridges.includes(port)) return true
+  const blocked = effectiveBlockedBridges(policy)
+  if (!blocked.includes(port)) return true
   res.writeHead(403, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" })
   res.end(JSON.stringify({ ok: false, gateway: true, error: "bridge-blocked-by-policy", port }))
   return false
@@ -342,10 +387,11 @@ function proxyUpgrade(req, socket, head) {
     return
   }
   const port = t ?? REST_PORT
-  // §38 — حظر جسور بالسياسة عن الخارج حصرًا (WS نفس الحسم — برد خام)
+  // §38/§40 — حظر جسور عن الخارج حصرًا (WS نفس الحسم — برد خام)
   if (t && !isLoopbackIp(clientIp(req))) {
     const policy = loadPolicy()
-    if (policy && policy.blockedBridges.includes(t)) {
+    const blocked = effectiveBlockedBridges(policy)
+    if (blocked.includes(t)) {
       try { socket.end("HTTP/1.1 403 Forbidden\r\ncontent-type: application/json\r\n\r\n" + JSON.stringify({ ok: false, gateway: true, error: "bridge-blocked-by-policy", port: t })) } catch {}
       return
     }
@@ -378,7 +424,7 @@ const server = http.createServer((req, res) => {
     if (path === "/__gw/health") {
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store", "access-control-allow-origin": "*" })
       const pol = loadPolicy()
-      res.end(JSON.stringify({ ok: true, proto: "Nexus/1.2", role: "gateway", port: GATEWAY_PORT, rest: REST_PORT, uptimeMs: Date.now() - STARTED_AT, pair: !!loadPair(), policyManaged: !!pol, policyRemoteAccess: pol ? pol.remoteAccess : null }))
+      res.end(JSON.stringify({ ok: true, proto: "Nexus/1.2", role: "gateway", port: GATEWAY_PORT, rest: REST_PORT, uptimeMs: Date.now() - STARTED_AT, pair: !!loadPair(), policyManaged: !!pol, policyRemoteAccess: pol ? pol.remoteAccess : null, oemPrivacy: oemPrivacyActive(), postureSource: pol ? "policy" : oemPrivacyActive() ? "oem-default" : "user-default" }))
       return
     }
     if (!pairGateHttp(req, res, req.url)) return

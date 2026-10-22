@@ -1,7 +1,7 @@
 import fs from "node:fs"
 import path from "node:path"
 import crypto from "node:crypto"
-import { resolvePolicyPathForAudit, type EnterprisePolicy } from "@/lib/enterprise-policy"
+import { resolvePolicyPathForAudit, oemPrivacyActive, resolveEffectivePosture, type EnterprisePolicy } from "@/lib/enterprise-policy"
 
 // §39 — السجل التدقيقي المؤسسي المحلي (M4.2 «شهادات الثقة» — النواة المحلية)
 // ============================================================
@@ -151,6 +151,9 @@ export function observePolicy(pol: EnterprisePolicy): Promise<void> {
   // الدورة الجديدة أولًا: ملف غائب = لا دليل سابق في هذه الدورة — الرصد الأولي يعاد
   // (قبل قصر تطابق الحالة، وإلا فالجولة الثانية على التطبيق الحي تفقد الرصد الأولي)
   if (!verifyAuditChain().exists) lastObs = null
+  // §40 — مصدر الفرض الفعلي يرافق كل رصد (إغناء الدليل لا تغيير عقده:
+  // d حرة الشكل وتُغشى بالبصمة، والسجلات القديمة تبقى صالحة كما هي)
+  const posture40 = resolveEffectivePosture(pol)
   const sig = { state: pol.state, hash: pol.hash }
   if (lastObs && lastObs.state === sig.state && lastObs.hash === sig.hash) return Promise.resolve()
   const anchor = lastObs
@@ -159,8 +162,8 @@ export function observePolicy(pol: EnterprisePolicy): Promise<void> {
     true,
     "local",
     anchor
-      ? { from: { ...anchor }, to: { state: pol.state, hash: pol.hash, org: pol.organization, ra: pol.remoteAccess } }
-      : { state: pol.state, hash: pol.hash, org: pol.organization, ra: pol.remoteAccess },
+      ? { from: { ...anchor }, to: { state: pol.state, hash: pol.hash, org: pol.organization, ra: pol.remoteAccess }, oem: oemPrivacyActive(), source: posture40.source }
+      : { state: pol.state, hash: pol.hash, org: pol.organization, ra: pol.remoteAccess, oem: oemPrivacyActive(), source: posture40.source },
   ).then((written) => {
     if (written) lastObs = sig
   })
