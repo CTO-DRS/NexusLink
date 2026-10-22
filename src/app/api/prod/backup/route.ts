@@ -107,14 +107,14 @@ export async function POST(req: Request) {
       if (!existing) {
         // جهاز من النسخة الاحتياطية غير موجود حالياً → يُعاد بإعدادات افتراضية سليمة
         reg.devices.push({
-          id: dv.id, name: dv.name, kind: dv.kind as never, state: "offline",
+          id: dv.id, name: dv.name, kind: dv.kind as any, state: "offline",
           mode: "wifi", ip: "192.168.1.9", battery: 80,
           storageTotal: 128 * 1024 ** 3, storageUsed: 64 * 1024 ** 3,
           lastSeen: Date.now(), rttMs: 25, pairedAt: dv.pairedAt ?? Date.now(), trusted: true,
-        })
+        } as any)
         result.devices++
       } else if (dv.trusted) {
-        existing.trusted = true
+        (existing as any).trusted = true
         result.devices++
       }
     }

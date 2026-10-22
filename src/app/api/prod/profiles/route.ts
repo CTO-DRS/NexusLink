@@ -45,7 +45,9 @@ export async function PATCH(req: Request) {
   const state = await db.prodState.findUnique({ where: { id: "main" } })
   if (state?.activeProfileId === d.id) {
     await db.prodState.update({ where: { id: "main" }, data: { notifsPaused: !profile.notifs } })
-    prodEmit("net:changed", { network: state.network, profile, auto: false, at: Date.now() })
+    if (state.network) {
+      prodEmit("net:changed", { network: state.network, profile, auto: false, at: Date.now() })
+    }
   }
   return Response.json({ ok: true, profile })
 }
@@ -59,6 +61,9 @@ export async function DELETE(req: Request) {
   const state = await db.prodState.findUnique({ where: { id: "main" } })
   if (state?.activeProfileId === id) {
     await db.prodState.update({ where: { id: "main" }, data: { activeProfileId: null, notifsPaused: false } })
+    if (state.network) {
+      prodEmit("net:changed", { network: state.network, profile: null, auto: false, at: Date.now() })
+    }
   }
   return Response.json({ ok: true })
 }
