@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import crypto from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
-import { readEnterprisePolicy, policyPaths, POLICY_CONTRACT } from "@/lib/enterprise-policy"
+import { readEnterprisePolicy, policyPaths, POLICY_CONTRACT, oemPrivacyActive, resolveEffectivePosture } from "@/lib/enterprise-policy"
 import { observePolicy, auditSummary, AUDIT_CONTRACT } from "@/lib/enterprise-audit"
 
 export const dynamic = "force-dynamic"
@@ -60,6 +60,9 @@ export async function GET(request: Request) {
   const pol = readEnterprisePolicy()
   // §39 — رصد انتقالات السياسة عند قراءات الامتثال (إدارة التغيير — أدلة SOC 2)
   await observePolicy(pol)
+  // §40 — وضع OEM «خصوصية افتراضية»: العلم الفعّال ومصدر الفرض الفعلي فوق
+  // حالة الملف (المولود خاصًا فشل-مغلق — الملف التالف لا يفتح جهازًا خاصًا)
+  const posture = resolveEffectivePosture(pol)
   const pair = readPairFile()
   return NextResponse.json({
     ok: true,
@@ -74,6 +77,17 @@ export async function GET(request: Request) {
     enforced: {
       remoteAccess: pol.remoteAccess,
       blockedBridges: pol.blockedBridges,
+    },
+    // §40 — الفرض الفعلي: من يملك الحسم (سياسة صالحة | مولود خاص | المستخدم)
+    // وما يترتب عليه فعليًا على الخارج — التوصيف الصادق للوضع المطبق الآن
+    oemPrivacy: {
+      active: oemPrivacyActive(),
+      source: posture.source,
+      effective: {
+        remoteAccess: posture.remoteAccess,
+        blockedBridges: posture.blockedBridges,
+        closed: posture.closed,
+      },
     },
     pairGate: {
       enabled: !!pair,
