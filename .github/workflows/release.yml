@@ -28,7 +28,7 @@ permissions:
   contents: write
 
 env:
-  VERSION: "2.0.0" # رقم إصدار موحّد لكل المنصات (يجب أن يطابق الملفات الأربعة — BUILD.md §5)
+  VERSION: "3.0.0" # رقم إصدار موحّد لكل المنصات (يجب أن يطابق الملفات الأربعة — BUILD.md §5)
 
 jobs:
   test:
