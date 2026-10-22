@@ -58,13 +58,13 @@ export function useGuardBridge() {
     socket.on("disconnect", () => st().setBridgeOnline(false))
 
     // ==== حالة القرب من المحرك المركزي ====
-    socket.on("prox:state", (d: { state: string; rssi: number | null; source: "real" | "sim" | null; leftMs: number | null; settings?: { enabled: boolean; thresholdRssi: number; graceSec: number; autoUnlock: boolean } }) => {
-      const patch: Partial<ProxInfo> = {
+    socket.on("prox:state", (d: { state: string; rssi: number | null; source: "real" | "sim" | null; leftMs?: number | null; settings?: { enabled: boolean; thresholdRssi: number; graceSec: number; autoUnlock: boolean } }) => {
+      const patch: Partial<ProxInfo & { leftMs?: number | null, source?: any }> = {
         rssi: d.rssi,
         state: d.state as never,
-        leftMs: d.leftMs,
+        leftMs: d.leftMs as any,
         source: d.source,
-      }
+      } as any
       if (d.settings) {
         patch.enabled = d.settings.enabled
         patch.thresholdRssi = d.settings.thresholdRssi

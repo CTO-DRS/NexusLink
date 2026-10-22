@@ -109,7 +109,7 @@ export function Onboarding() {
     <div className="rounded-2xl border p-4 space-y-2">
       <div className="flex items-center gap-2.5">
         <div className="w-8 h-8 rounded-xl bg-primary/12 text-primary grid place-items-center shrink-0">
-          <icon className="w-4 h-4" />
+          {React.createElement(icon, { className: "w-4 h-4" })}
         </div>
         <div className="font-semibold text-sm flex-1">{title}</div>
         {state && (

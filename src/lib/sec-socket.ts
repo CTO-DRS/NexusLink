@@ -13,8 +13,7 @@ export function getSecSocket(): Socket {
       reconnectionAttempts: 40,
       reconnectionDelay: 1000,
       timeout: 10000,
-      maxHttpBufferSize: 3e6,
-    })
+    } as any)
     ;(window as unknown as { __nexusSecSocket?: Socket }).__nexusSecSocket = socket
   }
   return socket

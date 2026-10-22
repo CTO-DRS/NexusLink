@@ -680,13 +680,13 @@ export const useMedia = create<MediaState>((set, get) => ({
   loadGallery: async () => {
     set((s) => ({ gallery: { ...s.gallery, loading: true } }))
     try {
-      const pickers: Array<{ dev: MediaDeviceId; dirs: string[] }> = [
+      const pickers: Array<{ dev: MediaDeviceId | "ipad-pro"; dirs: string[] }> = [
         { dev: "galaxy-s24", dirs: ["/DCIM/Camera", "/WhatsApp/Media"] },
         { dev: "pc-office", dirs: ["/Photos"] },
         { dev: "ipad-pro", dirs: ["/Media"] },
       ]
       const dev = get().gallery.device
-      const targets = dev === "all" ? pickers : pickers.filter((p) => p.dev === dev)
+      const targets = dev === "all" ? pickers : pickers.filter((p) => (p.dev === dev)) as any
       const photos: GalleryPhoto[] = []
       for (const t of targets) {
         for (const dir of t.dirs) {
@@ -696,7 +696,7 @@ export const useMedia = create<MediaState>((set, get) => ({
             for (const e of (j.entries ?? []) as Array<{ type: string; category: string; name: string; path: string; size: number; mtime: number }>) {
               if (e.type === "file" && e.category === "image") {
                 photos.push({
-                  id: `${t.dev}:${e.path}`, device: t.dev, path: e.path,
+                  id: `${t.dev}:${e.path}`, device: t.dev as MediaDeviceId, path: e.path,
                   name: e.name, mtime: e.mtime, size: e.size,
                 })
               }

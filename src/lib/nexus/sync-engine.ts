@@ -175,7 +175,7 @@ export async function runPairSync(pairId: string, emit: SyncEmit = noEmit) {
 }
 
 function offlineReason(a: boolean, b: boolean, pair: { deviceA: string; deviceB: string }): string {
-  const names = []
+  const names: string[] = []
   if (!a) names.push(deviceName(pair.deviceA))
   if (!b) names.push(deviceName(pair.deviceB))
   return `${names.join(" و ")} غير متصل — ستجري المزامنة تلقائياً عند عودته`

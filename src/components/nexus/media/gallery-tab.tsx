@@ -46,7 +46,7 @@ export function GalleryTab() {
   function openPreview(device: string, path: string, name: string, size: number, mtime: number) {
     const entry: FsEntry = {
       name, path, type: "file", size, mtime,
-      category: "image", mime: "image/jpeg",
+      category: "image", mime: "image/jpeg", ext: name.split('.').pop() || 'jpg',
     }
     setPreviewEntry(entry)
   }
@@ -75,7 +75,7 @@ export function GalleryTab() {
             variant={gallery.device === d.id ? "default" : "outline"}
             size="sm"
             className="h-7 rounded-lg text-[11px]"
-            onClick={() => setGalleryDevice(d.id)}
+            onClick={() => setGalleryDevice(d.id as any)}
           >
             {d.id === "all" ? <Images className="w-3 h-3" /> : <Smartphone className="w-3 h-3" />} {d.label}
           </Button>
