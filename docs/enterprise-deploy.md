@@ -64,9 +64,9 @@
 ### Windows (Intune / GPO / أي MDM يدعم MSI أو Win32)
 ```powershell
 # MSI — صامت تمامًا (لا واجهة ولا إعادة تشغيل)
-msiexec /i NexusLink_2.0.0_x64_en-US.msi /qn /norestart
+msiexec /i NexusLink_3.0.0_x64_en-US.msi /qn /norestart
 # NSIS بديل
-NexusLink_2.0.0_x64-setup.exe /S
+NexusLink_3.0.0_x64-setup.exe /S
 ```
 - **Intune**: أضف تطبيق Win32 (IntuneWin) أو MSI مباشرة، ثم سكربت PowerShell
   للخطوة الثانية: `Copy-Item policy.json 'C:\ProgramData\NexusLink\'`.
@@ -79,7 +79,7 @@ NexusLink_2.0.0_x64-setup.exe /S
 ```bash
 # تثبيت DMG بالبرمجة (غير موقّع — زر يمين Open للتشغيل الأول اليدوي، أو
 # زر التحميل المسبق OEM بوضع الحارس الطرفي)
-hdiutil attach NexusLink_2.0.0_aarch64.dmg -nobrowse
+hdiutil attach NexusLink_3.0.0_aarch64.dmg -nobrowse
 cp -R "/Volumes/NexusLink/NexusLink.app" /Applications/
 hdiutil detach "/Volumes/NexusLink"
 # ملف السياسة
@@ -92,12 +92,12 @@ cp policy.json "/Library/Application Support/NexusLink/policy.json"
 
 ### Linux (deb / AppImage)
 ```bash
-sudo apt install ./NexusLink_2.0.0_amd64.deb
+sudo apt install ./NexusLink_3.0.0_amd64.deb
 sudo mkdir -p /etc/nexuslink && sudo cp policy.json /etc/nexuslink/policy.json
 ```
 
 ### Android (Managed Google Play / Intune / المدير المدار)
-- ثبّت `app-release.aab` عبر Play المدار أو `NexusLink-2.0.0-release.apk`
+- ثبّت `app-release.aab` عبر Play المدار أو `NexusLink-3.0.0-release.apk`
   بأي MDM أندرويد (نشر صامت على الأجهزة المدارة بالكامل).
 - ملف السياسة على أندرويد: عبر MDM انسخ الملف إلى التخزين الخارجي للتطبيق
   ومرّر المسار بمتغير البيئة `NEXUSLINK_POLICY_FILE` عند تشغيل خدمة الجهاز

@@ -1,7 +1,7 @@
 name: nexuslink_mobile
 description: "NexusLink Device Agent — وكيل الجهاز لمنصة ربط الأجهزة NexusLink (LAN فقط)"
 publish_to: "none"
-version: 2.0.0+4
+version: 3.0.0+5
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
