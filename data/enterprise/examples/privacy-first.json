@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "organization": "OEM Privacy Defaults (نمط §38 — وضع «الخصوصية افتراضيًا»)",
+  "organization": "OEM Privacy Defaults (§40: العلم NEXUSLINK_OEM_PRIVACY=1 يولد الجهاز خاصًا — وهذا الملف لتخفيف لاحق بيد MDM)",
   "managed": {
     "remoteAccess": "force-off",
     "blockedBridges": [3005, 3006, 3007]

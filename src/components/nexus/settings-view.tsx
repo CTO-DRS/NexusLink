@@ -1163,6 +1163,9 @@ function RemoteAccessCard() {
   // §38 — تلميح الإدارة المؤسسية: ما تفرضه السياسة (force-on/force-off) —
   // الأزرار المتعارضة تُخفى بصدق بدل إظهارها لتفشل لاحقًا (القفل في المسار نفسه).
   const [policy, setPolicy] = useState<{ remoteAccess: string | null; organization: string | null } | null>(null)
+  // §40 — وضع OEM «خصوصية افتراضية»: العلم الفعّال ومصدر الفرض (المولود خاصًا
+  // يغلق التفعيل/التدوير بصدق — الفكّ حصرًا بملف سياسة من مدير النظام)
+  const [oem, setOem] = useState<{ active: boolean; source: string } | null>(null)
 
   const load = useCallback(async () => {
     // كل الترسيخ داخل ردود نداء الوعد (حد استدعاء متزامن) — فشل الجلب يعرض «تعطيل» بصدق §37.د
@@ -1173,6 +1176,7 @@ function RemoteAccessCard() {
         setFp(String(j.fingerprint ?? ""))
         setCreatedAt(String(j.createdAt ?? ""))
         setPolicy(j.policy ?? null)
+        setOem(j.oemPrivacy ?? null)
       })
       .catch(() => { /* البقاء صامتًا — بطاقة إعدادات */ setEnabled(false) })
   }, [])
@@ -1210,6 +1214,8 @@ function RemoteAccessCard() {
   // force-off → بلا تفعيل · force-on → بلا تعطيل (التدوير متروك — دورة الرمز بلا فجوة)
   const forceOff = policy?.remoteAccess === "force-off"
   const forceOn = policy?.remoteAccess === "force-on"
+  // §40 — المولود خاصًا: بلا تفعيل ولا تدوير (الرمز بلا معنى والخارج مغلق بالتصميم)
+  const oemLocked = !!oem?.active && oem.source === "oem-default"
 
   return (
     <Card data-remote-access-card>
@@ -1233,6 +1239,9 @@ function RemoteAccessCard() {
               <Building2 className="w-3 h-3" />{t("تُدار بالمؤسسة")}{policy?.organization ? <span data-no-i18n> · {policy.organization}</span> : null}
             </Badge>
           )}
+          {oemLocked && (
+            <Badge variant="secondary" data-ra-oem="1"><ShieldCheck className="w-3 h-3" />{t("وضع OEM: الخصوصية افتراضيًا")}</Badge>
+          )}
           {enabled && fp && (
             <Badge variant="outline" className="gap-1" data-ra-fp={fp}>
               <Fingerprint className="w-3 h-3" />{t("بصمة الرمز")}: <span data-no-i18n>{fp}</span>
@@ -1241,12 +1250,14 @@ function RemoteAccessCard() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!enabled && !forceOff && (
+          {!enabled && !forceOff && !oemLocked && (
             <Button size="sm" disabled={busy !== ""} onClick={() => doAction("enable")} data-ra-enable>{t("تفعيل")}</Button>
           )}
           {enabled && (
             <>
-              <Button size="sm" variant="outline" disabled={busy !== ""} onClick={() => doAction("rotate")} data-ra-rotate>{t("تدوير الرمز")}</Button>
+              {!oemLocked && (
+                <Button size="sm" variant="outline" disabled={busy !== ""} onClick={() => doAction("rotate")} data-ra-rotate>{t("تدوير الرمز")}</Button>
+              )}
               {!forceOn && (
                 <Button size="sm" variant="destructive" disabled={busy !== ""} onClick={() => doAction("disable")} data-ra-disable>{t("تعطيل")}</Button>
               )}
@@ -1254,6 +1265,9 @@ function RemoteAccessCard() {
           )}
           {forceOff && (
             <p className="text-xs text-muted-foreground" data-ra-locked="force-off">{t("الإدارة المؤسسية تغلق الوصول البعيد — التفعيل من مدير مؤسستك حصرًا")}</p>
+          )}
+          {oemLocked && (
+            <p className="text-xs text-muted-foreground" data-ra-locked="oem-default">{t("وضع الخصوصية الافتراضية من الشركة المصنعة يغلق الوصول الخارجي — فكّه يتطلب ملف سياسة من مدير النظام")}</p>
           )}
         </div>
         {issued && (
@@ -1320,6 +1334,12 @@ function EnterprisePolicyCard() {
   const org = typeof rep?.organization === "string" ? rep.organization : null
   const hash = typeof rep?.policyHash === "string" ? rep.policyHash : null
   const blocked = Array.isArray(enforced.blockedBridges) ? enforced.blockedBridges : []
+  // §40 — وضع OEM «خصوصية افتراضية»: العلم الفعّال ومصدر الفرض والوضع الفعلي
+  const oemRep = (rep?.oemPrivacy ?? null) as { active?: boolean; source?: string; effective?: { remoteAccess?: string | null; blockedBridges?: number[]; closed?: boolean } } | null
+  const oemActive = oemRep?.active === true
+  const oemSource = typeof oemRep?.source === "string" ? oemRep.source : null
+  const oemClosed = oemActive && oemSource === "oem-default"
+  const oemEffBlocked = Array.isArray(oemRep?.effective?.blockedBridges) ? oemRep!.effective!.blockedBridges! : []
 
   return (
     <Card data-enterprise-card>
@@ -1341,6 +1361,9 @@ function EnterprisePolicyCard() {
           >
             {state === "managed" ? t("مُدار بواسطة مؤسستك") : state === "invalid" ? t("ملف سياسة غير صالح — لا فرض حتى يصلحه المدير") : state === "loading" ? "…" : t("غير مُدار")}
           </Badge>
+          {oemActive && (
+            <Badge variant="secondary" data-oem-badge="1"><ShieldCheck className="w-3 h-3" />{t("وضع OEM: الخصوصية افتراضيًا")}</Badge>
+          )}
           {state === "managed" && org && <Badge variant="outline" data-en-org={org}><Building2 className="w-3 h-3" /><span data-no-i18n>{org}</span></Badge>}
           {state === "managed" && enforced.remoteAccess && (
             <Badge variant="outline" data-en-ra={enforced.remoteAccess}>
@@ -1358,8 +1381,17 @@ function EnterprisePolicyCard() {
             </Badge>
           )}
         </div>
-        {state === "unmanaged" && (
+        {state === "unmanaged" && !oemClosed && (
           <p className="text-xs text-muted-foreground">{t("غير مُدار: الجهاز بيد مستخدمه بالكامل (الافتراضي) — نشر ملف السياسة يجعل هذا الجهاز قابلًا للإدارة المركزية")}</p>
+        )}
+        {oemClosed && state !== "invalid" && (
+          <p className="text-xs text-muted-foreground" data-oem-note="born-private">{t("جهاز محمّل مسبقًا بوضع «الخصوصية افتراضية» — الخارج مغلق حتى ينشر مدير النظام ملف سياسة")}</p>
+        )}
+        {oemClosed && state === "invalid" && (
+          <p className="text-xs text-muted-foreground" data-oem-note="fail-closed">{t("ملف سياسة غير صالح — وضع الخصوصية يبقى مغلقًا (فشل مغلق) حتى يصلحه المدير")}</p>
+        )}
+        {oemClosed && oemEffBlocked.length > 0 && (
+          <Badge variant="outline" data-oem-blocked={oemEffBlocked.join(",")}>{t("كل الجسور محجوبة عن الشبكة (وضع الخصوصية)")}</Badge>
         )}
 
         {/* §39 — السجل التدقيقي المؤسسي: ملخص السلسلة + آخر الأحداث (منظر حصرًا) */}
@@ -1393,6 +1425,7 @@ function EnterprisePolicyCard() {
 
         <p className="text-xs text-muted-foreground">{t("حد صادق: ملف السياسة مصدر الحقيقة الواحد بلا قراءة سجل النظام، والحجب يمس الخارج حصرًا (loopback معفى — الجهاز هي الحدود)، والقبول المؤسسي الموسع (نشر صامت على عشرات الأجهزة/مدقق SOC 2/عقد OEM) بند خارجي M4")}</p>
         <p className="text-xs text-muted-foreground">{t("حد صادق للسجل: كاتبٌ واحد (خادم الويب) وحلقي العرض، ومن يملك القرص قد يعيد بناء السلسلة كاملة — كشف تعديل لا منعه (نموذج الجهاز المحلي نفسه)، والجمع المركزي للأدلة بند النشر الخارجي")}</p>
+        <p className="text-xs text-muted-foreground">{t("حد صادق لوضع OEM: العلم بيئي في صورة النظام (NEXUSLINK_OEM_PRIVACY=1) — من يملك القرص وصلاحيات النظام قد يزيله؛ كشف لا منع (نموذج الجهاز المحلي نفسه)")}</p>
       </CardContent>
     </Card>
   )
