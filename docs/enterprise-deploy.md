@@ -338,3 +338,55 @@ node scripts/tls-e2e.mjs   # 16 فحصًا: TLS حي + فشل-مغلق + انح�
   والمتطلبات التشغيلية للوصول عبر الإنترنت تبقى E4 خارجية بقرار مالك
   وعقد مؤسسي أول يحددها — mTLS بند عقدٍ إن جاء — والتدوير بإعادة تشغيل
   مقصودة لا إعادة تحميل حية.
+
+## 13) سلسلة الثقة — التوقيع والـ notarization (عقد §43 — النوى النائمة لـ X1/X2)
+
+سير الإصدار (`release.yml`) يحمل الآن خطوات توقيع **نائمة**: غياب الأسرار =
+سلوك تاريخي حرفيًا (خطوات عبور صادقة تطبع تحذيرًا وتخرج 0)، ووجودها = توقيع
+فعلي يُتحقق داخل CI نفسه قبل نشر أي أصل.
+
+### 13.أ الأسرار المطلوبة (تُضاف من إعدادات المستودع — قرار المالك)
+
+| السر | القيمة | ما يفعّله |
+|---|---|---|
+| `WINDOWS_PFX_BASE64` | شهادة Authenticode (OV ثم EV لاحقًا) بترميز base64 كامل | توقيع NSIS + MSI |
+| `WINDOWS_PFX_PASSWORD` | كلمة سر ملف PFX | فك الشهادة عند الاستيراد |
+| `APPLE_CERTIFICATE` | شهادة Developer ID Application (.p12) بترميز base64 | توقيع .app/.dmg |
+| `APPLE_CERTIFICATE_PASSWORD` | كلمة سر p12 | فك الشهادة |
+| `APPLE_SIGNING_IDENTITY` | اسم الهوية «Developer ID Application: …» | اختيار الهوية |
+| `APPLE_ID` / `APPLE_PASSWORD` / `APPLE_TEAM_ID` | حساب Apple (كلمة سر خاصة بالتطبيق) | notarization + staple آلي |
+
+### 13.ب ما يتغير لحظة توفير الأسرار (لا شيء غيره)
+
+- **Windows**: خطوة الاستيراد تفك PFX وتستوردها إلى مخزن المستخدم (`CurrentUser\My`
+  قابلة للتصدير) وتُخرج البصمة إلى `WIN_THUMBPRINT`؛ وعقل الإعدادات
+  (`apps/desktop/signing-config.sh`) يضيف كتلة `bundle.windows`
+  (`certificateThumbprint` + `digestAlgorithm: sha256` + طابع زمني DigiCert)
+  إلى `--config` — الباندلر يوقّع NSIS وMSI — ثم تتحقق خطوة
+  `Get-AuthenticodeSignature` من كل مثبت (Valid حصرًا وإلا فشل الجولة).
+- **macOS**: المتغيرات الستة تُكتب في `GITHUB_ENV` حصرًا عند اكتمال بوابة
+  كل منها (توقيع ≠ notarization — بوابتان مستقلتان)؛ الباندلر يوقّع
+  بDeveloper ID ويقدّم للـ notarization ويُخرج أصل updater موقّعًا.
+- **غياب الأسرار**: لا متغيرات تُمرر أصلًا (لا قيم فارغة توقع الباندلر
+  خطأً) — CONFIG يُطابق سلسلتي التاريخ حرفيًا (فحص E2E وضعا 1/2).
+
+### 13.ج التحقق اليدوي بعد التثبيت (يد المدقق/المشتري)
+
+- Windows: `Get-AuthenticodeSignature "NexusLink_3.0.0_x64-setup.exe"`
+  (Status=Valid + الموضوع + الطابع الزمني) — وSmartScreen لا يحذّر على
+  جهاز نظيف (معيار قبول X1 الفعلي يتطلب شهادة OV+ أصلًا).
+- macOS: `spctl --assess -v /Applications/NexusLink.app` (accepted) و
+  `xcrun stapler validate /Applications/NexusLink.app` — وGatekeeper
+  يفتح بنقرة عادية بلا «زر يمين ← Open» (معيار X2 الفعلي يتطلب حساب
+  Apple Developer أصلًا).
+
+### 13.د حدود صادقة (خلاصة §43.هـ)
+
+- النوى محلية؛ **الشهادات والحسابات خارجية بقرار مالك** (OV ~$200–400/سنة
+  · Apple $99/سنة) — لا تفعيل بلا أسرار ولا وعود بلا شهادة.
+- التوقيع يشمل مثبتي NSIS/MSI وأصول updater — **portable.zip أرشيف**
+  ومحتواه الداخلي لا يحمل Authenticode بذاته (حكم SmartScreen على
+  المثبت الموقع) — و**desktop.yml** بناء فحصي بلا نشر يبقى بلا توقيع
+  (الأصول الموزعة من release.yml حصرًا).
+- EV أو Azure Trusted Signing (سمعة فورية) بند عقدٍ لاحق — البنية نفسها
+  تقبل البصمة من أي مصدر يضعها في المتجر.
