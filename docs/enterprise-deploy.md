@@ -267,3 +267,74 @@ node scripts/oem-e2e.mjs --app http://127.0.0.1:3000  # المرحلة ج (14 ف
 2. العلم بيئي **كشف لا منع**: من يملك القرص وصلاحيات النظام قد يزيله من
    تعريف الخدمة — لا توقيع صورة ولا قفل boot في هذه النواة.
 3. لا جمع مركزي للوضع — الامتثال حلقي والعلم محلي (بند النفق/TLS الخارجي).
+
+## 12) النقل المشفر للبوابة — TLS ذاتي (عقد §41 — النواة المحلية لـ E4)
+
+البوابة HTTP صافٍ بالتصميم (OFF بالتصميم — نمط §37/§38/§40). عند حاجة
+الوصول المشفر المباشر (OEM/kiosk/شبكة موثوقة بلا وكيل خارجي) تُضبط
+علمان بيئيان معًا في تعريف الخدمة نفسه الذي يضبط باقي أعلام NexusLink:
+
+| المتغير | القيمة |
+|---|---|
+| `NEXUSLINK_TLS_CERT` | مسار ملف شهادة PEM (سلسلة كاملة إن وُجد وسطاء) |
+| `NEXUSLINK_TLS_KEY` | مسار ملف المفتاح الخاص PEM |
+
+### وضع العلم لكل منصة (الخدمة نفسها من §38/§40)
+
+```bash
+# systemd (Linux):
+[Service]
+Environment=NEXUSLINK_TLS_CERT=/etc/nexuslink/tls/cert.pem
+Environment=NEXUSLINK_TLS_KEY=/etc/nexuslink/tls/key.pem
+
+# launchd (macOS) — في plist:
+<key>EnvironmentVariables</key>
+<dict>
+  <key>NEXUSLINK_TLS_CERT</key><string>/Library/Application Support/NexusLink/tls/cert.pem</string>
+  <key>NEXUSLINK_TLS_KEY</key><string>/Library/Application Support/NexusLink/tls/key.pem</string>
+</dict>
+
+# Windows service — مفتاح سجل البيئة نفسه الذي يحمل NEXUSLINK_OEM_PRIVACY:
+setx /M NEXUSLINK_TLS_CERT "C:\ProgramData\NexusLink\tls\cert.pem"
+setx /M NEXUSLINK_TLS_KEY  "C:\ProgramData\NexusLink\tls\key.pem"
+```
+
+### توليد شهادة ذاتية التوقيع للشبكة المحلية (أداة النظام — بلا تبعية)
+
+```bash
+sudo mkdir -p /etc/nexuslink/tls && sudo openssl req -x509 -newkey rsa:2048 \
+  -keyout /etc/nexuslink/tls/key.pem -out /etc/nexuslink/tls/cert.pem \
+  -days 825 -nodes -subj "/CN=$(hostname)"
+sudo chmod 600 /etc/nexuslink/tls/key.pem
+```
+
+لنطاق عام بشهادة CA/Let's Encrypt: يبقى **الوكيل الخارجي (Caddy/nginx)**
+هو الموصى به (41.ب) — وقدرة البوابة الذاتية لسيناريوهات الوصول المباشر.
+
+### السلوك التعاقدي (خلاصة §41)
+
+- **بلا العلمين**: HTTP صافٍ حرفيًا كما كان — صفر تغيير وصفر حقن ترويسات.
+- **بالعلمين معًا**: المُستمع HTTPS/WSS على المنفذ نفسه — WS يعبر مشفرًا
+  بلا أي تعديل مسار، و`x-forwarded-proto: https` تُفرض للأعلى (تُستبدل أي
+  قيمة واردة من العميل — الحقيقة من البوابة).
+- **فشل-مغلق إقلاعي**: متغير واحد بلا الآخر، أو ملف غائب/تالف = الخدمة
+  ترفض الإقلاع برسالة صاخبة (`REFUSING plaintext fallback`) — لا سقوط
+  صامت إلى نص صريح أبدًا. أصلح المسارين أو أزل المتغيرين معًا.
+- **التدوير**: الشهادة تُقرأ مرة عند الإقلاع — استبدل الملفين ثم
+  `systemctl restart nexuslink` (أو مكافئه) — لا مراقبة حية للمفاتيخ.
+- **التحقق بعد الإقلاع**:
+
+```bash
+curl -sk https://127.0.0.1:81/__gw/health \
+  | python3 -c "import json,sys; j=json.load(sys.stdin); print(j['tls'], j['tlsFingerprint'])"
+#   → True <16hex>  — وطابق البصمة مع:
+openssl x509 -in /etc/nexuslink/tls/cert.pem -outform DER \
+  | sha256sum | cut -c1-16
+# الجولة الحية الكاملة:
+node scripts/tls-e2e.mjs   # 16 فحصًا: TLS حي + فشل-مغلق + انحدار OFF
+```
+
+- **حدود صادقة (خلاصة §41.هـ)**: النفق والريلاي والنطاق وشهادات CA
+  والمتطلبات التشغيلية للوصول عبر الإنترنت تبقى E4 خارجية بقرار مالك
+  وعقد مؤسسي أول يحددها — mTLS بند عقدٍ إن جاء — والتدوير بإعادة تشغيل
+  مقصودة لا إعادة تحميل حية.

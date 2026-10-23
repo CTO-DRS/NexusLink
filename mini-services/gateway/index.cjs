@@ -25,6 +25,7 @@
 //  - blockedBridges: جسور محجوبة عن الخارج حصرًا — loopback معفى (الجهاز هي الحدود).
 //  - /__gw/health يعلن policyManaged/policyRemoteAccess للتشخيص الحي.
 const http = require("http")
+const https = require("https")
 const net = require("net")
 const fs = require("fs")
 const crypto = require("crypto")
@@ -68,6 +69,18 @@ let pairCache = { mtimeMs: -1, size: -1, data: null }
 //  - التشخيص الحي في /__gw/health (oemPrivacy + postureSource).
 // هذا المنطق مطابق لمنطق src/lib/enterprise-policy.ts (resolveEffectivePosture)
 // — التعديل هنا يستوجب مراجعة هناك (نمط النسختين المتطابقتين نفسه).
+//
+// §41 — الطبقة المحلية للنقل المشفر (TLS في البوابة — النواة المحلية لـ E4 — docs/protocol-contract.md):
+//  - OFF بالتصميم: بلا NEXUSLINK_TLS_CERT + NEXUSLINK_TLS_KEY فالسلوك حرفيًا
+//    كما كان (HTTP صافٍ — صفر تغيير).
+//  - عند توفير الملفين معًا: المُستمع نفسه يصير HTTPS/WSS (شهادة تُقرأ مرة
+//    عند الإقلاع — التدوير بإعادة تشغيل الخدمة عبر مدير العمليات).
+//  - فشل-مغلق: متغير واحد بلا الآخر، أو ملف غائب/تالف = خروج فوري برسالة
+//    صاخبة — بوابة ضُبطت TLS لا تسقط صامتة إلى نص صريح (كذبة أمنية).
+//  - x-forwarded-proto: https تُفرض للأعلى تحت TLS حصرًا (تُستبدل أي قيمة
+//    واردة من العميل — نمط x-gw-client-ip الأمني نفسه). بلا TLS: لا حقن إطلاقًا.
+//  - /__gw/health يعلن tls + tlsFingerprint (sha256 من DER مقطوعة 16) —
+//    والنفق/النطاق/العقد المؤسسي يبقى خارجيًا (حد E4 الموثق بقرار مالك).
 const POLICY_FILE_CANDIDATES = [
   process.env.NEXUSLINK_POLICY_FILE,
   process.platform === "win32"
@@ -114,6 +127,34 @@ function externalClosedBy(policy) {
   if (policy && policy.remoteAccess === "force-off") return "policy"
   if (!policy && oemPrivacyActive()) return "oem-default"
   return null
+}
+
+// §41 — TLS بمصدر حقيقة واحد (متغيرات بيئة — نمط §37/§38/§40 حرفيًا):
+// الشهادة والمفتاح يُقرآن مرة عند الإقلاع حصرًا (فشل-مغلق) — لا مراقبة mtime
+// للمفاتيح الخاصة (سطح هجوم بلا داعٍ)؛ التدوير = إعادة تشغيل الخدمة.
+const TLS_CERT_FILE = process.env.NEXUSLINK_TLS_CERT || ""
+const TLS_KEY_FILE = process.env.NEXUSLINK_TLS_KEY || ""
+const TLS_SET_COUNT = [TLS_CERT_FILE, TLS_KEY_FILE].filter(Boolean).length
+if (TLS_SET_COUNT === 1) {
+  console.error("[gateway] TLS half-configured: NEXUSLINK_TLS_CERT وNEXUSLINK_TLS_KEY يُضبطان معًا حصرًا")
+  console.error("[gateway] REFUSING plaintext fallback — أصلح الإعداد أو أزل المتغيرين معًا")
+  process.exit(1)
+}
+const TLS_MODE = TLS_SET_COUNT === 2
+let TLS_OPTS = null
+let tlsFingerprint = null
+if (TLS_MODE) {
+  try {
+    const certPem = fs.readFileSync(TLS_CERT_FILE)
+    const keyPem = fs.readFileSync(TLS_KEY_FILE)
+    const x509 = new crypto.X509Certificate(certPem)
+    tlsFingerprint = crypto.createHash("sha256").update(x509.raw).digest("hex").slice(0, 16)
+    TLS_OPTS = { cert: certPem, key: keyPem }
+  } catch (e) {
+    console.error("[gateway] TLS config invalid:", e instanceof Error ? e.message : e)
+    console.error("[gateway] REFUSING plaintext fallback — أصلح الملفين أو أزل المتغيرين معًا")
+    process.exit(1)
+  }
 }
 
 /** §40 — الجسور المحجوبة فعليًا عن الخارج (دفاع ثانٍ خلف الباب الأمامي):
@@ -360,6 +401,8 @@ function proxyHttp(req, res) {
   // SEC: تمرير IP العميل الحقيقي للجسور (يستبدل دائمًا — لا يُثق بترويسة عميل)
   const headers = hopByHop(req.headers)
   headers["x-gw-client-ip"] = clientIp(req)
+  // §41 — تحت TLS حصرًا: الحقيقة من البوابة لا من العميل (تُستبدل أي قيمة واردة)
+  if (TLS_MODE) headers["x-forwarded-proto"] = "https"
   const up = http.request(
     { host: "127.0.0.1", port, method: req.method, path: stripPair(req.url), headers },
     (ures) => {
@@ -402,9 +445,12 @@ function proxyUpgrade(req, socket, head) {
       const k = req.rawHeaders[i]
       // SEC: استبدال أي x-gw-client-ip وارد من العميل — البوابة مصدر الحقيقة
       if (k.toLowerCase() === "x-gw-client-ip") continue
+      // §41: تحت TLS حصرًا — استبدال أي x-forwarded-proto وارد من العميل
+      if (TLS_MODE && k.toLowerCase() === "x-forwarded-proto") continue
       raw += `${k}: ${req.rawHeaders[i + 1]}\r\n`
     }
     raw += `x-gw-client-ip: ${clientIp(req)}\r\n`
+    if (TLS_MODE) raw += "x-forwarded-proto: https\r\n"
     raw += "\r\n"
     up.write(raw)
     if (head && head.length) up.write(head)
@@ -418,13 +464,14 @@ function proxyUpgrade(req, socket, head) {
   up.on("close", () => { try { socket.destroy() } catch {} })
 }
 
-const server = http.createServer((req, res) => {
+// §41 — معالج الطلبات واحد لHTTP وHTTPS حرفيًا — المُستمع وحده يتبدل
+function handleRequest(req, res) {
   try {
     const path = (req.url || "/").split("?")[0]
     if (path === "/__gw/health") {
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store", "access-control-allow-origin": "*" })
       const pol = loadPolicy()
-      res.end(JSON.stringify({ ok: true, proto: "Nexus/1.2", role: "gateway", port: GATEWAY_PORT, rest: REST_PORT, uptimeMs: Date.now() - STARTED_AT, pair: !!loadPair(), policyManaged: !!pol, policyRemoteAccess: pol ? pol.remoteAccess : null, oemPrivacy: oemPrivacyActive(), postureSource: pol ? "policy" : oemPrivacyActive() ? "oem-default" : "user-default" }))
+      res.end(JSON.stringify({ ok: true, proto: "Nexus/1.2", role: "gateway", port: GATEWAY_PORT, rest: REST_PORT, uptimeMs: Date.now() - STARTED_AT, pair: !!loadPair(), policyManaged: !!pol, policyRemoteAccess: pol ? pol.remoteAccess : null, oemPrivacy: oemPrivacyActive(), postureSource: pol ? "policy" : oemPrivacyActive() ? "oem-default" : "user-default", tls: TLS_MODE, tlsFingerprint }))
       return
     }
     if (!pairGateHttp(req, res, req.url)) return
@@ -435,7 +482,9 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ ok: false, gateway: true, error: e instanceof Error ? e.message : "gw" }))
     }
   }
-})
+}
+
+const server = TLS_MODE ? https.createServer(TLS_OPTS, handleRequest) : http.createServer(handleRequest)
 
 // مأخذ socket.io طويل الاستطلاع عبر البوابة: بلا مهلات قاتلة
 server.requestTimeout = 0
@@ -448,7 +497,7 @@ server.on("upgrade", (req, socket, head) => {
 server.on("clientError", (_err, socket) => { try { socket.end("HTTP/1.1 400 Bad Request\r\n\r\n") } catch {} })
 
 server.listen(GATEWAY_PORT, () => {
-  console.log(`[gateway] NexusLink gateway on :${BOUND_PORT} → rest:${REST_PORT} (+ ?XTransformPort=<port>)`)
+  console.log(`[gateway] NexusLink gateway on :${BOUND_PORT} → rest:${REST_PORT} (+ ?XTransformPort=<port>)${TLS_MODE ? " [TLS]" : ""}`)
   // سطر آلي يقرؤه مدير العمليات (Rust) ليحدد NEXUSLINK_GATEWAY_PORT لجسر comms/mDNS
   console.log(`[gateway] PORT=${BOUND_PORT}`)
 })
