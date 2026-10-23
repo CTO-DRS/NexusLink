@@ -40,6 +40,7 @@ const winVerify = findStep("Verify Authenticode signatures")
 const buildStep = steps.find((s) => String(s.name || "").startsWith("Build Tauri bundles"))
 
 ok("X1: خطوة استيراد شهادة Windows موجودة ومحارسة (if: windows)", !!winImport && String(winImport.if).includes("matrix.os-name == 'windows'"), winImport?.if)
+ok("X1: pwsh 7 حصرًا (powershell 5.1 يفسد UTF-8 — درس جولة dispatch الحية)", !!winImport && winImport.shell === "pwsh" && !!winVerify && winVerify.shell === "pwsh")
 ok("X1: الأسرار عبر خطوة env حصرًا (بلا كشف على مستوى الوظيفة)", !!winImport && winImport.env?.WINDOWS_PFX_BASE64 === "${{ secrets.WINDOWS_PFX_BASE64 }}" && winImport.env?.WINDOWS_PFX_PASSWORD === "${{ secrets.WINDOWS_PFX_PASSWORD }}")
 ok("X1: خطوة عبور صادقة بغياب السر (IsNullOrEmpty → exit 0)", !!winImport && winImport.run.includes("IsNullOrEmpty") && winImport.run.includes("exit 0"))
 ok("X1: بالسر = استيراد PFX قابل للتصدير + بصمة إلى GITHUB_ENV", !!winImport && winImport.run.includes("Import-PfxCertificate") && winImport.run.includes("-Exportable") && winImport.run.includes("WIN_THUMBPRINT=") && winImport.run.includes("GITHUB_ENV"))

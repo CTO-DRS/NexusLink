@@ -151,7 +151,8 @@ jobs:
       # خالصة (السلوك التاريخي حرفيًا)؛ بالأسرار = استيراد PFX وبصمة تُغذي البناء
       - name: Import Windows codesign certificate (dormant — activates when WINDOWS_PFX_BASE64 secret exists)
         if: matrix.os-name == 'windows'
-        shell: powershell
+        # pwsh 7 حصرًا: powershell 5.1 يقرأ .ps1 بترميز ANSI فيفسد UTF-8 (درس جولة dispatch الحية)
+        shell: pwsh
         env:
           WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
           WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
@@ -228,7 +229,7 @@ jobs:
       # §43 — إثبات حي داخل CI: المثبتات الموقعة تُتحقق Authenticode فورًا
       - name: Verify Authenticode signatures (signed builds only — §43)
         if: matrix.os-name == 'windows' && env.WINDOWS_SIGNED == 'true'
-        shell: powershell
+        shell: pwsh
         run: |
           $dir = "apps/desktop/src-tauri/target/release/bundle"
           $bins = @(Get-ChildItem $dir -Recurse -Include *.exe,*.msi | Where-Object { $_.FullName -match '\\(nsis|msi)\\' })
