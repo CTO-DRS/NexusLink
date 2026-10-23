@@ -22,7 +22,7 @@ on:
       release_tag:
         description: "وسم الإصدار عند الإرفاق اليدوي"
         type: string
-        default: "v2.0.0"
+        default: "v3.0.0"
 
 permissions:
   contents: write
