@@ -5248,8 +5248,9 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     const cEs = dCount("src/lib/i18n/es.json")
     const cDe = dCount("src/lib/i18n/de.json")
     const cRu = dCount("src/lib/i18n/ru.json")
-    check("LANG-A11Y/source: معاجم الويب الأربع — fr/es كاملة ≥3,300 وde/ru بتغطية متدرجة موثقة ≥2,100 (نافذة حصة الترجمة أُغلقت عند الإغلاق — المولّد قابل للاستئناف ويستكمل بلا تغيير كود §31.د.1)",
-      cFr >= 3300 && cEs >= 3300 && cDe >= 2100 && cRu >= 2100, `fr=${cFr} es=${cEs} de=${cDe} ru=${cRu}`)
+    const rawArN = (() => { try { return Object.keys(JSON.parse(readF("src/lib/ar-en-map.json"))).filter((k) => /[\u0600-\u06FF]/.test(k)).length } catch { return 0 } })()
+    check("LANG-A11Y/source: معاجم الويب الأربع كاملة 100% مقابل سجل en — إكمال §42 (استئناف §31.د.1 الموثق: المولّد رُشِّح وأُغلقت كل الفجوات بلا تغيير كود)",
+      rawArN >= 3400 && cFr === rawArN && cEs === rawArN && cDe === rawArN && cRu === rawArN, `raw=${rawArN} fr=${cFr} es=${cEs} de=${cDe} ru=${cRu}`)
     check("LANG-A11Y/source: مولّد القواميس بنمط الدروس — حمولات مفهرسة (درس ترجمة المفاتيح المختلطة) + طابور تدوير + قابل للاستئناف",
       readF("scripts/translate-batch-lang.mjs").includes("JSON.stringify(srcs)")
       && readF("scripts/translate-batch-lang.mjs").includes("queue units=")
@@ -5682,15 +5683,16 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
       const bad = ks.filter((k) => !d[k] || !String(d[k]).trim() || arabic(d[k]))
       return { n: ks.length, bad: bad.length, ok: ks.length >= floor && bad.length / Math.max(1, ks.length) <= 0.005 }
     }
-    const hFr = dictHealth("src/lib/i18n/fr.json", 3300)
-    const hEs = dictHealth("src/lib/i18n/es.json", 3300)
-    const hDe = dictHealth("src/lib/i18n/de.json", 2100)
-    const hRu = dictHealth("src/lib/i18n/ru.json", 2100)
-    check("LANG-DEEP/dict: fr — ≥3300 مفتاحًا و≥99.5% قيم مُترجَمة نظيفة (بلا عربية ولا فراغ)",
+    const rawFloor = (() => { const m = parseJ("src/lib/ar-en-map.json"); return Object.keys(m).filter((k) => arabic(k)).length })()
+    const hFr = dictHealth("src/lib/i18n/fr.json", rawFloor)
+    const hEs = dictHealth("src/lib/i18n/es.json", rawFloor)
+    const hDe = dictHealth("src/lib/i18n/de.json", rawFloor)
+    const hRu = dictHealth("src/lib/i18n/ru.json", rawFloor)
+    check(`LANG-DEEP/dict: fr — كاملة ${rawFloor} مفتاحًا (تطابق السجل — §42) و≥99.5% قيم مُترجَمة نظيفة (بلا عربية ولا فراغ)`,
       hFr.ok, `n=${hFr.n} bad=${hFr.bad}`)
-    check("LANG-DEEP/dict: es — ≥3300 مفتاحًا و≥99.5% نظيفة", hEs.ok, `n=${hEs.n} bad=${hEs.bad}`)
-    check("LANG-DEEP/dict: de — ≥2100 (تغطية متدرجة موثقة §31.د.1) و≥99.5% نظيفة", hDe.ok, `n=${hDe.n} bad=${hDe.bad}`)
-    check("LANG-DEEP/dict: ru — ≥2100 (تغطية متدرجة) و≥99.5% نظيفة", hRu.ok, `n=${hRu.n} bad=${hRu.bad}`)
+    check(`LANG-DEEP/dict: es — كاملة ${rawFloor} (تطابق السجل — §42) و≥99.5% نظيفة`, hEs.ok, `n=${hEs.n} bad=${hEs.bad}`)
+    check(`LANG-DEEP/dict: de — كاملة ${rawFloor} (تطابق السجل — إكمال §42 لـ §31.د.1) و≥99.5% نظيفة`, hDe.ok, `n=${hDe.n} bad=${hDe.bad}`)
+    check(`LANG-DEEP/dict: ru — كاملة ${rawFloor} (تطابق السجل — §42) و≥99.5% نظيفة`, hRu.ok, `n=${hRu.n} bad=${hRu.bad}`)
     const four = ["fr", "es", "de", "ru"].map((l) => parseJ(`src/lib/i18n/${l}.json`))
     check("LANG-DEEP/dict: المفتاحان المحوريان «الأجهزة» و«الإعدادات» موجودان بالأربع كلها",
       four.every((d) => "الأجهزة" in d && "الإعدادات" in d), "core keys ×4")
@@ -5712,8 +5714,8 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     const rawMap = parseJ("src/lib/ar-en-map.json")
     const deDict = four[2]
     const missDe = Object.keys(rawMap).filter((k) => arabic(k) && !(k in deDict)).length
-    check("LANG-DEEP/fallback: مفاتيح غائبة عن de موجودة بسجل en — السقوط map(en) يغطيها بياناتًا",
-      Object.keys(rawMap).length >= 3400 && missDe > 0 && missDe < Object.keys(rawMap).length, `raw=${Object.keys(rawMap).length} missingInDe=${missDe}`)
+    check("LANG-DEEP/fallback: بعد إكمال §42 — صفر مفاتيح غائبة عن de (لا حاجة للسقوط) وسجل en كامل بذاته يظل غطاء السقوط التعاقدي إن ظهرت فجوة مستقبلًا",
+      Object.keys(rawMap).length >= 3400 && missDe === 0, `raw=${Object.keys(rawMap).length} missingInDe=${missDe}`)
     const i18nLd = rdLd("src/lib/i18n.ts")
     check("LANG-DEEP/source: الثبات nexus-lang في LS (setItem + getItem عند initLang)",
       i18nLd.includes('localStorage.setItem("nexus-lang"') && i18nLd.includes('localStorage.getItem("nexus-lang")'), "persisted lang")

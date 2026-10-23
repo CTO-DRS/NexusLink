@@ -19,8 +19,8 @@ if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
 }
 
-def flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "4"
-def flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "2.0.0"
+def flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "5"
+def flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "3.0.0"
 
 android {
     namespace = "com.nexuslink.mobile"

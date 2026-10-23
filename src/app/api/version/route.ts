@@ -116,7 +116,9 @@ async function fetchHistory(): Promise<HistoryEntry[]> {
           .filter(Boolean)
           .slice(0, 10),
       }))
-      .filter((h) => h.version)
+      // الجولات الفاشلة المحفوظة (v2.0.0-fix1/fix2) نُشرت بلا ملاحظات — عقد العرض:
+      // لا قائمة ملاحظات فارغة في السجل (كل مدخل يُعرض بملاحظات غير فارغة ≤10)
+      .filter((h) => h.version && h.items.length > 0)
     if (!history.some((h) => h.version === CURRENT)) {
       history.push(...localHistory())
     }
