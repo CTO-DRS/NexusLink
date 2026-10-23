@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=NexusLink
+GenericName=Device Bridge
+Comment=NexusLink - LAN device bridge
+Comment[ar]=نكسس لينك — جسر الأجهزة عبر الشبكة المحلية
+Exec=nexuslink-wrapper.sh
+Icon=sa.drs.nexuslink
+StartupWMClass=nexuslink-desktop
+Terminal=false
+Categories=Utility;Network;
+Keywords=nexuslink;remote;sync;bridge;screen;
+StartupNotify=true

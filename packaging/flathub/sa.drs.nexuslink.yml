@@ -1,0 +1,78 @@
+# sa.drs.nexuslink.yml — بيان Flatpak لـ NexusLink (عقد §44 — نواة X3)
+# ============================================================
+# النمط: غلاف AppImage المستخرَج (نمط مثبت على Flathub — md.obsidian.Obsidian
+# ونظائره) — الحزمة الثنائية ذاتية الاكتفاء (webkit2gtk 4.1 وGTK 3 وGStreamer
+# مضمّنة في usr/lib داخل الصورة) فلا بناء من مصدر ولا SDK امتداد Rust.
+# الحقيقة المؤسِّسة (فحص فعلي للتخطيط الداخلي v3.0.0):
+#   squashfs-root/usr/bin/{nexuslink-desktop,node}
+#   squashfs-root/usr/lib/NexusLink/{resources,vcam,vdd}
+#   squashfs-root/apprun-hooks/linuxdeploy-plugin-gtk.sh (متغيرات GTK بـ$APPDIR)
+# الغلاف أعلاه يعيد إنتاج دلالات الخطّاف نفسها بـ APPDIR=/app حرفيًا.
+# الترويج الآلي: x-checker-data بباب GitHub Releases — يتتبع آخر AppImage.
+id: sa.drs.nexuslink
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+separate-locales: false
+command: nexuslink-desktop
+finish-args:
+  - --share=ipc
+  - --share=network        # المزامنة LAN + الاقتران + فحص التحديثات
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio    # الميكروفون الافتراضي ومخرج الصوت
+  - --device=dri           # WebRTC وبث الشاشة (تسريع GPU)
+  - --filesystem=home      # نقل الملفات بين الأجهزة (اختيار المصدر/الهدف)
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierItem   # أيقونة الشريط (SNI)
+modules:
+  - name: nexuslink
+    buildsystem: simple
+    sources:
+      - type: file
+        only-arches: [x86_64]   # صدق: لا بناء aarch64 Linux منشور (dmg أندرويد/ماك فقط)
+        url: https://github.com/CTO-DRS/NexusLink/releases/download/v3.0.0/NexusLink_3.0.0_amd64.AppImage
+        sha256: b9a0ef5afdc6c2de0e5c3095cd64d74b534df21ed0f5966c3a71beb64e0128d1
+        x-checker-data:
+          type: github-releases
+          url: https://api.github.com/repos/CTO-DRS/NexusLink/releases
+          match-suffix: .AppImage
+          version-scheme: semantic
+      - type: file
+        path: sa.drs.nexuslink.desktop
+      - type: file
+        path: sa.drs.nexuslink.metainfo.xml
+    build-commands:
+      - chmod +x NexusLink_3.0.0_amd64.AppImage
+      - ./NexusLink_3.0.0_amd64.AppImage --appimage-extract
+      # تخطيط usr/ محفوظ حرفيًا — الغلاف يعيد إنتاج خطّاف GTK بـ APPDIR=/app
+      - cp -r squashfs-root/usr /app/usr
+      - ln -s usr/bin/nexuslink-desktop /app/bin/nexuslink-desktop
+      - install -Dm644 sa.drs.nexuslink.desktop /app/share/applications/sa.drs.nexuslink.desktop
+      - install -Dm644 sa.drs.nexuslink.metainfo.xml /app/share/metainfo/sa.drs.nexuslink.metainfo.xml
+      - install -Dm644 squashfs-root/nexuslink-desktop.png /app/share/icons/hicolor/512x512/apps/sa.drs.nexuslink.png
+      - install -Dm644 squashfs-root/nexuslink-desktop.png /app/share/icons/hicolor/128x128/apps/sa.drs.nexuslink.png
+      - |
+        cat > /app/bin/nexuslink-wrapper.sh <<'EOF'
+        #!/bin/sh
+        # غلاف التشغيل — إعادة إنتاج apprun-hooks/linuxdeploy-plugin-gtk.sh بـ APPDIR=/app
+        COLOR_SCHEME="$(dbus-send --session --dest=org.freedesktop.portal.Desktop --type=method_call --print-reply --reply-timeout=1000 /org/freedesktop/portal/desktop org.freedesktop.portal.Settings.Read 'string:org.freedesktop.appearance' 'string:color-scheme' 2> /dev/null | tail -n1 | cut -b35- | cut -d' ' -f2 || printf '')"
+        case "$COLOR_SCHEME" in
+            "1") GTK_THEME_VARIANT="dark";;
+            "2") GTK_THEME_VARIANT="light";;
+            *)   GTK_THEME_VARIANT="light";;
+        esac
+        export APPDIR=/app
+        export GTK_DATA_PREFIX=/app
+        export GTK_THEME="Adwaita:$GTK_THEME_VARIANT"
+        export XDG_DATA_DIRS="/app/usr/share:/usr/share:$XDG_DATA_DIRS"
+        export GSETTINGS_SCHEMA_DIR=/app/usr/share/glib-2.0/schemas
+        export GI_TYPELIB_PATH=/app/usr/lib/girepository-1.0
+        export GIO_MODULE_DIR=/app/usr/lib/gio/modules
+        export GTK_EXE_PREFIX=/app/usr
+        export GTK_PATH=/app/usr/lib/gtk-3.0
+        export GTK_IM_MODULE_FILE=/app/usr/lib/gtk-3.0/3.0.0/immodules.cache
+        export GDK_PIXBUF_MODULE_FILE=/app/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache
+        exec /app/usr/bin/nexuslink-desktop "$@"
+        EOF
+        chmod +x /app/bin/nexuslink-wrapper.sh

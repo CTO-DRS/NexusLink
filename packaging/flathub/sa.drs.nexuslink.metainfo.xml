@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- sa.drs.nexuslink.metainfo.xml — AppStream metainfo (عقد §44 — نواة X3) -->
+<!-- السجل متزامن آليًا مع سجل /api/version المحلي (بوابة flathub-e2e تفحص التطابق) -->
+<component type="desktop-application">
+  <id>sa.drs.nexuslink</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <name>NexusLink</name>
+  <summary>Bridge your devices over your own LAN — screen, input, files, media, routines</summary>
+  <summary xml:lang="ar">جسر أجهزتك عبر شبكتك المحلية — شاشة وتحكم وملفات ووسائط وروتينات</summary>
+  <developer_name translatable="no">CTO-DRS</developer_name>
+  <launchable type="desktop-id">sa.drs.nexuslink.desktop</launchable>
+  <url type="homepage">https://github.com/CTO-DRS/NexusLink</url>
+  <url type="bugtracker">https://github.com/CTO-DRS/NexusLink/issues</url>
+  <description>
+    <p>
+      NexusLink is a local-first device bridge: control your computer from your phone (or
+      another computer) over your own network — no cloud account, no relay, no telemetry.
+      Live screen streaming over WebRTC with low-latency input, system clipboard, touch
+      control, file transfer, media control, and a self-hosted update channel.
+    </p>
+    <p xml:lang="ar">
+      نكسس لينك جسر أجهزة محلي أولًا: تحكم بحاسوبك من هاتفك (أو حاسوب آخر) عبر شبكتك
+      الخاصة — بلا حساب سحابي ولا وسيط خارجي ولا تتبّع. بث شاشة حي عبر WebRTC بإدخال
+      منخفض الكمون، حافظة نظام، تحكم لمسي، نقل ملفات، تحكم وسائط، وقناة تحديث ذاتية الاستضافة.
+    </p>
+    <p>
+      Highlights: NexusLive second-screen over UDP (P95 ≈ 13ms stylus), local smart
+      routines with historical health triggers, offline unified search, an on-device
+      assistant, an SDK and public REST APIs, enterprise policy management (MDM),
+      tamper-evident audit logging, and an OEM privacy-by-default mode.
+    </p>
+    <p xml:lang="ar">
+      أبرز القدرات: NexusLive شاشة ثانية فوق UDP (قلمًا P95≈13ms) · روتينات ذكية محلية
+      بمشغّلات صحية تاريخية · بحث موحد دون اتصال · مساعد على الجهاز · SDK وواجهات REST
+      عامة · إدارة سياسات مؤسسية (MDM) · سجل تدقيقي مقاوم للتعديل الرجعي · وضع OEM
+      «خصوصية افتراضية».
+    </p>
+    <p xml:lang="ar">
+      ملاحظة الصندوق الرملي: بعض الطبقات الأعمق (تعريف الشاشة الثانية على ويندوز، uinput،
+      الكاميرا الافتراضية على النظام المضيف) محدودة داخل أي صندوق رملي — نواة المزامنة
+      والبث والملفات والحافظة والروتينات تعمل كاملة.
+    </p>
+  </description>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/CTO-DRS/NexusLink/main/docs/screenshots/ah-editor-en.png</image>
+      <caption>Smart routines editor — triggers, conditions, evidence</caption>
+      <caption xml:lang="ar">محرر الروتينات الذكية — المشغّلات والشروط والأدلة</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/CTO-DRS/NexusLink/main/docs/screenshots/ah-tab-en.png</image>
+      <caption>Routines board with live server pulse</caption>
+      <caption xml:lang="ar">لوحة الروتينات مع نبض الخادم الحي</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/CTO-DRS/NexusLink/main/docs/screenshots/sp-live-en.png</image>
+      <caption>Live device sync panel</caption>
+      <caption xml:lang="ar">لوحة المزامنة الحية بين الأجهزة</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/CTO-DRS/NexusLink/main/docs/screenshots/da-live-en.png</image>
+      <caption>Durable alerts — seen/unseen waits for your return</caption>
+      <caption xml:lang="ar">التنبيهات الدائمة — «لم تُرَ» تنتظر عودتك</caption>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1">
+    <content_attribute id="violence-cartoon">none</content_attribute>
+    <content_attribute id="violence-fantasy">none</content_attribute>
+    <content_attribute id="violence-realistic">none</content_attribute>
+    <content_attribute id="violence-bloodshed">none</content_attribute>
+    <content_attribute id="violence-sexual">none</content_attribute>
+    <content_attribute id="drugs-alcohol">none</content_attribute>
+    <content_attribute id="drugs-narcotics">none</content_attribute>
+    <content_attribute id="drugs-tobacco">none</content_attribute>
+    <content_attribute id="sex-nudity">none</content_attribute>
+    <content_attribute id="sex-themes">none</content_attribute>
+    <content_attribute id="language-profanity">none</content_attribute>
+    <content_attribute id="language-humor">none</content_attribute>
+    <content_attribute id="language-discrimination">none</content_attribute>
+    <content_attribute id="social-chat">none</content_attribute>
+    <content_attribute id="social-audio">none</content_attribute>
+    <content_attribute id="social-contacts">none</content_attribute>
+    <content_attribute id="money-purchasing">none</content_attribute>
+    <content_attribute id="money-gambling">none</content_attribute>
+  </content_rating>
+  <releases>
+    <release version="3.0.0" date="2026-10-22">
+      <description>
+        <p>Enterprise gravity M4: central policies with instant enforcement (MDM kit), tamper-evident audit chain, OEM privacy-by-default mode.</p>
+        <p xml:lang="ar">الثقل المؤسسي M4: سياسات مركزية بفرض لحظي (MDM kit) وسجل تدقيقي مقاوم للتعديل الرجعي ووضع OEM «خصوصية افتراضية».</p>
+      </description>
+    </release>
+    <release version="2.0.0" date="2026-10-21">
+      <description>
+        <p>Local intelligence: unified offline search, on-device assistant, SDK 2.0 + public REST APIs, marketplace with 10 integrations, CLI 16 commands, standalone PWA web client, remote access with pairing code.</p>
+        <p xml:lang="ar">الذكاء المحلي: بحث موحد دون اتصال ومساعد على الجهاز وSDK 2.0 بواجهات REST عامة وسوق بعشر تكاملات وCLI بـ16 أمرًا وعميل وِب PWA مستقل ووصول بعيد برمز اقتران.</p>
+      </description>
+    </release>
+    <release version="1.2.0" date="2026-10-19">
+      <description>
+        <p>Smart routines × historical health triggers — 11 triggers, server heartbeat, durable rules and unseen alerts.</p>
+        <p xml:lang="ar">روتينات ذكية × مشغّلات صحية تاريخية — 11 مشغّلًا ونبض خدمة ذاتي وقواعد دائمة وتنبيهات «لم تُرَ».</p>
+      </description>
+    </release>
+    <release version="1.1.0" date="2026-10-15">
+      <description>
+        <p>NexusLive live channel over UDP — second screen, pro drawing board, advanced control trio, virtual camera and mic, phone-to-TV.</p>
+        <p xml:lang="ar">قناة NexusLive الحية فوق UDP — شاشة ثانية ولوحة رسم احترافية وثلاثية تحكم متقدم وكاميرا وميكروفون افتراضي وهاتف→TV.</p>
+      </description>
+    </release>
+    <release version="1.0.0" date="2026-10-12">
+      <description>
+        <p>First stable release: desktop app (Tauri 2) with WebRTC screen streaming, system clipboard, power, touch control, files, virtual media, app lock and signed updater.</p>
+        <p xml:lang="ar">الإصدار المستقر الأول: تطبيق سطح المكتب (Tauri 2) ببث شاشة WebRTC وحافظة نظام وطاقة وتحكم لمسي وملفات ووسائط افتراضية وقفل تطبيق ومحدّث موقّع.</p>
+      </description>
+    </release>
+  </releases>
+  <provides>
+    <binary>nexuslink-desktop</binary>
+  </provides>
+  <recommends>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <memory>2048</memory>
+  </recommends>
+  <requires>
+    <display>1024x768</display>
+    <display_length compare="ge">720</display_length>
+  </requires>
+</component>
