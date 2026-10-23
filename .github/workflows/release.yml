@@ -147,6 +147,63 @@ jobs:
             echo "⚠️ لا مفتاح توقيع updater — سيُبنى بلا updater artifacts"
           fi
 
+      # §43 — النواة النائمة لـ X1 (Windows codesign): بلا أسرار = خطوة عبور
+      # خالصة (السلوك التاريخي حرفيًا)؛ بالأسرار = استيراد PFX وبصمة تُغذي البناء
+      - name: Import Windows codesign certificate (dormant — activates when WINDOWS_PFX_BASE64 secret exists)
+        if: matrix.os-name == 'windows'
+        shell: powershell
+        env:
+          WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrEmpty($env:WINDOWS_PFX_BASE64)) {
+            "WINDOWS_SIGNED=false" >> $env:GITHUB_ENV
+            Write-Host "⚠️ بلا شهادة Windows (WINDOWS_PFX_BASE64) — يُبنى بلا توقيع Authenticode (السلوك التاريخي حرفيًا)"
+            exit 0
+          }
+          $pfxPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))
+          $sec = ConvertTo-SecureString -String $env:WINDOWS_PFX_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $sec -Exportable
+          Remove-Item $pfxPath -Force
+          "WIN_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+          "WINDOWS_SIGNED=true" >> $env:GITHUB_ENV
+          Write-Host "✅ شهادة codesign مستوردة — البصمة $($cert.Thumbprint) (الموضوع: $($cert.Subject))"
+
+      # §43 — النواة النائمة لـ X2 (macOS sign+notarize): المتغيرات تُكتب في
+      # GITHUB_ENV حصرًا عند وجود الأسرار — غيابها = غياب المتغيرات = Tauri
+      # يبني بلا توقيع تمامًا كما اليوم (لا تمرير قيم فارغة يوقّع الباندلر خطأً)
+      - name: Detect Apple signing/notarization secrets (dormant — activates when Apple secrets exist)
+        if: matrix.os-name == 'macos'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_S: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD_S: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY_S: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID_S: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD_S: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID_S: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "${APPLE_CERTIFICATE_S:-}" ] && [ -n "${APPLE_SIGNING_IDENTITY_S:-}" ]; then
+            echo "APPLE_CERTIFICATE=$APPLE_CERTIFICATE_S" >> "$GITHUB_ENV"
+            echo "APPLE_CERTIFICATE_PASSWORD=$APPLE_CERTIFICATE_PASSWORD_S" >> "$GITHUB_ENV"
+            echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY_S" >> "$GITHUB_ENV"
+            echo "MACOS_SIGN=true" >> "$GITHUB_ENV"
+            echo "✅ شهادة Apple موجودة (P12 بbase64) — البناء موقّع بDeveloper ID"
+          else
+            echo "MACOS_SIGN=false" >> "$GITHUB_ENV"
+            echo "⚠️ بلا شهادة Apple — يُبنى بلا توقيع/notarization (السلوك التاريخي حرفيًا)"
+          fi
+          if [ -n "${APPLE_ID_S:-}" ] && [ -n "${APPLE_PASSWORD_S:-}" ] && [ -n "${APPLE_TEAM_ID_S:-}" ]; then
+            echo "APPLE_ID=$APPLE_ID_S" >> "$GITHUB_ENV"
+            echo "APPLE_PASSWORD=$APPLE_PASSWORD_S" >> "$GITHUB_ENV"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID_S" >> "$GITHUB_ENV"
+            echo "MACOS_NOTARIZE=true" >> "$GITHUB_ENV"
+            echo "✅ بيانات notarization موجودة — سيُوقّع الباندلر ويُختَم (staple) آليًا"
+          else
+            echo "MACOS_NOTARIZE=false" >> "$GITHUB_ENV"
+          fi
+
       - name: Build Tauri bundles (${{ matrix.bundles }})
         shell: bash
         working-directory: apps/desktop
@@ -160,15 +217,30 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          if [ "$UPDATER_SIGN" = "true" ]; then
-            CONFIG='{"bundle":{"externalBin":["binaries/node"]}}'
-          else
-            # بلا مفتاح: عطّل updater artifacts وإلا فشل البناء (pubkey بلا مفتاح خاص)
-            CONFIG='{"bundle":{"externalBin":["binaries/node"],"createUpdaterArtifacts":false}}'
-          fi
+          # §43 — عقل الإعدادات في سكربت مُختبر (signing-config.sh): يُطابق
+          # السلوك التاريخي حرفيًا بغياب التوقيع ويضيف كتلة windows عند البصمة
+          CONFIG="$(bash signing-config.sh)"
+          echo "CONFIG=$CONFIG"
           bunx @tauri-apps/cli@^2 build ${{ matrix.tauri-args }} \
             --bundles ${{ matrix.bundles }} \
             --config "$CONFIG"
+
+      # §43 — إثبات حي داخل CI: المثبتات الموقعة تُتحقق Authenticode فورًا
+      - name: Verify Authenticode signatures (signed builds only — §43)
+        if: matrix.os-name == 'windows' && env.WINDOWS_SIGNED == 'true'
+        shell: powershell
+        run: |
+          $dir = "apps/desktop/src-tauri/target/release/bundle"
+          $bins = @(Get-ChildItem $dir -Recurse -Include *.exe,*.msi | Where-Object { $_.FullName -match '\\(nsis|msi)\\' })
+          if ($bins.Count -eq 0) { Write-Host "::error::لا مثبتات NSIS/MSI للتحقق"; exit 1 }
+          $bad = 0
+          foreach ($b in $bins) {
+            $sig = Get-AuthenticodeSignature -FilePath $b.FullName
+            Write-Host ("{0} → {1} [{2}]" -f $b.Name, $sig.Status, $sig.SignerCertificate.Subject)
+            if ($sig.Status -ne 'Valid') { $bad++ }
+          }
+          if ($bad -gt 0) { exit 1 }
+          Write-Host "✅ كل المثبتات موقعة Authenticode صالحة (SHA-256 مع طابع زمني)"
 
       # نسخة Portable لويندوز: نفس تخطيط NSIS تمامًا (exe + node.exe + resources/)
       # resolve_resources (procman.rs) يفحص هذا التخطيط أولًا — صفّر خطوات يدوية.

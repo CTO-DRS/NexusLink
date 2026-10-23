@@ -2561,8 +2561,10 @@ check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms 
     check("§17: release.yml — خطوة Portable ZIP (تجميع بنفس تخطيط NSIS + bsdtar + README)",
       rel.includes("Assemble Windows portable ZIP") && rel.includes("NexusLink_${VERSION}_x64-portable.zip")
       && rel.includes("PORTABLE-README.txt") && rel.includes("/c/Windows/System32/tar.exe -a -cf"))
-    check("§17: release.yml — توقيع updater شرطي + latest.json على الوسوم + SHA256SUMS",
-      rel.includes("TAURI_SIGNING_PRIVATE_KEY") && rel.includes('createUpdaterArtifacts":false')
+    check("§17: release.yml — توقيع updater شرطي + latest.json على الوسوم + SHA256SUMS (§43: الشرطية في العقل المُختبر signing-config.sh)",
+      rel.includes("TAURI_SIGNING_PRIVATE_KEY") && rel.includes("bash signing-config.sh")
+      && rd("apps/desktop/signing-config.sh").includes("UPDATER_SIGN")
+      && rd("apps/desktop/signing-config.sh").includes("createUpdaterArtifacts")
       && rel.includes("Generate latest.json") && rel.includes("SHA256SUMS"))
     check("§17: release.yml — dispatch = artifacts فقط (إرفاق يدوي opt-in) والوسم = إرفاق تلقائي",
       rel.includes("attach_to_release") && rel.includes("startsWith(github.ref, 'refs/tags/v')"))
