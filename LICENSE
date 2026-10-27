@@ -1,0 +1,100 @@
+NexusLink — الترخيص الجذري الصادق (عقد §45 — الازدواجية الصادقة)
+NexusLink — Honest Root License (Contract §45 — Honest Dual Licensing)
+========================================================================
+
+نطاق الترخيص: هذا الملف يغطي المستودع كله (النواة + المجموعة المفتوحة + الوثائق
+والتغليف). الترخيص محسوم هنا مرة واحدة، وكل ملف يصرّح بموقعه عبر مُعرِّف
+SPDX عند وجوده — الوثيقة هي المصدر، والترويسة إثبات لا بديل.
+
+Scope: this file covers the entire repository (the closed core + the Open Set
++ docs and packaging). Licensing is settled here once; every file states its
+position via an SPDX identifier where present — this document is the source
+of truth, headers are evidence, not a substitute.
+
+────────────────────────────────────────────────────────────────────────────
+1) النواة المغلقة — The Closed Core
+────────────────────────────────────────────────────────────────────────────
+
+النواة المغلقة من NexusLink — الخادم المضمن، الجسور الست (3003–3009)، محرِك
+سطح المكتب Tauri، وكيل Flutter، تطبيق الهاتف، خطوط الإصدار، وسكربتات البوابات
+غير المصرَّح بها في المجموعة المفتوحة أدناه — برمجية مملوكة.
+
+Copyright (c) 2026 CTO-DRS. جميع الحقوق محفوظة.
+Copyright (c) 2026 CTO-DRS. All rights reserved.
+
+يُمنح التحميل والتشغيل والاستخدام الشخصي والتجريبي للنواة المجانية، ويُمنح
+إعادة التوزيع أو التعديل أو إعادة البناء التجاري للنواة بترخيص كتابي مسبق من
+المالك (CTO-DRS) حصرًا. ما لم يصرَّح به هنا يبقى محفوظ الحقوق بالكامل.
+
+Personal use, evaluation, and running the unmodified builds are permitted;
+redistribution, modification, or commercial rebuilding of the Closed Core
+requires prior written permission from the owner (CTO-DRS). Anything not
+explicitly granted here remains fully reserved.
+
+معرِّف الآلة: SPDX-License-Identifier: LicenseRef-proprietary
+Machine identifier: SPDX-License-Identifier: LicenseRef-proprietary
+
+هذا النمط (نواة مغلقة + أجزاء مفتوحة مصرَّح بها) هو نفسه نمط منتجات معروفة
+مثل Obsidian، وهو مقبول في Flathub مع project_group الخصوصية نفسها — انظر
+البند 3.
+
+This pattern (closed core + declared open parts) is the same model used by
+well-known products such as Obsidian, and is accepted by Flathub — see §3.
+
+────────────────────────────────────────────────────────────────────────────
+2) المجموعة المفتوحة — رخصة MIT — The Open Set — MIT License
+────────────────────────────────────────────────────────────────────────────
+
+الملفات الستة المصرَّح بها في docs/OPEN-COMPONENTS.md («المجموعة المفتوحة»)
+مرخّصة بموجب رخصة MIT الكاملة في LICENSES/MIT.txt، وبكل ملف منها ترويسة:
+
+SPDX-License-Identifier: MIT
+
+The six files declared in docs/OPEN-COMPONENTS.md (the "Open Set") are
+licensed under the full MIT license text in LICENSES/MIT.txt, each carrying
+the header shown above. The Open Set is closed by declaration: a file joins
+it only by adding its path to docs/OPEN-COMPONENTS.md and stamping its
+header — nothing is open by silence, and the core never opens by drift.
+
+القائمة الحصرية (حتى هذا الإصدار — أي إضافة تُكتب هنا أولًا):
+  - src/lib/pair-math.ts
+  - src/lib/nexus/oplog.ts
+  - sdk/index.mjs
+  - cli/nexus.mjs
+  - docs/sdk-guide.md
+  - docs/protocol-contract.md
+
+────────────────────────────────────────────────────────────────────────────
+3) توافق Flathub — Flathub Compatibility
+────────────────────────────────────────────────────────────────────────────
+
+بيان Flathub الحالي (packaging/flathub/sa.drs.nexuslink.metainfo.xml):
+  metadata_license = CC0-1.0            (البيانات الوصفية وحدها — الميتاداتا)
+  project_license  = LicenseRef-proprietary   (التطبيق نفسه — النواة المغلقة)
+
+وهذا متسق مع هذا الملف: التطبيق المُغلَّف نواة مغلقة، والمجموعة المفتوحة
+استثناء مصرَّح لا ينقض الترخيص الإجمالي — تمامًا كما تُرسى منتجات الازدواج
+المعروفة. أي انجراف لاحق في بيان المتجر عن هذا الملف تكشفه بوابة
+scripts/license-e2e.mjs (الطور الرابع) وتفشل قبل الوصول للمتجر.
+
+This is consistent with this file: the shipped app is a closed core, and the
+Open Set is a declared exception that does not dilute the overall license —
+exactly how known dual-licensed products are grounded. Any later drift
+between the store metadata and this file is caught by scripts/license-e2e.mjs
+(phase 4) and fails before reaching the store.
+
+────────────────────────────────────────────────────────────────────────────
+4) الحارس المضاد للانجراف — The Anti-Drift Gate
+────────────────────────────────────────────────────────────────────────────
+
+بوابة scripts/license-e2e.mjs (44 فحصًا × 5 أطوار) تحرس هذا الترتيب: بنية
+الملفين، تزامن التصرّحات مع docs/OPEN-COMPONENTS.md، حرمة النواة (لا تصريح
+SPDX يتسلل لملف مغلق)، لا انجراف في بيان Flathub، وتزامن الوثائق (README
+وBUILD وOPEN-COMPONENTS). تشغيلها مرتين متتاليتين شرط الإغلاق كما في كل
+البوابات.
+
+The gate scripts/license-e2e.mjs (44 checks × 5 phases) guards this order:
+structure of both files, declaration sync with docs/OPEN-COMPONENTS.md, core
+inviolability (no SPDX claim sneaks into a closed file), no Flathub metadata
+drift, and docs sync (README, BUILD, OPEN-COMPONENTS). Running it twice in a
+row, all green, is the closing condition — as with every gate in this repo.

@@ -228,3 +228,18 @@ node  scripts/agent-sec-e2e.mjs # FA-10: الأمان E2E — 26/26 (مصافح�
 ├── scripts/                   # عدّاءات E2E + أدوات
 └── .github/workflows/         # desktop.yml (بوابة بناء) + release.yml (خط الإصدار الكامل)
 ```
+
+---
+
+## 8) الترخيص — الازدواجية الصادقة (عقد §45)
+
+NexusLink منتج **ازدواج الترخيص الصادق** (نفس نمط Obsidian): نواة مغلقة + مجموعة مفتوحة مصرَّح بها — لا غموض ولا ادعاءات.
+
+| الجزء | الترخيص | ماذا يشمل |
+|---|---|---|
+| **النواة المغلقة** | مملوك — `LicenseRef-proprietary` | الخادم المضمن، الجسور الست، محرِك سطح المكتب Tauri، وكيل Flutter، خطوط الإصدار |
+| **المجموعة المفتوحة** | MIT | `src/lib/pair-math.ts` · `src/lib/nexus/oplog.ts` · `sdk/index.mjs` · `cli/nexus.mjs` · `docs/sdk-guide.md` · `docs/protocol-contract.md` |
+
+- الترخيص الجذري الكامل: [`LICENSE`](LICENSE) — ونص MIT المعياري: [`LICENSES/MIT.txt`](LICENSES/MIT.txt)
+- تصريح المجموعة المفتوحة الرسمي: [`docs/OPEN-COMPONENTS.md`](docs/OPEN-COMPONENTS.md) — كل عضو يحمل `SPDX-License-Identifier: MIT` في ترويسته
+- بيان Flathub متسق حرفيًا: `project_license = LicenseRef-proprietary` — والحارس `scripts/license-e2e.mjs` (44 فحصًا) يمنع أي انجراف بين الثلاثة
