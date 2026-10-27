@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import QRCode from "qrcode"
 import { store, PAIRING_TTL_MS } from "@/lib/nexus/devices"
+import { deriveAssistCode, ASSIST_CODE_TTL_MS } from "@/lib/nexus/assist-code"
 import crypto from "crypto"
 
 export const dynamic = "force-dynamic"
@@ -27,6 +28,8 @@ export async function GET(req: NextRequest) {
   const secret = crypto.randomBytes(16).toString("hex")
   s.pairingSecret = secret
   s.pairingIssuedAt = Date.now()
+  // §46.د — تدوير QR يفتح سقف محاولات رمز المساعدة من جديد (السقف لكل نافذة لا للعملية)
+  s.assistAttempts = 0
 
   // العنوان الفعلي كما وصل الطلب: "192.168.1.2:81" أو "192.168.1.2:3000" …
   const hostHeader = (req.headers.get("host") ?? "").trim() || "127.0.0.1:3000"
@@ -49,11 +52,15 @@ export async function GET(req: NextRequest) {
     color: { dark: "#0f172a", light: "#ffffff" },
   })
   // G-1 — شفافية نافذة الاقتران: الصلاحية تعتمد على آخر إصدار (تدوير عند كل GET)
+  // §46 — رمز المساعدة العددي مشتق من السر نفسه (نفس النافذة، تدوير معًا)
+  const assistCode = deriveAssistCode(secret)
   return NextResponse.json({
     qr: dataUrl,
     code: secret.slice(0, 6).toUpperCase(),
+    assistCode,
     payload,
     ttlMs: PAIRING_TTL_MS,
     expiresAt: s.pairingIssuedAt + PAIRING_TTL_MS,
+    assistExpiresAt: s.pairingIssuedAt + ASSIST_CODE_TTL_MS,
   })
 }

@@ -1,5 +1,5 @@
 // NexusLink — device registry with simulated live state + heartbeat.
-import type { NexusDevice } from "./types"
+import type { NexusDevice, DeviceKind } from "./types"
 import crypto from "crypto"
 
 /** نافذة صلاحية سر الاقتران (G-1): آخر رمز QR مُصدَر يقبل الاقتران لعشر دقائق فقط،
@@ -31,12 +31,36 @@ interface Store {
   devices: NexusDevice[]
   pairingSecret: string | null
   pairingIssuedAt: number
+  /** عقد §46 — طلب اقتران برمز المساعدة في انتظار موافقة مالك سطح المكتب */
+  assistPending: AssistPending | null
+  /** عقد §46.د — محاولات الرمز الخاطئ المستنفدة على نافذة الاقتران الحالية */
+  assistAttempts: number
+  /** عقد §46.هـ — جلسة المساعدة النشطة (بعد قبول صريح) — تظهر لافتة وقطع بضغطة */
+  assistSession: AssistSession | null
+}
+
+/** طلب اقتران برمز المساعدة — بيانات وصفية حصرًا (حرس F6 متوافق) */
+export interface AssistPending {
+  id: string
+  name: string
+  model: string
+  kind: DeviceKind
+  ip: string
+  requestedAt: number
+}
+
+/** جلسة مساعدة نشطة عبر رمز قصير — يقطعها مالك سطح المكتب أو الوكيل */
+export interface AssistSession {
+  deviceId: string
+  deviceName: string
+  startedAt: number
+  via: "short-code"
 }
 
 const g = globalThis as unknown as { __nexusStore?: Store; __nexusStoreVersion?: number }
 
-// v3: + Nexus-TV + Redmi-Note13 متصل (طبقة الوسائط والكاميرا)
-const SEED_VERSION = 3
+// v4: + حالة المساعدة عن بعد §46 (assistPending/assistAttempts/assistSession)
+const SEED_VERSION = 4
 
 function seed(): Store {
   return {
@@ -74,6 +98,9 @@ function seed(): Store {
     ],
     pairingSecret: null,
     pairingIssuedAt: 0,
+    assistPending: null,
+    assistAttempts: 0,
+    assistSession: null,
   }
 }
 
