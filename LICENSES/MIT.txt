@@ -1,0 +1,38 @@
+MIT License
+
+Copyright (c) 2026 CTO-DRS — NexusLink Open Set
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+------------------------------------------------------------------------
+Scope note (NexusLink)
+------------------------------------------------------------------------
+This MIT license applies exclusively to the files declared as the
+"NexusLink Open Set" in docs/OPEN-COMPONENTS.md and stamped with
+"SPDX-License-Identifier: MIT". It does NOT extend to the NexusLink
+Closed Core (the embedded server, the six bridges, the Tauri desktop
+engine, the Flutter agent, release pipelines, and any file not declared
+in the Open Set) — those remain proprietary, Copyright (c) 2026 CTO-DRS,
+all rights reserved. See the repository root LICENSE for the full
+licensing statement.
+
+ملاحظة النطاق: تسري هذه الرخصة حصرًا على الملفات المصرَّح بها في
+«المجموعة المفتوحة» داخل docs/OPEN-COMPONENTS.md والتي تحمل ترويسة
+"SPDX-License-Identifier: MIT"، ولا تمتد للنواة المغلقة — فهي تبقى
+مملوكة، حقوق النشر (c) 2026 CTO-DRS، جميع الحقوق محفوظة.

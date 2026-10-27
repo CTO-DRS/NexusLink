@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # NexusLink — عقد بروتوكول الوكيل (Device Agent Contract)
 
 > **هذا المستند هو المصدر الوحيد للحقيقة** لبناء تطبيق Flutter (وكيل الجهاز).

@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # دليل مطور NexusLink 2.0 — SDK · API عام · سوق التكاملات · CLI
 
 > **عقد 2.0** (المصدر التعاقدي: `docs/protocol-contract.md` §34). هذا الدليل هو «دليل مطور 2.0
