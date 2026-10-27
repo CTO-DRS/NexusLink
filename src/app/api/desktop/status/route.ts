@@ -79,6 +79,17 @@ export async function GET() {
     const syncCfg = await readDesktopSync()
     const mediaCfg = await readDesktopMedia()
 
+    // عقد §46 — حالة المساعدة عن بعد (طلب معلّق / جلسة نشطة) — يقرؤها Rust
+    // واللافتة الحمراء القابلة للقطع بضغطة. فشلها محمي — لا يُسقط الحالة.
+    let assist: { pending: boolean; session: { deviceName: string; startedAt: number } | null } = { pending: false, session: null }
+    try {
+      const st = deviceStore()
+      assist = {
+        pending: !!st.assistPending,
+        session: st.assistSession ? { deviceName: st.assistSession.deviceName, startedAt: st.assistSession.startedAt } : null,
+      }
+    } catch { /* السجل غير جاهز — لا جلسة */ }
+
     return Response.json({
       ok: true,
       proto: "Nexus/1.2",
@@ -112,6 +123,8 @@ export async function GET() {
         hardening: await readDesktopHardening(),
         transfers,
         notifs,
+        // عقد §46 — المساعدة عن بعد برمز قصير (للافتة والقطع بضغطة)
+        assist,
       },
     })
   } catch (e) {

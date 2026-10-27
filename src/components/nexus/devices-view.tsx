@@ -18,6 +18,7 @@ import { toast } from "sonner"
 import type { NexusDevice } from "@/lib/nexus/types"
 import { HealthPanel } from "@/components/nexus/health-panel"
 import { PairPanel } from "@/components/nexus/pair-panel"
+import { AssistBanner, AssistCodeBlock } from "@/components/nexus/assist-panel"
 
 const kindIcon = (k: string) => (k === "phone" ? Smartphone : k === "tablet" ? Tablet : k === "tv" ? Tv : Monitor)
 const modeLabel = (m: string) => (m === "wifi" ? "واي فاي" : m === "hotspot" ? "نقطة اتصال" : "USB")
@@ -112,6 +113,8 @@ function PairDialog() {
   const [code, setCode] = useState<string | null>(null)
   // G-1 — سر الاقتران الكامل من حمولة QR (آخر رمز مُصدَر هو الصالح لعشر دقائق)
   const [secret, setSecret] = useState<string | null>(null)
+  // §46 — رمز المساعدة العددي الستّي (مشتق من السر نفسه — تدوير معًا)
+  const [assistCode, setAssistCode] = useState<string | null>(null)
   const [step, setStep] = useState<"scan" | "confirm">("scan")
   const [loading, setLoading] = useState(false)
 
@@ -121,6 +124,7 @@ function PairDialog() {
       const r = await fetch("/api/devices/qr")
       const j = await r.json()
       setQr(j.qr); setCode(j.code); setSecret(j.payload?.secret ?? null); setStep("scan")
+      setAssistCode(j.assistCode ?? null)
     } finally {
       setLoading(false)
     }
@@ -177,6 +181,8 @@ function PairDialog() {
               <div className="font-mono text-2xl font-bold tracking-[0.3em] text-primary">{code}</div>
               <div className="text-[11px] text-muted-foreground mt-1">الصلاحية 10 دقائق — كل إصدار جديد يُبطل الرمز السابق (التحقق G-1)</div>
             </div>
+            {/* §46 — الطريق البديل لمن لا يستطيع المسح (سيناريو العائلة) */}
+            <AssistCodeBlock assistCode={assistCode} />
             {step === "scan" ? (
               <Button className="w-full" onClick={confirm} disabled={loading}>
                 {loading ? "جارٍ تبادل المفاتيح…" : "لقد مسحت الرمز — تأكيد الاقتران"}
@@ -203,6 +209,9 @@ export function DevicesView() {
   return (
     <div className="space-y-6">
       <HealthPanel />
+
+      {/* §46 — لافتة المساعدة الحية: موافقة على الطلبات + قطع بضغطة */}
+      <AssistBanner />
 
       {/* §30 (M1.1): لوحة قياس الاقتران الفوري الحية — من QR إلى أول قيمة */}
       <PairPanel />
