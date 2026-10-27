@@ -6,6 +6,33 @@
 
 ---
 
+## English — one hub for all your devices, on your own network
+
+**NexusLink** unifies what AirDroid, scrcpy, LocalSend, Phone Link and KDE Connect each
+do alone — into **one local-first desktop hub** with one Android agent app. Everything
+runs on **your own Wi-Fi**: no cloud account, no relay server, no telemetry — the
+Internet is never on the data path.
+
+| Capability | What you get |
+|---|---|
+| 🖥️ Screen & input | Live second-screen streaming (WebRTC + NexusLive over UDP, P95 ≈ 13 ms stylus), touchpad/touch control, clipboard sync both ways |
+| 📁 Files & media | Drag-and-drop transfer, phone file browsing from the desktop, media playback control, virtual camera |
+| 🤖 Smart routines | Local automation with live & historical triggers, durable alerts, offline unified search, on-device assistant |
+| 🔐 Security | X25519 + AES-256-GCM end-to-end encryption with emoji SAS verification, rotating keys, tamper-evident audit log, zero external calls |
+| 🧰 Open tooling | SDK 2.0 + public REST APIs + 16-command CLI (MIT-licensed open set), 6 languages (ar · en · fr · es · de · ru) |
+| 🏢 Beyond the desk | Enterprise policy (MDM), OEM privacy-by-default mode, remote assist with short-code pairing & one-tap disconnect |
+
+**Download** (Windows 10/11 · macOS 12+ Apple Silicon · Linux x64 · Android):
+[Latest release](https://github.com/CTO-DRS/NexusLink/releases/latest) — install, launch,
+scan the QR from the phone app, done. Full guide in §0 below (العربية).
+
+**License** — honest dual model (like Obsidian): closed core © 2026 CTO-DRS, all rights
+reserved; a declared open set (SDK · CLI · pairing math · oplog · docs) under
+[MIT](LICENSES/MIT.txt) — see [LICENSE](LICENSE) and
+[docs/OPEN-COMPONENTS.md](docs/OPEN-COMPONENTS.md).
+
+---
+
 ## 0) التشغيل السريع الحقيقي — سطح المكتب = المركز، الهاتف = وكيل
 
 **الطريق الأساسي للمستخدم النهائي — صفر خطوات يدوية بعد التثبيت:**
