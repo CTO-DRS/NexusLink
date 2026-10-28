@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NexusLink ADML — نصوص سياسات NexusLink (عقد §47) — يوضع في
+     C:\Windows\PolicyDefinitions\en-US\nexuslink.adml -->
+<policyDefinitionResources xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0">
+  <displayName>NexusLink</displayName>
+  <description>NexusLink central management policies (contract 47, schema v2)</description>
+  <resources>
+    <stringTable>
+      <string id="category">NexusLink device management</string>
+      <string id="categoryExplain">Central policy for NexusLink fleet devices. Values are written to the registry and converted to the live policy file (C:\ProgramData\NexusLink\policy.json) — see packaging/mdm/README.md. Invalid values fail safe: no enforcement.</string>
+      <string id="org">Organization name</string>
+      <string id="orgExplain">Free-form label (max 120 chars) shown in compliance and reports. Informational only.</string>
+      <string id="remoteAccess">Remote access posture</string>
+      <string id="remoteAccessExplain">force-on: pairing code always required for external access, disable is refused. force-off: all external access refused enterprise-wide, enable/rotate refused.</string>
+      <string id="remoteAccessOn">Force on (code always required)</string>
+      <string id="remoteAccessOff">Force off (external access closed)</string>
+      <string id="blockedBridges">Bridges blocked from external access</string>
+      <string id="blockedBridgesExplain">Bridge ports among 3003-3009 blocked for external (non-loopback) clients. Loopback is always exempt.</string>
+      <string id="lockedSettings">Locked settings sections</string>
+      <string id="lockedSettingsExplain">Sections among appLock, idle, updater that users cannot change (PUT returns 403). Selective lock: unlisted sections remain user-editable.</string>
+      <string id="rotationDays">Access-code rotation period (days)</string>
+      <string id="rotationDaysExplain">Integer 1-365. When the pairing token is older, rotation is flagged as due (loudly surfaced, never auto-revoked — continuity over silent strictness).</string>
+      <string id="disabledCapabilities">Disabled capabilities</string>
+      <string id="disabledCapabilitiesExplain">Among market, assist, sync. market: all marketplace actions 403. assist: short-code family assistance folded. sync: public ops-log channel (contract 34) closed — internal agent channel untouched.</string>
+      <string id="minimumVersion">Minimum allowed app version</string>
+      <string id="minimumVersionExplain">Semver X.Y.Z floor. Devices below the floor are loudly flagged (announcement, not a live block — updater refuses downgrades).</string>
+    </stringTable>
+  </resources>
+</policyDefinitionResources>

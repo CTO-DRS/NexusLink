@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NexusLink ADMX — سياسات الإدارة المركزية (عقد §47 — المخطط v2)
+     ================================================================
+     يُثبَّت في: C:\Windows\PolicyDefinitions\nexuslink.admx
+     (وnexuslink.adml بجانبه في C:\Windows\PolicyDefinitions\en-US\)
+     يُدار من: GPO أو Intune (Administrative Templates profile).
+     القيم تكتب في السجل تحت SOFTWARE\NexusLink\Policy — ونص التحويل إلى
+     policy.json الحي (C:\ProgramData\NexusLink\policy.json) في
+     packaging/mdm/README.md (apply.ps1 سطر واحد) — المخطط مطابق حرفيًا
+     لمخطط المحرك (src/lib/enterprise-policy.ts — §47). -->
+<policyDefinitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0">
+  <policyNamespaces>
+    <target prefix="nexuslink" namespace="NexusLink.Policy.47" />
+    <using prefix="windows" namespace="Microsoft.PolicyDefinitions.5724b3c4-d37c-4a47-a7da-5d4c1a99be4f" />
+  </policyNamespaces>
+  <resources minRequiredRevision="1.0" />
+  <categories>
+    <category name="NexusLink" displayName="$(string.category)" explainText="$(string.categoryExplain)" />
+  </categories>
+  <policies>
+    <policy name="Organization" class="Machine" displayName="$(string.org)" explainText="$(string.orgExplain)" key="SOFTWARE\NexusLink\Policy" valueName="Organization">
+      <parentCategory ref="NexusLink" />
+      <supportedOn ref="windows:SUPPORTED_Windows8" />
+      <elements>
+        <text id="Organization" maxLength="120" />
+      </elements>
+    </policy>
+    <policy name="RemoteAccess" class="Machine" displayName="$(string.remoteAccess)" explainText="$(string.remoteAccessExplain)" key="SOFTWARE\NexusLink\Policy\Managed">
+      <parentCategory ref="NexusLink" />
+      <supportedOn ref="windows:SUPPORTED_Windows8" />
+      <elements>
+        <enum id="RemoteAccess" key="SOFTWARE\NexusLink\Policy\Managed" valueName="RemoteAccess">
+          <item displayName="$(string.remoteAccessOn)"><value><string>force-on</string></value></item>
+          <item displayName="$(string.remoteAccessOff)"><value><string>force-off</string></value></item>
+        </enum>
+      </elements>
+    </policy>
+    <policy name="BlockedBridges" class="Machine" displayName="$(string.blockedBridges)" explainText="$(string.blockedBridgesExplain)" key="SOFTWARE\NexusLink\Policy\Managed">
+      <parentCategory ref="NexusLink" />
+      <supportedOn ref="windows:SUPPORTED_Windows8" />
+      <elements>
+        <list id="BlockedBridges" key="SOFTWARE\NexusLink\Policy\Managed\BlockedBridges" valuePrefix="" explicitValue="true" additive="false" />
+      </elements>
+    </policy>
+    <policy name="LockedSettings" class="Machine" displayName="$(string.lockedSettings)" explainText="$(string.lockedSettingsExplain)" key="SOFTWARE\NexusLink\Policy\Managed">
+      <parentCategory ref="NexusLink" />
+      <supportedOn ref="windows:SUPPORTED_Windows8" />
+      <elements>
+        <list id="LockedSettings" key="SOFTWARE\NexusLink\Policy\Managed\LockedSettings" valuePrefix="" explicitValue="true" additive="false" />
+      </elements>
+    </policy>
+    <policy name="AccessCodeRotationDays" class="Machine" displayName="$(string.rotationDays)" explainText="$(string.rotationDaysExplain)" key="SOFTWARE\NexusLink\Policy\Managed">
+      <parentCategory ref="NexusLink" />
+      <supportedOn ref="windows:SUPPORTED_Windows8" />
+      <elements>
+        <decimal id="AccessCodeRotationDays" minValue="1" maxValue="365" />
+      </elements>
+    </policy>
+    <policy name="DisabledCapabilities" class="Machine" displayName="$(string.disabledCapabilities)" explainText="$(string.disabledCapabilitiesExplain)" key="SOFTWARE\NexusLink\Policy\Managed">
+      <parentCategory ref="NexusLink" />
+      <supportedOn ref="windows:SUPPORTED_Windows8" />
+      <elements>
+        <list id="DisabledCapabilities" key="SOFTWARE\NexusLink\Policy\Managed\DisabledCapabilities" valuePrefix="" explicitValue="true" additive="false" />
+      </elements>
+    </policy>
+    <policy name="MinimumVersion" class="Machine" displayName="$(string.minimumVersion)" explainText="$(string.minimumVersionExplain)" key="SOFTWARE\NexusLink\Policy\Managed">
+      <parentCategory ref="NexusLink" />
+      <supportedOn ref="windows:SUPPORTED_Windows8" />
+      <elements>
+        <text id="MinimumVersion" maxLength="12" />
+      </elements>
+    </policy>
+  </policies>
+</policyDefinitions>

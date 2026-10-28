@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- NexusLink macOS managed preferences — سياسات الإدارة المركزية (عقد §47)
+     =====================================================================
+     الرفع في Jamf: Application & Custom Settings → Payload → com.nexuslink.policy
+     (أو Munki — ونص التحويل plutil أدناه في README).
+     المفاتيح مطابقة 1:1 لمخطط policy.json v2 (src/lib/enterprise-policy.ts) —
+     نص التحويل في packaging/mdm/README.md (apply.sh سطر plutil واحد).
+     القيم هنا مثال مرجعي — المدير يعدّلها لأسطوله؛ القيم الشاذة تُرفض
+     بالكامل (ملف غير صالح = لا فرض — فشل-آمن §38). -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>schemaVersion</key>
+  <integer>2</integer>
+  <key>organization</key>
+  <string>Acme Corp</string>
+  <key>managed</key>
+  <dict>
+    <key>remoteAccess</key>
+    <string>force-on</string>
+    <key>blockedBridges</key>
+    <array>
+      <integer>3005</integer>
+      <integer>3006</integer>
+    </array>
+    <key>lockedSettings</key>
+    <array>
+      <string>appLock</string>
+      <string>updater</string>
+    </array>
+    <key>accessCodeRotationDays</key>
+    <integer>30</integer>
+    <key>disabledCapabilities</key>
+    <array>
+      <string>market</string>
+    </array>
+    <key>minimumVersion</key>
+    <string>3.1.0</string>
+  </dict>
+</dict>
+</plist>

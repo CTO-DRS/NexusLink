@@ -54,6 +54,13 @@ let pairCache = { mtimeMs: -1, size: -1, data: null }
 //  - ملف غير صالح = لا فرض (فشل-آمن نحو سلوك المستخدم) — الحالة تُعلن في
 //    /api/enterprise/compliance (حد §38.هـ.3).
 //
+// §47 — المخطط v2 (التوأم المطابق لـ src/lib/enterprise-policy.ts): يقبل
+// v1|v2؛ مفاتيح v2 الجديدة (lockedSettings/accessCodeRotationDays/
+// disabledCapabilities/minimumVersion) تُحكّم بالمخالفات نفسها (null = لا
+// فرض) — حكم «صالح/غير صالح» واحد في النسختين وإلا انشق الحسم. البوابة
+// تستخدم remoteAccess/blockedBridges حصرًا (مفاتيح v2 تُفرض في نقاط الويب) —
+// لكن رفض المخالفات هنا إلزامي كي يبقى «ملف تالف = غير مُدار» متطابقًا.
+//
 // §40 — وضع OEM «خصوصية افتراضية» (M4.3 النواة المحلية — docs/protocol-contract.md):
 //  - العلم البيئي NEXUSLINK_OEM_PRIVACY=1 تضعه صورة النظام (وحدة systemd/launchd/
 //    خدمة ويندوز) فيُورثه كل عمليات NexusLink — الجهاز «مولود خاص»: بلا ملف
@@ -167,11 +174,21 @@ function effectiveBlockedBridges(policy) {
   return []
 }
 
-/** تحقق مخطط v1 — null عند أي مخالفة (فشل-آمن بلا فرض) */
+/** تحكّم مخطط v1|v2 (§47 — توأم src/lib/enterprise-policy.ts) — null عند أي
+ * مخالفة (فشل-آمن بلا فرض). مفاتيح v2 في ملف v1 = null (لا مزج إصدارات). */
+const LOCKABLE_SETTINGS = new Set(["appLock", "idle", "updater"])
+const POLICY_CAPABILITIES = new Set(["market", "assist", "sync"])
+const ROTATION_DAYS_MIN = 1
+const ROTATION_DAYS_MAX = 365
+function isValidSemver(v) {
+  return typeof v === "string" && /^\d+\.\d+\.\d+$/.test(v)
+}
 function parsePolicy(raw) {
   try {
     const j = JSON.parse(raw)
-    if (!j || typeof j !== "object" || Array.isArray(j) || j.schemaVersion !== 1) return null
+    if (!j || typeof j !== "object" || Array.isArray(j)) return null
+    if (j.schemaVersion !== 1 && j.schemaVersion !== 2) return null
+    const v2 = j.schemaVersion === 2
     const out = { organization: null, remoteAccess: null, blockedBridges: [] }
     if (j.organization !== undefined && j.organization !== null) {
       if (typeof j.organization !== "string" || j.organization.length > 120) return null
@@ -192,6 +209,36 @@ function parsePolicy(raw) {
           seen.add(v)
         }
         out.blockedBridges = [...seen].sort((a, b) => a - b)
+      }
+      // §47 — مفاتيح v2: تحكّم مطابق (تُهمل قيمها هنا — فرضها في نقاط الويب —
+      // لكن مخالفتها تُبطل الملف كله كي لا يختلف حكم الصلاحية بين النسختين)
+      if (m.lockedSettings !== undefined && m.lockedSettings !== null) {
+        if (!v2) return null
+        if (!Array.isArray(m.lockedSettings) || m.lockedSettings.length > 3) return null
+        const seen = new Set()
+        for (const v of m.lockedSettings) {
+          if (typeof v !== "string" || !LOCKABLE_SETTINGS.has(v)) return null
+          seen.add(v)
+        }
+        if (seen.size !== m.lockedSettings.length) return null
+      }
+      if (m.accessCodeRotationDays !== undefined && m.accessCodeRotationDays !== null) {
+        if (!v2) return null
+        if (!Number.isInteger(m.accessCodeRotationDays) || m.accessCodeRotationDays < ROTATION_DAYS_MIN || m.accessCodeRotationDays > ROTATION_DAYS_MAX) return null
+      }
+      if (m.disabledCapabilities !== undefined && m.disabledCapabilities !== null) {
+        if (!v2) return null
+        if (!Array.isArray(m.disabledCapabilities) || m.disabledCapabilities.length > 3) return null
+        const seen = new Set()
+        for (const v of m.disabledCapabilities) {
+          if (typeof v !== "string" || !POLICY_CAPABILITIES.has(v)) return null
+          seen.add(v)
+        }
+        if (seen.size !== m.disabledCapabilities.length) return null
+      }
+      if (m.minimumVersion !== undefined && m.minimumVersion !== null) {
+        if (!v2) return null
+        if (!isValidSemver(m.minimumVersion)) return null
       }
     }
     return out
