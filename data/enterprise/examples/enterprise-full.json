@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "organization": "Acme Corp — مثال الإدارة الكاملة",
+  "managed": {
+    "remoteAccess": "force-on",
+    "blockedBridges": [3005, 3006],
+    "lockedSettings": ["appLock", "updater"],
+    "accessCodeRotationDays": 30,
+    "disabledCapabilities": ["market"],
+    "minimumVersion": "3.1.0"
+  }
+}

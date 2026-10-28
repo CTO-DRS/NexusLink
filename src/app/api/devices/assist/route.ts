@@ -4,6 +4,8 @@ import { verifyAssistCode, deriveAssistCode, MAX_ASSIST_ATTEMPTS, ASSIST_CODE_TT
 import { ensureDeviceRoot } from "@/lib/nexus/fs-server"
 import { writeServerAudit } from "@/lib/nexus/desktop-hardening"
 import { recordPairMetric } from "@/lib/nexus/pair-metrics"
+import { readEnterprisePolicy } from "@/lib/enterprise-policy"
+import { appendAudit, observePolicy } from "@/lib/enterprise-audit"
 import type { NexusDevice } from "@/lib/nexus/types"
 import crypto from "crypto"
 
@@ -19,6 +21,11 @@ export const dynamic = "force-dynamic"
 //  4. قطع بضغطة:                 POST action=cut      → إبطال الاقتران وطي الجلسة
 // حدود §46 الصادقة: لا تسجيل بلا موافقة صريحة · سقف محاولات §46.د ·
 // الرمز داخل نافذة سر الاقتران نفسها (تدوير QR يُدوّره) · لا سرّ يُحرَّر للطالب.
+//
+// §47 — تعطيل قدرة المساعدة مؤسسيًا: managed.disabledCapabilities تحتوي
+// "assist" → POST كله → 403 capability-disabled-by-policy (مساعدة العائلة
+// مطوية مؤسسيًا — لا رموز ولا طلبات ولا جلسات) — GET يبقى لقطة صادقة مع
+// علم التعطيل (الواجهة تُخفي زر الرمز وتعلن السبب).
 
 const forceHealthTick = () => {
   import("@/lib/nexus/health")
@@ -29,18 +36,26 @@ const forceHealthTick = () => {
 const audit = (action: string, detail: string, severity?: "warn") =>
   void writeServerAudit({ action, detail, severity, actor: "assist-code" }).catch(() => null)
 
+/** لقطة موحدة + علم تعطيل §47 (توصيفي — الواجهة تتصرف به) */
+function assistDisabledByPolicy(): boolean {
+  const pol = readEnterprisePolicy()
+  return pol.state === "managed" && pol.disabledCapabilities.includes("assist")
+}
+
 /** اللقطة الموحدة لواجهة سطح المكتب (تستطلعها اللوحة كل 2ث داخل نافذة الاقتران) */
 function snapshot() {
   const s = store()
   const hasWindow = !!s.pairingSecret
+  const disabled = assistDisabledByPolicy()
   return {
     ok: true,
-    active: hasWindow && Date.now() - s.pairingIssuedAt <= ASSIST_CODE_TTL_MS,
-    code: hasWindow ? deriveAssistCode(s.pairingSecret!) : null,
+    active: !disabled && hasWindow && Date.now() - s.pairingIssuedAt <= ASSIST_CODE_TTL_MS,
+    code: !disabled && hasWindow ? deriveAssistCode(s.pairingSecret!) : null,
     expiresAt: hasWindow ? s.pairingIssuedAt + ASSIST_CODE_TTL_MS : 0,
     attemptsLeft: Math.max(0, MAX_ASSIST_ATTEMPTS - s.assistAttempts),
-    pending: s.assistPending,
-    session: s.assistSession,
+    pending: disabled ? null : s.assistPending,
+    session: disabled ? null : s.assistSession,
+    policy: { assistDisabled: disabled },
   }
 }
 
@@ -54,6 +69,17 @@ export async function POST(req: NextRequest) {
   const action = body.action as string
   const s = store()
   heartbeatBump()
+
+  // §47 — حسم التعطيل قبل أي منطق (لا رموز ولا طلبات ولا جلسات مؤسسيًا)
+  const pol = readEnterprisePolicy()
+  await observePolicy(pol)
+  if (pol.state === "managed" && pol.disabledCapabilities.includes("assist")) {
+    await appendAudit("capability.denied", false, "local", { capability: "assist", action: String(action ?? "").slice(0, 24) })
+    return NextResponse.json(
+      { ok: false, error: "capability-disabled-by-policy", detail: { capability: "assist" } },
+      { status: 403 },
+    )
+  }
 
   switch (action) {
     /* ── 1) طلب الهاتف: رمز صحيح → طلب معلّق (لا تسجيل — الموافقة لاحقة) ── */

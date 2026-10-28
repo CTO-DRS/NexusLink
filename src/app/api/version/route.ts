@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { readEnterprisePolicy, isValidSemver, semverGte } from "@/lib/enterprise-policy"
 
 // /api/version — الإصدار + سجل الإصدارات الحقيقي (عقد §16 بند 2 + §23).
 // ============================================================
@@ -133,6 +134,13 @@ async function fetchHistory(): Promise<HistoryEntry[]> {
 export async function GET() {
   const history = await fetchHistory()
   const latest = history[0]?.version ?? CURRENT
+  // §47 — ختم الإصدار الأدنى المؤسسي (إعلان لا حجب — الحد 47.و.3):
+  // managed.minimumVersion من ملف السياسة v2 يُعلن هنا وفي الامتثال
+  // والتقرير — الجهاز تحت الأرضية يُعلَن صاخبًا ولا يُرفض اتصاله.
+  const pol = readEnterprisePolicy()
+  const minimumVersion = pol.state === "managed" ? pol.minimumVersion : null
+  const belowMinimum =
+    minimumVersion !== null && isValidSemver(CURRENT) ? !semverGte(CURRENT, minimumVersion) : false
   return NextResponse.json(
     {
       current: CURRENT,
@@ -142,6 +150,7 @@ export async function GET() {
       portable: true,
       signature: "minisign (Ed25519) — tauri-plugin-updater",
       changelog: history,
+      policy: { minimumVersion, belowMinimum },
       t: Date.now(),
     },
     { headers: { "Cache-Control": "no-store" } },

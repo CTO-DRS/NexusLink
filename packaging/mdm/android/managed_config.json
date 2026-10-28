@@ -1,0 +1,13 @@
+{
+  "_comment": "NexusLink Android managed configuration — سياسات الإدارة المركزية (عقد §47). يُمرَّر عبر AnyMind/MDM كـ managed configuration لتطبيق الوكيل (com.nexuslink.agent) — الوكيل يكتبه كما هو في مسار السياسة (docs/enterprise-deploy.md §2). المفاتيح مطابقة حرفيًا لمخطط policy.json v2؛ القيم الشاذة تُرفض بالكامل (ملف غير صالح = لا فرض — فشل-آمن §38). القيم هنا مثال مرجعي.",
+  "schemaVersion": 2,
+  "organization": "Acme Corp",
+  "managed": {
+    "remoteAccess": "force-on",
+    "blockedBridges": [3005, 3006],
+    "lockedSettings": ["appLock", "updater"],
+    "accessCodeRotationDays": 30,
+    "disabledCapabilities": ["market"],
+    "minimumVersion": "3.1.0"
+  }
+}

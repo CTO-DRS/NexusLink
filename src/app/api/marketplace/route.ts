@@ -7,6 +7,8 @@ import {
   listPublishers, rotatePublisherKey, setPublisherRevoked,
   signWithPublisherKey, verifyPublisherEnvelope,
 } from "@/lib/nexus/publisher"
+import { readEnterprisePolicy } from "@/lib/enterprise-policy"
+import { appendAudit, observePolicy } from "@/lib/enterprise-audit"
 
 export const dynamic = "force-dynamic"
 
@@ -15,12 +17,18 @@ export const dynamic = "force-dynamic"
 // GET  → القناة الموقعة (10 تكاملات بغلافي توقيع) + المثبت + الناشرون + البصمة + الكتالوج
 // POST → action: install | uninstall | sign | pub-list | pub-rotate | pub-revoke
 //        | pub-restore | pub-verify (مساعدو الناشرين — محلي حصرًا)
+//
+// §47 — تعطيل قدرة السوق مؤسسيًا: managed.disabledCapabilities تحتوي "market"
+// → كل أفعال POST → 403 capability-disabled-by-policy (قبل أي منطق — حسم
+// مبكر). GET يبقى قراءة صادقة: القناة تُرى والسياسة معلنة فيها (البطاقة
+// تُطفئ الأزرار) — الغرض منع التثبيت لا إخفاء الوجود.
 
 export async function GET() {
   try {
     const [channel, installed, keyInfo, publishers] = await Promise.all([
       signedChannel(), listInstalled(), getChannelKey(), listPublishers(),
     ])
+    const pol = readEnterprisePolicy()
     return NextResponse.json({
       keyFp: keyInfo.fp,
       capabilities: PLUGIN_CAPABILITIES,
@@ -28,6 +36,9 @@ export async function GET() {
       installed: installed.map((p) => ({ ...p })),
       // قناة الناشر (§35.أ): بصمات حصرًا — لا مفاتيح أبدًا
       publishers,
+      policy: {
+        marketDisabled: pol.state === "managed" && pol.disabledCapabilities.includes("market"),
+      },
     })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 503 })
@@ -37,6 +48,16 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const action = String(body.action ?? "")
+  // §47 — حسم التعطيل قبل أي منطق (بلا أثر جانبي) + دليل §39
+  const pol = readEnterprisePolicy()
+  await observePolicy(pol)
+  if (pol.state === "managed" && pol.disabledCapabilities.includes("market")) {
+    await appendAudit("capability.denied", false, "local", { capability: "market", action: action.slice(0, 24) })
+    return NextResponse.json(
+      { ok: false, error: "capability-disabled-by-policy", detail: { capability: "market" } },
+      { status: 403 },
+    )
+  }
   try {
     if (action === "install") {
       const out = await installPlugin(body.manifest, body.sig, body.pub)

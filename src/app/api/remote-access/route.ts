@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import crypto from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
-import { readEnterprisePolicy, oemPrivacyActive, resolveEffectivePosture, type PostureSource } from "@/lib/enterprise-policy"
+import { readEnterprisePolicy, oemPrivacyActive, resolveEffectivePosture, rotationDue, type PostureSource } from "@/lib/enterprise-policy"
 import { appendAudit, observePolicy } from "@/lib/enterprise-audit"
 
 export const dynamic = "force-dynamic"
@@ -58,6 +58,31 @@ function newToken(): string {
   return crypto.randomBytes(32).toString("base64url")
 }
 
+// §47 — رصد انتقال التقادم (نمط observePolicy §39): «استحق التدوير» يُوثق مرة
+// عند الانتقال لا عند كل قراءة (لا إغراق السجل) — إعادة تشغيل الخادم قد
+// تعيد التسجيل مرة (مقبول وموثق: الدليل فوق الضجيج).
+let lastOverdueFp: string | null = null
+function rotationInfoOf(
+  p: { fingerprint: string; createdAt: string } | null,
+  rotationDays: number | null,
+): { days: number | null; ageDays: number | null; due: boolean } {
+  if (!p || !rotationDays) return { days: rotationDays, ageDays: null, due: false }
+  const t = Date.parse(p.createdAt)
+  const ageDays = Number.isFinite(t) ? Math.floor((Date.now() - t) / 86_400_000) : null
+  const due = rotationDue(p.createdAt, rotationDays)
+  if (due && lastOverdueFp !== p.fingerprint) {
+    lastOverdueFp = p.fingerprint
+    void appendAudit("pair.rotation.overdue", false, "local", {
+      fp: p.fingerprint,
+      days: rotationDays,
+      ageDays: ageDays ?? null,
+    })
+  } else if (!due) {
+    lastOverdueFp = null
+  }
+  return { days: rotationDays, ageDays, due }
+}
+
 export async function GET() {
   const p = readPairFile()
   // §38 — تلميح الإدارة للبطاقة: ما تفرضه السياسة المؤسسية (بلا حساسيات —
@@ -70,7 +95,10 @@ export async function GET() {
   const posture = resolveEffectivePosture(pol)
   const oemPrivacy = { active: oemPrivacyActive(), source: posture.source as PostureSource }
   const policy = { remoteAccess: pol.remoteAccess, organization: pol.organization }
-  if (!p) return NextResponse.json({ ok: true, enabled: false, policy, oemPrivacy })
+  // §47 — إجبار تدوير رمز الوصول: عمر الرمز مقابل أجلة السياسة (توصيفي —
+  // إعلان صاخب لا قطع ذاتي: الحد 47.و.2 — الاستمرارية فوق الصرامة الصامتة)
+  const rotation = rotationInfoOf(p, pol.state === "managed" ? pol.accessCodeRotationDays : null)
+  if (!p) return NextResponse.json({ ok: true, enabled: false, policy, oemPrivacy, rotation })
   return NextResponse.json({
     ok: true,
     enabled: true,
@@ -78,6 +106,7 @@ export async function GET() {
     createdAt: p.createdAt,
     policy,
     oemPrivacy,
+    rotation,
     // الرمز الخام عمدًا غائب — يُسلَّم مرة واحدة في استجابة enable/rotate حصرًا
   })
 }

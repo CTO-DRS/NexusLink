@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "organization": "اسم مؤسستك هنا",
+  "managed": {
+    "remoteAccess": "force-on",
+    "blockedBridges": [],
+    "lockedSettings": [],
+    "accessCodeRotationDays": 30,
+    "disabledCapabilities": [],
+    "minimumVersion": "3.1.0"
+  }
+}

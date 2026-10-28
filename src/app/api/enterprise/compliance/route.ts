@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import crypto from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
-import { readEnterprisePolicy, policyPaths, POLICY_CONTRACT, oemPrivacyActive, resolveEffectivePosture } from "@/lib/enterprise-policy"
+import { readEnterprisePolicy, policyPaths, POLICY_CONTRACT, oemPrivacyActive, resolveEffectivePosture, rotationDue } from "@/lib/enterprise-policy"
 import { observePolicy, auditSummary, AUDIT_CONTRACT } from "@/lib/enterprise-audit"
 
 export const dynamic = "force-dynamic"
@@ -77,6 +77,12 @@ export async function GET(request: Request) {
     enforced: {
       remoteAccess: pol.remoteAccess,
       blockedBridges: pol.blockedBridges,
+      // §47 — فرض المخطط v2 معلن كاملًا في الامتثال (v1/غير مُدار = محايد):
+      // الأقسام المقفولة · أجلة تدوير الرمز · القدرات المعطلة · أرضية الإصدار
+      lockedSettings: pol.lockedSettings,
+      accessCodeRotationDays: pol.accessCodeRotationDays,
+      disabledCapabilities: pol.disabledCapabilities,
+      minimumVersion: pol.minimumVersion,
     },
     // §40 — الفرض الفعلي: من يملك الحسم (سياسة صالحة | مولود خاص | المستخدم)
     // وما يترتب عليه فعليًا على الخارج — التوصيف الصادق للوضع المطبق الآن
@@ -93,6 +99,11 @@ export async function GET(request: Request) {
       enabled: !!pair,
       fingerprint: pair?.fingerprint ?? null,
       createdAt: pair?.createdAt ?? null,
+      // §47 — استحقاق تدوير الرمز معلن في الامتثال (توصيفي صادق)
+      rotation: {
+        days: pol.state === "managed" ? pol.accessCodeRotationDays : null,
+        due: rotationDue(pair?.createdAt, pol.state === "managed" ? pol.accessCodeRotationDays : null),
+      },
     },
     // §39 — ملخص السجل التدقيقي المحلي (أدلة الإدارة والتغيير — توصيفي حصرًا)
     audit: { contract: AUDIT_CONTRACT, ...auditSummary() },

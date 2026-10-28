@@ -19,6 +19,7 @@ import {
   Ear, Volume2, CheckCircle2, AlertTriangle, Rocket, Package, Globe,
   FolderSync, Plus, Trash2, FolderOpen, MonitorPlay, Camera, Mic,
   Lock, Fingerprint, ScrollText, History, Type, Store, RefreshCw, Building2,
+  Ban, Tag,
 } from "lucide-react"
 import { toast } from "sonner"
 import { pickFolder } from "@/lib/desktop-files"
@@ -1298,6 +1299,10 @@ const AUDIT_KIND_LABEL: Record<string, string> = {
   "pair.admin.denied": "رفض فعل إداري",
   "policy.observed": "رصد أولي للسياسة",
   "policy.changed": "تغير ملف السياسة",
+  // §47 — أفعال الإدارة الجماعية الموسّعة
+  "settings.write.denied": "كتابة إعدادات مرفوضة (قفل مؤسسي)",
+  "pair.rotation.overdue": "استحقاق تدوير الرمز",
+  "capability.denied": "قدرة مرفوضة بالسياسة",
 }
 interface AuditEventView { i: number; t: string; k: string; ok: boolean; actor: string }
 
@@ -1307,6 +1312,7 @@ function EnterprisePolicyCard() {
   const [state, setState] = useState("loading")
   const [audit, setAudit] = useState<{ count: number; valid: boolean } | null>(null)
   const [events, setEvents] = useState<AuditEventView[] | null>(null)
+  const [exporting, setExporting] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     await fetch("/api/enterprise/compliance")
@@ -1330,10 +1336,45 @@ function EnterprisePolicyCard() {
   }, [])
   useEffect(() => { load() }, [load])
 
-  const enforced = (rep?.enforced ?? {}) as { remoteAccess?: string | null; blockedBridges?: number[] }
+  const enforced = (rep?.enforced ?? {}) as { remoteAccess?: string | null; blockedBridges?: number[]; lockedSettings?: string[]; accessCodeRotationDays?: number | null; disabledCapabilities?: string[]; minimumVersion?: string | null }
   const org = typeof rep?.organization === "string" ? rep.organization : null
   const hash = typeof rep?.policyHash === "string" ? rep.policyHash : null
   const blocked = Array.isArray(enforced.blockedBridges) ? enforced.blockedBridges : []
+  // §47 — فرض المخطط v2: الأقسام المقفولة · القدرات المعطلة · التدوير والأرضية
+  const locked = Array.isArray(enforced.lockedSettings) ? enforced.lockedSettings : []
+  const disabledCaps = Array.isArray(enforced.disabledCapabilities) ? enforced.disabledCapabilities : []
+  const rotationDays = typeof enforced.accessCodeRotationDays === "number" ? enforced.accessCodeRotationDays : null
+  const minVersion = typeof enforced.minimumVersion === "string" ? enforced.minimumVersion : null
+  const pg = (rep?.pairGate ?? {}) as { rotation?: { due?: boolean; days?: number | null } }
+  const rotationDueFlag = pg.rotation?.due === true
+  const appV = typeof rep?.appVersion === "string" ? rep.appVersion : null
+  const belowMinimum =
+    minVersion !== null && appV !== null &&
+    /^\d+\.\d+\.\d+$/.test(appV) && /^\d+\.\d+\.\d+$/.test(minVersion) &&
+    (() => {
+      const a = appV.split(".").map(Number)
+      const b = minVersion.split(".").map(Number)
+      return a[0]! < b[0]! || (a[0]! === b[0]! && (a[1]! < b[1]! || (a[1]! === b[1]! && a[2]! < b[2]!)))
+    })()
+  // §47 — تصدير التقرير محليًا حصرًا (تنزيل متصفح — لا إرسال لأي طرف)
+  const exportReport = useCallback(async (format: "json" | "pdf") => {
+    setExporting(format)
+    try {
+      const res = await fetch(`/api/enterprise/report?format=${format}`)
+      if (!res.ok) throw new Error(String(res.status))
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = format === "pdf" ? "nexuslink-compliance-report.pdf" : "nexuslink-compliance-report.json"
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      /* بلا تصعيد — زر إعدادات */
+    } finally {
+      setExporting(null)
+    }
+  }, [])
   // §40 — وضع OEM «خصوصية افتراضية»: العلم الفعّال ومصدر الفرض والوضع الفعلي
   const oemRep = (rep?.oemPrivacy ?? null) as { active?: boolean; source?: string; effective?: { remoteAccess?: string | null; blockedBridges?: number[]; closed?: boolean } } | null
   const oemActive = oemRep?.active === true
@@ -1380,7 +1421,40 @@ function EnterprisePolicyCard() {
               <Fingerprint className="w-3 h-3" />{t("بصمة ملف السياسة")}: <span data-no-i18n>{hash}</span>
             </Badge>
           )}
+          {/* §47 — شارات المخطط v2: القفل والتدوير والقدرات والأرضية */}
+          {state === "managed" && locked.length > 0 && (
+            <Badge variant="outline" data-en-locked={locked.join(",")}>
+              <Lock className="w-3 h-3" />{t("إعدادات مقفولة مؤسسيًا")}: <span data-no-i18n>{locked.join(" · ")}</span>
+            </Badge>
+          )}
+          {state === "managed" && rotationDays != null && (
+            <Badge variant={rotationDueFlag ? "destructive" : "outline"} data-en-rotation={rotationDueFlag ? "due" : String(rotationDays)}>
+              <RefreshCw className="w-3 h-3" />
+              {rotationDueFlag ? t("تدوير رمز الوصول مستحق الآن") : t("تدوير الرمز كل")} <span data-no-i18n>{rotationDays}</span>
+            </Badge>
+          )}
+          {state === "managed" && disabledCaps.length > 0 && (
+            <Badge variant="outline" data-en-caps={disabledCaps.join(",")}>
+              <Ban className="w-3 h-3" />{t("قدرات معطلة مؤسسيًا")}: <span data-no-i18n>{disabledCaps.join(" · ")}</span>
+            </Badge>
+          )}
+          {state === "managed" && minVersion && (
+            <Badge variant={belowMinimum ? "destructive" : "outline"} data-en-minver={`${minVersion}:${belowMinimum ? "below" : "ok"}`}>
+              <Tag className="w-3 h-3" />{t("أرضية الإصدار")} <span data-no-i18n>{minVersion}</span>
+              {belowMinimum ? ` · ${t("الجهاز تحت الأرضية")}` : ""}
+            </Badge>
+          )}
         </div>
+        {rotationDueFlag && (
+          <p className="text-xs text-destructive" data-rotation-note="due">
+            {t("الرمز الحالي تجاوز أجلة التدوير المؤسسية — دوّره الآن: الاستمرار أولًا والإنذار صاخب لا صامت (لا قطع ذاتي)")}
+          </p>
+        )}
+        {belowMinimum && (
+          <p className="text-xs text-destructive" data-minver-note="below">
+            {t("إصدار هذا الجهاز تحت الأرضية المؤسسية — أعلِم مديرك وحدّثه (ختم معلن لا حجب حي)")}
+          </p>
+        )}
         {state === "unmanaged" && !oemClosed && (
           <p className="text-xs text-muted-foreground">{t("غير مُدار: الجهاز بيد مستخدمه بالكامل (الافتراضي) — نشر ملف السياسة يجعل هذا الجهاز قابلًا للإدارة المركزية")}</p>
         )}
@@ -1422,6 +1496,30 @@ function EnterprisePolicyCard() {
             )}
           </div>
         )}
+
+        {/* §47 — مولّد تقارير الامتثال: تصدير محلي حصرًا (تنزيل متصفح — لا إرسال) */}
+        <div className="flex flex-wrap items-center gap-2" data-report-export>
+          <span className="text-xs font-medium">{t("تصدير تقرير الامتثال")}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => exportReport("json")}
+            disabled={exporting === "json"}
+            data-report-json="1"
+          >
+            {exporting === "json" ? t("…جارٍ التصدير") : t("تقرير JSON الكامل")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => exportReport("pdf")}
+            disabled={exporting === "pdf"}
+            data-report-pdf="1"
+          >
+            {exporting === "pdf" ? t("…جارٍ التصدير") : t("تقرير PDF للمُدقّقين (إنجليزي)")}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">{t("التقرير يُصدَّر محليًا حصرًا (تنزيل في متصفحك — لا يُرسل لأي طرف): بيانات وصفية فقط من سياسة وأجهزة وإصدارات ومقاييس وسجل تدقيقي")}</p>
 
         <p className="text-xs text-muted-foreground">{t("حد صادق: ملف السياسة مصدر الحقيقة الواحد بلا قراءة سجل النظام، والحجب يمس الخارج حصرًا (loopback معفى — الجهاز هي الحدود)، والقبول المؤسسي الموسع (نشر صامت على عشرات الأجهزة/مدقق SOC 2/عقد OEM) بند خارجي M4")}</p>
         <p className="text-xs text-muted-foreground">{t("حد صادق للسجل: كاتبٌ واحد (خادم الويب) وحلقي العرض، ومن يملك القرص قد يعيد بناء السلسلة كاملة — كشف تعديل لا منعه (نموذج الجهاز المحلي نفسه)، والجمع المركزي للأدلة بند النشر الخارجي")}</p>

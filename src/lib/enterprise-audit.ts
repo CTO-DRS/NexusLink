@@ -31,6 +31,10 @@ export type AuditKind =
   | "pair.admin.denied"
   | "policy.observed"
   | "policy.changed"
+  // §47 — أفعال الإدارة الجماعية الموسّعة (قفل/تدوير/قدرات — نفس السلسلة)
+  | "settings.write.denied"
+  | "pair.rotation.overdue"
+  | "capability.denied"
 
 const KINDS: ReadonlySet<string> = new Set<string>([
   "pair.enable",
@@ -39,6 +43,9 @@ const KINDS: ReadonlySet<string> = new Set<string>([
   "pair.admin.denied",
   "policy.observed",
   "policy.changed",
+  "settings.write.denied",
+  "pair.rotation.overdue",
+  "capability.denied",
 ])
 
 export interface AuditRecord {
