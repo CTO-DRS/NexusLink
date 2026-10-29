@@ -93,7 +93,7 @@ function arKeys(p) {
   try { return Object.keys(JSON.parse(fs.readFileSync(path.join(process.cwd(), p), "utf8"))).filter((k) => AR.test(k)).length } catch { return -1 }
 }
 const counts = [arKeys("src/lib/ar-en-map.json"), arKeys("src/lib/i18n/fr.json"), arKeys("src/lib/i18n/es.json"), arKeys("src/lib/i18n/de.json"), arKeys("src/lib/i18n/ru.json")]
-ok("أ27 توازن i18n الخمسة حرفيًا (3,707×5)", counts.every((c) => c === 3707), counts.join("/"))
+ok("أ27 توازن i18n الخمسة حرفيًا (3,725×5 — أساس §49: +18 مفتاح المرحّل)", counts.every((c) => c === 3725), counts.join("/"))
 
 /* ═════════════ الطور ب — السيناريو الحي (24 فحصًا) ═════════════ */
 const APP = (() => {

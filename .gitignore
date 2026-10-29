@@ -93,3 +93,6 @@ scripts/hardening-verify/target/
 
 # local backup bundles (R5-git-attribution) — never commit
 *.bundle
+
+# §49 — حالة تشغيل النفق والسجل (لا تُلتزم أبدًا — مصدر الحقيقة محلي عابر)
+.zstate/
