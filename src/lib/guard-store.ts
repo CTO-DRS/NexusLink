@@ -3,7 +3,7 @@
 // مقاييس حية · تطبيقات · منبهات · إعدادات سريعة · رن · فقدان · مسح · قرب
 import { create } from "zustand"
 
-export type GuardTab = "dashboard" | "apps" | "find" | "lost" | "proximity" | "control" | "touch"
+export type GuardTab = "dashboard" | "apps" | "find" | "lost" | "proximity" | "control" | "touch" | "emergency"
 
 // ---------- FA-7: جلسة التحكم باللمس ----------
 
