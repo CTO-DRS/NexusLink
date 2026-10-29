@@ -236,6 +236,10 @@ if (!APP) {
   const writePolicy = (objOrRaw) => fs.writeFileSync(POLICY, typeof objOrRaw === "string" ? objOrRaw : JSON.stringify(objOrRaw, null, 2))
   const writePair = (createdAt) =>
     fs.writeFileSync(PAIR, JSON.stringify({ token: "e47-" + "k".repeat(40), fingerprint: "e47fingerprint0000", createdAt }, null, 2))
+  // أرضية الإصدار الأدنى ديناميكية: minor أعلى من الحالي — تنجو أي ترقية قادمة
+  const pkgVer = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version
+  const [MAJ, MIN, PAT] = pkgVer.split(".").map(Number)
+  const FLOOR = `${MAJ}.${MIN + 1}.${PAT}`
   const LIVE_V2 = {
     schemaVersion: 2,
     organization: "E2E Live Org",
@@ -245,7 +249,7 @@ if (!APP) {
       lockedSettings: ["appLock"],
       accessCodeRotationDays: 30,
       disabledCapabilities: ["market", "assist", "sync"],
-      minimumVersion: "3.1.0",
+      minimumVersion: FLOOR,
     },
   }
 
@@ -321,11 +325,11 @@ if (!APP) {
     r.status === 403 && r.j?.error === "capability-disabled-by-policy" && r.j?.detail?.capability === "sync",
   )
 
-  // ب13 — ختم الإصدار الأدنى: إعلان صادق (الجهاز 3.0.0 تحت أرضية 3.1.0)
+  // ب13 — ختم الإصدار الأدنى: إعلان صادق (الجهاز الحالي تحت أرضية ديناميكية minor+1)
   r = await getJson("/api/version")
   ok(
-    "ب13 GET version: minimumVersion=3.1.0 وbelowMinimum=true (إعلان لا حجب)",
-    r.j.policy?.minimumVersion === "3.1.0" && r.j.policy?.belowMinimum === true,
+    `ب13 GET version: minimumVersion=${FLOOR} وbelowMinimum=true (إعلان لا حجب)`,
+    r.j.policy?.minimumVersion === FLOOR && r.j.policy?.belowMinimum === true,
     `current=${r.j.current}`,
   )
 
@@ -337,7 +341,7 @@ if (!APP) {
       JSON.stringify(r.j.enforced?.lockedSettings) === '["appLock"]' &&
       r.j.enforced?.accessCodeRotationDays === 30 &&
       Array.isArray(r.j.enforced?.disabledCapabilities) && r.j.enforced.disabledCapabilities.includes("market") &&
-      r.j.enforced?.minimumVersion === "3.1.0" && typeof r.j.policyHash === "string",
+      r.j.enforced?.minimumVersion === FLOOR && typeof r.j.policyHash === "string",
   )
 
   // ب15/ب16 — تقرير JSON: العقد §47 بكل أذرعه

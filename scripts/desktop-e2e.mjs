@@ -858,9 +858,9 @@ try {
       "header roundtrip")
     check("R4 §18-ت: قياس الطرف-إلى-طرف بلفّ u32 آمن (wrapping_sub) + P50/P95 من live.rs",
       liveRs18.includes("wrapping_sub") && liveRs18.includes("p95") && liveRs18.includes("p50"), "live.rs e2e")
-check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms epoch & 0xFFFFFFFF — إزاحة NTP عبر pong)",
+check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (Dart ‏& 0xFFFFFFFF · الجسر >>> 0 — إزاحة NTP عبر pong)",
       ((Date.now() & 0xffffffff) >>> 0) <= 0xFFFFFFFF && liveDart18.includes("& 0xFFFFFFFF")
-        && rbTs18.includes("Date.now() & 0xffffffff"), "ts mask")
+        && rbTs18.includes("Date.now() >>> 0"), "ts mask")
 
     // (ج) حوض Rust — loopback حصرًا
     check("R4 §18-ت: live.rs يرتبط 127.0.0.1 حصرًا على NEXUS_LIVE_SINK_PORT (3011) بمحاولات إعادة + P50/P95",
@@ -1229,7 +1229,7 @@ check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms 
         head[3] = 1 // pen
         head[4] = flags
         head.writeUInt32BE(seq >>> 0, 6)
-        head.writeUInt32BE(Date.now() & 0xffffffff, 10)
+        head.writeUInt32BE(Date.now() >>> 0, 10)
         head.write(keyHex, 14, "hex")
         const pl = Buffer.alloc(10) // 0.5/0.5 · ضغط 0.8 · down
         pl.writeUInt16BE(0x8000, 0)
@@ -1492,7 +1492,7 @@ check("R4 §18-ت: ts مُقتطع 32-بت عند العميل والجسر (ms 
         head[3] = 3 // gyro
         head[4] = flags
         head.writeUInt32BE(seq >>> 0, 6)
-        head.writeUInt32BE(Date.now() & 0xffffffff, 10)
+        head.writeUInt32BE(Date.now() >>> 0, 10)
         head.write(keyHex, 14, "hex")
         const pl = Buffer.alloc(12)
         pl.writeInt16BE(0, 0) // ax

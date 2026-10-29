@@ -22,13 +22,13 @@ on:
       release_tag:
         description: "وسم الإصدار عند الإرفاق اليدوي"
         type: string
-        default: "v3.0.0"
+        default: "v3.1.0"
 
 permissions:
   contents: write
 
 env:
-  VERSION: "3.0.0" # رقم إصدار موحّد لكل المنصات (يجب أن يطابق الملفات الأربعة — BUILD.md §5)
+  VERSION: "3.1.0" # رقم إصدار موحّد لكل المنصات (يجب أن يطابق الملفات الأربعة — BUILD.md §5)
 
 jobs:
   test:

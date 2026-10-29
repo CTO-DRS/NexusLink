@@ -31,8 +31,8 @@ modules:
     sources:
       - type: file
         only-arches: [x86_64]   # صدق: لا بناء aarch64 Linux منشور (dmg أندرويد/ماك فقط)
-        url: https://github.com/CTO-DRS/NexusLink/releases/download/v3.0.0/NexusLink_3.0.0_amd64.AppImage
-        sha256: b9a0ef5afdc6c2de0e5c3095cd64d74b534df21ed0f5966c3a71beb64e0128d1
+        url: https://github.com/CTO-DRS/NexusLink/releases/download/v3.1.0/NexusLink_3.1.0_amd64.AppImage
+        sha256: b9a0ef5afdc6c2de0e5c3095cd64d74b534df21ed0f5966c3a71beb64e0128d1 # تُحدَّث من SHA256SUMS.txt فور نشر أصل v3.1.0 (بوابة هـ تتحقق حيًّا)
         x-checker-data:
           type: github-releases
           url: https://api.github.com/repos/CTO-DRS/NexusLink/releases

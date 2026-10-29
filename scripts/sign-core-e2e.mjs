@@ -90,9 +90,10 @@ ok("وضع 5 — توقيع + بلا updater: الكتلتان مستقلتان 
 
 // ============ المرحلة ج — انحدار عقود الإصدار (سلاسل المقيّس الكامل) ============
 console.log("== [ج] انحدار §23/§42 ==")
+const pkgVer = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version
 const mustKeep = [
-  ['VERSION: "3.0.0"', "env.VERSION موحد"],
-  ['default: "v3.0.0"', "وسم الإرفاق اليدوي"],
+  [`VERSION: "${pkgVer}"`, "env.VERSION موحد مع package.json"],
+  [`default: "v${pkgVer}"`, "وسم الإرفاق اليدوي"],
   ["Verify release notes exist (AR/EN)", "حارس ملاحظات الإصدار"],
   ["body_path: docs/releases/${{ github.ref_name }}.md", "body_path على الوسم"],
   ['"windows-x86_64"', "منصة ويندوز latest.json"],

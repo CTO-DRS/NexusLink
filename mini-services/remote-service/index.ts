@@ -306,7 +306,8 @@ function ensureLiveUdp() {
       flow.stats.pings++
       const pong = Buffer.from(buf)
       pong[3] = LIVE_PONG
-      pong.writeUInt32BE(Date.now() & 0xffffffff, 10)
+      // >>> 0 لا & 0xffffffff (درس §48: & يعيد Int32 سالبًا فيكسر writeUInt32BE)
+      pong.writeUInt32BE(Date.now() >>> 0, 10)
       sock.send(pong, rinfo.port, rinfo.address, (err) => {
         if (err) liveGlobal.pongErrors++
       })
