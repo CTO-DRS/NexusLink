@@ -7,6 +7,8 @@
 #      package-lock.json/yarn.lock — المستودع bun (bun.lock) — فكان أحمر في كل دفعة.
 # ما يُنشر: public/NexusLink-Release-Page.html كما هو باسم index.html —
 # نفس الصفحة التي يخدمها التطبيق نفسه على /NexusLink-Release-Page.html.
+# وأصول SEO في public/seo/ تُنسخ إلى جذر الموقع:
+# robots.txt · sitemap.xml · llms.txt · ملف تحقق Google Search Console · مفتاح IndexNow.
 
 name: Deploy release page to Pages
 
@@ -16,6 +18,7 @@ on:
     paths:
       - ".github/workflows/nextjs.yml"
       - "public/NexusLink-Release-Page.html"
+      - "public/seo/**"
   workflow_dispatch:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
