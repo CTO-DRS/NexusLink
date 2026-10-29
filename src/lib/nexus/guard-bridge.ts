@@ -8,6 +8,7 @@ import { Server as SocketServer } from "socket.io"
 import { applyAgentTx } from "./transfer-engine"
 import { store } from "./devices"
 import { socketCors } from "./socket-security" // SEC (M0.3 F4)
+import { isDeviceKilled, noteRefired } from "./emergency" // §48 — قائمة القتل عند إعادة الاتصال
 
 const PORT = 3006
 
@@ -252,6 +253,30 @@ export function isAgentOnline(): boolean {
   return !!ioX.sockets?.sockets?.has(reg.socketId)
 }
 
+/**
+ * §48 — إطلاق القتل على وكيل متصل بمعرّفه (من الخادم حصرًا بعد PIN): يبحث
+ * في سجل الوكيل الأساسي ثم سجل تعدد الوكلاء (§24). لا يوجد أي مسار آخر
+ * يولّد dev:kill عبر المقبس (خارج CMDS حرفيًا — لا حقن).
+ */
+export function emitKillToDevice(deviceId: string): boolean {
+  const ioX = currentIo()
+  if (!ioX || !deviceId) return false
+  const reg = agentReg()
+  const target =
+    reg.deviceId === deviceId && reg.socketId
+      ? reg.socketId
+      : [...agentsReg().entries()].find(([, a]) => a.deviceId === deviceId)?.[0]
+  if (!target) return false
+  const s = ioX.sockets?.sockets?.get(target)
+  if (!s) return false
+  try {
+    s.emit("dev:kill", { deviceId, at: Date.now(), via: "server" })
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function getAgentDeviceId(): string | null {
   return agentReg().deviceId
 }
@@ -291,6 +316,17 @@ export function ensureGuardBridge() {
       socket.on(
         "guard:hello-phone",
         (d: { name?: string; deviceId?: string; media?: { port?: unknown; token?: unknown } }) => {
+          // §48.ج — فحص قائمة القتل قبل أي شيء: المقتول العائد يُقابَل بالقتل
+          // فورًا — لا تسجيل وكيل، لا منارة، لا نقطة وسائط، ولا مصافحة. البوابة
+          // (البوابة الصغيرة للطوارئ) نفسها تفرض هذا الترتيب على مستوى البروتوكول.
+          if (d?.deviceId && isDeviceKilled(String(d.deviceId))) {
+            try {
+              socket.emit("dev:kill", { deviceId: String(d.deviceId), at: Date.now(), via: "reconnect", refired: true })
+            } catch { /* السوكِت يموت معه */ }
+            void noteRefired(String(d.deviceId))
+            log(io2, `هاتف مقتول عاد للاتصال — القتل أُعيد فورًا بلا مصافحة (${String(d.deviceId).slice(0, 24)})`, "warn")
+            return
+          }
           phoneGuardOnline = true
           // تسجيل الوكيل الحقيقي (لإرسال عروض النقل tx:offer إليه لاحقًا)
           const reg = agentReg()

@@ -35,6 +35,11 @@ export type AuditKind =
   | "settings.write.denied"
   | "pair.rotation.overdue"
   | "capability.denied"
+  // §48 — وضع الطوارئ الذكي (تسليح/قتل/رفض/إعادة إطلاق — سلسلة القتل النهائي)
+  | "emergency.arm"
+  | "emergency.kill"
+  | "emergency.kill.denied"
+  | "emergency.kill.refired"
 
 const KINDS: ReadonlySet<string> = new Set<string>([
   "pair.enable",
@@ -46,6 +51,10 @@ const KINDS: ReadonlySet<string> = new Set<string>([
   "settings.write.denied",
   "pair.rotation.overdue",
   "capability.denied",
+  "emergency.arm",
+  "emergency.kill",
+  "emergency.kill.denied",
+  "emergency.kill.refired",
 ])
 
 export interface AuditRecord {
