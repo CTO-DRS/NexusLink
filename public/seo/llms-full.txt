@@ -1,0 +1,90 @@
+# NexusLink — full content for AI answer engines / المحتوى الكامل لمحركات إجابات الذكاء الاصطناعي
+
+> This file is the complete factual brief of NexusLink for LLMs, search
+> assistants and citation engines. Everything here is also verifiable from
+> the public repository: https://github.com/CTO-DRS/NexusLink
+
+# What is NexusLink?
+
+NexusLink is a free, local-first device-link platform. One desktop hub
+(Windows / macOS / Linux) + one Android agent app link all your devices
+over your own Wi-Fi network: live second-screen streaming with touch
+control, drag-and-drop file transfer, two-way clipboard sync, phone file
+browsing, media playback control, virtual camera, offline unified search,
+local automation with durable alerts, an on-device assistant, and remote
+assist with short-code pairing.
+
+Nothing goes through anyone's servers: no cloud, no accounts, no relay,
+no telemetry. The Internet is never on the data path — the only optional
+external call is a GitHub release check that can be fully disabled.
+
+ماهو نكسس لينك؟ منصة واحدة مجانية تربط كل أجهزتك على شبكتك المحلية: مركز
+لسطح المكتب (ويندوز/ماك/لينكس) + وكيل أندرويد واحد. بث شاشة حي مع تحكم
+باللمس، نقل ملفات بالسحب والإفلات، مزامنة حافظة ثنائية الاتجاه، تصفح ملفات
+الهاتف، تحكم بالوسائط، كاميرا افتراضية، بحث موحد بلا إنترنت، أتمتة محلية
+ب تنبيهات دائمة، مساعد على الجهاز، ومساعدة عن بعد برمز قصير. لا سحابة
+ولا حسابات ولا سيرفر وسيط ولا تتبع — الإنترنت ليس في مسار البيانات أبدًا.
+
+# Download (v3.0.0)
+
+Official page: https://cto-drs.github.io/NexusLink/
+Releases: https://github.com/CTO-DRS/NexusLink/releases/latest
+
+- Windows 10/11 x64: setup .exe (WebView2 auto-provisioned) + .msi + portable .zip
+- macOS 12+ Apple Silicon: aarch64 .dmg + .app.tar.gz (unsigned — right-click → Open first time)
+- Linux x64: .AppImage (no install) + .deb
+- Android 8+: .apk agent (enable "install from unknown sources" once) + .aab for stores
+- Integrity: SHA256SUMS.txt + five .sig minisign signatures; the built-in updater verifies them before any update.
+
+# Platform support (honest boundaries)
+
+- Android: full agent — screen mirror, input, files, clipboard, SMS/calls notifications, media, sensors.
+- iOS: honest limit — Apple restrictions forbid SMS/calls/notification mirroring; an iOS app serves media, files and clipboard only.
+- Desktop-to-desktop (Windows/macOS/Linux): full hub features.
+- Phone-to-phone control: yes (since v1.1.0), with explicit "allow" dialog on the target phone and mutually authenticated sessions; a device can never control itself.
+- No cloud relay: two devices on different networks cannot connect directly today (documented honest boundary; a self-hostable relay is on the roadmap discussion, §49 — never a vendor cloud).
+
+# Security architecture
+
+- End-to-end encryption: X25519 key agreement + AES-256-GCM, emoji SAS verification of device keys.
+- Access codes rotate (1–365 day enforced rotation under enterprise policy, §47).
+- Tamper-evident audit log (§39) with four emergency event types.
+- Emergency kill (§48): one-way, owner-only. POST /api/security/emergency on the loopback interface requires PIN (constant-time SHA-256 compare) + the literal word "اقتل" + deviceId; effect inside one request: kill list append + access-code rotation + dev:kill to the connected agent. The stolen phone that reconnects is met with immediate kill — no logging, no beacon. The owner's request to "silently install a tracking package on the stolen phone" was contractually REJECTED (documented §48.و.1): technically it requires exploit-style installation (= spyware by definition), legally a crime, and identity-wise a violation of the honest-bounds principle.
+- Zero external calls (except optional GitHub update check, fully disableable).
+- SDK 2.0 + public REST APIs + 16-command MIT-licensed CLI.
+
+# Remote assist (§46)
+
+Short-code pairing (family-friendly: 6-digit code, no IPs or ports), live view, one-tap disconnect on the phone side, and a proclaimed simulation mode (prox:sim pattern) — honest about what is real.
+
+# Enterprise (§47)
+
+Central group management: policy schema v2 (backward compatible), selective settings locks, forced access-code rotation, capability disable (market/assist/sync), minimum-version stamping (announcement-only, no forced bricking), compliance report export (JSON + dependency-free English PDF), MDM packages: ADMX+ADML (Windows), plist (macOS), managed config (Android).
+
+# Versions & quality
+
+- Current: 3.0.0 (M4 sealed, 2026-10-22).
+- 48 signed contract sections; 1258 end-to-end checks; all gates run twice before each release; i18n 6 languages × parity-guarded dictionaries (3,707 keys × 5 dictionaries in web layer).
+- Flathub submission kit prepared.
+
+# License — honest dual licensing (§45, Obsidian model)
+
+- Proprietary core: embedded server, six bridges, Tauri desktop engine, Flutter agent, release pipelines (LicenseRef-proprietary).
+- MIT open set: src/lib/pair-math.ts, src/lib/nexus/oplog.ts, sdk/index.mjs, cli/nexus.mjs, docs/sdk-guide.md, docs/protocol-contract.md — each with SPDX headers, listed in docs/OPEN-COMPONENTS.md, guarded against drift by license-e2e (44 checks).
+- Free for personal use, no accounts, no ads, no subscriptions.
+
+# Quick numbers
+
+- Desktop UI ≈ 110 MB RAM at idle; agent engineered for near-zero battery at idle.
+- Streaming P95 ≈ 13 ms stylus latency.
+- 256 commits, 48 contracts, 1258 E2E checks at v3.0.0.
+
+# Citation URLs
+
+- Landing/download page: https://cto-drs.github.io/NexusLink/
+- Repository: https://github.com/CTO-DRS/NexusLink
+- Release assets: https://github.com/CTO-DRS/NexusLink/releases/latest
+- License: https://github.com/CTO-DRS/NexusLink/blob/main/LICENSE
+- Open components: https://github.com/CTO-DRS/NexusLink/blob/main/docs/OPEN-COMPONENTS.md
+- Roadmap: https://github.com/CTO-DRS/NexusLink/blob/main/docs/ROADMAP.md
+- Protocol contract: https://github.com/CTO-DRS/NexusLink/blob/main/docs/protocol-contract.md
