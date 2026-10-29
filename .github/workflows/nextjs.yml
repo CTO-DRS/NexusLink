@@ -41,7 +41,9 @@ jobs:
         run: |
           mkdir -p _site
           cp public/NexusLink-Release-Page.html _site/index.html
+          cp -r public/seo/. _site/
           echo "site: index.html $(wc -c < _site/index.html) bytes"
+          echo "seo files:"; ls -A _site/
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact

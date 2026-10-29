@@ -1,5 +1,19 @@
 # NexusLink — منصة ربط الأجهزة عبر الشبكة المحلية
 
+[![GitHub release](https://img.shields.io/github/v/release/CTO-DRS/NexusLink)](https://github.com/CTO-DRS/NexusLink/releases/latest)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-009b8f)](https://cto-drs.github.io/NexusLink/)
+[![Website](https://img.shields.io/website?url=https%3A%2F%2Fcto-drs.github.io%2FNexusLink%2F&up_color=009b8f)](https://cto-drs.github.io/NexusLink/)
+[![Commit activity](https://img.shields.io/github/commit-activity/m/CTO-DRS/NexusLink)](https://github.com/CTO-DRS/NexusLink/commits/main)
+[![Last commit](https://img.shields.io/github/last-commit/CTO-DRS/NexusLink)](https://github.com/CTO-DRS/NexusLink/commits/main)
+
+**🌐 الموقع والتحميل المباشر: <https://cto-drs.github.io/NexusLink/>**
+
+> **Quick facts (باهتزاز واحد):** NexusLink · v3.0.0 · مجاني للاستخدام الشخصي ·
+> Windows 10/11 · macOS 12+ · Linux x64 · Android 8+ (iOS: وسائط/ملفات/حافظة فقط — حد معلن) ·
+> ازدواجية ترخيص صادقة: نواة مملوكة + مجموعة مفتوحة MIT (انظر `LICENSE` و`docs/OPEN-COMPONENTS.md`) ·
+> لا سحابة · لا حسابات · لا تتبع · تشفير X25519 + AES-256-GCM من الطرف للطرف ·
+> 6 لغات (ar · en · fr · es · de · ru) · 1258 فحص E2E عبر 48 عقدًا موثقًا.
+
 منصة واحدة تربط هاتفك بجهاز الكمبيوتر — كل شيء محلي على شبكتك، بلا سحابة وبلا حسابات.
 هذا الملف يشرح التشغيل الكامل: **سطح المكتب (المركز) ← الهاتف (الوكيل) ← الاختبار المشترك**،
 مع خريطة المنافذ ونقاط التحقق السريعة لكل طبقة (FA-2 … FA-10).
@@ -25,6 +39,14 @@ Internet is never on the data path.
 **Download** (Windows 10/11 · macOS 12+ Apple Silicon · Linux x64 · Android):
 [Latest release](https://github.com/CTO-DRS/NexusLink/releases/latest) — install, launch,
 scan the QR from the phone app, done. Full guide in §0 below (العربية).
+Landing page: <https://cto-drs.github.io/NexusLink/>.
+
+**Keywords / ابحث عنا:** device management · screen mirroring · scrcpy alternative ·
+AirDroid alternative · KDE Connect alternative · LocalSend alternative · phone to PC ·
+remote assist · clipboard sync · file transfer over LAN · WebRTC streaming ·
+E2EE privacy tool · local-first software · بدون إنترنت · بديل أيرو درويد ·
+مرآة الشاشة · نقل ملفات واي فاي · مزامنة الحافظة · التحكم بالهاتف من الكمبيوتر ·
+خصوصية · مصدر مفتوح جزئيًا (SDK + CLI بترخيص MIT).
 
 **License** — honest dual model (like Obsidian): closed core © 2026 CTO-DRS, all rights
 reserved; a declared open set (SDK · CLI · pairing math · oplog · docs) under

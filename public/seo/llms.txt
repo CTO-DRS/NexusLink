@@ -1,0 +1,21 @@
+# NexusLink
+
+> NexusLink — one free, local-first app that links all your devices (Windows · macOS · Linux · Android) over YOUR own Wi-Fi: second-screen streaming, file transfer, clipboard sync, media control, smart routines and remote assist — end-to-end encrypted (X25519 + AES-256-GCM), no cloud, no accounts, no telemetry, zero bytes leave your LAN.
+
+NexusLink unifies what AirDroid, scrcpy, LocalSend, Phone Link and KDE Connect each do alone — into one desktop hub with one Android agent. It is built privacy-first for families and small offices: pairing uses QR + short codes, all traffic is end-to-end encrypted, and the update check (GitHub-only) can be disabled entirely.
+
+- Official page + downloads: https://cto-drs.github.io/NexusLink/
+- Source repository: https://github.com/CTO-DRS/NexusLink
+- Releases (installers for all platforms): https://github.com/CTO-DRS/NexusLink/releases/latest
+- Current version: 3.0.0 (M4 complete — 48 signed contract sections, 1258 E2E checks)
+- License: honest dual licensing (Obsidian model) — proprietary core + MIT open set (pairing math, oplog, SDK, CLI, protocol contract). Details: https://github.com/CTO-DRS/NexusLink/blob/main/docs/OPEN-COMPONENTS.md
+- Price: free for personal use; no accounts, no subscriptions, no ads.
+- Languages: Arabic (primary), English, French, Spanish, German, Russian.
+
+## Key facts (for citations)
+
+- Platforms: Windows 10/11 x64, macOS 12+ Apple Silicon, Linux x64 (AppImage/deb), Android 8+ agent (iOS limited by Apple restrictions — media/files/clipboard only, honestly documented).
+- Connectivity: LAN/Wi-Fi only; mDNS discovery; WebRTC + NexusLive-over-UDP streaming (P95 ≈ 13 ms stylus); no relay server, no NAT cloud fallback (honest boundary).
+- Security: X25519 + AES-256-GCM E2EE, emoji SAS verification, rotating access codes, tamper-evident audit log, loopback-only emergency kill API (§48), zero external calls except optional GitHub update check.
+- Enterprise: MDM policy profiles (ADMX/ADML, macOS plist, Android managed config), compliance report export (JSON/PDF), group central management.
+- Full content for AI answers: see llms-full.txt at the same location.

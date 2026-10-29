@@ -5,6 +5,168 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NexusLink — صفحة النشر والتحميل</title>
 <meta name="description" content="NexusLink v3.0.0 — حمّل التطبيق لـ Windows وmacOS وLinux وAndroid. كل شيء محلي على شبكتك، بلا سحابة، بتشفير من الطرف إلى الطرف.">
+<!-- SEO/AIO layer v1 (Task 12) -->
+<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+<meta name="keywords" content="NexusLink, نكسس لينك, device management, ربط الأجهزة, local-first, بلا سحابة, screen mirroring, مرآة الشاشة, clipboard sync, مزامنة الحافظة, file transfer, نقل ملفات, remote control, تحكم عن بعد, WebRTC, E2EE, تشفير الطرف للطرف, AirDroid alternative, KDE Connect alternative, LocalSend, scrcpy, Android, Windows, macOS, Linux, LAN, WiFi, privacy, خصوصية, open source SDK">
+<meta name="author" content="CTO-DRS">
+<meta name="theme-color" content="#009b8f" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="https://cto-drs.github.io/NexusLink/">
+<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<link rel="manifest" href="site.webmanifest">
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NexusLink">
+<meta property="og:url" content="https://cto-drs.github.io/NexusLink/">
+<meta property="og:title" content="NexusLink — كل أجهزتك على شبكتك، بلا سحابة (تحميل مجاني)">
+<meta property="og:description" content="حمّل NexusLink لـ Windows وmacOS وLinux وAndroid: بث شاشة، نقل ملفات، مزامنة حافظة، تحكم عن بعد — مشفر طرف-لطرف، بلا سحابة ولا حسابات. مجاني بالكامل.">
+<meta property="og:image" content="https://cto-drs.github.io/NexusLink/og-image.png">
+<meta property="og:image:secure_url" content="https://cto-drs.github.io/NexusLink/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="NexusLink — All your devices. One local hub. No cloud.">
+<meta property="og:locale" content="ar_AR">
+<meta property="og:locale:alternate" content="en_US">
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="NexusLink — كل أجهزتك على شبكتك، بلا سحابة">
+<meta name="twitter:description" content="بث شاشة · نقل ملفات · مزامنة حافظة · تحكم عن بعد — مشفر، محلي، مجاني لكل المنصات">
+<meta name="twitter:image" content="https://cto-drs.github.io/NexusLink/og-image.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "NexusLink",
+  "operatingSystem": "Windows 10/11, macOS 12+, Linux x64, Android 8+",
+  "applicationCategory": "UtilitiesApplication",
+  "softwareVersion": "3.0.0",
+  "inLanguage": [
+    "ar",
+    "en",
+    "fr",
+    "es",
+    "de",
+    "ru"
+  ],
+  "description": "One free local-first app that links all your devices over your own Wi-Fi: second-screen streaming, file transfer, clipboard sync, media control, smart routines and remote assist — end-to-end encrypted (X25519 + AES-256-GCM), no cloud, no accounts, no telemetry.",
+  "featureList": [
+    "Live second-screen streaming with touch/touchpad control (WebRTC + NexusLive, P95 ≈ 13 ms)",
+    "Drag-and-drop file transfer and phone file browsing",
+    "Two-way clipboard sync",
+    "Media playback control and virtual camera",
+    "Local automation with live & historical triggers and durable alerts",
+    "Remote assist with family short-code pairing and one-tap disconnect",
+    "End-to-end encryption with emoji SAS verification and rotating access codes",
+    "Enterprise MDM policies and compliance reports",
+    "SDK 2.0 + public REST APIs + 16-command MIT-licensed CLI"
+  ],
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Organization",
+    "name": "CTO-DRS",
+    "url": "https://github.com/CTO-DRS"
+  },
+  "downloadUrl": "https://github.com/CTO-DRS/NexusLink/releases/latest",
+  "installUrl": "https://cto-drs.github.io/NexusLink/",
+  "screenshot": "https://cto-drs.github.io/NexusLink/og-image.png",
+  "license": "https://github.com/CTO-DRS/NexusLink/blob/main/LICENSE",
+  "isAccessibleForFree": true,
+  "datePublished": "2026-10-22"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "inLanguage": "ar",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "هل تحتاج بياناتي إنترنت أو سيرفراتكم؟",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "لا إطلاقًا. كل شيء — ملفات، حافظة، تحكم، وسائط — يعمل بين أجهزتك على شبكتك المحلية. لا حسابات ولا سحابة ولا سيرفر وسيط لنا. الاتصال الخارجي الوحيد هو فحص التحديث من GitHub وهو قابل للتعطيل كليًا من الإعدادات."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "ما الذي يعمل على iPhone؟",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "حد صادق: iOS لا يسمح بقراءة SMS/المكالمات/مرآة الإشعارات (قيود Apple). تطبيق iOS يخدم الوسائط والملفات والحافظة فقط — ميزات المرآة الكاملة متاحة على Android."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "كيف أعرف أن الملف الذي حمّلته سليم؟",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "قارن بصمة SHA-256 مع SHA256SUMS.txt المنشور (أوامر جاهزة في قسم «التحقق» أعلاه)، وملفات .sig الخمسة موقعة بمفتاح minisign الخاص بالمستودع — نفس التحقق الذي يجريه المحدّث الذاتي قبل أي تحديث."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "الوكيل يتوقف على أندرويد 13+ — ما الحل؟",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "أندرويد 13+ يقيد التطبيقات من مصادر غير معروفة. افتح: الإعدادات ← التطبيقات ← NexusLink ← قائمة ⋮ ← «السماح بالإعدادات المقيدة»، ثم فعّل الإتاحة والتشغيل التلقائي — الخطوات الكاملة في دليل التثبيت أعلاه."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "هل يمكن التحكم بهاتف من هاتف آخر؟",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "نعم — من إصدار 1.1.0: طلب تحكم عبر المركز يصل للهاتف الهدف بحوار «سماح» صريح، والإدخال يتطلب جلسة موثقة من الطرفين، ولا يمكن لأي جهاز أن يتحكم بنفسه. كل شيء على بروتوكول NexusLink المشفر نفسه."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "كم يستهلك من الموارد؟ وهل هو مجاني؟",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "واجهة سطح المكتب ~110MB ذاكرة عند التشغيل، والوكيل مصمم بسياسة خمول (بطارية شبه معدومة في الخمول). مجاني للاستخدام الشخصي بالكامل — بلا حسابات ولا اشتراكات."
+      }
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "CTO-DRS",
+  "url": "https://github.com/CTO-DRS",
+  "logo": "https://cto-drs.github.io/NexusLink/icon-512.png",
+  "sameAs": [
+    "https://github.com/CTO-DRS/NexusLink"
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "NexusLink",
+  "alternateName": "NexusLink — تحميل وإصدارات",
+  "url": "https://cto-drs.github.io/NexusLink/",
+  "inLanguage": [
+    "ar",
+    "en"
+  ],
+  "publisher": {
+    "@type": "Organization",
+    "name": "CTO-DRS"
+  }
+}
+</script>
+
 <style>
 :root{
   --brand:#009b8f;--brand-2:#2eb5a4;--brand-soft:rgba(0,155,143,.12);

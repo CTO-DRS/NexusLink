@@ -1,0 +1,18 @@
+{
+  "name": "NexusLink — تحميل وإصدارات",
+  "short_name": "NexusLink",
+  "description": "حمّل NexusLink لويندوز وماك ولينكس وأندرويد — كل شيء محلي على شبكتك، بلا سحابة",
+  "id": "/NexusLink/",
+  "start_url": "../",
+  "scope": "../",
+  "display": "standalone",
+  "dir": "rtl",
+  "lang": "ar",
+  "background_color": "#0b1220",
+  "theme_color": "#009b8f",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
