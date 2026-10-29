@@ -40,6 +40,10 @@ export type AuditKind =
   | "emergency.kill"
   | "emergency.kill.denied"
   | "emergency.kill.refired"
+  // §49 — المرحّل الذاتي (تفعيل/تعطيل/رفض إدارة — نفس السلسلة، بلا أسرار)
+  | "relay.enable"
+  | "relay.disable"
+  | "relay.admin.denied"
 
 const KINDS: ReadonlySet<string> = new Set<string>([
   "pair.enable",
@@ -55,6 +59,9 @@ const KINDS: ReadonlySet<string> = new Set<string>([
   "emergency.kill",
   "emergency.kill.denied",
   "emergency.kill.refired",
+  "relay.enable",
+  "relay.disable",
+  "relay.admin.denied",
 ])
 
 export interface AuditRecord {

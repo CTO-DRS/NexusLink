@@ -265,6 +265,16 @@ function isLoopbackIp(ip) {
   return ip === "::1" || ip === "::ffff:127.0.0.1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)
 }
 
+// §49 — ترويسة الشدة للمرحّل الذاتي: طلب واصل عبر نفق المرحّل (يضبطها نفق
+// المركز حصرًا داخل الجهاز قبل نداء البوابة) يُعامل كواصل خارجي في كل
+// حواجز الثقة (رمز §37 · فرض السياسة §38/§40 · حجب الجسور).
+// خصائص الأمان: وجود الترويسة يشدّ أبدًا ولا يرخي أبدًا — واصل الشبكة
+// الحقيقي خارجي أصلًا فلا يغيرها أثرًا، وواصل loopback لا يمكنه استعمالها
+// إلا ليعامل أشد (لا مسار نفاذ عبرها إطلاقًا).
+function relayed(req) {
+  return req.headers["x-nexuslink-relay"] !== undefined
+}
+
 /** مقارنة زمن-ثابت عبر هضم ثابت الطول — لا تسرّب طول ولا بادئة */
 function tokenMatches(candidate, expected) {
   const h = (s) => crypto.createHash("sha256").update(String(s)).digest()
@@ -306,14 +316,15 @@ function pairGateHttp(req, res, reqUrl) {
   // يلغي معنى الرمز أصلًا (خطأ تشخيصي مميز لكل مصدر)
   const policy = loadPolicy()
   const closedBy = externalClosedBy(policy)
-  if (!isLoopbackIp(ip) && closedBy) {
+  if ((!isLoopbackIp(ip) || relayed(req)) && closedBy) {
     res.writeHead(403, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" })
     res.end(JSON.stringify({ ok: false, gateway: true, error: closedBy === "policy" ? "remote-access-disabled-by-policy" : "remote-access-closed-oem-default" }))
     return false
   }
   const pair = loadPair()
   if (!pair) return true // OFF — السلوك التاريخي حرفيًا
-  if (isLoopbackIp(ip)) return true
+  // §49 — عبر النفق = خارجي: الإعفاء المحلي لا يسري على طلب مرحّل
+  if (isLoopbackIp(ip) && !relayed(req)) return true
   let u
   try { u = new URL(reqUrl, "http://gw") } catch { u = new URL("/", "http://gw") }
   const cand = pairCandidate(req, u)
@@ -335,7 +346,7 @@ function pairGateRaw(req, socket, reqUrl) {
   const ip = clientIp(req)
   const policy = loadPolicy()
   const closedBy = externalClosedBy(policy)
-  if (!isLoopbackIp(ip) && closedBy) {
+  if ((!isLoopbackIp(ip) || relayed(req)) && closedBy) {
     try {
       socket.end("HTTP/1.1 403 Forbidden\r\ncontent-type: application/json\r\n\r\n" + JSON.stringify({ ok: false, gateway: true, error: closedBy === "policy" ? "remote-access-disabled-by-policy" : "remote-access-closed-oem-default" }))
     } catch { /* مقبس ميت */ }
@@ -343,7 +354,8 @@ function pairGateRaw(req, socket, reqUrl) {
   }
   const pair = loadPair()
   if (!pair) return true
-  if (isLoopbackIp(ip)) return true
+  // §49 — عبر النفق = خارجي (نفس حسم HTTP حرفيًا)
+  if (isLoopbackIp(ip) && !relayed(req)) return true
   let u
   try { u = new URL(reqUrl, "http://gw") } catch { u = new URL("/", "http://gw") }
   const cand = pairCandidate(req, u)
@@ -405,7 +417,8 @@ function targetPort(reqUrl) {
 function policyBridgeGate(req, res, port) {
   if (!port) return true // REST 3000 ليست جسرًا قابلًا للحجب
   const ip = clientIp(req)
-  if (isLoopbackIp(ip)) return true
+  // §49 — عبر النفق = خارجي (الجسور محجوبة عن الخارج حصرًا)
+  if (isLoopbackIp(ip) && !relayed(req)) return true
   const policy = loadPolicy()
   const blocked = effectiveBlockedBridges(policy)
   if (!blocked.includes(port)) return true

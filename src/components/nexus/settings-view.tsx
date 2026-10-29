@@ -19,7 +19,7 @@ import {
   Ear, Volume2, CheckCircle2, AlertTriangle, Rocket, Package, Globe,
   FolderSync, Plus, Trash2, FolderOpen, MonitorPlay, Camera, Mic,
   Lock, Fingerprint, ScrollText, History, Type, Store, RefreshCw, Building2,
-  Ban, Tag,
+  Ban, Tag, Network, CloudOff, ArrowUpDown,
 } from "lucide-react"
 import { toast } from "sonner"
 import { pickFolder } from "@/lib/desktop-files"
@@ -435,6 +435,9 @@ export function SettingsView() {
 
       {/* الوصول البعيد برمز اقتران (عقد §37 — إغلاق حد §36.هـ.1) */}
       <RemoteAccessCard />
+
+      {/* المرحّل الذاتي (عقد §49 — النواة المحلية لـ E4) */}
+      <RelayCard />
 
       {/* الإدارة المؤسسية (عقد §38 — M4.1 النواة المحلية) */}
       <EnterprisePolicyCard />
@@ -1281,6 +1284,166 @@ function RemoteAccessCard() {
           </div>
         )}
         <p className="text-xs text-muted-foreground">{t("حد صادق: تشفير النقل عبر النفق/البنية الخارجية مسؤولية نشرها — البوابة تحسم الرمز قبل وصول أي طلب للخدمات، والإدارة من خارج الجهاز مرفوضة ولو برمز صحيح")}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
+// المرحّل الذاتي (عقد §49 — النواة المحلية لـ E4): وصول عبر الإنترنت بخادم
+// يملكه المالك حصرًا — صفر سحابة. النفق يمرر HTTP/REST فقط عبر المرحّل مع
+// ترويسة شدّ تجعل كل حواجز البوابة تعامل الطلب كخارجي (رمز §37 يظل حاسمًا).
+function RelayCard() {
+  const { t } = useI18n()
+  const [st, setSt] = useState<{
+    state?: string; reason?: string; url?: string; roomId?: string; fingerprint?: string;
+    createdAt?: string; stats?: { requests?: number; ok?: number; errors?: number; bytesIn?: number; bytesOut?: number };
+    enabled?: boolean; pairEnabled?: boolean;
+    policy?: { remoteAccess?: string | null; organization?: string | null } | null;
+    oemPrivacy?: { active?: boolean; source?: string } | null;
+  } | null>(null)
+  const [url, setUrl] = useState("")
+  const [secret, setSecret] = useState("")
+  const [busy, setBusy] = useState(false)
+
+  const load = useCallback(async () => {
+    await fetch("/api/relay")
+      .then((r) => r.json())
+      .then((j) => setSt(j))
+      .catch(() => { /* بطاقة إعدادات — البقاء صامتًا */ setSt(null) })
+  }, [])
+  useEffect(() => { load(); const id = setInterval(load, 4000); return () => clearInterval(id) }, [load])
+
+  const enabled = !!st?.enabled && st?.state !== "disabled"
+  const forceOff = st?.policy?.remoteAccess === "force-off"
+  const oemLocked = !!st?.oemPrivacy?.active && st?.oemPrivacy?.source === "oem-default"
+
+  const doEnable = useCallback(async () => {
+    setBusy(true)
+    try {
+      const r = await fetch("/api/relay", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "enable", url: url.trim(), secret: secret.trim() }),
+      })
+      const j = await r.json()
+      if (r.ok && j.ok) {
+        toast.success(t("تم تفعيل المرحّل")); announce(t("تم تفعيل المرحّل"))
+        setSecret(""); await load()
+      } else if (j.error === "relay-url-invalid") {
+        toast.error(t("رابط غير صالح — http(s) أو ws(s) فقط"))
+      } else if (j.error === "relay-secret-invalid") {
+        toast.error(t("السر قصير — 16 محرفًا على الأقل بلا فراغات"))
+      } else {
+        toast.error(String(j.error ?? t("تعذر تنفيذ الإجراء")))
+      }
+    } catch { toast.error(t("تعذر تنفيذ الإجراء")) }
+    setBusy(false)
+  }, [url, secret, t, load])
+
+  const doDisable = useCallback(async () => {
+    setBusy(true)
+    try {
+      const r = await fetch("/api/relay", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "disable" }),
+      })
+      const j = await r.json()
+      if (r.ok && j.ok) { toast.success(t("تم تعطيل المرحّل")); announce(t("تم تعطيل المرحّل")); await load() }
+      else toast.error(String(j.error ?? t("تعذر تنفيذ الإجراء")))
+    } catch { toast.error(t("تعذر تنفيذ الإجراء")) }
+    setBusy(false)
+  }, [t, load])
+
+  const stateLabel = () => {
+    if (!enabled) return t("معطّل")
+    switch (st?.state) {
+      case "connected": return t("متصل")
+      case "connecting": return t("يتصل")
+      case "waiting": return t("بانتظار إعادة الاتصال")
+      case "error": return t("خطأ")
+      default: return t("معطّل")
+    }
+  }
+  const kb = (n?: number) => (n ?? 0) >= 1048576 ? `${((n ?? 0) / 1048576).toFixed(1)} MB` : `${Math.round((n ?? 0) / 1024)} KB`
+
+  return (
+    <Card data-relay-card>
+      <CardContent className="p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <SectionTitle
+            icon={Network}
+            title={t("المرحّل الذاتي")}
+            desc={t("وصول عبر خادم تملكه أنت — صفر سحابة: نفق يمرر طلبات جهازك البعيد إلى مركزك عبر مرحّلك الخاص")}
+          />
+          <Button variant="ghost" size="sm" onClick={load} aria-label={t("تحديث")}>
+            <RefreshCw className="w-4 h-4" />
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge variant="outline" data-relay-state={st?.state ?? "disabled"}>
+            {t("الحالة")}: {stateLabel()}
+          </Badge>
+          {enabled && st?.roomId && (
+            <Badge variant="outline" className="gap-1" data-relay-room={st.roomId}>
+              <Tag className="w-3 h-3" />{t("معرّف الغرفة")}: <span data-no-i18n>{st.roomId}</span>
+            </Badge>
+          )}
+          {enabled && st?.fingerprint && (
+            <Badge variant="outline" className="gap-1" data-relay-fp={st.fingerprint}>
+              <Fingerprint className="w-3 h-3" />{t("بصمة السر")}: <span data-no-i18n>{st.fingerprint}</span>
+            </Badge>
+          )}
+          {forceOff && (
+            <Badge variant="secondary" data-relay-managed="force-off">
+              <Building2 className="w-3 h-3" />{t("تُدار بالمؤسسة")}
+            </Badge>
+          )}
+          {oemLocked && (
+            <Badge variant="secondary" data-relay-oem="1"><ShieldCheck className="w-3 h-3" />{t("وضع OEM: الخصوصية افتراضيًا")}</Badge>
+          )}
+        </div>
+        {enabled && st?.pairEnabled === false && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-xs" data-relay-pair-warn>
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{t("فعّل رمز الوصول البعيد أولًا — النفق مفتوح بلا حسم الرمز")}</span>
+          </div>
+        )}
+        {enabled && st?.stats && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground" data-relay-stats>
+            <span data-no-i18n>{t("الطلبات المخدومة")}: {st.stats.requests ?? 0}</span>
+            <span className="inline-flex items-center gap-1"><ArrowUpDown className="w-3 h-3" />{t("الحركة عبر النفق")}: <span data-no-i18n>↓{kb(st.stats.bytesIn)} · ↑{kb(st.stats.bytesOut)}</span></span>
+            {st.url && (<span className="inline-flex items-center gap-1"><CloudOff className="w-3 h-3" /><span data-no-i18n>{st.url}</span></span>)}
+          </div>
+        )}
+        {!enabled && !forceOff && !oemLocked && (
+          <div className="space-y-2" data-relay-form>
+            <div className="grid gap-2">
+              <Label htmlFor="relay-url">{t("رابط المرحّل")}</Label>
+              <input
+                id="relay-url" data-relay-url-input className="input-loopback-safe w-full rounded-md border bg-background px-3 py-2 text-xs"
+                placeholder="https://relay.example.com:8310" value={url}
+                onChange={(e) => setUrl(e.target.value)} autoComplete="off" spellCheck={false}
+              />
+              <Label htmlFor="relay-secret">{t("سرّ المرحّل")}</Label>
+              <input
+                id="relay-secret" data-relay-secret-input type="password" className="w-full rounded-md border bg-background px-3 py-2 text-xs"
+                placeholder="NEXUSLINK_RELAY_SECRET" value={secret}
+                onChange={(e) => setSecret(e.target.value)} autoComplete="off"
+              />
+            </div>
+            <Button size="sm" disabled={busy || url.trim().length === 0 || secret.trim().length < 16} onClick={doEnable} data-relay-enable>
+              {t("تفعيل النفق")}
+            </Button>
+          </div>
+        )}
+        {enabled && !forceOff && (
+          <Button size="sm" variant="destructive" disabled={busy} onClick={doDisable} data-relay-disable>
+            {t("تعطيل النفق")}
+          </Button>
+        )}
+        {forceOff && (
+          <p className="text-xs text-muted-foreground" data-relay-locked="force-off">{t("الإدارة المؤسسية تغلق الوصول البعيد — التفعيل من مدير مؤسستك حصرًا")}</p>
+        )}
+        <p className="text-xs text-muted-foreground">{t("حدود صادقة: المرحّل يرى البيانات الوصفية (التوقيت والأحجام) لا محتوى القنوات المعمّاة · قنوات المقبس الحي محلية ولا تعبره · تعطّله يسقط الوصول البعيد فقط والشبكة المحلية بلا أي تغيير · معرّف الغرفة علني والوصول يتطلب السر")}</p>
       </CardContent>
     </Card>
   )
