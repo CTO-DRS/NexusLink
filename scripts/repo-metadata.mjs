@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // NexusLink — أداة مالك وصف المستودع (عقد §45) — repo-metadata
 // ============================================================
-// تحديث وصف GitHub الإنجليزي + الـtopics عبر API الرسمي — حصرًا بيد المالك.
+// تحديث وصف GitHub ثنائي اللغة + الـtopics عبر API الرسمي — حصرًا بيد المالك.
 // قواعد الرمز الصارمة (غير قابلة للتفاوض):
 //   · الرمز من متغير البيئة GITHUB_TOKEN حصرًا — لا بارامتر ولا ملف ولا سؤال تفاعلي.
 //   · غياب الرمز = فشل مغلق (exit 2) مع دليل الإصدار الصحيح.
@@ -16,11 +16,12 @@ const OWNER = "CTO-DRS"
 const REPO = "NexusLink"
 const API = `https://api.github.com/repos/${OWNER}/${REPO}`
 
-/** الوصف الإنجليزي التعاقدي (يظهر في البحث والمشاركة — حد GitHub 350 حرفًا) */
+/** الوصف التعاقدي ثنائي اللغة (يظهر في البحث والمشاركة — حد GitHub 350 حرفًا) */
 const DESCRIPTION =
   "One local hub for your devices: screen mirroring & control, clipboard, " +
   "file transfer, media streaming and routines — fully on your Wi-Fi, " +
-  "end-to-end encrypted, no cloud, no accounts."
+  "end-to-end encrypted, no cloud, no accounts. " +
+  "| ربط كل أجهزتك على شبكتك: مرآة الشاشة، نقل ملفات، مزامنة حافظة، تحكم عن بعد — بلا سحابة ولا حسابات."
 
 /** 20 topic تعاقدية (حرف صغير، شرطات، بلا نقاط — قواعد GitHub) */
 const TOPICS = [
@@ -32,7 +33,7 @@ const TOPICS = [
 
 const payload = {
   description: DESCRIPTION,
-  homepage: "https://github.com/CTO-DRS/NexusLink/releases/latest",
+  homepage: "https://cto-drs.github.io/NexusLink/",
   topics: TOPICS,
   has_discussions: false,
   has_wiki: false,
