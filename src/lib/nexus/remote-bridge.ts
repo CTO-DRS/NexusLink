@@ -146,7 +146,9 @@ function ensureLiveUdp() {
       flow.stats.pings++
       const pong = Buffer.from(buf)
       pong[3] = LIVE_PONG
-      pong.writeUInt32BE(Date.now() & 0xffffffff, 10)
+      // قناع 32-بت: >>> 0 حصرًا — عامل & في JS يُعيد Int32 بإشارة سالبة فيكسر
+      // writeUInt32BE في نصف نوافذ الزمن (درس §48 نفسه — قنبلة موقّتة أزلناها)
+      pong.writeUInt32BE(Date.now() >>> 0, 10)
       sock.send(pong, rinfo.port, rinfo.address, (err) => {
         if (err) liveGlobal.pongErrors++
       })

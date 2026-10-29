@@ -85,6 +85,12 @@
     <content_attribute id="money-gambling">none</content_attribute>
   </content_rating>
   <releases>
+    <release version="3.1.0" date="2026-10-29">
+      <description>
+        <p>Post-seal minor: self-hosted relay (internet access with zero cloud middlemen), smart emergency mode, fleet policy v2 with compliance reports, short-code remote assist, self-owned TLS, complete languages, dormant signing chain, honest license dual-licensing.</p>
+        <p xml:lang="ar">‏minor ما بعد الختم: المرحّل الذاتي (وصول عبر الإنترنت بلا أي وسيط سحابي) ووضع الطوارئ الذكي وسياسة الأسطول v2 بتقارير الامتثال والمساعدة عن بعد برمز قصير وTLS الذاتي وإكمال اللغات وسلسلة التوقيع النائمة وازدواجية الترخيص الصادقة.</p>
+      </description>
+    </release>
     <release version="3.0.0" date="2026-10-22">
       <description>
         <p>Enterprise gravity M4: central policies with instant enforcement (MDM kit), tamper-evident audit chain, OEM privacy-by-default mode.</p>
