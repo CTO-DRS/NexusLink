@@ -235,7 +235,7 @@ fn zip_dir(dir: &PathBuf, out: &PathBuf) -> Result<(), String> {
     use std::io::Write as _;
     let file = std::fs::File::create(out).map_err(|e| e.to_string())?;
     let mut w = zip::ZipWriter::new(file);
-    let opts: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
+    let opts: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated);
     let base = dir.parent().unwrap_or(dir).to_path_buf();
     let mut stack = vec![dir.clone()];

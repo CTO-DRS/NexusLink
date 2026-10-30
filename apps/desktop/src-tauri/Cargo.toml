@@ -34,7 +34,7 @@ enigo = { version = "0.2.1", default-features = false, features = ["x11rb"] }
 # notify: مراقب ملفات أصلي فوري (inotify/FSEvents/ReadDirectoryChangesW) للمزامنة
 notify = "8"
 # zip: ضغط المجلدات من قائمة الزر الأيمن قبل الإرسال
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 
 # ---------------------------------------------------------------------------
 # FA-media (عقد §15) — طبقة الوسائط الأصلية:
