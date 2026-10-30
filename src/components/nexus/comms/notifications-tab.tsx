@@ -1,5 +1,6 @@
 "use client"
-// مركز الإشعارات — انعكاس فوري + رد سريع + قواعد الفلترة
+// مركز الإشعارات — انعكاس فوري + رد سريع + قواعد الفلترة + وضع التركيز الموحد (§52)
+import { FocusCard } from "./focus-card"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { useComms, relTime } from "@/lib/comms-store"
@@ -278,6 +279,8 @@ export function NotificationsTab() {
 
   return (
     <div className="space-y-3">
+      {/* عقد §52 — وضع التركيز الموحد: مفتاح واحد للكتم عبر الأجهزة */}
+      <FocusCard />
       {/* شريط الأدوات */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex rounded-xl border p-0.5 gap-0.5 bg-card">

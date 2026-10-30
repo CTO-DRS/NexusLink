@@ -16,6 +16,11 @@ export interface ProdClipItem {
   mode: "auto" | "manual"
   received: boolean
   createdAt: number
+  // §50 خزنة الحافظة الذكية — حقول إضافية (تظهر من الخادم بعد الترقية)
+  pinned?: boolean
+  sensitive?: string | null
+  masked?: boolean
+  expiresAt?: number | null
 }
 
 export interface SyncEventItem {
