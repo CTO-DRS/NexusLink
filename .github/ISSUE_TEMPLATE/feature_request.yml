@@ -1,0 +1,44 @@
+name: "✨ طلب ميزة"
+description: "اقتراح يخضع لباب الخندق التنافسي — ما لا يعمّق خندقًا لا يدخل"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        عقيدة الخارطة: كل ميزة يجب أن تعمّق خندقًا تنافسيًا واحدًا على الأقل
+        (الخصوصية المعمارية · التكامل الرأسي · الأتمتة التاريخية · بلا حسابات · إيقاع مقاس) —
+        وما لا يفعلها يُرفض مهما بدت جاذبيته.
+  - type: dropdown
+    id: moat
+    attributes:
+      label: أي خندق تنافسي تعمّق هذه الميزة؟
+      options:
+        - "الخصوصية المعمارية (لا سحابة/لا حسابات/لا تتبع)"
+        - "عمق التكامل الرأسي عبر المنصات"
+        - "محرك الأتمتة التاريخية"
+        - "تبنٍّ صفري الاحتكاك (بلا حسابات)"
+        - "لا تعمّق أيًا منها صراحة (سيُناقش بصدق)"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: المشكلة التي تحلها (لا الحل بعد)
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: الحل المقترح
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: بدائل فكرت فيها (بما فيها «لا شيء — أُكمل يدويًا»)
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: قيود المنتج المعلنة
+      options:
+        - label: "أفهم أن الميزة يجب أن تعمل محليًا بلا سحابة وبلا حسابات — لا يُقبل اقتراح يتطلب وسيطًا"

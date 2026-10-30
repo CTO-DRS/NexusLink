@@ -1,0 +1,24 @@
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        قناة الدعم العامة الموحدة — سؤال واحد لكل نقاش، وعنوان واضح يفيد من يبحث بعدهك.
+        **ثغرة أمنية؟ لا هنا — الإبلاغ الخاص حصرًا (راجع SECURITY.md).**
+  - type: textarea
+    id: context
+    attributes:
+      label: السياق — ماذا تحاول؟
+      placeholder: "منصة، إصدار (v3.1.0 مثلاً)، وما وصلت إليه"
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: السؤال تحديدًا
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: ما جربته (بما فيه صفحة الإصدارات وأدلة docs/)

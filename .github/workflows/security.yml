@@ -1,0 +1,51 @@
+# حرس الأسرار — فحص الشجرة والتاريخ على كل دفع وطلب دمج + جولة أسبوعية
+#
+# البند الأم: الخارطة الموحدة 2026–2030 — اليوم 1–2 (فحص أسرار تاريخ المستودع)
+# والتخفيف الموثق في سجل المخاطر («ثغرات المنبع/الانجراف: حرس انجراف آلي»).
+#
+# التصميم:
+#  · صفر تبعيات — الأداة نفسها scripts/secret-scan.mjs بلا حزم خارجية.
+#  · خط الأساس scripts/secret-scan-baseline.txt موثق ومقنّع — أي سر جديد يفشل فورًا.
+#  · الإخراج مقنّع دائمًا (أول 6 محارف + قناع) — سجلات CI آمنة بذاتها.
+
+name: Security — Secrets Guard
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1" # كل اثنين 03:00 UTC — جولة دورية ضد أنماط جديدة
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: فحص الأسرار (شجرة + تاريخ كامل)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout بكامل التاريخ
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # الفحص التاريخي يتطلب كل الكائنات
+
+      - name: تشغيل الفاحص
+        run: |
+          echo "== فحص الأسرار: الشجرة الحالية + كامل التاريخ =="
+          node scripts/secret-scan.mjs --baseline scripts/secret-scan-baseline.txt
+
+      - name: رفع تقرير JSON عند الفشل (للتشخيص — معاينات مقنّعة)
+        if: failure()
+        run: |
+          node scripts/secret-scan.mjs --baseline scripts/secret-scan-baseline.txt --json > secret-scan-report.json || true
+          echo "التقرير الكامل المقنّع في secret-scan-report.json"
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: secret-scan-report
+          path: secret-scan-report.json
+          retention-days: 30

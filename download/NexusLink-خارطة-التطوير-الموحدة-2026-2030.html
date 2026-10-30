@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>NexusLink — خارطة التطوير الموحدة 2026–2030</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+@page { size: 720px 1020px; margin: 0; }
+:root{
+  --c-dark:#0B1D1C;
+  --c-deep:#2D534F;
+  --c-accent:#178C81;
+  --c-bg:#F5F8F8;
+  --c-card:#ECF3F2;
+  --c-stripe:#F0F5F4;
+  --c-border:#C5D7D4;
+  --c-text:#1B2B29;
+  --c-muted:#556967;
+  --warn-bg:#FAF2E3;
+  --warn-text:#7A5310;
+  --warn-border:#E3CD9E;
+}
+html,body{ margin:0; padding:0; width:720px; background:#F5F8F8; color:var(--c-text);
+  font-family:'Tajawal','Cairo','DejaVu Sans',sans-serif; font-size:15px; line-height:1.9;
+  line-break:strict; word-break:normal; overflow-wrap:break-word; }
+@media screen{
+  html{ height:auto; display:flex; justify-content:center; background:#F5F8F8; }
+  body{ transform-origin:top center; margin:20px auto; box-shadow:0 0 40px rgba(0,0,0,.5); }
+}
+*{ box-sizing:border-box; }
+p{ margin:0 0 12px; text-align:justify; }
+h2,h3,h4{ font-family:'Cairo','Tajawal',sans-serif; margin:0; }
+
+/* ---------- COVER ---------- */
+.cover{ width:720px; height:1020px; color:#EAF3F2;
+  break-after:page;
+  display:flex; flex-direction:column; justify-content:center; padding:64px 60px;
+  background:
+    radial-gradient(circle 210px at 0% 0%, rgba(23,140,129,.16), rgba(23,140,129,0) 70%),
+    radial-gradient(circle 280px at 100% 100%, rgba(23,140,129,.12), rgba(23,140,129,0) 70%),
+    var(--c-dark); }
+.cover .grid-dots{ position:absolute; top:120px; right:56px; width:120px; height:64px;
+  background-image:radial-gradient(rgba(23,140,129,.45) 1.4px, transparent 1.5px); background-size:16px 16px; }
+.cover-brand{ display:flex; align-items:center; gap:12px; margin-bottom:34px; }
+.cover-logo{ width:44px; height:44px; border-radius:11px; background:var(--c-accent);
+  display:flex; align-items:center; justify-content:center; }
+.cover-logo svg{ width:26px; height:26px; }
+.cover-brand-name{ font-family:'Cairo',sans-serif; font-weight:800; font-size:21px; letter-spacing:.4px; }
+.cover-brand-sub{ font-size:12px; color:#9DB8B5; line-height:1.3; }
+.cover-tag{ display:inline-block; width:fit-content; color:#7FD3CA;
+  font-size:12.5px; font-weight:500; padding:5px 14px; border-radius:999px; margin-bottom:22px; background:rgba(23,140,129,.16); }
+.cover-title{ font-family:'Cairo',sans-serif; font-weight:900; font-size:47px; line-height:1.3; margin-bottom:16px; }
+.cover-title2{ font-family:'Cairo',sans-serif; font-weight:900; font-size:47px; line-height:1.3; margin-bottom:16px; color:#4FC4B8; }
+.cover-sub{ font-size:15.5px; color:#B9CDCB; line-height:1.95; text-align:justify; margin-bottom:34px; max-width:560px; }
+.cover-meta{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:40px; }
+.cover-meta span{ font-size:12px; color:#8FB0AD; padding:4px 12px; border-radius:6px; background:rgba(23,140,129,.14); }
+.cover-stats{ display:flex; gap:14px; border-top:1px solid rgba(197,215,212,.2); padding-top:46px; }
+.cover-stat{ flex:1 1 0; min-width:60px; padding:0 6px; }
+.cover-stat .n{ font-family:'Cairo',sans-serif; font-weight:800; font-size:23px; color:#4FC4B8; line-height:1.15; }
+.cover-stat .l{ font-size:11px; color:#8FA9A6; line-height:1.5; margin-top:2px; }
+.cover-foot{ position:absolute; bottom:38px; right:60px; left:60px; display:flex; justify-content:space-between;
+  font-size:11.5px; color:#7E9794; border-top:1px solid rgba(197,215,212,.14); padding-top:46px; }
+
+/* ---------- MAIN FLOW ---------- */
+.main-content{ background:var(--c-bg); padding:56px 58px 48px; }
+.chapter-header{ break-after:avoid; break-inside:avoid; margin-top:26px; }
+.chapter-header.first{ margin-top:0; }
+.kicker{ font-family:'Cairo',sans-serif; font-weight:700; font-size:12px; color:var(--c-accent);
+  letter-spacing:.5px; margin-bottom:5px; }
+.chapter-title{ font-size:25px; font-weight:800; line-height:1.45; margin-bottom:8px; }
+.chapter-title::after{ content:''; display:block; width:64px; height:2.5px; background:var(--c-accent); border-radius:2px; margin-top:9px; }
+h3.sub{ font-size:17.5px; font-weight:800; color:var(--c-deep); margin:18px 0 8px; break-after:avoid; }
+.lead{ font-weight:500; color:var(--c-deep); }
+
+/* stat cards */
+.stat-row{ display:flex; flex-wrap:wrap; gap:10px; margin:14px 0 6px; break-inside:avoid; }
+.stat-card{ flex:1 1 150px; min-width:140px; max-width:100%; background:#fff; border:1px solid var(--c-border);
+  border-radius:10px; padding:12px 14px; }
+.stat-card .n{ font-family:'Cairo',sans-serif; font-weight:800; font-size:21px; color:var(--c-accent); line-height:1.2; }
+.stat-card .t{ font-size:11.5px; color:var(--c-muted); line-height:1.55; margin-top:2px; }
+
+/* callouts */
+.callout{ border-radius:10px; padding:14px 16px; margin:14px 0; break-inside:avoid; font-size:13.5px; line-height:1.85; }
+.callout .ct{ font-family:'Cairo',sans-serif; font-weight:800; font-size:13.5px; margin-bottom:4px; }
+.callout-info{ background:var(--c-card); border:1px solid var(--c-border); color:var(--c-text); }
+.callout-info .ct{ color:var(--c-deep); }
+.callout-warn{ background:var(--warn-bg); border:1px solid var(--warn-border); color:var(--warn-text); }
+.callout-warn .ct{ color:var(--warn-text); }
+
+/* tables */
+table.data{ width:100%; border-collapse:separate; border-spacing:2px 0; font-size:12.3px; margin:12px 0 6px; line-height:1.7; }
+table.data thead{ display:table-header-group; }
+table.data tr{ break-inside:avoid; }
+table.data th{ background:var(--c-deep); color:#fff; font-family:'Cairo',sans-serif; font-weight:700;
+  padding:8px 10px; text-align:right; font-size:12px; }
+table.data td{ padding:7px 10px; border-bottom:1px solid var(--c-border); vertical-align:top; }
+table.data tbody tr:nth-child(odd) td{ background:var(--c-stripe); }
+table.data td.strong{ font-weight:700; color:var(--c-deep); }
+.tbl-cap{ font-size:11.5px; color:var(--c-muted); margin:2px 0 10px; }
+
+/* chips */
+.chip{ display:inline-block; font-size:10.5px; font-weight:700; font-family:'Cairo',sans-serif;
+  padding:2px 9px; border-radius:999px; line-height:1.6; white-space:nowrap; }
+.chip-done{ background:var(--c-card); color:var(--c-accent); border:1px solid var(--c-border); }
+.chip-pend{ background:var(--warn-bg); color:var(--warn-text); border:1px solid var(--warn-border); }
+.chip-dark{ background:var(--c-deep); color:#fff; }
+
+/* numbered phase items */
+.phase{ margin-top:20px; }
+.phase-head{ display:flex; align-items:center; gap:12px; break-after:avoid; break-inside:avoid; margin-bottom:10px; }
+.phase-num{ width:44px; height:44px; border-radius:11px; background:var(--c-dark); color:#4FC4B8;
+  font-family:'Cairo',sans-serif; font-weight:900; font-size:20px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.phase-name{ font-family:'Cairo',sans-serif; font-weight:800; font-size:18px; line-height:1.4; }
+.phase-window{ font-size:12px; color:var(--c-muted); }
+.phase-goal{ background:#fff; border:1px solid var(--c-border); border-right:4px solid var(--c-accent);
+  border-radius:8px; padding:11px 14px; font-size:13.5px; margin-bottom:12px; break-inside:avoid; }
+.item{ background:#fff; border:1px solid var(--c-border); border-radius:8px; padding:10px 14px;
+  margin-bottom:9px; break-inside:avoid; font-size:13px; line-height:1.85; }
+.item b.it{ color:var(--c-deep); }
+.exit-gate{ background:var(--c-card); border:1px dashed var(--c-accent); border-radius:8px;
+  padding:10px 14px; font-size:13px; break-inside:avoid; margin-top:10px; }
+.exit-gate b{ color:var(--c-accent); font-family:'Cairo',sans-serif; }
+
+/* timeline */
+.tl-wrap{ margin:16px 0 8px; break-inside:avoid; }
+.tl-years{ display:flex; flex-wrap:wrap; gap:10px; font-family:'Cairo',sans-serif; font-weight:700; font-size:11.5px;
+  color:var(--c-muted); margin-bottom:4px; }
+.tl-years span{ text-align:center; }
+.tl-bar{ display:flex; flex-wrap:wrap; border-radius:8px; overflow:hidden; }
+.tl-seg{ flex:1 1 90px; min-width:80px; max-width:100%; padding:9px 6px 8px; color:#fff; text-align:center; }
+.tl-seg .p{ font-family:'Cairo',sans-serif; font-weight:800; font-size:12px; line-height:1.4; }
+.tl-seg .w{ font-size:10px; opacity:.85; line-height:1.4; }
+.tl-seg.s-done{ background:#0B1D1C; }
+.tl-seg.s-1{ background:#178C81; }
+.tl-seg.s-2{ background:#2D534F; }
+.tl-seg.s-3{ background:#4E837D; }
+.tl-seg.s-4{ background:#7FA9A4; }
+
+/* lists */
+ul.tight{ margin:6px 0 12px; padding-right:20px; }
+ul.tight li{ margin-bottom:5px; text-align:justify; }
+.two-col{ display:flex; flex-wrap:wrap; gap:10px; }
+.two-col .col{ flex:1 1 280px; min-width:260px; max-width:100%; }
+
+/* moat cards */
+.moat{ background:#fff; border:1px solid var(--c-border); border-radius:9px; padding:11px 14px;
+  margin-bottom:9px; break-inside:avoid; font-size:13px; line-height:1.8; }
+.moat b.mn{ font-family:'Cairo',sans-serif; color:var(--c-accent); font-weight:800; }
+
+/* checklist */
+.check{ display:flex; gap:10px; background:#fff; border:1px solid var(--c-border); border-radius:8px;
+  padding:9px 13px; margin-bottom:8px; break-inside:avoid; font-size:13px; line-height:1.8; }
+.check .d{ flex-shrink:0; width:86px; font-family:'Cairo',sans-serif; font-weight:700; font-size:11.5px;
+  color:var(--c-accent); padding-top:2px; }
+
+/* ---------- ENDING ---------- */
+.ending{ width:720px; height:1020px; color:#EAF3F2; break-before:page;
+  display:flex; flex-direction:column; justify-content:center; padding:70px 64px;
+  background:
+    radial-gradient(circle 260px at 0% 100%, rgba(23,140,129,.14), rgba(23,140,129,0) 70%),
+    var(--c-dark); }
+.ending .kicker{ color:#4FC4B8; }
+.ending .ns{ font-family:'Cairo',sans-serif; font-weight:900; font-size:31px; line-height:1.55; margin:14px 0 22px; }
+.ending .ns2{ font-family:'Cairo',sans-serif; font-weight:900; font-size:31px; line-height:1.55; margin:-18px 0 22px; color:#4FC4B8; }
+.ending p{ color:#B9CDCB; font-size:14.5px; }
+.ending .gov{ background:rgba(23,140,129,.12); border-radius:10px; padding:16px 18px; margin-top:12px; font-size:13px; color:#C9DBD9; line-height:1.9; }
+.ending .gov b{ color:#4FC4B8; }
+.ending-foot{ position:absolute; bottom:40px; right:64px; left:64px; display:flex; justify-content:space-between;
+  font-size:11.5px; color:#7E9794; border-top:1px solid rgba(197,215,212,.14); padding-top:46px; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<div class="cover">
+  <div class="grid-dots"></div>
+  <div class="cover-brand">
+    <div class="cover-logo">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M7 3h10a4 4 0 0 1 0 8H7a4 4 0 0 1 0-8zm0 10h10a4 4 0 0 1 0 8H7a4 4 0 0 1 0-8z" fill="#fff" opacity=".92"/></svg>
+    </div>
+    <div>
+      <div class="cover-brand-name">NexusLink</div>
+      <div class="cover-brand-sub">منصة ربط الأجهزة المحلية · بلا سحابة · بلا حسابات</div>
+    </div>
+  </div>
+  <div class="cover-tag">وثيقة المالك التنفيذية — مرجع حي بمراجعة ربعية</div>
+  <div class="cover-title">خارطة التطوير</div>
+  <div class="cover-title2">الموحدة 2026 – 2030</div>
+  <div class="cover-sub">خارطة واحدة متكاملة تدمج المنجز المؤسَّس — 49 عقدًا ومعيارًا وتغطية 1,316 فحص E2E — مع الأفق الثلاثي القادم على أربعة محاور: التبني والانتشار، الثقل المؤسسي والامتثال، تحقيق الدخل، وتوسيع المنتج. من «منصة مكتملة هندسيًا» إلى «منصة موزعة رسميًا ذات دخل مستدام».</div>
+  <div class="cover-meta">
+    <span>الإصدار المرجعي: v3.1.0</span>
+    <span>التدوين: أكتوبر 2026</span>
+    <span>الجمهور: المالك / CTO</span>
+    <span>التصنيف: استراتيجية تنفيذية</span>
+  </div>
+  <div class="cover-stats">
+    <div class="cover-stat"><div class="n">1,316</div><div class="l">فحص E2E أخضر × مرتين</div></div>
+    <div class="cover-stat"><div class="n">49</div><div class="l">عقدًا موثقًا §1–§49</div></div>
+    <div class="cover-stat"><div class="n">88.4K</div><div class="l">سطر كود في النواة</div></div>
+    <div class="cover-stat"><div class="n">5</div><div class="l">منصات في CI الإصداري</div></div>
+    <div class="cover-stat"><div class="n">6</div><div class="l">لغات مكتملة التغطية</div></div>
+  </div>
+  <div class="cover-foot">
+    <span>CTO-DRS · NexusLink</span>
+    <span>خارطة موحدة — دمج المنجز والمخطط</span>
+  </div>
+</div>
+
+<!-- ============ MAIN CONTENT ============ -->
+<div class="main-content">
+
+  <!-- ===== 1. EXECUTIVE SUMMARY ===== -->
+  <div class="chapter-header first">
+    <div class="kicker">القسم 01</div>
+    <h2 class="chapter-title">الملخص التنفيذي</h2>
+  </div>
+
+  <p class="lead">NexusLink عند أكتوبر 2026 لم يعد فكرة ولا نموذجًا أوليًا؛ إنه منتج مكتمل هندسيًا بحجم يقارب 88.4 ألف سطر موزعة على نواة سطح مكتب بلغة Rust، وسيرفر وواجهة Next.js، ووكيل أندرويد Flutter، وطبقة Kotlin أصلية — تخدمها 65 مسار REST عامًا و18 حزمة فحوص من طرف إلى طرف تغطي 1,316 فحصًا أخضر، مكررًا مرتين متتاليتين، موزعة على 49 عقدًا معاقدًا (§1–§49). كامل التنفيذ المحلي لخارطة 2026–2029 أُغلق: من الاقتران والحافظة والتحكم والملفات والوسائط، إلى الأتمتة التاريخية والذكاء المحلي وSDK 2.0 وسوق التكاملات الموقعة والمرحّل الذاتي وإطار الطوارئ.</p>
+
+  <p>المعادلة الجوهرية التي تفرضها هذه الخارطة بسيطة وصريحة: <b>انتقل العنق الزجاجي من الهندسة إلى الخارج</b>. كل ما تبقى على المسار الحرج بنود قرارات ومدفوعات وحسابات خارجية لا بنود كود: شهادتا توقيع (Windows وApple)، وحساب Flathub، ودومين خاص، ومدقق SOC 2 خارجي، وأول عقد MDM حي، وخادم VPS للمرحّل. كلفة فتح هذه الأبواب مباشرة صغيرة — أساسياتها أقل من 650 دولارًا سنويًا — لكنها الباب الوحيد أمام أن يلمس المنتج مستخدمون حقيقيون خارج دائرة المالك.</p>
+
+  <p>لذلك تُبنى هذه الوثيقة بوصفها <b>خارطة موحدة واحدة</b> تجمع المنجز والمخطط في بنية واحدة: جرد الواقع الموثق أولًا، ثم أربع مراحل تشغيلية تمتد من الربع الرابع 2026 حتى 2030، تغطي المحاور الأربعة المطلوبة (التبني والانتشار · المؤسسي والامتثال · تحقيق الدخل · توسيع المنتج)، ثم خط زمني ونموذج دخل ومؤشرات قياس وسجل مخاطر وميزانية وقائمة أول 30 يومًا. كل بند جديد يخضع للعقيدة المعتمدة نفسها: لا يدخل ما لا يعمّق أحد الخنادق التنافسية الخمسة مهما بدت جاذبيته.</p>
+
+  <p>القرار المركزي الوحيد المطلوب الآن: التحول من «منتج مكتمل بلا توزيع رسمي» إلى «منتج موزع رسميًا يقاس أثره». ويبدأ ذلك بإجراء أمني يوم واحد: إبطال رمز الوصول الشخصي إلى GitHub الذي تسرب عبر قنوات المحادثة، قبل أي شراء أو نشر. أول 30 يومًا محسومة بالكامل في قسم خاص بنهاية هذه الوثيقة، والمراجعة الربعية التالية (يناير 2027) هي أول بوابة حكم خارجي على هذه الخارطة.</p>
+
+  <div class="stat-row">
+    <div class="stat-card"><div class="n">أقل من $650/سنة</div><div class="t">كلفة فتح كل أبواب التوزيع الخارجية في المرحلة الأولى</div></div>
+    <div class="stat-card"><div class="n">4 مراحل</div><div class="t">من الإطلاق الرسمي 2026 إلى الاستدامة الذاتية 2030</div></div>
+    <div class="stat-card"><div class="n">4 محاور</div><div class="t">تبنٍّ · مؤسسي · دخل · توسّع — مدمجة في مسار واحد</div></div>
+    <div class="stat-card"><div class="n">1,316</div><div class="t">فحص E2E أخضر كخط أساس جودة لا يتراجع</div></div>
+  </div>
+
+  <!-- ===== 2. INVENTORY ===== -->
+  <div class="chapter-header">
+    <div class="kicker">القسم 02</div>
+    <h2 class="chapter-title">جرد الواقع الموثق — أين نقف اليوم</h2>
+  </div>
+
+  <p>قبل رسم أي خطوة قادمة، يُثبَّت هذا القسم ما هو مغلق فعلًا بفحوص حية لا بوعود. فكل بند في المراحل القادمة سيُبنى فوق هذا الأساس، وأي جدل مستقبلي حول «ماذا أنجزنا» يعود إلى هذا الجرد. الحالة الإجمالية الموثقة وقت التدوين: <b>التنفيذ المحلي للخارطة كامل بلا حد معلق بمفتاح محلي</b>، والتغطية 1,316 فحص E2E خضراء مرتين متتاليتين، مع ملاحظات إصدار ثنائية اللغة لكل وسم وبناء إنتاجي خماسي المنصات.</p>
+
+  <h3 class="sub">الطبقات المنجزة والمثبتة</h3>
+  <table class="data">
+    <thead><tr><th style="width:52%">الطبقة</th><th style="width:20%">العقد</th><th style="width:28%">الحالة</th></tr></thead>
+    <tbody>
+      <tr><td>الأساس: اقتران QR، حافظة، تحكم، ملفات، وسائط، إشعارات، بث شاشة WebRTC</td><td class="strong">§1–§23</td><td><span class="chip chip-done">منجز ومثبت</span></td></tr>
+      <tr><td>الأتمتة التاريخية: روتينات، مشغلات لحظية وتاريخية، تنبيهات دائمة</td><td class="strong">§26–§27</td><td><span class="chip chip-done">منجز ومثبت</span></td></tr>
+      <tr><td>M1 التجربة: اقتران أقل من 30 ثانية، مزامنة قابلة للاستئناف، p95 مقيس، 6 لغات، إتاحة</td><td class="strong">§28–§31</td><td><span class="chip chip-done">906/906</span></td></tr>
+      <tr><td>M2 الذكاء المحلي: بحث موحد فوق 8 مخازن، مساعد حتمي وLLM محلي، مشغلات مركبة، رؤى</td><td class="strong">§33</td><td><span class="chip chip-done">945/945</span></td></tr>
+      <tr><td>M3 المنظومة المفتوحة: SDK 2.0، REST عامة، سوق 10 تكاملات موقعة، CLI بأوامر 16</td><td class="strong">§34</td><td><span class="chip chip-done">989/989</span></td></tr>
+      <tr><td>العمق: قناة الناشر، الفرض اللحظي للقدرات، التنبؤ، عميل ويب PWA، وصول برمز اقتران</td><td class="strong">§35–§37</td><td><span class="chip chip-done">1074/1074</span></td></tr>
+      <tr><td>ما بعد الختم: المؤسسي §47، الطوارئ §48، المرحّل الذاتي §49، الترخيص §45، المساعدة عن بعد §46</td><td class="strong">§41–§49</td><td><span class="chip chip-done">1,316 إجمالًا</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="sub">حجم الكودبايس بالأرقام</h3>
+  <table class="data">
+    <thead><tr><th>المكوّن</th><th style="width:22%">اللغة</th><th style="width:22%">الأسطر</th><th style="width:22%">الملفات</th></tr></thead>
+    <tbody>
+      <tr><td>نواة سطح المكتب (جسور، أجهزة افتراضية، تشفير)</td><td class="strong">Rust</td><td>13,214</td><td>30</td></tr>
+      <tr><td>السيرفر والواجهة (65 مسار REST + 8 أسطح)</td><td class="strong">TypeScript / TSX</td><td>51,201</td><td>309</td></tr>
+      <tr><td>وكيل الأندرويد (Flutter)</td><td class="strong">Dart</td><td>19,349</td><td>49</td></tr>
+      <tr><td>الطبقة الأصلية (خدمات أمان ووصول)</td><td class="strong">Kotlin</td><td>4,662</td><td>13</td></tr>
+    </tbody>
+  </table>
+  <div class="tbl-cap">المجموع ≈ 88,426 سطرًا في النواة، إضافة إلى SDK وCLI و4 خدمات مصغرة و6 حزم تحقق Rust و18 حزمة E2E.</div>
+
+  <h3 class="sub">الخنادق التنافسية الخمسة — أساس كل قرار قادم</h3>
+  <div class="moat"><b class="mn">01 · الخصوصية المعمارية:</b> لا سحابة ولا حسابات ولا تتبع؛ خصوم سحابيون لا يستطيعون حذف وسيطهم بنائيًا. المرحّل الذاتي (§49) أغلق آخر ثغرة في هذا الوعد.</div>
+  <div class="moat"><b class="mn">02 · عمق التكامل الرأسي:</b> نواة Rust واحدة تخدم Windows وmacOS وLinux مع وكيل أندرويد أصلي؛ منافس يبدأ من الصفر لكل منصة.</div>
+  <div class="moat"><b class="mn">03 · محرك الأتمتة التاريخية:</b> تاريخ قياس متراكم لا يُنسخ بالشراء، ومشغلات مركبة بذليل مسبب مُرسَّخ.</div>
+  <div class="moat"><b class="mn">04 · البنية بلا حسابات:</b> تبنٍّ صفري الاحتكاك — تثبيت ومسح QR وانتهى؛ لا مقابل له لدى الاشتراكات السحابية.</div>
+  <div class="moat"><b class="mn">05 · إيقاع الإصدار المقاس:</b> CI خماسي + عتبات E2E تصاعدية + حارس ترجمة آلي؛ ثقة مكتسبة لا تُبنى بسرعة.</div>
+
+  <div class="callout callout-info">
+    <div class="ct">الحدود المعلنة الصادقة (بلا وعود)</div>
+    لا وكيل iOS أصلي (القيود منخفضة المستوى معلنة، والمسار: عميل ويب محدود للوسائط والملفات والحافظة) · لا توزيع في أي متجر بعد اليوم · لا دومين خاص بعد اليوم · لا قياس مستخدمين حقيقيين بعد اليوم · لا دخل بعد اليوم · فريق هندسي فردي. هذه الحدود ليست عيوبًا مخفية بل بنود الخارطة القادمة نفسها.
+  </div>
+
+  <!-- ===== 3. EXTERNAL GAPS ===== -->
+  <div class="chapter-header">
+    <div class="kicker">القسم 03</div>
+    <h2 class="chapter-title">الفجوات المفتوحة — كل ما تبقى خارجي</h2>
+  </div>
+
+  <p>النواة المحلية لكل بنود ما تبقى <b>مبنية ونائمة</b>: مقاعد توقيع جاهزة داخل CI (§43)، وملفات Flathub مكتملة (§44)، ومخطط MDM v2 وأدلة النشر (§38/§47)، وسلسلة تدقيق موجهة للمدققين (§39)، ووضع OEM (§40)، ومرحّل ذاتي (§49). ما يفتح كل بند قرار مالك + دفعة خارجية واحدة. الجدول التالي هو الجرد الكامل للفجوات، وهو نفسه خريطة المرحلتين الأولى والثانية.</p>
+
+  <table class="data">
+    <thead><tr><th style="width:8%">الرمز</th><th style="width:34%">البند</th><th style="width:40%">ما هو جاهز محليًا</th><th style="width:18%">المفتاح الخارجي</th></tr></thead>
+    <tbody>
+      <tr><td class="strong">X1</td><td>توقيع Windows (OV ثم EV)</td><td>مقاعد الاستيراد والحقن والتحقق الحي في release.yml (§43) — نائمة</td><td>شهادة مدفوعة + قرار</td></tr>
+      <tr><td class="strong">X2</td><td>توقيع macOS + notarization</td><td>بوابتا توقيع وتوثيق مستقلتان (§43) — نائمتان</td><td>حساب Apple Developer</td></tr>
+      <tr><td class="strong">X3</td><td>أول إرسال إلى Flathub</td><td>حزمة كاملة في packaging/flathub مع بوابة انجراف 61 فحصًا (§44)</td><td>حساب وفتح الطلب</td></tr>
+      <tr><td class="strong">X4</td><td>دومين خاص للموقع</td><td>موقع Pages حي بـ SEO مكتمل (JSON-LD، llms.txt، sitemap، IndexNow)</td><td>دومين + ربط DNS</td></tr>
+      <tr><td class="strong">E1</td><td>نشر MDM فعلي على 50 جهازًا</td><td>سياسة v2 + حزم ADMX/plist/managed config + تقرير امتثال (§38/§47)</td><td>أجهزة حقيقية + عقد تجريبي</td></tr>
+      <tr><td class="strong">E2</td><td>SOC 2 Type I ثم ISO 27001</td><td>سلسلة تدقيق مقاومة للعبث + دليل جمع أدلة للمدقق (§39)</td><td>مدقق خارجي وتمويل</td></tr>
+      <tr><td class="strong">E3</td><td>شراكة OEM أولى</td><td>وضع الخصوصية الافتراضية NEXUSLINK_OEM_PRIVACY (§40)</td><td>عقد مع مصنّع</td></tr>
+      <tr><td class="strong">E4</td><td>وصول عبر الإنترنت إنتاجي</td><td>بوابة TLS/WSS ذاتية (§41) + مرحّل ذاتي مملوك (§49)</td><td>VPS + دومين + شهادات CA</td></tr>
+      <tr><td class="strong">D1</td><td>أجهزة حقيقية لبنود الوكيل</td><td>بروتوكول ومواصفات جاهزة (§46.د، §47.و، §48.ز، §49.هـ)</td><td>بناء على جهاز المالك</td></tr>
+      <tr><td class="strong">D2</td><td>ثلاثة قرارات ملكية معلقة</td><td>مؤرشف pre-rewrite، ترتيب بداية M4، سياسة تدوير رموز الاقتران</td><td>قرار مكتوب بالمالك</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-warn">
+    <div class="ct">تحذير أمني عاجل — قبل أي خطوة أخرى</div>
+    رمز الوصول الشخصي (PAT) الخاص بـ GitHub ظهر نصًا في قنوات المحادثة، وهو مصنّف في سجل العمل نفسه بندًا مفتوحًا للإبطال. الإجراء: إبطاله فورًا من إعدادات GitHub (Developer settings ثم Personal access tokens)، وإنشاء رمز بديل بأقل نطاق ممكن وتاريخ انتهاء قصير، وتفعيل التحقق الثنائي على الحساب. ويُستكمل معه مسار الملكية الرقمي: زر «تحقق» في Google Search Console ثم تقديم sitemap.xml — البنود الخارجية الوحيدة التي لا كلفتها شيئًا وأثرها الأكبر.
+  </div>
+
+  <!-- ===== 4. PHASE 1 ===== -->
+  <div class="chapter-header">
+    <div class="kicker">المحور التنفيذي · القسم 04</div>
+    <h2 class="chapter-title">المرحلة الأولى: الإطلاق الرسمي والتبني</h2>
+  </div>
+  <div class="phase">
+    <div class="phase-head">
+      <div class="phase-num">P1</div>
+      <div>
+        <div class="phase-name">من «مستودع GitHub» إلى «منتج قابل للتوصية»</div>
+        <div class="phase-window">النافذة: الربع الرابع 2026 ← نهاية النصف الأول 2027 · النجم: الخندق 04 و05</div>
+      </div>
+    </div>
+
+    <div class="phase-goal"><b>الهدف الاستراتيجي:</b> إزالة كل احتكاك بين منتج مكتمل ومستخدم محتمل — تثبيت بلا تحذيرات أمنية على المنصات الثلاث، ووجود في Flathub، وهوية ويب مستقلة، وقناة دعم حية، وسرد مقارن صادق يجعل التوصية طبيعية. هذه المرحلة صفر كود جديد جوهري: كل بنودها دفعات وقرارات وفتح أبواب.</div>
+
+    <div class="item"><b class="it">1.1 · النظافة الأمنية (اليوم الأول):</b> إبطال الرمز المسرّب وإنشاء بديل بأقل نطاق، وتفعيل 2FA، وتشغيل فحص أسرار على تاريخ المستودع، وإغلاق بنود التحقق في Search Console مع تقديم sitemap. صفر كلفة، وأعلى أثر.</div>
+    <div class="item"><b class="it">1.2 · التوقيع الرسمي (X1+X2):</b> شراء شهادة Windows OV وتفعيل مقعد §43 الأصلي، وانضمام برنامج Apple Developer وتشغيل بوابتا notarization. النتيجة القياسية: تثبيت بلا شاشات تحذير على المنصات الثلاث — معيار الخروج الأصلي لـ M0 الذي بقي الباب الخارجي الوحيد أمامه مفتوحًا.</div>
+    <div class="item"><b class="it">1.3 · Flathub (X3):</b> إنشاء الحساب وفتح طلب المراجعة بالحزمة الجاهزة (§44). Flathub هو أكبر قناة توزيع لينكس ويمنح المنتج مصداقية مصدرية مجانية.</div>
+    <div class="item"><b class="it">1.4 · الهوية المستقلة (X4):</b> دومين خاص يُربط بـ Pages، مع تحديث الروابط داخل المنتج والموقع وصفحة النشر. الدومين شرط عملي لتوسيع SEO وبريد الدعم المؤسسي لاحقًا.</div>
+    <div class="item"><b class="it">1.5 · قنوات المجتمع والدعم:</b> فتح GitHub Discussions بقوالب، وسياسة أمان SECURITY.md، وقناة دعم عامة واحدة، وحلقة تغذية راجعة موثقة في صفحة التحميل. العقلانية: منتج بلا قناة دعم لا يُوصى به رغم كماله.</div>
+    <div class="item"><b class="it">1.6 · السرد المقارن الصادق:</b> صفحات مقارنة مكتوبة بأرقام مقيسة لا ادعاءات — p95 قلم ≈ 13ms، اقتران أقل من 30 ثانية، صفر بايت يغادر الشبكة، مقابل بدائل تحميل البيانات إلى سحابة. الفئة المستهدفة: الباحثون عن بديل AirDroid وKDE Connect وscrcpy وLocalSend في منتج واحد.</div>
+    <div class="item"><b class="it">1.7 · الإيقاع:</b> إصدار minor شهري (v3.2 ← v3.6) يثبّت ثقة الإيقاع المقاس، مع حسم القرارات الملكية الثلاثة (D2) كتابيًا في سجل المراجعات.</div>
+
+    <div class="exit-gate"><b>بوابة الخروج:</b> تثبيت بلا تحذيرات أمنية على Windows وmacOS وLinux + وجود فعلي في Flathub + دومين حي + أول 1,000 تحميل موثق + مراجعة يناير 2027 تجتاز بأي قرار إعادة نطاق موثق.</div>
+  </div>
+
+  <!-- ===== 5. PHASE 2 ===== -->
+  <div class="chapter-header">
+    <div class="kicker">المحور التنفيذي · القسم 05</div>
+    <h2 class="chapter-title">المرحلة الثانية: الثقل المؤسسي وأول الدخل</h2>
+  </div>
+  <div class="phase">
+    <div class="phase-head">
+      <div class="phase-num">P2</div>
+      <div>
+        <div class="phase-name">من «منتج يُثبَّت» إلى «منتج يُشترى»</div>
+        <div class="phase-window">النافذة: النصف الثاني 2027 ← 2028 · النجم: الخندق 01 و03 و05</div>
+      </div>
+    </div>
+
+    <div class="phase-goal"><b>الهدف الاستراتيجي:</b> تحويل البنية المؤسسية الجاهزة (سياسة MDM، سلسلة التدقيق، وضع OEM) إلى أول عملاء حقيقيين، وإطلاق أول آلية دخل تحترم فلسفة «بلا حسابات»، ودخول متجري توزيع رئيسيين. هنا يبدأ الدخل لأول مرة في تاريخ المشروع.</div>
+
+    <div class="item"><b class="it">2.1 · أسطول MDM حي (E1):</b> أول نشر موسّع على 50 جهازًا عبر برنامج شريك مبكر مجاني (Intune أو Jamf أو Managed Google Play) — البند الذي يحول «دعم المؤسسات» من مخطط بياني إلى مرجع قابل للاستشهاد في أول عقد بيع.</div>
+    <div class="item"><b class="it">2.2 · SOC 2 Type I (E2):</b> تشغيل المدقق الخارجي فوق سلسلة الأدلة الجاهزة (§39). أثقل بند مالي في الخارطة؛ يُجدول بعروض أسعار ويمكن تثبيته في النصف الثاني من 2028 إذا تأخر الدخل.</div>
+    <div class="item"><b class="it">2.3 · إطلاق الدخل v1:</b> فئة Pro بمفتاح ترخيص محلي موقّع (بلا حسابات ولا تتبع — نفس نمط توقيع سوق التكاملات §34.ب)، وأول عقد دعم مؤسسي سنوي. التسعير التفصيلي في قسم نموذج الدخل.</div>
+    <div class="item"><b class="it">2.4 · المتاجر:</b> Google Play بحزمة AAB (مبنية أصلًا في CI)، وMicrosoft Store بحزمة MSIX من مسار Tauri، مع winget كبوابة أسرع. قاعدة التوزيع المباشر تبقى الأولى دائمًا؛ المتاجر قناة ثقة إضافية لا بديل.</div>
+    <div class="item"><b class="it">2.5 · قياس طوعي بلا تتبع:</b> استبيان داخل التطبيق ومقاييس الاقتران والأداء المحلية الحية (§29/§30) كأساس قرار — بيانات وصفية محلية حصرًا، صفر تتبع، حتى لا يشترى النمو بثمن الخندق الأول.</div>
+    <div class="item"><b class="it">2.6 · الإصدار الكبير:</b> v4.0 major في 2028 بعتبة E2E جديدة لا تقل عن 1,450، مع أول مراجعة ربعية تُقاس فيها مؤشرات الدخل والمؤسسة بجانب مؤشرات الجودة.</div>
+
+    <div class="exit-gate"><b>بوابة الخروج:</b> أول عقد دعم مؤسسي موقّع + شهادة SOC 2 Type I + أسطول MDM واحد حي + 3 قنوات توزيع رسمية نشطة إضافة إلى القناتين القائمتين + فئة Pro عاملة بالتحقق المحلي.</div>
+  </div>
+
+  <!-- ===== 6. PHASE 3 ===== -->
+  <div class="chapter-header">
+    <div class="kicker">المحور التنفيذي · القسم 06</div>
+    <h2 class="chapter-title">المرحلة الثالثة: التوسع والمنظومة</h2>
+  </div>
+  <div class="phase">
+    <div class="phase-head">
+      <div class="phase-num">P3</div>
+      <div>
+        <div class="phase-name">من «منتج ناجح فردي» إلى «منظومة بفريق وسوق»</div>
+        <div class="phase-window">النافذة: 2029 · النجم: الخندق 02 و03 و04</div>
+      </div>
+    </div>
+
+    <div class="phase-goal"><b>الهدف الاستراتيجي:</b> معالجة الخطر الأكبر المسجل منذ اليوم الأول — الفريق الفردي — عبر أول توظيف هندسي، وتحويل سوق التكاملات من قناة ميزات إلى اقتصاد صغير، وفتح أول شراكة OEM، ورفع سقف الامتثال إلى ISO 27001. هذه مرحلة التحوّل التنظيمي في تاريخ المشروع.</div>
+
+    <div class="item"><b class="it">3.1 · أول توظيف (2–3 مهندسين):</b> أولوية للهندسة الأصلية (Rust/Android) وثانيها لجودة وتوزيع. شرط القبول: إلمام بمنهجية العقود § والفحوص الحية حتى لا يُخترق إيقاع الإصدار المقاس. يُمول من الدخل المتكرر للمرحلة الثانية.</div>
+    <div class="item"><b class="it">3.2 · أول شراكة OEM (E3):</b> وضع الخصوصية الافتراضية (§40) جاهز كورقة بيع: تحميل مسبق بلا حسابات وبلا تتبع وبلا سحابة — قيمة تصنّع الفرق أمام OEM يزعجه منافسو السحابة. الاستهداف: أجهزة مكتبية للمكاتب الصغيرة والقطاع التعليمي.</div>
+    <div class="item"><b class="it">3.3 · ISO 27001:</b> امتداد طبيعي بعد SOC 2 Type I؛ يُخطط في نهاية 2028 بعروض أسعار ويُنفذ خلال 2029 فوق نفس منظومة الأدلة.</div>
+    <div class="item"><b class="it">3.4 · اقتصاد السوق:</b> توسيع التكاملات الموقعة من 10 إلى أكثر من 50 مع برنامج ناشرين فوق قناة الناشر الجاهزة (§35.أ) — تدوير مفاتيح وإبطال لحظي — مع حصة دخل للناشرين في الفئات المدفوعة لاحقًا.</div>
+    <div class="item"><b class="it">3.5 · قرارات المنصات الواقعية:</b> iOS يبقى PWA محسّنًا حصرًا بلا وعود (حد معلن لا يُشترى بثمن الغش في القيود)؛ وقرار تطبيق Android TV أصلي يُبنى فوق وضع TV القرائي الجاهز (§36) عند تأكد الطلب.</div>
+    <div class="item"><b class="it">3.6 · الذكاء المحلي الأعمق:</b> رفع المساعد المحلي من الطبقة الاختيارية إلى تجربة افتراضية معروضة عبر Ollama/llama.cpp بحرس 127.0.0.1 القائم، مع فهرسة أعمق للملفات والروتينات — استباق لا تقليد، وصفر بايت يغادر الجهاز.</div>
+    <div class="item"><b class="it">3.7 · الإصدار الكبير:</b> v5.0 major نهاية 2029 بعتبة E2E لا تقل عن 1,550 وفريق يوقّع الإصدارات بأكثر من يد.</div>
+
+    <div class="exit-gate"><b>بوابة الخروج:</b> فريق هندسي 3+ يعمل بإيقاع العقود نفسه + عقد OEM موقّع واحد على الأقل + 50 تكاملًا موقعة + ISO 27001 قيد التنفيذ أو مكتمل.</div>
+  </div>
+
+  <!-- ===== 7. PHASE 4 ===== -->
+  <div class="chapter-header">
+    <div class="kicker">المحور التنفيذي · القسم 07</div>
+    <h2 class="chapter-title">المرحلة الرابعة: الاستدامة والقيادة</h2>
+  </div>
+  <div class="phase">
+    <div class="phase-head">
+      <div class="phase-num">P4</div>
+      <div>
+        <div class="phase-name">من «منظومة قائمة» إلى «فئة يقودها NexusLink»</div>
+        <div class="phase-window">النافذة: 2030 · النجم: الخنادق كلها مجتمعة</div>
+      </div>
+    </div>
+
+    <div class="phase-goal"><b>الهدف الاستراتيجي:</b> أن يصبح الدخل المتكرر يغطي تكاليف الفريق كاملة (نقطة الاستدامة الذاتية)، وأن تتحول حوكمة المجموعة المفتوحة من قرار فردي إلى مؤسسة مجتمعية صغيرة، وأن يُنشر NexusLink بوصفه المعيار المرجعي لفئة «مركز الأجهزة المحلي» بمقاييس معيارية منشورة يضطر المنافسون للاقتباس منها.</div>
+
+    <div class="item"><b class="it">4.1 · اكتمال نموذج الدخل:</b> Pro + عقود مؤسسية + حصة سوق التكاملات تشكل ثلاثة روافد مستقلة؛ مؤشر النجاح أن أي رافد لا يغطي وحده الفريق.</div>
+    <div class="item"><b class="it">4.2 · الحوكمة المجتمعية:</b> تحويل المجموعة المفتوحة MIT (pair-math، oplog، SDK، CLI، الدليل) إلى صندوق أو مؤسسة صغيرة بمساهمين خارجيين، مع بقاء النواة مملوكة — افتتاحية مزدوجة مستقرة لا عرضة لمزاج فرد.</div>
+    <div class="item"><b class="it">4.3 · قيادة الفئة:</b> نشر معيار مقارنة مفتوح (local-first device-hub benchmark) يقيس الاستجابة والخصوصية والاكتمال عبر الفئة كلها، وقصص مؤسسية موثقة من عملاء المرحلتين الثانية والثالثة.</div>
+    <div class="item"><b class="it">4.4 · توسع منصي متقن:</b> تلفازات ولوحات وعميل ويب أعمق حيث تسمح المنصات فعلًا — كل توسعة تجتاز باب الخندق نفسه قبل أن تدخل الإصدار.</div>
+    <div class="item"><b class="it">4.5 · المراجعة الاستراتيجية الكبرى 2030:</b> قرار الأفق التالي — توسع رأسي أعمق في الفئة أم أفق جديد — يُحسم بمراجعة كاملة للمؤشرات والسوق، على غرار هذه الوثيقة تمامًا.</div>
+
+    <div class="exit-gate"><b>بوابة الخروج:</b> دخل متكرر يغطي فريق 3+ لربعين متتاليين + حوكمة مجتمعية عاملة + مرجعية معيارية منشورة للفئة.</div>
+  </div>
+
+  <!-- ===== 8. TIMELINE ===== -->
+  <div class="chapter-header">
+    <div class="kicker">القسم 08</div>
+    <h2 class="chapter-title">خط الزمن الموحد 2026 → 2030</h2>
+  </div>
+
+  <p>الشريط التالي يدمج المنجز والمخطط في مسار واحد كما هو مطلوب: ما على اليمين مُغلق ومثبت بفحوص حية، وما يليه أربع مراحل تنفيذية ببوابات خروج مكتوبة. الألوان كلها من عائلة العلامة نفسها — الأساس الداكن للمنجز، والدرجات الفاتحة للمراحل القادمة بتدرج يشير إلى النضج المتزايد.</p>
+
+  <div class="tl-wrap">
+    <div class="tl-years">
+      <span style="flex:1.8">2025 ← 2026</span><span style="flex:1.1">2026→2027</span><span style="flex:1">2027→2028</span><span style="flex:1">2029</span><span style="flex:1">2030</span>
+    </div>
+    <div class="tl-bar">
+      <div class="tl-seg s-done"><div class="p">المنجز M0→M3 + SEAL</div><div class="w">§1–§49 · 1,316 فحصًا</div></div>
+      <div class="tl-seg s-1"><div class="p">P1 الإطلاق الرسمي</div><div class="w">توقيع · Flathub · دومين</div></div>
+      <div class="tl-seg s-2"><div class="p">P2 المؤسسي والدخل</div><div class="w">MDM · SOC 2 · Pro · متاجر</div></div>
+      <div class="tl-seg s-3"><div class="p">P3 التوسع</div><div class="w">فريق · OEM · ISO · سوق 50</div></div>
+      <div class="tl-seg s-4"><div class="p">P4 الاستدامة</div><div class="w">دخل ذاتي · حوكمة · قيادة</div></div>
+    </div>
+  </div>
+
+  <table class="data">
+    <thead><tr><th style="width:16%">المرحلة</th><th style="width:22%">النافذة</th><th style="width:34%">الهدف المكثف</th><th style="width:28%">بوابة الخروج</th></tr></thead>
+    <tbody>
+      <tr><td class="strong">المنجز</td><td>حتى أكتوبر 2026</td><td>منتج مكتمل محليًا بجودة مثبتة</td><td>مغلق — v3.1.0</td></tr>
+      <tr><td class="strong">P1</td><td>2026Q4 ← 2027H1</td><td>توزيع رسمي بلا احتكاك</td><td>1,000 تحميل + 4 قنوات</td></tr>
+      <tr><td class="strong">P2</td><td>2027H2 ← 2028</td><td>أول عملاء وأول دخل</td><td>عقد موقّع + SOC 2 + Pro</td></tr>
+      <tr><td class="strong">P3</td><td>2029</td><td>فريق وسوق وشراكة OEM</td><td>فريق 3+ + 50 تكاملًا</td></tr>
+      <tr><td class="strong">P4</td><td>2030</td><td>استدامة ذاتية وقيادة فئة</td><td>دخل يغطي الفريق ربعين</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-info">
+    <div class="ct">قاعدة الترقيم بعد استهلاك «3.0 = M4»</div>
+    الخطة القديمة ربطت الترقيم بالمراحل واستُهلك ربط 3.0 مع ختم M4. القاعدة الجديدة: minor شهري على 3.x خلال P1، ثم major عند كل بوابة خروج — v4.0 مع خروج P2 (2028)، وv5.0 مع خروج P3 (2029) — بحيث يصبح رقم الإصدار العلامة المائية للبوابة لا للمرحلة.
+  </div>
+
+  <!-- ===== 9. MONETIZATION ===== -->
+  <div class="chapter-header">
+    <div class="kicker">القسم 09</div>
+    <h2 class="chapter-title">نموذج تحقيق الدخل المقترح</h2>
+  </div>
+
+  <p>القاعدة الملزمة: الدخل يُبنى فوق الخندق الرابع لا ضده — <b>لا حسابات ولا اشتراك سحابي إجباري أبدًا</b>. التحقق بمفاتيح ترخيص موقعة تُدقق محليًا بنفس نمط توقيع سوق التكاملات القائم (§34.ب) وقناة الناشر (§35.أ)، فيبقى المنتج يعمل بلا اتصال دائم وبلا هوية مركزية. والنواة الشخصية تبقى مجانية كاملة كما هي اليوم — الدخل يأتي من القيمة المؤسسية والاحترافية، لا من اقتطاع ما هو مجاني.</p>
+
+  <table class="data">
+    <thead><tr><th style="width:14%">الفئة</th><th style="width:22%">الجمهور</th><th style="width:22%">التسعير (تقديري)</th><th style="width:42%">ما تفتحه</th></tr></thead>
+    <tbody>
+      <tr><td class="strong">مجاني</td><td>شخصي</td><td>$0 للأبد</td><td>كل ما هو اليوم حرفيًا — النواة كاملة بلا قيود اصطناعية؛ هذا هو محرك التبني والتوصية.</td></tr>
+      <tr><td class="strong">Pro</td><td>فرد محترف</td><td>شراء مرة واحدة ≈ $29</td><td>مفتاح محلي: أتمتة متقدمة بلا سقف، عميل ويب كامل الوظائف على أكثر من جهازين، أولوية قنوات التحديث.</td></tr>
+      <tr><td class="strong">فرق</td><td>أعمال صغيرة</td><td>اشتراك سنوي ≈ $8–12/مقعد</td><td>MDM وسياسات مركزية، تقارير امتثال، قناة الناشر المؤسسية، دعم بريد بأوقات استجابة.</td></tr>
+      <tr><td class="strong">مؤسسي / OEM</td><td>مؤسسات ومصنّعون</td><td>عقد سنوي بعروض</td><td>SOC 2 / ISO، SLA، وضع الخصوصية الافتراضية (§40)، تحميل مسبق، دعم أولوية وتدريب.</td></tr>
+    </tbody>
+  </table>
+  <div class="tbl-cap">أرقام التسعير تقديرات سوقية للتأطير فقط وليست التزامًا؛ تثبيت النهائي قرار ملكي في بوابة P2 مع دراسة مقارنة.</div>
+
+  <div class="callout callout-warn">
+    <div class="ct">خطر يعرف ويُدار: رد فعل المجتمع</div>
+    أي إطلاق Pro في منتج اشتهر بالمجانية يختبر الثقة. التخفيف المبني على العقيدة: الإعلان المبكر عن حدود الفئات قبل إطلاقها بفترة كافية، وعدم اقتطاع أي ميزة قائمة عن المستخدم المجاني الحالي أبدًا (سياسة «الجراندفاذرينج» المكتوبة في ملاحظات الإصدار)، والبقاء بلا تتبع حتى في التحقق التجاري.
+  </div>
+
+  <!-- ===== 10. KPIS ===== -->
+  <div class="chapter-header">
+    <div class="kicker">القسم 10</div>
+    <h2 class="chapter-title">مؤشرات القياس عبر المراحل</h2>
+  </div>
+
+  <p>المؤشرات تُراجع ربعيًا بجانب سجل المخاطر؛ وأي مؤشر يتراجع ربعين متتاليين يستدعي قرار إعادة نطاق موثقًا كما في العقيدة القائمة. خط الأساس بأكمله مقيس فعلًا اليوم — وهذا بحد ذاته خندق: نادر ما تُدار خارطة ثلاثية بأرقام أساس كلها حية لا تقديرية.</p>
+
+  <table class="data">
+    <thead><tr><th>المؤشر</th><th style="width:16%">أساس 2026</th><th style="width:16%">نهاية P1</th><th style="width:16%">نهاية P2</th><th style="width:16%">نهاية P4</th></tr></thead>
+    <tbody>
+      <tr><td>فحوص E2E الخضراء</td><td class="strong">1,316</td><td>1,400</td><td>1,450 (v4.0)</td><td>1,600+</td></tr>
+      <tr><td>قنوات التوزيع الرسمية</td><td class="strong">2</td><td>4</td><td>6</td><td>8+</td></tr>
+      <tr><td>تحميلات موثقة</td><td class="strong">غير مقيس</td><td>1,000</td><td>25,000</td><td>150,000</td></tr>
+      <tr><td>تكاملات السوق الموقعة</td><td class="strong">10</td><td>15</td><td>25</td><td>50+</td></tr>
+      <tr><td>أجهزة MDM المدارة</td><td class="strong">0</td><td>0</td><td>50</td><td>500</td></tr>
+      <tr><td>الدخل المتكرر السنوي</td><td class="strong">$0</td><td>$0</td><td>أول عقد</td><td>يغطي فريق 3+</td></tr>
+      <tr><td>زمن الاقتران حتى أول قيمة</td><td class="strong">أقل من 30ث موثق</td><td>أقل من 25ث</td><td>أقل من 20ث</td><td>أقل من 20ث</td></tr>
+      <tr><td>استجابة الأوامر p95 محليًا</td><td class="strong">أقل من 80ms</td><td>أقل من 60ms</td><td>أقل من 50ms</td><td>أقل من 40ms</td></tr>
+      <tr><td>موثوقية المزامنة الأسبوعية</td><td class="strong">99.9% هدف</td><td>99.9% مقيس</td><td>99.95%</td><td>99.95%</td></tr>
+      <tr><td>اللغات المكتملة</td><td class="strong">6</td><td>6</td><td>6</td><td>8 (قرار سوقي)</td></tr>
+    </tbody>
+  </table>
+  <div class="tbl-cap">القلم p95 ≈ 13ms يبقى مؤشرًا تقنيًا رائدًا يُنشر في السرد المقارن ولا يُخفّض تحت أي توسعة منصية.</div>
+
+  <!-- ===== 11. RISKS ===== -->
+  <div class="chapter-header">
+    <div class="kicker">القسم 11</div>
+    <h2 class="chapter-title">سجل المخاطر المحدث</h2>
+  </div>
+
+  <table class="data">
+    <thead><tr><th style="width:26%">الخطر</th><th style="width:12%">الأثر</th><th style="width:62%">التخفيف المعتمد</th></tr></thead>
+    <tbody>
+      <tr><td class="strong">فريق هندسي واحد (الأعلى)</td><td>مرتفع</td><td>يتراجع على نافذتين: أتمتة CI الخماسية الآن، وأول توظيف 2–3 مهندسين في P3 ممولًا من الدخل — بلا توظيف لا تُفتح P3.</td></tr>
+      <tr><td class="strong">بطء التبني أمام علامات كبرى</td><td>مرتفع</td><td>فئة مبكرة جدية بأرقام لا يستطيع السحابيون سردها (صفر بايت يغادر) + سرد مقارن صادق + تبنٍّ صفري احتكاك.</td></tr>
+      <tr><td class="strong">رد فعل المجتمع على الدخل</td><td>متوسط</td><td>سياسة الجراندفاذرينج المكتوبة، إعلان مبكر، نواة شخصية مجانية أبدًا، تحقق محلي بلا حسابات.</td></tr>
+      <tr><td class="strong">قيود iOS المنخفضة</td><td>مرتفع</td><td>بلا وعود معلنة: PWA محسّن حصرًا، والحاسوب مقصود لمستخدمي أبل؛ لا يُنفق عليها جهد أصلي.</td></tr>
+      <tr><td class="strong">عوائق مراجعة المتاجر</td><td>متوسط</td><td>التوزيع المباشر الموقع أولًا دائمًا؛ المتاجر قناة إضافية؛ winget وFlathub كبوابات أسرع.</td></tr>
+      <tr><td class="strong">تجاوز كلفة الامتثال</td><td>متوسط</td><td>SOC 2 يُثبَّت بعروض أسعار متعددة ويمكن انزلاقه لنصف 2028 الثاني دون كسر البوابة؛ ISO يليه لا يسبقه.</td></tr>
+      <tr><td class="strong">إرهاق المؤسس وتركّز المعرفة</td><td>مرتفع</td><td>إيقاع مقاس بمراجعات ربعية إلزامية، توثيق عقدي يسمح بتفويض آمن، وتوظيف P3 يوزع المعرفة.</td></tr>
+      <tr><td class="strong">ثغرات التبعيات المنبعية</td><td>متوسط</td><td>دورة ترقيع موثقة (zip/rustls/sharp أُغلقت حديثًا) + تدقيق خارجي دوري بعد SOC 2 + حرس انجراف آلي.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ===== 12. BUDGET ===== -->
+  <div class="chapter-header">
+    <div class="kicker">القسم 12</div>
+    <h2 class="chapter-title">الميزانية التقديرية للبنود الخارجية</h2>
+  </div>
+
+  <p>كل الأرقام التالية إما موثقة في أدلة النشر داخل المستودع أو تقديرات سوقية معلنة بوصفها كذلك. القيمة الأخلاقية للجدول: أن يرى المالك ثمن فتح كل باب مكتوبًا في سطر واحد قبل اتخاذ القرار — فالفجوة الحقيقية مالية بسيطة وصغيرة مقارنة بما أُنجز هندسيًا.</p>
+
+  <table class="data">
+    <thead><tr><th style="width:30%">البند</th><th style="width:22%">الكلفة</th><th style="width:12%">المرحلة</th><th style="width:36%">ملاحظة</th></tr></thead>
+    <tbody>
+      <tr><td class="strong">شهادة Windows OV</td><td>$200–400/سنة</td><td>P1</td><td>مقعد §43 يتفعل لحظة إدخال الشهادة؛ ترقية EV لاحقًا عند طلب المتاجر.</td></tr>
+      <tr><td class="strong">Apple Developer</td><td>$99/سنة</td><td>P1</td><td>بوابتا notarization جاهزتان؛ يفتح أيضًا باب بناء iOS الاختياري مستقبلًا.</td></tr>
+      <tr><td class="strong">دومين خاص</td><td>≈ $10/سنة</td><td>P1</td><td>ربط Pages + بريد دعم لاحقًا على نفس النطاق.</td></tr>
+      <tr><td class="strong">Flathub</td><td>$0</td><td>P1</td><td>حساب مجاني؛ الحزمة كاملة ببوابة انجراف 61 فحصًا.</td></tr>
+      <tr><td class="strong">VPS للمرحّل (E4)</td><td>$60–120/سنة</td><td>P1–P2</td><td>نواة §49 جاهزة؛ يُشغَّل فقط عند أول عميل يحتاج وصولًا عبر الإنترنت.</td></tr>
+      <tr><td class="strong">SOC 2 Type I</td><td>يُثبَّت بعروض أسعار</td><td>P2</td><td>أثقل بند مالي؛ التوقيت النهائي داخل نافذة 2027H2–2028 حسب الدخل.</td></tr>
+      <tr><td class="strong">ISO 27001</td><td>يُثبَّت بعروض أسعار</td><td>P3</td><td>يُخطط نهاية 2028 فوق منظومة الأدلة نفسها.</td></tr>
+      <tr><td class="strong">أول توظيف</td><td>حسب السوق المحلي</td><td>P3</td><td>شرط تمويل: دخل متكرر يغطي ربعًا كاملًا قبل التعاقد.</td></tr>
+    </tbody>
+  </table>
+  <div class="tbl-cap">مجموع فتح بوابة P1 كاملة: أقل من ≈ $650 سنويًا — أصغر استثمار في تاريخ المشروع مقابل أكبر تحول في وصوله.</div>
+
+  <!-- ===== 13. FIRST 30 DAYS ===== -->
+  <div class="chapter-header">
+    <div class="kicker">القسم 13</div>
+    <h2 class="chapter-title">أول 30 يومًا — قائمة تنفيذ فوري</h2>
+  </div>
+
+  <p>هذه القائمة هي وحدها ما يحتاج قرارًا اليوم؛ كل ما بعدها يتبع بوابات المراحل. الترتيب مقصود: الأمن أولًا بلا كلفة، ثم الشراءات، ثم الفتحات، ثم الإيقاع.</p>
+
+  <div class="check"><div class="d">اليوم 1</div><div>إبطال رمز GitHub المسرّب فورًا + إنشاء بديل بأقل نطاق وتاريخ انتهاء قصير + تفعيل 2FA على الحساب.</div></div>
+  <div class="check"><div class="d">اليوم 1–2</div><div>فحص أسرار تاريخ المستودع (بأداة فحص أسرار محلية) والتأكد من صفر أسرار متبقية، وتحديث سجل العمل بغلق البند.</div></div>
+  <div class="check"><div class="d">الأسبوع 1</div><div>قرار شراء شهادة Windows OV والانضمام لبرنامج Apple Developer، وإدخال الأسرار في مقاعد §43 ليقفز الإصدار القادم موقّعًا.</div></div>
+  <div class="check"><div class="d">الأسبوع 1–2</div><div>زر «تحقق» في Google Search Console بعد وصول ملف الملكية، ثم تقديم sitemap.xml ومراقبة الفهرسة.</div></div>
+  <div class="check"><div class="d">الأسبوع 2</div><div>إنشاء حساب Flathub بالبريد الدائم وفتح طلب المراجعة بالحزمة الجاهزة (§44) والرد على المراجعين إن طُلب.</div></div>
+  <div class="check"><div class="d">الأسبوع 3</div><div>شراء الدومين وربطه بـ Pages وتحديث الروابط في الموقع وصفحة النشر وملاحظات الإصدار.</div></div>
+  <div class="check"><div class="d">الأسبوع 3</div><div>فتح GitHub Discussions بقوالب + إضافة SECURITY.md + حلقة التغذية الراجعة في صفحة التحميل.</div></div>
+  <div class="check"><div class="d">الأسبوع 4</div><div>إصدار v3.2 بالإيقاع الشهري — أول إصدار موقّع إن اكتملت الشراءات، وإلا إصدار اعتيادي لا يكسر الإيقاع.</div></div>
+  <div class="check"><div class="d">نهاية الشهر</div><div>كتابة قرارات D2 الثلاثة كتابيًا في سجل المراجعات + اعتماد هذه الخارطة مرجعًا حيًا في ROADMAP.md استعدادًا لمراجعة يناير 2027.</div></div>
+
+  <h3 class="sub">القرارات الملكية الثلاثة المعلقة (D2) — تُحسم كتابيًا</h3>
+  <table class="data">
+    <thead><tr><th style="width:38%">القرار</th><th style="width:38%">الخيارات على الطاولة</th><th style="width:24%">التوقيت المقترح</th></tr></thead>
+    <tbody>
+      <tr><td>أرشيف pre-rewrite bundle: حفظ أم حذف</td><td>حفظ خارج المستودع مع بصمة SHA256، أو حذف نهائي بعد توثيق الجرد</td><td class="strong">نهاية الشهر الأول</td></tr>
+      <tr><td>بداية M4: أي بند أول — MDM أم OEM أم SOC 2</td><td>MDM يمنح مرجع عميل أسرع؛ SOC 2 يمنح بوابة بيع؛ OEM أطول دورة</td><td class="strong">بوابة مراجعة يناير 2027</td></tr>
+      <tr><td>سياسة تدوير رموز الاقتران المؤسسية</td><td>تدوير آلي عبر MDM، أم يدوي بإدارة الجهاز، أم مختلط حسب الفئة</td><td class="strong">قبل أول عقد دعم (P2)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-info">
+    <div class="ct">كيف تُدار هذه الخارطة بعد اليوم</div>
+    هذه الوثيقة مرجع حي لا وثيقة أرشيفية: تُحدَّث في كل مراجعة ربعية (التالية يناير 2027)، ويُسجَّل في سجل المراجعات حكم كل دورة وقراراتها، وترتفع عتبات الجودة عند كل إصدار major. البنود الخارجية تُعلَّق بحالتها الحية في ROADMAP.md وMASTER-PLAN.md حتى تبقى الثلاث وثائق متوافقة بلا تناقض — فالمصدر الوحيد للحقيقة في التنفيذ يبقى عقد البروتوكول، وهذه الخارطة مرآة القرار الاستراتيجي فوقه.
+  </div>
+
+</div>
+
+<!-- ============ ENDING ============ -->
+<div class="ending">
+  <div class="kicker">نجم الشمال — غير قابل للتفاوض</div>
+  <div class="ns">أجهزة المستخدم يدًا واحدة موثوقة —</div>
+  <div class="ns2">محليًا، خاصًا، بلا وسيط.</div>
+  <p>كل بند في هذه الخارطة يُقيَّم بسؤال واحد: هل يعمّق أحد الخنادق الخمسة؟ ما لا يفعل ذلك يُرفض مهما بدت جاذبيته. المنجز أثبت أن العقيدة تعمل؛ والقادم يثبت أنها تنمو.</p>
+  <div class="gov"><b>الحوكمة:</b> مراجعة ربعية إلزامية — الدورة التالية يناير 2027، بمقارنة مؤشرات خط الأساس (اقتران أقل من 30 ثانية، p95، موثوقية المزامنة، أول قنوات التوزيع). أي مؤشر يتراجع ربعين متتاليين يستدعي قرار إعادة نطاق موثقًا في سجل المراجعات.</div>
+  <div class="ending-foot">
+    <span>NexusLink · v3.1.0 · أكتوبر 2026</span>
+    <span>خارطة التطوير الموحدة 2026–2030 — CTO-DRS</span>
+  </div>
+</div>
+
+</body>
+</html>

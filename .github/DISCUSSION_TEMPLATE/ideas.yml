@@ -1,0 +1,32 @@
+labels: ["idea"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        الأفكار تُقيَّم بسؤال واحد: هل تعمّق أحد الخنادق التنافسية الخمسة؟
+        (الخصوصية المعمارية · التكامل الرأسي · الأتمتة التاريخية · بلا حسابات · إيقاع مقاس)
+        الفكرة التي تتطلب سحابة أو حسابات ترفض مهما بدت جاذبيتها — هذا بند في العقيدة لا رأي.
+  - type: textarea
+    id: problem
+    attributes:
+      label: المشكلة أو الحاجة
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: الفكرة
+    validations:
+      required: true
+  - type: dropdown
+    id: moat
+    attributes:
+      label: الخندق الذي تعمّقه
+      options:
+        - "الخصوصية المعمارية"
+        - "التكامل الرأسي"
+        - "الأتمتة التاريخية"
+        - "بلا حسابات"
+        - "غير محسومة — أريد النقاش"
+    validations:
+      required: true
