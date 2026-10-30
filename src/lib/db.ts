@@ -149,6 +149,24 @@ function ensureUpgradeSchema(): Promise<void> {
       await db.$executeRawUnsafe(
         `CREATE INDEX IF NOT EXISTS "PairMetric_at_idx" ON "PairMetric"("at")`,
       )
+      // خزنة الحافظة الذكية (عقد §50) — أعمدة ProdClip الإضافية الثلاثة بنمط
+      // الترقية الآمنة §26.ط: محروسة بـPRAGMA فلا تُنفَّذ إلا مرة على قواعد
+      // قائمة، وADD COLUMN إضافية بحتة بلا أي مساس بالصفوف القائمة (pinned
+      // يُقرأ 0 = غير مثبت · sensitive NULL = غير مصنف · expiresAt NULL = لا انتهاء).
+      try {
+        const clipCols = await db.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info("ProdClip")`)
+        if (Array.isArray(clipCols) && !clipCols.some((c) => c.name === "pinned")) {
+          await db.$executeRawUnsafe(`ALTER TABLE "ProdClip" ADD COLUMN "pinned" BOOLEAN NOT NULL DEFAULT 0`)
+        }
+        if (Array.isArray(clipCols) && !clipCols.some((c) => c.name === "sensitive")) {
+          await db.$executeRawUnsafe(`ALTER TABLE "ProdClip" ADD COLUMN "sensitive" TEXT`)
+        }
+        if (Array.isArray(clipCols) && !clipCols.some((c) => c.name === "expiresAt")) {
+          await db.$executeRawUnsafe(`ALTER TABLE "ProdClip" ADD COLUMN "expiresAt" DATETIME`)
+        }
+      } catch (e) {
+        console.error('[db] ProdClip vault columns ensure:', e instanceof Error ? e.message : e)
+      }
     } catch (e) {
       // بلا هلع: القاعدة الجاهزة (seed 1.1.0) تحوي الجدول مسبقًا؛ فشل ضمان
       // المخطط (قاعدة للقراءة فقط مثلًا) يظهر في مسارات الكتابة بصدق لاحقًا.

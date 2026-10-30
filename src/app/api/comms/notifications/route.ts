@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { ensureSeed, serNotification, evaluateIngest } from "@/lib/nexus/comms-server"
+import { ensureFocusRestored, readFocusState, bumpFocusSuppressed } from "@/lib/nexus/focus-state"
+import { focusActive } from "@/lib/nexus/focus-core"
 
 export const dynamic = "force-dynamic"
 
@@ -17,7 +19,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 })
   }
   await ensureSeed()
-  const status = await evaluateIngest(String(body.appId))
+  // §52 — كتم وضع التركيز: الإشعار يُخزَّن ولا يُفقد أبدًا — يُعلَّم «مكتوم»
+  // ويزيد عدّاد المكبوت في حالة التركيز (لا مؤقتات — القراءة الكسولة تحسم).
+  // المكتوم عبر DND (المصدر focus) يُحسب للتركيز أيضًا — المخفي بقواعد الفلترة
+  // يبقى ملكها (لا يُنسب للتركيز أبدًا).
+  let status = await evaluateIngest(String(body.appId))
+  let suppressedByFocus = false
+  await ensureFocusRestored()
+  const fstate = readFocusState()
+  if (fstate && focusActive(fstate, Date.now()) && fstate.suppressMirroring && status !== "hidden") {
+    if (status === "new") status = "muted"
+    suppressedByFocus = true
+    await bumpFocusSuppressed()
+  }
   const n = await db.nexusNotification.create({
     data: {
       appId: String(body.appId),
@@ -28,5 +42,5 @@ export async function POST(req: NextRequest) {
       status,
     },
   })
-  return NextResponse.json({ ok: true, notification: serNotification(n) })
+  return NextResponse.json({ ok: true, notification: serNotification(n), suppressedByFocus })
 }

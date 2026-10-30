@@ -44,6 +44,16 @@ export type AuditKind =
   | "relay.enable"
   | "relay.disable"
   | "relay.admin.denied"
+  // §51 — المشاركة الضيوفة (تمكين/تدوير/تعطيل/نقل/رفض — أسماء وأحجام حصرًا F6)
+  | "guest.enable"
+  | "guest.rotate"
+  | "guest.disable"
+  | "guest.upload"
+  | "guest.download"
+  | "guest.page"
+  | "guest.inbox.save"
+  | "guest.inbox.clear"
+  | "guest.admin.denied"
 
 const KINDS: ReadonlySet<string> = new Set<string>([
   "pair.enable",
@@ -62,6 +72,15 @@ const KINDS: ReadonlySet<string> = new Set<string>([
   "relay.enable",
   "relay.disable",
   "relay.admin.denied",
+  "guest.enable",
+  "guest.rotate",
+  "guest.disable",
+  "guest.upload",
+  "guest.download",
+  "guest.page",
+  "guest.inbox.save",
+  "guest.inbox.clear",
+  "guest.admin.denied",
 ])
 
 export interface AuditRecord {

@@ -117,6 +117,10 @@ model ProdClip {
   size       Int      @default(0)
   mode       String   @default("manual") // auto | manual
   received   Boolean  @default(false) // استُلم فعلياً على جهاز آخر (نسخ بايتات)
+  // §50 خزنة الحافظة الذكية — أعمدة إضافية بحتة (نمط الترقية الآمنة §26.ط):
+  pinned    Boolean  @default(false) // المثبت لا ينتهي ولا يُنقّى أبدًا
+  sensitive String? // otp | password | card | iban | token — تصنيف محلي حصرًا
+  expiresAt DateTime? // انتهاء الصلاحية (null = لا ينتهي — العادي والمثبت)
   createdAt  DateTime @default(now())
 
   @@index([createdAt])
