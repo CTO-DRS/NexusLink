@@ -1,0 +1,58 @@
+name: "🐛 تقرير خلل"
+description: "خلل قابل لإعادة الإنتاج في النواة أو البوابة أو الوكيل أو SDK"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        شكرًا لإبلاغك — NexusLink بلا حسابات ولا تتبع، فكل ما نعرفه عن الخلل يأتي منك.
+        **ثغرة أمنية؟ أغلق هذه الصفحة فورًا واستخدم الإبلاغ الأمني الخاص (راجع SECURITY.md).**
+  - type: dropdown
+    id: component
+    attributes:
+      label: المكوّن المتأثر
+      options:
+        - "سطح المكتب (Windows)"
+        - "سطح المكتب (macOS)"
+        - "سطح المكتب (Linux)"
+        - "وكيل الأندرويد"
+        - "عميل الويب (PWA)"
+        - "SDK / CLI"
+        - "المرحّل الذاتي"
+        - "أخرى"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: الإصدار (من الإعدادات أو `nexus version`)
+      placeholder: "v3.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: خطوات إعادة الإنتاج
+      placeholder: |
+        1. افتح …
+        2. اربط …
+        3. يظهر …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: المتوقع مقابل الفعلي
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: سجلات إن وجدت (لوحة السجلات داخل التطبيق — ازل أي بيانات شخصية يدويًا)
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: إقرار الخصوصية
+      options:
+        - label: "أقر أن المرفقات لا تحوي بيانات شخصية أو أسرارًا (المنصة بلا تتبع فلا نجمع شيئًا عنك)"
+        - label: "لست متأكدًا أن هذا خلل أمني — إن كان كذلك سأستخدم الإبلاغ الخاص"

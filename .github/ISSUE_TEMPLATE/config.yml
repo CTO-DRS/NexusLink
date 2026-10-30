@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: الأسئلة والدعم (Discussions → Q&A)
+    url: https://github.com/CTO-DRS/NexusLink/discussions/categories/q-a
+    about: سؤال عن التثبيت أو الاقتران أو الاستخدام — الدعم العام الموحد
+  - name: الأفكار والاقتراحات (Discussions → Ideas)
+    url: https://github.com/CTO-DRS/NexusLink/discussions/categories/ideas
+    about: فكرة ميزة قبل تحويلها لطلب — تُقيَّم بباب الخندق التنافسي
+  - name: 🔒 ثغرة أمنية؟ لا تفتح Issue أبدًا
+    url: https://github.com/CTO-DRS/NexusLink/security/advisories/new
+    about: الإبلاغ الأمني الخاص حصرًا — راجع SECURITY.md
