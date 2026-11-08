@@ -12,6 +12,12 @@ export type AutomationFact =
       clipKind?: string
       at: number
     }
+  | {
+      kind: "handoff.arrived"
+      handoffKind?: string
+      sourceDevice?: string
+      at: number
+    }
 
 export type FactListener = (f: AutomationFact) => void
 

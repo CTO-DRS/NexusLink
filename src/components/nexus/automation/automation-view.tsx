@@ -19,7 +19,7 @@ import {
   Workflow, MonitorSmartphone, MonitorOff, BatteryLow, BatteryCharging, ClipboardList, CalendarClock,
   BellRing, ClipboardPaste, PhoneCall, Power, Play, Trash2, Plus, History,
   Clock, Sparkles, ShieldAlert, Timer, Activity, WifiOff, CheckCheck, DatabaseBackup, HardDrive,
-  FlaskConical, CheckCircle2, AlertTriangle,
+  FlaskConical, CheckCircle2, AlertTriangle, Forward,
 } from "lucide-react"
 import type { TriggerKind, ActionKind, AutoRule, AutoTestResult } from "@/lib/nexus/automation-types"
 import { SUSTAINED_TRIGGER_KINDS, COMPOSITE_STATE_KINDS } from "@/lib/nexus/automation-types"
@@ -33,6 +33,7 @@ const TRIGGER_META: Record<TriggerKind, { icon: typeof Workflow; label: string }
   "battery.below": { icon: BatteryLow, label: "عند هبوط البطارية تحت عتبة" },
   "battery.above": { icon: BatteryCharging, label: "عند بلوغ البطارية عتبة (اكتمال شحن)" },
   "clip.received": { icon: ClipboardList, label: "عند وصول محتوى للحافظة الموحدة" },
+  "handoff.arrived": { icon: Forward, label: "عند وصول عنصر تسليم يدوي من الهاتف" },
   "time.once": { icon: Timer, label: "مرة واحدة عند موعد" },
   "time.daily": { icon: CalendarClock, label: "يوميًا عند ساعة محددة" },
   "health.battery.sustained": { icon: BatteryLow, label: "بقاء البطارية تحت عتبة لمدة (تاريخي)" },

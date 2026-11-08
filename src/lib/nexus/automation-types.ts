@@ -16,6 +16,7 @@ export type TriggerKind =
   | "health.rtt.sustained"     // تاريخي: الاستجابة ≥ العتبة لمدة متواصلة (عينات متصلة فقط)
   | "health.silence.sustained" // تاريخي: لا عينات صحة خلال المدة (صمت الجهاز عن التقارير)
   | "health.storage.sustained" // تاريخي: التخزين ≥ العتبة لمدة متواصلة (§26.ط — امتلاء مستمر)
+  | "handoff.arrived"     // وصل عنصر تسليم يدوي من جهاز مقترن (عقد §53 — ناقل الحقائق)
 
 /** أنواع «شرط الحالة» المسموح بها كعنصر ثانٍ في المشغل المركب (§33.ج):
  *  تُقيَّم كحالة الآن عند اكتمال الشرط التاريخي الأول — لا كحافة.
@@ -162,6 +163,7 @@ export interface AutoTestResult {
 export const TRIGGER_KINDS: readonly TriggerKind[] = [
   "device.connect", "device.disconnect", "battery.below", "battery.above", "clip.received", "time.once", "time.daily",
   "health.battery.sustained", "health.rtt.sustained", "health.silence.sustained", "health.storage.sustained",
+  "handoff.arrived",
 ] as const
 
 /** المشغلات التاريخية المستمرة (§26.و + §26.ط) — تُقيَّم من عينات مركز الصحة لا من اللحظة الحالية.
