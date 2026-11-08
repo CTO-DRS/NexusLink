@@ -3790,5 +3790,19 @@
   "إلغاء التدبيس": "Desfijar", 
   "تدبيس العنصر": "Fijar elemento", 
   "خزنة الحافظة (§50)": "Bóveda del portapapeles (§50)", 
-  "الحساس (رمز دخول/كلمة سر/بطاقة) يُقنَّع تلقائيًا وينتهي بعد 15 دقيقة — الكشف المقصود مُدقَّق، والتدبيس يحفظ ما لا تريد فقدانه، واللصق المؤقت يختفي بذاته.": "Los elementos sensibles (accesos, contraseñas, tarjetas) se enmascaran automáticamente y expiran tras 15 minutos — la revelación deliberada se audita, fijar guarda lo que no debes perder, y el pegado efímero desaparece solo."
+  "الحساس (رمز دخول/كلمة سر/بطاقة) يُقنَّع تلقائيًا وينتهي بعد 15 دقيقة — الكشف المقصود مُدقَّق، والتدبيس يحفظ ما لا تريد فقدانه، واللصق المؤقت يختفي بذاته.": "Los elementos sensibles (accesos, contraseñas, tarjetas) se enmascaran automáticamente y expiran tras 15 minutos — la revelación deliberada se audita, fijar guarda lo que no debes perder, y el pegado efímero desaparece solo.", 
+  "س": "h", 
+  "ي": "d", 
+  "التسليم اليدوي — أكمل من حيث توقفت": "Entrega inteligente — continúa donde lo dejaste", 
+  "التسليم": "Entrega", 
+  "لا عناصر تسليم — ادفع رابطًا أو نصًا من هاتفك ليظهر هنا بفعل بنقرة": "Sin elementos — envía un enlace o texto desde tu teléfono y aparecerá aquí, un toque para actuar", 
+  "محلي حصرًا — بلا حساب ولا سحابة، والقائمة تنتهي بعد 24 ساعة": "Solo local — sin cuenta ni nube; la cola expira tras 24 horas", 
+  "العنصر استُهلك أو انتهى": "Elemento ya consumido o expirado", 
+  "نُسخ إلى الحافظة": "Copiado al portapapeles", 
+  "موضع التشغيل جاهز للاستئناف": "Posición de reproducción lista para continuar", 
+  "الملف جاهز للفتح من تبويب الملفات": "Archivo listo para abrir desde la pestaña Archivos", 
+  "فُرّغت قائمة التسليم": "Cola de entrega vaciada", 
+  "عند وصول عنصر تسليم يدوي من الهاتف": "Cuando llega un elemento de entrega del teléfono", 
+  "Android — APK": "Android — APK", 
+  "macOS — Apple Silicon": "macOS — Apple Silicon"
 }

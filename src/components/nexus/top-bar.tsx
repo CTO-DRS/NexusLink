@@ -8,6 +8,8 @@ import { syncDnd } from "@/hooks/use-comms"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useToast } from "@/hooks/use-toast"
+import { HandoffBell } from "@/components/nexus/handoff-bell"
 import { Sun, Moon, Link2, Smartphone, BellOff, Bell, MessageSquareText, Zap, Languages, Search, ScanSearch } from "lucide-react"
 
 export function TopBar() {
@@ -117,6 +119,9 @@ export function TopBar() {
                 : t("مزامنة وضع عدم الإزعاج مع الهاتف")}
             </TooltipContent>
           </Tooltip>
+
+          {/* التسليم اليدوي الذكي (§53) */}
+          <HandoffBell />
 
           {/* الإشعارات غير المقروءة */}
           <Tooltip>

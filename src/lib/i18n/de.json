@@ -3790,5 +3790,19 @@
   "إلغاء التدبيس": "Lösen", 
   "تدبيس العنصر": "Element anheften", 
   "خزنة الحافظة (§50)": "Zwischenablage-Tresor (§50)", 
-  "الحساس (رمز دخول/كلمة سر/بطاقة) يُقنَّع تلقائيًا وينتهي بعد 15 دقيقة — الكشف المقصود مُدقَّق، والتدبيس يحفظ ما لا تريد فقدانه، واللصق المؤقت يختفي بذاته.": "Sensible Elemente (Logins, Passwörter, Karten) werden automatisch maskiert und laufen nach 15 Minuten ab — gezieltes Aufdecken wird auditiert, Anheften bewahrt Unverzichtbares, und flüchtiges Einfügen verschwindet von selbst."
+  "الحساس (رمز دخول/كلمة سر/بطاقة) يُقنَّع تلقائيًا وينتهي بعد 15 دقيقة — الكشف المقصود مُدقَّق، والتدبيس يحفظ ما لا تريد فقدانه، واللصق المؤقت يختفي بذاته.": "Sensible Elemente (Logins, Passwörter, Karten) werden automatisch maskiert und laufen nach 15 Minuten ab — gezieltes Aufdecken wird auditiert, Anheften bewahrt Unverzichtbares, und flüchtiges Einfügen verschwindet von selbst.", 
+  "س": "Std", 
+  "ي": "T", 
+  "التسليم اليدوي — أكمل من حيث توقفت": "Smartes Handoff — weiter da, wo du aufgehört hast", 
+  "التسليم": "Handoff", 
+  "لا عناصر تسليم — ادفع رابطًا أو نصًا من هاتفك ليظهر هنا بفعل بنقرة": "Keine Handoff-Elemente — schicke einen Link oder Text vom Handy, ein Tippeln zum Handeln", 
+  "محلي حصرًا — بلا حساب ولا سحابة، والقائمة تنتهي بعد 24 ساعة": "Nur lokal — ohne Konto oder Cloud; die Liste läuft nach 24 Stunden ab", 
+  "العنصر استُهلك أو انتهى": "Element bereits verbraucht oder abgelaufen", 
+  "نُسخ إلى الحافظة": "In die Zwischenablage kopiert", 
+  "موضع التشغيل جاهز للاستئناف": "Wiedergabeposition bereit zum Fortsetzen", 
+  "الملف جاهز للفتح من تبويب الملفات": "Datei bereit zum Öffnen im Tab „Dateien“", 
+  "فُرّغت قائمة التسليم": "Handoff-Liste geleert", 
+  "عند وصول عنصر تسليم يدوي من الهاتف": "Wenn ein Handoff-Element vom Handy ankommt", 
+  "Android — APK": "Android — APK", 
+  "macOS — Apple Silicon": "macOS — Apple Silicon"
 }

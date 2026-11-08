@@ -3792,5 +3792,17 @@
   "إلغاء التدبيس": "Unpin", 
   "تدبيس العنصر": "Pin item", 
   "خزنة الحافظة (§50)": "Clipboard vault (§50)", 
-  "الحساس (رمز دخول/كلمة سر/بطاقة) يُقنَّع تلقائيًا وينتهي بعد 15 دقيقة — الكشف المقصود مُدقَّق، والتدبيس يحفظ ما لا تريد فقدانه، واللصق المؤقت يختفي بذاته.": "Sensitive items (logins, passwords, cards) are auto-masked and expire after 15 minutes — deliberate reveal is audited, pinning keeps what you must not lose, and ephemeral pastes vanish on their own."
+  "الحساس (رمز دخول/كلمة سر/بطاقة) يُقنَّع تلقائيًا وينتهي بعد 15 دقيقة — الكشف المقصود مُدقَّق، والتدبيس يحفظ ما لا تريد فقدانه، واللصق المؤقت يختفي بذاته.": "Sensitive items (logins, passwords, cards) are auto-masked and expire after 15 minutes — deliberate reveal is audited, pinning keeps what you must not lose, and ephemeral pastes vanish on their own.", 
+  "س": "h", 
+  "ي": "d", 
+  "التسليم اليدوي — أكمل من حيث توقفت": "Smart handoff — resume where you left off", 
+  "التسليم": "Handoff", 
+  "لا عناصر تسليم — ادفع رابطًا أو نصًا من هاتفك ليظهر هنا بفعل بنقرة": "No handoff items — push a link or text from your phone and it appears here, one tap to act", 
+  "محلي حصرًا — بلا حساب ولا سحابة، والقائمة تنتهي بعد 24 ساعة": "Local only — no account, no cloud; the queue expires after 24 hours", 
+  "العنصر استُهلك أو انتهى": "Item already consumed or expired", 
+  "نُسخ إلى الحافظة": "Copied to clipboard", 
+  "موضع التشغيل جاهز للاستئناف": "Playback position ready to resume", 
+  "الملف جاهز للفتح من تبويب الملفات": "File ready to open from the Files tab", 
+  "فُرّغت قائمة التسليم": "Handoff queue cleared", 
+  "عند وصول عنصر تسليم يدوي من الهاتف": "When a smart handoff item arrives from the phone"
 }

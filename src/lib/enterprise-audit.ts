@@ -54,6 +54,14 @@ export type AuditKind =
   | "guest.inbox.save"
   | "guest.inbox.clear"
   | "guest.admin.denied"
+  // §53 — التسليم اليدوي الذكي (وصول/تكرار/فعل/إزالة/تقليم/تفريغ/رفض — أطوال وبصمات حصرًا F6)
+  | "handoff.arrive"
+  | "handoff.dedupe"
+  | "handoff.open"
+  | "handoff.dismiss"
+  | "handoff.clear"
+  | "handoff.prune"
+  | "handoff.denied"
 
 const KINDS: ReadonlySet<string> = new Set<string>([
   "pair.enable",
@@ -81,6 +89,13 @@ const KINDS: ReadonlySet<string> = new Set<string>([
   "guest.inbox.save",
   "guest.inbox.clear",
   "guest.admin.denied",
+  "handoff.arrive",
+  "handoff.dedupe",
+  "handoff.open",
+  "handoff.dismiss",
+  "handoff.clear",
+  "handoff.prune",
+  "handoff.denied",
 ])
 
 export interface AuditRecord {

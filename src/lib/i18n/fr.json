@@ -3790,5 +3790,19 @@
   "إلغاء التدبيس": "Désépingler", 
   "تدبيس العنصر": "Épingler l'élément", 
   "خزنة الحافظة (§50)": "Coffre-pressepapiers (§50)", 
-  "الحساس (رمز دخول/كلمة سر/بطاقة) يُقنَّع تلقائيًا وينتهي بعد 15 دقيقة — الكشف المقصود مُدقَّق، والتدبيس يحفظ ما لا تريد فقدانه، واللصق المؤقت يختفي بذاته.": "Les éléments sensibles (identifiants, mots de passe, cartes) sont masqués automatiquement et expirent après 15 minutes — la révélation délibérée est auditée, l'épinglage garde ce qu'il ne faut pas perdre, et le collage éphémère disparaît seul."
+  "الحساس (رمز دخول/كلمة سر/بطاقة) يُقنَّع تلقائيًا وينتهي بعد 15 دقيقة — الكشف المقصود مُدقَّق، والتدبيس يحفظ ما لا تريد فقدانه، واللصق المؤقت يختفي بذاته.": "Les éléments sensibles (identifiants, mots de passe, cartes) sont masqués automatiquement et expirent après 15 minutes — la révélation délibérée est auditée, l'épinglage garde ce qu'il ne faut pas perdre, et le collage éphémère disparaît seul.", 
+  "س": "h", 
+  "ي": "j", 
+  "التسليم اليدوي — أكمل من حيث توقفت": "Transfert intelligent — reprenez où vous en étiez", 
+  "التسليم": "Transfert", 
+  "لا عناصر تسليم — ادفع رابطًا أو نصًا من هاتفك ليظهر هنا بفعل بنقرة": "Aucun élément — envoyez un lien ou du texte depuis votre téléphone, une touche pour agir", 
+  "محلي حصرًا — بلا حساب ولا سحابة، والقائمة تنتهي بعد 24 ساعة": "Local uniquement — sans compte ni cloud ; la file expire après 24 heures", 
+  "العنصر استُهلك أو انتهى": "Élément déjà consommé ou expiré", 
+  "نُسخ إلى الحافظة": "Copié dans le presse-papiers", 
+  "موضع التشغيل جاهز للاستئناف": "Position de lecture prête à reprendre", 
+  "الملف جاهز للفتح من تبويب الملفات": "Fichier prêt à ouvrir depuis l'onglet Fichiers", 
+  "فُرّغت قائمة التسليم": "File de transfert vidée", 
+  "عند وصول عنصر تسليم يدوي من الهاتف": "Quand un élément de transfert arrive du téléphone", 
+  "Android — APK": "Android — APK", 
+  "macOS — Apple Silicon": "macOS — Apple Silicon"
 }

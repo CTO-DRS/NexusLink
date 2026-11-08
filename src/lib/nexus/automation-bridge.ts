@@ -705,10 +705,19 @@ export function ensureAutomationBridge() {
 
     // حقائق الحافظة من ناقل العملية (prod ينشر clip.received)
     onAutomationFact((f) => {
-      if (f.kind !== "clip.received") return
-      for (const rule of rules) {
-        if (rule.enabled && rule.trigger.kind === "clip.received") {
-          void onTriggerHit(rule, `وصل محتوى ${f.clipKind === "image" ? "صورة" : "نص"} من ${f.deviceName || "جهاز"} إلى الحافظة`)
+      if (f.kind === "clip.received") {
+        for (const rule of rules) {
+          if (rule.enabled && rule.trigger.kind === "clip.received") {
+            void onTriggerHit(rule, `وصل محتوى ${f.clipKind === "image" ? "صورة" : "نص"} من ${f.deviceName || "جهاز"} إلى الحافظة`)
+          }
+        }
+      }
+      // §53 — وصل عنصر تسليم يدوي من جهاز مقترن (ناقل الحقائق داخل العملية)
+      if (f.kind === "handoff.arrived") {
+        for (const rule of rules) {
+          if (rule.enabled && rule.trigger.kind === "handoff.arrived") {
+            void onTriggerHit(rule, `وصل عنصر تسليم ${f.handoffKind || ""} من ${f.sourceDevice || "جهاز مقترن"} — أكمل على الحاسوب`)
+          }
         }
       }
     })
