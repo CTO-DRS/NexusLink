@@ -6,6 +6,7 @@ import {
   ClipboardCheck, Monitor, Smartphone, Tablet, Tv, Copy, Trash2, FileDown,
   Pilcrow, Image as ImageIcon, FileText, Keyboard, Wand2, CircleCheck,
   ArrowLeftRight, Send, Pin, PinOff, Eye, Search, ShieldAlert, TimerReset,
+  Lock, Stamp, KeyRound,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -57,6 +58,9 @@ export function ClipboardTab() {
   // §50 — خزنة الحافظة: بحث + كشف مقصود + تدبيس
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<ProdClipItem[] | null>(null)
+  // §58 — قفل الخزنة الساكن: حالة حية من القائمة (نشط + عدّاد الترحيل)
+  const [rest, setRest] = useState<{ active: boolean; migrated?: number; dropped?: number } | null>(null)
+  const [restBusy, setRestBusy] = useState<"" | "seal" | "rotate">("")
 
   useEffect(() => {
     void loadClipMax().then((v) => { if (v) setClipMaxLocal(v) })
@@ -76,13 +80,51 @@ export function ClipboardTab() {
     return () => clearTimeout(id)
   }, [query])
 
-  /** §50 — إعادة تحميل القائمة بعد إجراء خزنة */
+  /** §50 — إعادة تحميل القائمة بعد إجراء خزنة — §58: مع حالة القفل */
   async function reloadClips() {
     try {
       const r = await fetch("/api/prod/clipboard", { cache: "no-store" })
       const j = await r.json()
       if (Array.isArray(j.items)) setClips(j.items)
+      if (j.atRest && typeof j.atRest.active === "boolean") setRest(j.atRest)
     } catch { /* بلا هلع */ }
+  }
+
+  // §58 — حالة القفل الساكن حية منذ التركيب
+  useEffect(() => {
+    void reloadClips()
+  }, [])
+
+  /** §58 — ختم السجل كاملًا: كل النص العاري فوق القاعدة يُختم الآن */
+  async function sealAllNow() {
+    setRestBusy("seal")
+    try {
+      const r = await fetch("/api/prod/clipboard/vault", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "seal-all" }),
+      })
+      const j = await r.json()
+      if (j.ok) toast.success("خُتم السجل — القاعدة تحمل مغلفات لا نصًّا", { description: `عناصر خُتمت الآن: ${j.sealed ?? 0}` })
+      else toast.error("تعذّر الختم", { description: String(j.error || "") })
+    } catch { toast.error("تعذّر الاتصال") }
+    setRestBusy("")
+    await reloadClips()
+  }
+
+  /** §58 — تدوير القفل: مفتاح جديد وإعادة ختم شاملة — والمفتاح لا يُعرض أبدًا */
+  async function rotateKeyNow() {
+    setRestBusy("rotate")
+    try {
+      const r = await fetch("/api/prod/clipboard/vault", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "rotate-key" }),
+      })
+      const j = await r.json()
+      if (j.ok) toast.success("دُوّر القفل — كل الصفوف أُعيد ختمها بمفتاح جديد", { description: `أعيد ختم: ${j.resealed ?? 0} · سقط: ${j.dropped ?? 0}` })
+      else toast.error("تعذّر التدوير", { description: String(j.error || "") })
+    } catch { toast.error("تعذّر الاتصال") }
+    setRestBusy("")
+    await reloadClips()
   }
 
   /** §50 — تدبيس/إلغاء: المثبت لا ينتهي ولا يُنقّى */
@@ -314,6 +356,18 @@ export function ClipboardTab() {
                 />
               </div>
             </div>
+            {rest?.active && (
+              <Badge variant="secondary" className="rounded-full text-[9.5px] gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                <Lock className="w-2.5 h-2.5" /> مقفول على القرص §58
+                {typeof rest.migrated === "number" && rest.migrated > 0 ? ` · رُحّل ${rest.migrated}` : ""}
+              </Badge>
+            )}
+            <Button variant="ghost" size="sm" disabled={restBusy !== ""} className="h-7 rounded-lg gap-1 text-[10.5px]" onClick={() => void sealAllNow()} aria-label="ختم السجل كاملًا (§58)">
+              <Stamp className="w-3.5 h-3.5" /> {restBusy === "seal" ? "يختم…" : "ختم السجل"}
+            </Button>
+            <Button variant="ghost" size="sm" disabled={restBusy !== ""} className="h-7 rounded-lg gap-1 text-[10.5px]" onClick={() => void rotateKeyNow()} aria-label="تدوير قفل الخزنة (§58)">
+              <KeyRound className="w-3.5 h-3.5" /> {restBusy === "rotate" ? "يدوّر…" : "تدوير القفل"}
+            </Button>
             {clips.length > 0 && !query.trim() && (
               <Button variant="ghost" size="sm" className="h-7 rounded-lg gap-1 text-[10.5px] text-red-500 hover:text-red-600" onClick={() => void clearAll()}>
                 <Trash2 className="w-3.5 h-3.5" /> مسح الكل
@@ -438,6 +492,9 @@ export function ClipboardTab() {
           </p>
           <p className="text-muted-foreground">
             <span className="font-semibold text-foreground">خزنة الحافظة (§50):</span> الحساس (رمز دخول/كلمة سر/بطاقة) يُقنَّع تلقائيًا وينتهي بعد 15 دقيقة — الكشف المقصود مُدقَّق، والتدبيس يحفظ ما لا تريد فقدانه، واللصق المؤقت يختفي بذاته.
+          </p>
+          <p className="text-muted-foreground">
+            <span className="font-semibold text-foreground">القفل الساكن (§58):</span> كل عنصر يُختم AES-256-GCM قبل ملامسة القاعدة — من يسرق ملف القاعدة يرى مغلفات لا نصوصك. «ختم السجل» يغلق القديم فورًا، و«تدوير القفل» يعيد الختم بمفتاح جديد يُنسى القديم بعده.
           </p>
         </div>
       </aside>

@@ -10,6 +10,10 @@ import { emitAutomationFact } from "./automation-facts"
 import { socketCors, isLocalSocket } from "./socket-security" // SEC (M0.3 F4) + F6
 import { appendOp, headSeq, opsSince, ackUpto, REPLAY_LIMIT } from "./oplog" // M1.2 §28
 import { markFirstValue } from "./pair-metrics" // M1.1 §30: ختم أول قيمة على التسييل
+import { CLIP_CONTENT_MAX } from "./clip-crypto" // §58
+import {
+  ensureClipRestKey, loadClipRestKey, sealClipContent, openClipContent,
+} from "./clip-at-rest-server" // §58 قفل الخزنة الساكن
 
 const PORT = 3007
 
@@ -75,20 +79,36 @@ export function prodEmitClip(item: ClipBroadcastItem): boolean {
   }
 }
 
-/** M1.2 §28 — شكل عملية الحافظة في السجل: نفس حدث البث الموسع (createdAt رقماً) */
-function clipOpPayload(item: ClipBroadcastItem): Record<string, unknown> {
+/** M1.2 §28 — شكل عملية الحافظة في السجل: نفس حدث البث الموسع (createdAt رقماً).
+ *  §58: المحتوى في السجل مغلّف §58 (السجل على القاعدة كذلك) — العميل المحلي
+ *  يُفك له شفافًا عند الإعادة (opForClient) فدلالة §28 بلا تغيير. */
+function clipOpPayload(item: ClipBroadcastItem, storedContent?: string): Record<string, unknown> {
   const createdAt = item.createdAt instanceof Date ? item.createdAt.getTime() : item.createdAt
-  return { ...item, createdAt }
+  return { ...item, createdAt, content: typeof storedContent === "string" ? storedContent : item.content }
 }
 
 /** M1.2 §28 — حرس F6 على الاستئناف: عميل شبكي (بلا محلية) يستلم بيانات وصفية
- * حصرًا — المحتوى يصل عبر قناة 3009 المشفرة كما في البث الحي حرفيًا */
+ * حصرًا — المحتوى يصل عبر قناة 3009 المشفرة كما في البث الحي حرفيًا.
+ * §58: العميل المحلي يستلم النص الصريح — المغلف في السجل يُفك عند حدود
+ * القرص حصرًا (نمط §57)، وغير القابل للفك يعود بيانات وصفية بصدق. */
 function opForClient(
   op: { seq: number; opId: string; kind: string; deviceId: string; payload: Record<string, unknown>; at: number },
   local: boolean,
+  restKey: string | null,
 ) {
-  if (op.kind === "clip:new" && !local) {
-    return { ...op, payload: { ...op.payload, content: "", encrypted: true, delivery: "e2ee" } }
+  if (op.kind === "clip:new") {
+    if (!local) {
+      return { ...op, payload: { ...op.payload, content: "", encrypted: true, delivery: "e2ee" } }
+    }
+    const c = op.payload.content
+    if (typeof c === "string" && c.length > 0) {
+      const opened = openClipContent(c, restKey)
+      if (!opened.ok) {
+        return { ...op, payload: { ...op.payload, content: "", encrypted: true, delivery: "e2ee" } }
+      }
+      return { ...op, payload: { ...op.payload, content: opened.content } }
+    }
+    return op
   }
   return op
 }
@@ -120,20 +140,25 @@ export function ensureProdBridge() {
         content?: string; fileName?: string; filePath?: string; size?: number; mode?: string
       }) => {
         try {
+          // §58 — الختم قبل ملامسة القاعدة؛ البث والذاكرة نص صريح (نمط §57)
+          const restKey = await ensureClipRestKey()
+          const memContent = (d?.content || "").slice(0, CLIP_CONTENT_MAX)
+          const storedContent = sealClipContent(memContent, restKey)
           const item = await db.prodClip.create({
             data: {
               deviceId: d?.deviceId || "galaxy-s24",
               deviceName: d?.deviceName || syncDeviceName(d?.deviceId || "galaxy-s24"),
               kind: d?.kind || "text",
-              content: (d?.content || "").slice(0, 4_000_000),
+              content: storedContent,
               fileName: d?.fileName || null,
               filePath: d?.filePath || null,
-              size: d?.size || (d?.content?.length ?? 0),
+              size: d?.size || memContent.length,
               mode: d?.mode || "manual",
             },
           })
-          const netClients = broadcastClip(io2, item) // SEC F6: المحتوى الكامل للجهاز المحلي حصرًا
-          void appendOp("clip:new", item.id, item.deviceId, clipOpPayload(item)) // M1.2 §28: ترسيخ قابل للاستئناف
+          const memItem = { ...item, content: memContent }
+          const netClients = broadcastClip(io2, memItem) // SEC F6: المحتوى الكامل للجهاز المحلي حصرًا
+          void appendOp("clip:new", item.id, item.deviceId, clipOpPayload(memItem, storedContent)) // M1.2 §28: ترسيخ قابل للاستئناف — المحتوى فيه مغلّف §58
           void markFirstValue(item.deviceId, "prod") // M1.1 §30: أول قيمة إنتاجية تُكمل التسييل
           // §26 — نشر الحقيقة لمحرك الروتينات (ناقل داخل العملية — بلا تغيير سلكي)
           emitAutomationFact({ kind: "clip.received", deviceId: item.deviceId, deviceName: item.deviceName, clipKind: item.kind, at: Date.now() })
@@ -229,8 +254,10 @@ export function ensureProdBridge() {
         try {
           const since = Math.max(0, Math.floor(Number(d?.since ?? 0)) || 0)
           const local = isLocalSocket(socket.handshake)
+          // §58 — مفتاح القفل يُحمّل مرة للدفعة: الإعادة المحلية تُفك شفافًا
+          const restKey = await loadClipRestKey()
           const rows = await opsSince(since, REPLAY_LIMIT)
-          const ops = rows.map((o) => opForClient(o, local))
+          const ops = rows.map((o) => opForClient(o, local, restKey))
           socket.emit("prod:replay", { ops, lastSeq: await headSeq(), truncated: rows.length >= REPLAY_LIMIT, local })
         } catch { /* ignore */ }
       })
@@ -292,22 +319,26 @@ function emitBridge(io2: SocketServer) {
 }
 
 /** §26 — دفع نص إلى الحافظة الموحدة من محرك الروتينات (نفس قناة clip:new —
- *  بث F6 نفسه: المحتوى للجهاز المحلي حصرًا والشبكة عبر القناة المشفرة). */
+ *  بث F6 نفسه: المحتوى للجهاز المحلي حصرًا والشبكة عبر القناة المشفرة).
+ *  §58: القاعدة تستلم مغلف §58 — والبث نص صريح (القفل للقرص حصرًا). */
 export async function prodInjectClip(content: string, deviceName = "PC-OFFICE"): Promise<boolean> {
   try {
+    const restKey = await ensureClipRestKey()
+    const memContent = content.slice(0, CLIP_CONTENT_MAX)
+    const storedContent = sealClipContent(memContent, restKey)
     const item = await db.prodClip.create({
       data: {
         deviceId: "pc-office",
         deviceName,
         kind: "text",
-        content: content.slice(0, 4_000_000),
+        content: storedContent,
         fileName: null,
         filePath: null,
-        size: content.length,
+        size: memContent.length,
         mode: "auto",
       },
     })
-    if (io) broadcastClip(io, item)
+    if (io) broadcastClip(io, { ...item, content: memContent })
     return true
   } catch {
     return false
