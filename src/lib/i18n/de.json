@@ -3845,5 +3845,7 @@
   "للأسفل": "Nach unten", 
   "الماسح الموثق": "Dokumentenscanner", 
   "الحدود: 30 صفحة لكل جلسة و12MB للصفحة و3 جلسات مفتوحة — JPEG حصرًا بفحص السحر حرفيًا": "Grenzen: 30 Seiten pro Sitzung, 12MB pro Seite, 3 offene Sitzungen — nur JPEG, per Signatur geprüft", 
-  "صفحة المسح": "Scanseite"
+  "صفحة المسح": "Scanseite", 
+  "القائمة مقفلة على القرص — حمولات مشفرة لا نصًّا عاريًا": "Warteschlange auf der Festplatte versiegelt — Nutzdaten verschlüsselt, nie Klartext", 
+  "سيُختم القرص تلقائيًا عند أول دفعة تسليم": "Die Festplatten-Versiegelung aktiviert sich beim ersten Senden"
 }
