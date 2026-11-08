@@ -2,17 +2,19 @@
 // ============================================================
 // GET                    → القائمة الحية (تقليم + معاينات مقنّعة — الحمولة الكاملة
 //                          لا تعود في GET أبدًا؛ تعود عبر act حصرًا عند الاستهلاك)
-// POST { action: "push" | "open" | "copy" | "dismiss" | "clear" }
+// POST { action: "push" | "open" | "copy" | "dismiss" | "clear" | "rotate-key" }
 //  - push: { kind, payload, sourceDevice?, note? } — من الأجهزة المقترنة عبر
 //    البوابة (رمز §37 تلقائيًا) ومن الجهاز المحلي — هو جوهر العقد.
 //  - open/copy: { id } — يستهلك العنصر ويعيد التوجيه الإرشادي.
 //  - dismiss: { id } — إزالة بلا فعل.
 //  - clear: تفريغ كامل — يد محلية حصرًا (حرس loopback نمط §37/§51).
+//  - rotate-key (§57): تدوير مفتاح القفل الساكن وإعادة ختم القائمة —
+//    يد محلية حصرًا، والمفتاح لا يُعرض أبدًا.
 // كل فعل يُدوَّن §39 بأطوال وبصمات حصرًا — المحتوى لا يدخل الدليل (F6).
 import { NextResponse } from "next/server"
 import { appendAudit } from "@/lib/enterprise-audit"
 import {
-  listHandoff, pushHandoff, actHandoff, clearHandoff,
+  listHandoff, pushHandoff, actHandoff, clearHandoff, rotateRestKey,
 } from "@/lib/nexus/handoff-server"
 
 export const dynamic = "force-dynamic"
@@ -64,6 +66,19 @@ export async function POST(req: Request) {
       )
     }
     return NextResponse.json(await clearHandoff())
+  }
+
+  if (action === "rotate-key") {
+    // حرس loopback للإدارة (نمط §37/§51) — تدوير القفل بيد الجهاز حصرًا
+    const fwd = req.headers.get("x-gw-client-ip")
+    if (fwd && !isLoopbackIp(fwd)) {
+      await appendAudit("handoff.denied", false, "remote", { reason: "loopback", action: "rotate-key" })
+      return NextResponse.json(
+        { ok: false, error: "handoff-admin-loopback-only", detail: "via-gateway-non-loopback" },
+        { status: 403 },
+      )
+    }
+    return NextResponse.json(await rotateRestKey())
   }
 
   return NextResponse.json({ ok: false, error: "unknown-action" }, { status: 400 })

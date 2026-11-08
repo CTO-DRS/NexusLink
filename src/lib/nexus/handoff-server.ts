@@ -1,4 +1,7 @@
 // عقد §53 — التسليم اليدوي الذكي — طبقة الخادم (ثبات صفر-مخطط + تدقيق §39 + حقائق §26)
+// عقد §57 — قفل التسليم الساكن: الحمولات على القرص مغلّفة AES-256-GCM بمفتاح
+// محلي مرسوخ DesktopSetting (نمط §34.ب/§54) — النص العاري القديم يُختم تلقائيًا
+// عند أول كتابة، والمفتاح لا يعود في أي API، والتدوير يعيد الختم كاملًا.
 // ============================================================
 // مصدر الحقيقة: ملف JSON خارج المخطط (NEXUSLINK_HANDOFF_FILE أو
 // .zstate/handoff.json) — حذفه = قائمة فارغة فورًا (نمط §37/§48/§49/§51).
@@ -8,6 +11,7 @@
 
 import fs from "node:fs"
 import path from "node:path"
+import { db } from "@/lib/db"
 import { appendAudit } from "@/lib/enterprise-audit"
 import { emitAutomationFact } from "./automation-facts"
 import { createRateLimiter } from "./guest-core"
@@ -18,9 +22,45 @@ import {
   HANDOFF_TTL_MS, HANDOFF_RATE_PER_MIN, HANDOFF_CAP,
   type HandoffItem, type HandoffKind,
 } from "./handoff-core"
+import {
+  inspectPayload, sealItemsPure, openPayload, isValidLocalKey,
+  newLocalKey,
+} from "./handoff-crypto"
 
 const HANDOFF_FILE =
   process.env.NEXUSLINK_HANDOFF_FILE || path.join(process.cwd(), ".zstate", "handoff.json")
+/** مفتاح القفل الساكن — صفر مخطط (نمط §34.ب/§54): لا يعود في GET أبدًا */
+const AT_REST_KEY_SETTING = "handoff.at-rest-key"
+
+// ---------- مفتاح §57 (DesktopSetting — صفر مخطط) ----------
+
+async function loadRestKey(): Promise<string | null> {
+  try {
+    const row = await db.desktopSetting.findUnique({ where: { key: AT_REST_KEY_SETTING } })
+    const v = row?.value ?? null
+    return isValidLocalKey(v) ? v : null
+  } catch {
+    return null // قاعدة غائبة — سقوط صادق إلى وضع النص القديم
+  }
+}
+
+/** توليد المفتاح عند أول كتابة قادرة — يرسخ ولا يُعرض أبدًا */
+async function ensureRestKey(): Promise<string | null> {
+  const existing = await loadRestKey()
+  if (existing) return existing
+  try {
+    const key = newLocalKey()
+    await db.desktopSetting.upsert({
+      where: { key: AT_REST_KEY_SETTING },
+      update: { value: key },
+      create: { key: AT_REST_KEY_SETTING, value: key },
+    })
+    await appendAudit("handoff.crypto.init", true, "local", {})
+    return key
+  } catch {
+    return null // تعذر الرسوخ — كتابة نصية صادقة لا فقدان وظيفة
+  }
+}
 
 // حارس حساسية §50 — النواة نقية بلا دورة استيراد
 function classifyOf(s: string): { sensitive: unknown } {
@@ -34,22 +74,31 @@ function maskFor(payload: string, sensitive: unknown): string {
   }
 }
 
-/** حالة القائمة من القرص — الفساد = قائمة فارغة صادقة (لا انهيار) */
-function readItems(): HandoffItem[] {
+/** حالة القائمة من القرص — الفساد = قائمة فارغة صادقة (لا انهيار).
+ *  §57: المختوم يُفك بالمفتاح، وغير القابل للفك يُسقط بصدق مع عدّه،
+ *  والنص العاري القديم يبقى مقروءًا (ترحيل عند أول كتابة). */
+async function readItems(key: string | null): Promise<{ items: HandoffItem[]; dropped: number }> {
   try {
     const j = JSON.parse(fs.readFileSync(HANDOFF_FILE, "utf8")) as { items?: unknown }
-    if (!j || !Array.isArray(j.items)) return []
+    if (!j || !Array.isArray(j.items)) return { items: [], dropped: 0 }
     const out: HandoffItem[] = []
+    let dropped = 0
     for (const raw of j.items) {
       if (!raw || typeof raw !== "object") continue
       const o = raw as Record<string, unknown>
       if (typeof o.id !== "string" || typeof o.payload !== "string") continue
       if (typeof o.kind !== "string") continue
       if (typeof o.at !== "number" || typeof o.expiresAt !== "number") continue
+      let payload = o.payload
+      if (inspectPayload(payload) === "sealed") {
+        const opened = openPayload(payload, key)
+        if (!opened.ok) { dropped++; continue } // فساد أو مفتاح ضائع — إسقاط صادق فردي
+        payload = opened.payload
+      }
       out.push({
         id: o.id,
         kind: o.kind as HandoffKind,
-        payload: o.payload,
+        payload,
         sourceDevice: String(o.sourceDevice ?? "هاتف").slice(0, 60),
         note: typeof o.note === "string" ? o.note.slice(0, 140) : "",
         at: o.at,
@@ -57,16 +106,19 @@ function readItems(): HandoffItem[] {
         expiresAt: o.expiresAt,
       })
     }
-    return out
+    return { items: out, dropped }
   } catch {
-    return []
+    return { items: [], dropped: 0 }
   }
 }
 
-function writeItems(items: HandoffItem[]): void {
+/** كتابة ذرّية — §57: كل نص عاري يُختم قبل ملامسة القرص (إن وُجد مفتاح) */
+function writeItems(items: HandoffItem[], key: string | null): void {
+  const sealedItems = items.map((it) => ({ ...it }))
+  sealItemsPure(sealedItems, key)
   fs.mkdirSync(path.dirname(HANDOFF_FILE), { recursive: true, mode: 0o700 })
   const tmp = `${HANDOFF_FILE}.tmp`
-  fs.writeFileSync(tmp, JSON.stringify({ items }, null, 2), { mode: 0o600 })
+  fs.writeFileSync(tmp, JSON.stringify({ items: sealedItems }, null, 2), { mode: 0o600 })
   fs.renameSync(tmp, HANDOFF_FILE)
   try { fs.chmodSync(HANDOFF_FILE, 0o600) } catch { /* أنظمة بلا أذونات بوزيكس */ }
 }
@@ -124,8 +176,11 @@ export async function pushHandoff(body: {
     hits: 1,
     expiresAt: now + HANDOFF_TTL_MS,
   }
-  const { items, deduped } = pushHandoffPure(readItems(), item, now)
-  writeItems(items)
+  const key = await ensureRestKey()
+  const { items: before, dropped } = await readItems(key)
+  if (dropped > 0) await appendAudit("handoff.crypto.drop", true, "local", { dropped })
+  const { items, deduped } = pushHandoffPure(before, item, now)
+  writeItems(items, key)
   // عند التكرار الذكي: المُرجَع هو العنصر المرسوخ المُحدّث (hits مرفوع) لا الزائف
   const stored = items.find(
     (x) => handoffDedupeKey(x.kind, x.payload) === handoffDedupeKey(v.kind, v.payload),
@@ -138,24 +193,29 @@ export async function pushHandoff(body: {
   return { ok: true, deduped, item: publicHandoffItem(stored, handoffPreviewWith(v.kind, v.payload, classifyOf, maskFor)) }
 }
 
-/** العرض الحي: تقليم ثم معاينات مقنّعة — الأحدث أولًا */
+/** العرض الحي: تقليم ثم معاينات مقنّعة — الأحدث أولًا. §57: الحالة atRest معلنة بصدق */
 export async function listHandoff() {
   const now = Date.now()
-  const before = readItems()
+  const key = await loadRestKey()
+  const { items: before, dropped } = await readItems(key)
+  if (dropped > 0) await appendAudit("handoff.crypto.drop", true, "local", { dropped, via: "list" })
   const live = pruneHandoff(before, now)
   if (live.length !== before.length) {
-    writeItems(live)
+    writeItems(live, key)
     await appendAudit("handoff.prune", true, "local", { removed: before.length - live.length, kept: live.length })
   }
   live.sort((a, b) => b.at - a.at)
-  return { ok: true, count: live.length, cap: HANDOFF_CAP, items: previewsFor(live) }
+  return { ok: true, count: live.length, cap: HANDOFF_CAP, atRest: { active: key !== null }, items: previewsFor(live) }
 }
 
 /** الفعل على عنصر: open/copy تعيد التوجيه الإرشادي وتزيل العنصر (استُهلك) —
  *  dismiss يزيل دون فعل. الغائب 404 صادق. */
 export async function actHandoff(id: string, action: "open" | "copy" | "dismiss") {
   const now = Date.now()
-  const items = pruneHandoff(readItems(), now)
+  const key = await loadRestKey()
+  const { items: raw, dropped } = await readItems(key)
+  if (dropped > 0) await appendAudit("handoff.crypto.drop", true, "local", { dropped, via: "act" })
+  const items = pruneHandoff(raw, now)
   const idx = items.findIndex((it) => it.id === id)
   if (idx < 0) {
     await appendAudit("handoff.denied", false, "local", { reason: "not-found", action: action.slice(0, 12) })
@@ -163,7 +223,7 @@ export async function actHandoff(id: string, action: "open" | "copy" | "dismiss"
   }
   const it = items[idx]
   const rest = items.filter((x) => x.id !== id)
-  writeItems(rest)
+  writeItems(rest, key)
   const directive = actDirective(it.kind, it.payload)
   await appendAudit(
     action === "dismiss" ? "handoff.dismiss" : "handoff.open",
@@ -176,8 +236,38 @@ export async function actHandoff(id: string, action: "open" | "copy" | "dismiss"
 
 /** تفريغ كامل — يد محلية حصرًا (الحارس في المسار) */
 export async function clearHandoff() {
-  const n = readItems().length
-  writeItems([])
+  const key = await loadRestKey()
+  const n = (await readItems(key)).items.length
+  writeItems([], key)
   await appendAudit("handoff.clear", true, "local", { removed: n })
   return { ok: true, removed: n }
+}
+
+/** §57 — تدوير القفل: مفتاح جديد يُرسخ فورًا والقائمة الحية تُختم به كاملًا.
+ *  الصدق: ما لا يُفك بالمفتاح القديم يُسقط (تدقيق) — والمفتاح لا يُعرض أبدًا
+ *  (خلاف §54 الذي يعرضه مرة لأنه عبارة استرجاع خارجية؛ هنا القفل داخلي حصرًا). */
+export async function rotateRestKey(): Promise<{ ok: boolean; error?: string; resealed?: number; dropped?: number }> {
+  const oldKey = await loadRestKey()
+  const { items, dropped } = await readItems(oldKey)
+  if (dropped > 0) await appendAudit("handoff.crypto.drop", true, "local", { dropped, via: "rotate" })
+  const key = newLocalKey()
+  try {
+    await db.desktopSetting.upsert({
+      where: { key: AT_REST_KEY_SETTING },
+      update: { value: key },
+      create: { key: AT_REST_KEY_SETTING, value: key },
+    })
+  } catch {
+    return { ok: false, error: "key-store-unavailable" }
+  }
+  // كتابة مباشرة بمغلفات المفتاح الجديد (العناصر نص صريح في الذاكرة)
+  const sealedItems = items.map((it) => ({ ...it }))
+  sealItemsPure(sealedItems, key)
+  fs.mkdirSync(path.dirname(HANDOFF_FILE), { recursive: true, mode: 0o700 })
+  const tmp = `${HANDOFF_FILE}.tmp`
+  fs.writeFileSync(tmp, JSON.stringify({ items: sealedItems }, null, 2), { mode: 0o600 })
+  fs.renameSync(tmp, HANDOFF_FILE)
+  try { fs.chmodSync(HANDOFF_FILE, 0o600) } catch { /* بوزيكس */ }
+  await appendAudit("handoff.crypto.rotate", true, "local", { resealed: sealedItems.length, dropped })
+  return { ok: true, resealed: sealedItems.length, dropped }
 }

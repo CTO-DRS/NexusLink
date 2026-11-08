@@ -3845,5 +3845,7 @@
   "للأسفل": "Bajar", 
   "الماسح الموثق": "Escáner de documentos", 
   "الحدود: 30 صفحة لكل جلسة و12MB للصفحة و3 جلسات مفتوحة — JPEG حصرًا بفحص السحر حرفيًا": "Límites: 30 páginas por sesión, 12MB por página, 3 sesiones abiertas — solo JPEG, verificado por firma", 
-  "صفحة المسح": "Página escaneada"
+  "صفحة المسح": "Página escaneada", 
+  "القائمة مقفلة على القرص — حمولات مشفرة لا نصًّا عاريًا": "Cola sellada en disco — cargas cifradas, nunca texto plano", 
+  "سيُختم القرص تلقائيًا عند أول دفعة تسليم": "El sellado del disco se activa en el primer envío"
 }

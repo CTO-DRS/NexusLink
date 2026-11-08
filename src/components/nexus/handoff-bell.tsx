@@ -2,6 +2,8 @@
 // عقد §53 — التسليم اليدوي الذكي — جرس الشريط العلوي (شريط «أكمل من حيث توقفت»)
 // استطلاع كل 5 ثوانٍ + عند الفتح · معاينات مقنّعة (حارس §50) · الأفعال الثلاثة
 // (فتح/نسخ/إزالة) + تفريغ · شارة عدد غير المستهلك · بلا أي مورد خارجي.
+// عقد §57 — شارة القفل الساكن: حالة atRest.active من GET تُظهر أن حمولات
+// القرص مغلّفة مشفرة (درع القرص لا يُرى في الذاكرة — صدق معماري).
 import { useEffect, useState, useCallback } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
@@ -11,7 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useToast } from "@/hooks/use-toast"
 import { useI18n } from "@/lib/i18n"
-import { Forward, Link2, Type, FileSymlink, PlayCircle, X, Trash2, ExternalLink, Copy } from "lucide-react"
+import { Forward, Link2, Type, FileSymlink, PlayCircle, X, Trash2, ExternalLink, Copy, Lock } from "lucide-react"
 
 interface HandoffView {
   id: string
@@ -40,12 +42,16 @@ export function HandoffBell() {
   const { toast } = useToast()
   const qc = useQueryClient()
   const [items, setItems] = useState<HandoffView[]>([])
+  const [atRest, setAtRest] = useState(false)
   const [open, setOpen] = useState(false)
 
   const refresh = useCallback(() => {
     fetch("/api/handoff", { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { items?: HandoffView[] }) => setItems(j.items ?? []))
+      .then((j: { items?: HandoffView[]; atRest?: { active?: boolean } }) => {
+        setItems(j.items ?? [])
+        setAtRest(j.atRest?.active === true)
+      })
       .catch(() => { /* الخادم غائب — صمت صادق */ })
   }, [])
 
@@ -176,8 +182,12 @@ export function HandoffBell() {
             </ul>
           )}
         </ScrollArea>
-        <div className="px-3 py-1.5 border-t text-[9px] text-muted-foreground">
-          {t("محلي حصرًا — بلا حساب ولا سحابة، والقائمة تنتهي بعد 24 ساعة")}
+        <div className="px-3 py-1.5 border-t text-[9px] text-muted-foreground space-y-0.5">
+          <div className="flex items-center gap-1" data-testid="handoff-atrest">
+            <Lock className={`w-2.5 h-2.5 shrink-0 ${atRest ? "text-emerald-500" : "text-muted-foreground"}`} />
+            <span>{atRest ? t("القائمة مقفلة على القرص — حمولات مشفرة لا نصًّا عاريًا") : t("سيُختم القرص تلقائيًا عند أول دفعة تسليم")}</span>
+          </div>
+          <div>{t("محلي حصرًا — بلا حساب ولا سحابة، والقائمة تنتهي بعد 24 ساعة")}</div>
         </div>
       </PopoverContent>
     </Popover>

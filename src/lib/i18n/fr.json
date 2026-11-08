@@ -3845,5 +3845,7 @@
   "للأسفل": "Descendre", 
   "الماسح الموثق": "Scanner de documents", 
   "الحدود: 30 صفحة لكل جلسة و12MB للصفحة و3 جلسات مفتوحة — JPEG حصرًا بفحص السحر حرفيًا": "Limites : 30 pages par session, 12 Mo par page, 3 sessions ouvertes — JPEG uniquement, vérifié par signature", 
-  "صفحة المسح": "Page scannée"
+  "صفحة المسح": "Page scannée", 
+  "القائمة مقفلة على القرص — حمولات مشفرة لا نصًّا عاريًا": "File scellée sur disque — charges chiffrées, jamais en texte brut", 
+  "سيُختم القرص تلقائيًا عند أول دفعة تسليم": "Le scellement du disque s'active dès le premier envoi"
 }
