@@ -41,6 +41,19 @@ class _SendToPcScreenState extends ConsumerState<SendToPcScreen> {
     super.dispose();
   }
 
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData('text/plain');
+    final t = data?.text?.trim() ?? '';
+    if (t.isEmpty) {
+      _toast('handoff.clipboardEmpty'.tr(), error: true);
+      return;
+    }
+    // الحافظة قد تتجاوز السقوف — نقص بصدق حتى السقف المسموح للنوع المكتشف
+    final capped = t.length > 8192 ? t.substring(0, 8192) : t;
+    setState(() => _payloadCtrl.text = capped);
+    HapticFeedback.selectionClick();
+  }
+
   Future<void> _send() async {
     if (_sending || !_valid) return;
     final conn = ref.read(connectionProvider).value;
@@ -162,6 +175,16 @@ class _SendToPcScreenState extends ConsumerState<SendToPcScreen> {
                 labelText: 'handoff.note'.tr(),
                 hintText: 'handoff.noteHint'.tr(),
                 border: const OutlineInputBorder(),
+              ),
+            ),
+            // §56.ج — الحافظة بنقرة: ما نسخته على هاتفك يصل الكمبيوتر —
+            // تعبئة الحقل من الحافظة المحلية ثم الإرسال بالمسار نفسه الموثق.
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                onPressed: _pasteFromClipboard,
+                icon: const Icon(Icons.content_paste_rounded, size: 18),
+                label: Text('handoff.paste'.tr()),
               ),
             ),
             const Spacer(),

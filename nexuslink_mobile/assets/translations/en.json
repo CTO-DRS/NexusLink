@@ -746,7 +746,9 @@
       "noHost": "Link has no valid host",
       "rate": "Sending too fast — wait a moment and retry"
     },
-    "sendShort": "To PC"
+    "sendShort": "To PC",
+    "paste": "From clipboard",
+    "clipboardEmpty": "Clipboard is empty — copy some text first"
   },
   "scan": {
     "title": "Document Scanner",
