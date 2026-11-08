@@ -725,5 +725,62 @@
       "wait": "Esperando primer emparejamiento completo",
       "detail": "{n} emparejamientos completos · p95 {p95} · Máx {max} · Tasa {rate}"
     }
+  },
+  "handoff": {
+    "title": "Enviar al PC",
+    "targetNamed": "Llegará a: {name}",
+    "needConnect": "Conéctate primero al servidor — pantalla «Conexión»",
+    "payload": "Enlace o texto",
+    "payloadHint": "Pega un enlace que empiece por http/https o escribe texto…",
+    "note": "Nota (opcional)",
+    "noteHint": "Se muestra junto al elemento en el PC",
+    "send": "Enviar al ordenador",
+    "sending": "Enviando…",
+    "sent": "Llegó al PC — insignia de la campana en la barra superior",
+    "failed": "No se pudo enviar — inténtalo de nuevo",
+    "privacyNote": "Solo por tu propia red — sin nube, sin cuenta, sin intermediario",
+    "err": {
+      "empty": "El contenido está vacío",
+      "scheme": "El enlace debe empezar por http:// o https://",
+      "tooLong": "El contenido supera el límite permitido",
+      "noHost": "El enlace no tiene un host válido",
+      "rate": "Envío demasiado rápido — espera un momento y reintenta"
+    }
+  },
+  "scan": {
+    "title": "Escáner de documentos",
+    "needConnect": "Conéctate primero al servidor — pantalla «Conexión»",
+    "intro": "Las páginas de tu teléfono se convierten en un PDF en tu ordenador — local, sin nube",
+    "limits": "Límites: {pages} páginas/sesión · {mb} MB/página",
+    "titleLabel": "Título de la sesión (opcional)",
+    "titleHint": "p. ej.: Contrato de alquiler — noviembre",
+    "openSession": "Iniciar sesión de escaneo",
+    "sessionNoTitle": "Sesión sin título",
+    "addPages": "Añadir páginas",
+    "cancelSession": "Cancelar sesión y borrar páginas",
+    "empty": "Aún no hay páginas — añade fotos JPEG de la galería",
+    "moveUp": "Subir",
+    "moveDown": "Bajar",
+    "rotate": "Girar 90°",
+    "remove": "Quitar",
+    "seal": "Sellar el PDF en el ordenador",
+    "sealedTitle": "PDF sellado",
+    "sealedBody": "{pages} páginas · {size} — el archivo se escribió en tu ordenador",
+    "sealedTo": "Sellado: {file}",
+    "cancelled": "Sesión cancelada",
+    "ok": "OK",
+    "failed": "La acción falló — inténtalo de nuevo",
+    "err": {
+      "notFound": "La sesión ya no existe en el ordenador",
+      "tooManySessions": "Máximo tres sesiones abiertas — sella o cancela una",
+      "tooManyPages": "Máximo treinta páginas por sesión",
+      "rate": "Subida demasiado rápida — espera y reintenta",
+      "notJpeg": "No es JPEG — el escáner solo acepta JPEG de cámara",
+      "notJpegNamed": "{name} no es JPEG — omitido",
+      "tooLarge": "La página supera los 12 MB",
+      "noPages": "Nada que sellar — añade fotos primero",
+      "escape": "Ruta insegura rechazada por el ordenador",
+      "badArgs": "Argumentos no válidos"
+    }
   }
 }

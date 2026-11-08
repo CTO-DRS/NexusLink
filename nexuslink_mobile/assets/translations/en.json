@@ -725,5 +725,62 @@
       "wait": "waiting for first completed pairing",
       "detail": "{n} completed pairings · p95 {p95} · max {max} · pass {rate}"
     }
+  },
+  "handoff": {
+    "title": "Send to PC",
+    "targetNamed": "Will arrive at: {name}",
+    "needConnect": "Connect to the server first — Connect screen",
+    "payload": "Link or text",
+    "payloadHint": "Paste a link starting with http/https or plain text…",
+    "note": "Note (optional)",
+    "noteHint": "Shown next to the item on the PC",
+    "send": "Send to computer",
+    "sending": "Sending…",
+    "sent": "Arrived on the PC — see the bell badge in the top bar",
+    "failed": "Could not send — try again",
+    "privacyNote": "Over your own network only — no cloud, no account, no relay",
+    "err": {
+      "empty": "Content is empty",
+      "scheme": "Link must start with http:// or https://",
+      "tooLong": "Content exceeds the allowed limit",
+      "noHost": "Link has no valid host",
+      "rate": "Sending too fast — wait a moment and retry"
+    }
+  },
+  "scan": {
+    "title": "Document Scanner",
+    "needConnect": "Connect to the server first — Connect screen",
+    "intro": "Pages from your phone become a PDF on your computer — locally, no cloud",
+    "limits": "Limits: {pages} pages/session · {mb} MB/page",
+    "titleLabel": "Session title (optional)",
+    "titleHint": "e.g. Rental contract — November",
+    "openSession": "Start scan session",
+    "sessionNoTitle": "Untitled session",
+    "addPages": "Add pages",
+    "cancelSession": "Cancel session and delete pages",
+    "empty": "No pages yet — add JPEG photos from the gallery",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "rotate": "Rotate 90°",
+    "remove": "Remove",
+    "seal": "Seal PDF on the computer",
+    "sealedTitle": "PDF sealed",
+    "sealedBody": "{pages} pages · {size} — the file was written on your computer",
+    "sealedTo": "Sealed: {file}",
+    "cancelled": "Session cancelled",
+    "ok": "OK",
+    "failed": "Action failed — try again",
+    "err": {
+      "notFound": "The session no longer exists on the computer",
+      "tooManySessions": "Three open sessions max — seal or cancel one",
+      "tooManyPages": "Thirty pages max per session",
+      "rate": "Uploading too fast — wait a moment and retry",
+      "notJpeg": "Not a JPEG — the scanner accepts camera JPEGs only",
+      "notJpegNamed": "{name} is not a JPEG — skipped",
+      "tooLarge": "Page is larger than 12 MB",
+      "noPages": "Nothing to seal — add photos first",
+      "escape": "Unsafe path rejected by the computer",
+      "badArgs": "Invalid arguments"
+    }
   }
 }

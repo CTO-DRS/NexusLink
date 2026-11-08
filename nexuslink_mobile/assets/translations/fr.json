@@ -725,5 +725,62 @@
       "wait": "En attente du premier jumelage complet",
       "detail": "{n} jumelages complets · p95 {p95} · Max {max} · Débit {rate}"
     }
+  },
+  "handoff": {
+    "title": "Envoyer vers le PC",
+    "targetNamed": "Arrivera sur : {name}",
+    "needConnect": "Connectez-vous d'abord au serveur — écran « Connexion »",
+    "payload": "Lien ou texte",
+    "payloadHint": "Collez un lien commençant par http/https ou saisissez du texte…",
+    "note": "Note (facultatif)",
+    "noteHint": "Affichée à côté de l'élément sur le PC",
+    "send": "Envoyer vers l'ordinateur",
+    "sending": "Envoi…",
+    "sent": "Arrivé sur le PC — badge de la cloche dans la barre supérieure",
+    "failed": "Échec de l'envoi — réessayez",
+    "privacyNote": "Sur votre propre réseau uniquement — sans cloud, sans compte, sans relais",
+    "err": {
+      "empty": "Le contenu est vide",
+      "scheme": "Le lien doit commencer par http:// ou https://",
+      "tooLong": "Le contenu dépasse la limite autorisée",
+      "noHost": "Lien sans hôte valide",
+      "rate": "Envoi trop rapide — patientez un instant puis réessayez"
+    }
+  },
+  "scan": {
+    "title": "Scanner de documents",
+    "needConnect": "Connectez-vous d'abord au serveur — écran « Connexion »",
+    "intro": "Les pages de votre téléphone deviennent un PDF sur votre ordinateur — en local, sans cloud",
+    "limits": "Limites : {pages} pages/session · {mb} Mo/page",
+    "titleLabel": "Titre de la session (facultatif)",
+    "titleHint": "ex. : Contrat de location — novembre",
+    "openSession": "Démarrer une session de scan",
+    "sessionNoTitle": "Session sans titre",
+    "addPages": "Ajouter des pages",
+    "cancelSession": "Annuler la session et supprimer les pages",
+    "empty": "Aucune page — ajoutez des photos JPEG depuis la galerie",
+    "moveUp": "Monter",
+    "moveDown": "Descendre",
+    "rotate": "Pivoter de 90°",
+    "remove": "Retirer",
+    "seal": "Sceller le PDF sur l'ordinateur",
+    "sealedTitle": "PDF scellé",
+    "sealedBody": "{pages} pages · {size} — le fichier a été écrit sur votre ordinateur",
+    "sealedTo": "Scellé : {file}",
+    "cancelled": "Session annulée",
+    "ok": "OK",
+    "failed": "Échec de l'action — réessayez",
+    "err": {
+      "notFound": "La session n'existe plus sur l'ordinateur",
+      "tooManySessions": "Trois sessions ouvertes maximum — scellez-en ou annulez-en une",
+      "tooManyPages": "Trente pages maximum par session",
+      "rate": "Téléversement trop rapide — patientez puis réessayez",
+      "notJpeg": "Pas un JPEG — le scanner n'accepte que les JPEG d'appareil photo",
+      "notJpegNamed": "{name} n'est pas un JPEG — ignoré",
+      "tooLarge": "La page dépasse 12 Mo",
+      "noPages": "Rien à sceller — ajoutez d'abord des photos",
+      "escape": "Chemin non sûr rejeté par l'ordinateur",
+      "badArgs": "Arguments invalides"
+    }
   }
 }
