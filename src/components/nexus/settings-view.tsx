@@ -24,6 +24,7 @@ import {
 import { toast } from "sonner"
 import { pickFolder } from "@/lib/desktop-files"
 import { tauriInvoke } from "@/lib/tauri"
+import { BackupShieldCard } from "@/components/nexus/settings/backup-shield-card"
 
 const SHORTCUT_ORDER: ShortcutAction[] = [
   "palette", "help", "sendFile", "lock", "theme", "lang", "contrast", "speedtest", "dnd",
@@ -438,6 +439,9 @@ export function SettingsView() {
 
       {/* المرحّل الذاتي (عقد §49 — النواة المحلية لـ E4) */}
       <RelayCard />
+
+      {/* الدرع الاحتياطي المشفّر (عقد §54) */}
+      <BackupShieldCard />
 
       {/* الإدارة المؤسسية (عقد §38 — M4.1 النواة المحلية) */}
       <EnterprisePolicyCard />
