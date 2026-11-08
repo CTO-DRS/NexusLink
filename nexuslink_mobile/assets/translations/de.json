@@ -746,7 +746,9 @@
       "noHost": "Link ohne gültigen Host",
       "rate": "Zu schnell gesendet — kurz warten und wiederholen"
     },
-    "sendShort": "Zum PC"
+    "sendShort": "Zum PC",
+    "paste": "Aus der Zwischenablage",
+    "clipboardEmpty": "Zwischenablage ist leer — zuerst Text kopieren"
   },
   "scan": {
     "title": "Dokument-Scanner",

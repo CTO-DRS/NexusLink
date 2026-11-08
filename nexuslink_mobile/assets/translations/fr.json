@@ -746,7 +746,9 @@
       "noHost": "Lien sans hôte valide",
       "rate": "Envoi trop rapide — patientez un instant puis réessayez"
     },
-    "sendShort": "Vers PC"
+    "sendShort": "Vers PC",
+    "paste": "Depuis le presse-papiers",
+    "clipboardEmpty": "Presse-papiers vide — copiez d'abord du texte"
   },
   "scan": {
     "title": "Scanner de documents",
