@@ -62,6 +62,15 @@ export type AuditKind =
   | "handoff.clear"
   | "handoff.prune"
   | "handoff.denied"
+  // §54 — الدرع الاحتياطي المشفّر (إنشاء/استعادة/حذف/تقليم/جدولة/رفض — بلا مفاتيح ولا عبارة)
+  | "backup.create"
+  | "backup.restore"
+  | "backup.delete"
+  | "backup.prune"
+  | "backup.schedule.enable"
+  | "backup.schedule.disable"
+  | "backup.schedule.rotate"
+  | "backup.denied"
 
 const KINDS: ReadonlySet<string> = new Set<string>([
   "pair.enable",
@@ -96,6 +105,14 @@ const KINDS: ReadonlySet<string> = new Set<string>([
   "handoff.clear",
   "handoff.prune",
   "handoff.denied",
+  "backup.create",
+  "backup.restore",
+  "backup.delete",
+  "backup.prune",
+  "backup.schedule.enable",
+  "backup.schedule.disable",
+  "backup.schedule.rotate",
+  "backup.denied",
 ])
 
 export interface AuditRecord {
