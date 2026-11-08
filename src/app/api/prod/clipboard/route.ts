@@ -2,6 +2,10 @@
 // FA-clipboard-sync: السجل التعاقدي = آخر 50 عنصرًا (عقد §11)
 // عقد §50 — خزنة الحافظة الذكية: التصنيف عند الدخول + سياسة الانتهاء + العرض
 // المخفيّ للحساس (البحث/الكشف/التدبيس في المسار الفرعي /vault حصرًا).
+// عقد §58 — قفل الخزنة الساكن: المحتوى لا يُكتب في القاعدة نصًّا عاريًا أبدًا —
+// الختم قبل ملامسة القاعدة (إن وُجد مفتاح) والقراءة تُفك شفافًا عند حدود
+// القرص، والنص العاري القديم يُختم تلقائيًا عند أول قراءة (ترحيل صامت) —
+// والقفل للقرص حصرًا: الذاكرة والبث المحلي نص صريح (حد §57 المعلن).
 import { promises as fs } from "fs"
 import path from "path"
 import { db } from "@/lib/db"
@@ -12,15 +16,27 @@ import { writeServerAudit } from "@/lib/nexus/desktop-hardening"
 import { classifyClip, retentionAt } from "@/lib/nexus/clip-vault-core"
 import { purgeExpired, serClipItem } from "@/lib/nexus/clip-vault-server"
 import { vaultStats } from "@/lib/nexus/clip-vault-core"
+import { CLIP_CONTENT_MAX } from "@/lib/nexus/clip-crypto"
+import {
+  ensureClipRestKey, loadClipRestKey,
+  openClipRows, dropUnopenableClipRows, migratePlainClipRows,
+  sealClipContent, openClipContent,
+} from "@/lib/nexus/clip-at-rest-server"
 
 export const dynamic = "force-dynamic"
 
 export async function GET() {
   await purgeExpired().catch(() => 0)
-  const items = await db.prodClip.findMany({ orderBy: { createdAt: "desc" }, take: 50 })
+  const rows = await db.prodClip.findMany({ orderBy: { createdAt: "desc" }, take: 50 })
+  const key = await loadClipRestKey()
+  const { rows: opened, dropped } = openClipRows(rows, key)
+  if (dropped.length > 0) await dropUnopenableClipRows(dropped, "list")
+  // §58 — الترحيل الصامت: النص العاري القديم يُختم عند أول قراءة (نمط §57)
+  const migrated = await migratePlainClipRows(opened, key).catch(() => 0)
   return Response.json({
-    items: items.map((i) => serClipItem(i)),
-    vault: vaultStats(items, Date.now()),
+    items: opened.map((i) => serClipItem(i)),
+    vault: vaultStats(opened, Date.now()),
+    atRest: { active: key !== null, migrated, dropped: dropped.length },
   })
 }
 
@@ -43,25 +59,31 @@ export async function POST(req: Request) {
     nowMs,
     expiresAtFrom: typeof d.expiresAt === "number" ? d.expiresAt : null,
   })
+  // §58 — الختم قبل ملامسة القاعدة: التصنيف على النص الصريح ثم الختم (نمط §57)
+  const key = await ensureClipRestKey()
+  const memContent = contentStr.slice(0, CLIP_CONTENT_MAX)
+  const storedContent = sealClipContent(memContent, key)
   const item = await db.prodClip.create({
     data: {
       deviceId,
       deviceName: d.deviceName || syncDeviceName(deviceId),
       kind: d.kind || "text",
-      content: contentStr.slice(0, 4_000_000),
+      content: storedContent,
       fileName: d.fileName || null,
       filePath: d.filePath || null,
-      size: d.size || (d.content?.length ?? 0),
+      size: d.size || memContent.length,
       mode: d.mode || "manual",
       pinned: false,
       sensitive: cls.sensitive,
       expiresAt: expiresAtMs ? new Date(expiresAtMs) : null,
     },
   })
+  // الذاكرة والبث نص صريح — القفل للقرص حصرًا (حد §58 الصادق)
+  const memItem = { ...item, content: memContent }
   // SEC (F6): بث الحافظة بقواعد الهوية — المحتوى الكامل للجهاز المحلي حصرًا،
   // وعملاء الشبكة بيانات وصفية والمحتوى يصلهم مشفرًا عبر قناة 3009
   // §50: وسم الحساسية يرافق البث (المحتوى كما هو — الإخفاء على العرض/القوائم)
-  prodEmitClip({ ...item, createdAt: item.createdAt.getTime() })
+  prodEmitClip({ ...memItem, createdAt: memItem.createdAt.getTime() })
   // FA-harden (عقد §16) — تدقيق الحافظة (أصل: هاتف/ويب/المراقب الأصلي)
   void writeServerAudit({
     action: "clipboard",
@@ -69,7 +91,7 @@ export async function POST(req: Request) {
     actor: item.deviceName || item.deviceId,
     deviceId: item.deviceId,
   }).catch(() => null)
-  return Response.json({ ok: true, item: serClipItem(item), tags: cls.tags })
+  return Response.json({ ok: true, item: serClipItem(memItem), tags: cls.tags, atRest: { active: key !== null } })
 }
 
 export async function DELETE() {
@@ -104,7 +126,11 @@ export async function PUT(req: Request) {
     const st = await fs.stat(target)
     const updated = await db.prodClip.update({ where: { id }, data: { received: true } })
     prodEmit("clip:received", { id, name: path.basename(target), bytes: st.size, at: Date.now() })
-    return Response.json({ ok: true, name: path.basename(target), bytes: st.size, item: updated })
+    // §58: العائد شفاف — محتوى مقروء لا مغلف (نمط القراءة الموحد)
+    const restKey = await loadClipRestKey()
+    const oc = openClipContent(updated.content, restKey)
+    const openedItem = { ...updated, content: oc.ok ? oc.content : "" }
+    return Response.json({ ok: true, name: path.basename(target), bytes: st.size, item: openedItem })
   } catch (e) {
     return Response.json({ ok: false, error: "تعذر نسخ الملف: " + String(e) }, { status: 500 })
   }

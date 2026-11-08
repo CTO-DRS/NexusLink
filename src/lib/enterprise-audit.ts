@@ -66,6 +66,11 @@ export type AuditKind =
   | "handoff.crypto.init"
   | "handoff.crypto.rotate"
   | "handoff.crypto.drop"
+  // §58 — قفل الخزنة الساكن (تهيئة مفتاح/تدوير/إسقاط/ختم السجل — عدّادات حصرًا F6)
+  | "clip.crypto.init"
+  | "clip.crypto.rotate"
+  | "clip.crypto.drop"
+  | "clip.crypto.sealall"
   // §54 — الدرع الاحتياطي المشفّر (إنشاء/استعادة/حذف/تقليم/جدولة/رفض — بلا مفاتيح ولا عبارة)
   | "backup.create"
   | "backup.restore"
@@ -121,6 +126,10 @@ const KINDS: ReadonlySet<string> = new Set<string>([
   "handoff.crypto.init",
   "handoff.crypto.rotate",
   "handoff.crypto.drop",
+  "clip.crypto.init",
+  "clip.crypto.rotate",
+  "clip.crypto.drop",
+  "clip.crypto.sealall",
   "backup.create",
   "backup.restore",
   "backup.delete",
