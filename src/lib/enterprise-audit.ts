@@ -71,6 +71,15 @@ export type AuditKind =
   | "backup.schedule.disable"
   | "backup.schedule.rotate"
   | "backup.denied"
+  // §55 — الماسح الموثق الحي (جلسة/صفحة/دوران/ترتيب/حذف/ختم/إلغاء/رفض — أبعاد وأحجام حصرًا)
+  | "scan.session.open"
+  | "scan.page.add"
+  | "scan.page.rotate"
+  | "scan.page.move"
+  | "scan.page.remove"
+  | "scan.seal"
+  | "scan.cancel"
+  | "scan.denied"
 
 const KINDS: ReadonlySet<string> = new Set<string>([
   "pair.enable",
@@ -113,6 +122,14 @@ const KINDS: ReadonlySet<string> = new Set<string>([
   "backup.schedule.disable",
   "backup.schedule.rotate",
   "backup.denied",
+  "scan.session.open",
+  "scan.page.add",
+  "scan.page.rotate",
+  "scan.page.move",
+  "scan.page.remove",
+  "scan.seal",
+  "scan.cancel",
+  "scan.denied",
 ])
 
 export interface AuditRecord {

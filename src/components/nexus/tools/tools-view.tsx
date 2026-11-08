@@ -16,12 +16,13 @@ import { useI18n } from "@/lib/i18n"
 import { isTauri, tauriInvoke } from "@/lib/tauri"
 import { CliTerminal } from "./cli-terminal"
 import { GuestShareTab } from "./guest-share-tab"
+import { ScanTab } from "./scan-tab"
 import {
   Gauge, Stethoscope, SquareTerminal, Package, Download, Upload, Timer,
   RefreshCw, CheckCircle2, AlertTriangle, XCircle, MinusCircle, Battery,
   BatteryCharging, Wifi, Database, Server, Cpu, FileDown, Rocket, Plane,
   History, Languages, ShieldCheck, MonitorSmartphone, HardDriveDownload,
-  Camera, Mic, Wrench, DownloadCloud, Volume2, Share2,
+  Camera, Mic, Wrench, DownloadCloud, Volume2, Share2, ScanLine,
 } from "lucide-react"
 
 /* ============ Speed test ============ */
@@ -841,6 +842,7 @@ export function ToolsView() {
           <TabsTrigger value="diag" className="gap-1.5"><Stethoscope className="w-3.5 h-3.5" /> {t("التشخيص")}</TabsTrigger>
           <TabsTrigger value="vdev" className="gap-1.5"><Wrench className="w-3.5 h-3.5" /> {t("الأجهزة الافتراضية")}</TabsTrigger>
           <TabsTrigger value="guest" className="gap-1.5"><Share2 className="w-3.5 h-3.5" /> {t("المشاركة الضيوفة")}</TabsTrigger>
+          <TabsTrigger value="scan" className="gap-1.5"><ScanLine className="w-3.5 h-3.5" /> {t("الماسح الموثق")}</TabsTrigger>
           <TabsTrigger value="cli" className="gap-1.5"><SquareTerminal className="w-3.5 h-3.5" /> CLI</TabsTrigger>
           <TabsTrigger value="builds" className="gap-1.5"><Package className="w-3.5 h-3.5" /> {t("البناء والتوزيع")}</TabsTrigger>
         </TabsList>
@@ -848,6 +850,7 @@ export function ToolsView() {
         <TabsContent value="diag"><DiagnosticsTab /></TabsContent>
         <TabsContent value="vdev"><VirtualDevicesTab /></TabsContent>
         <TabsContent value="guest"><GuestShareTab /></TabsContent>
+        <TabsContent value="scan"><ScanTab /></TabsContent>
         <TabsContent value="cli"><CliTerminal /></TabsContent>
         <TabsContent value="builds"><BuildsTab /></TabsContent>
       </Tabs>
