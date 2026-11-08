@@ -725,5 +725,62 @@
       "wait": "Warte auf erste vollständige Verbindung",
       "detail": "{n} Verbindungen · p95 {p95} · Max {max} · Rate {rate}"
     }
+  },
+  "handoff": {
+    "title": "An PC senden",
+    "targetNamed": "Kommt an bei: {name}",
+    "needConnect": "Zuerst mit dem Server verbinden — Bildschirm „Verbinden“",
+    "payload": "Link oder Text",
+    "payloadHint": "Link mit http/https einfügen oder Text eingeben…",
+    "note": "Notiz (optional)",
+    "noteHint": "Wird am PC neben dem Eintrag angezeigt",
+    "send": "An den Computer senden",
+    "sending": "Wird gesendet…",
+    "sent": "Am PC angekommen — Klingel-Badge in der oberen Leiste",
+    "failed": "Senden fehlgeschlagen — erneut versuchen",
+    "privacyNote": "Nur über Ihr eigenes Netzwerk — keine Cloud, kein Konto, kein Relay",
+    "err": {
+      "empty": "Inhalt ist leer",
+      "scheme": "Link muss mit http:// oder https:// beginnen",
+      "tooLong": "Inhalt überschreitet das zulässige Limit",
+      "noHost": "Link ohne gültigen Host",
+      "rate": "Zu schnell gesendet — kurz warten und wiederholen"
+    }
+  },
+  "scan": {
+    "title": "Dokument-Scanner",
+    "needConnect": "Zuerst mit dem Server verbinden — Bildschirm „Verbinden“",
+    "intro": "Seiten vom Handy werden zu einem PDF auf Ihrem Computer — lokal, ohne Cloud",
+    "limits": "Grenzen: {pages} Seiten/Sitzung · {mb} MB/Seite",
+    "titleLabel": "Sitzungstitel (optional)",
+    "titleHint": "z. B. Mietvertrag — November",
+    "openSession": "Scan-Sitzung starten",
+    "sessionNoTitle": "Sitzung ohne Titel",
+    "addPages": "Seiten hinzufügen",
+    "cancelSession": "Sitzung abbrechen und Seiten löschen",
+    "empty": "Noch keine Seiten — JPEG-Fotos aus der Galerie hinzufügen",
+    "moveUp": "Nach oben",
+    "moveDown": "Nach unten",
+    "rotate": "90° drehen",
+    "remove": "Entfernen",
+    "seal": "PDF am Computer versiegeln",
+    "sealedTitle": "PDF versiegelt",
+    "sealedBody": "{pages} Seiten · {size} — die Datei wurde auf Ihrem Computer geschrieben",
+    "sealedTo": "Versiegelt: {file}",
+    "cancelled": "Sitzung abgebrochen",
+    "ok": "OK",
+    "failed": "Aktion fehlgeschlagen — erneut versuchen",
+    "err": {
+      "notFound": "Die Sitzung existiert am Computer nicht mehr",
+      "tooManySessions": "Maximal drei offene Sitzungen — eine versiegeln oder abbrechen",
+      "tooManyPages": "Maximal dreißig Seiten pro Sitzung",
+      "rate": "Zu schnell hochgeladen — kurz warten und wiederholen",
+      "notJpeg": "Kein JPEG — der Scanner akzeptiert nur Kamera-JPEGs",
+      "notJpegNamed": "{name} ist kein JPEG — übersprungen",
+      "tooLarge": "Seite ist größer als 12 MB",
+      "noPages": "Nichts zu versiegeln — zuerst Fotos hinzufügen",
+      "escape": "Unsicherer Pfad vom Computer abgelehnt",
+      "badArgs": "Ungültige Argumente"
+    }
   }
 }

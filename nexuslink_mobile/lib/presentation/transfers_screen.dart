@@ -11,6 +11,8 @@ import '../data/native_bridge.dart';
 import '../data/transfer_engine.dart';
 import '../state/providers.dart';
 import '../state/transfer_providers.dart';
+import 'scan_screen.dart';
+import 'send_to_pc_screen.dart';
 
 /// شاشة النقل (البند 1/2/3/5): الطابور الحي + العروض الواردة + النصوص/الروابط
 /// السريعة + السجل الدائم في SQLite، مع رفع ملفات/مجلدات ومشاركات أندرويد.
@@ -38,6 +40,24 @@ class TransfersScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text('nav.transfers'.tr()),
         actions: [
+          IconButton(
+            tooltip: 'handoff.title'.tr(),
+            onPressed: connected
+                ? () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(builder: (_) => const SendToPcScreen()),
+                    )
+                : null,
+            icon: const Icon(Icons.send_to_mobile_rounded),
+          ),
+          IconButton(
+            tooltip: 'scan.title'.tr(),
+            onPressed: connected
+                ? () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(builder: (_) => const ScanScreen()),
+                    )
+                : null,
+            icon: const Icon(Icons.document_scanner_rounded),
+          ),
           IconButton(
             tooltip: 'tx.pickFiles'.tr(),
             onPressed: connected ? () => _pickFiles(context, ref) : null,
