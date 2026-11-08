@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/database/nexus_db.dart';
 import '../data/native_bridge.dart';
+import '../data/nexus_api.dart';
 import '../data/transfer_engine.dart';
 import '../state/providers.dart';
 import '../state/transfer_providers.dart';
@@ -497,6 +498,8 @@ class _ShareCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final engine = ref.read(engineProvider);
+    final conn = ref.watch(connectionProvider).value;
+    final connected = conn?.phase == ConnectPhase.online;
     final files = intake.files;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -559,6 +562,45 @@ class _ShareCard extends ConsumerWidget {
                 label: Text('tx.sendViaNexus'.tr()),
               ),
             ),
+            // §56 — دفع مباشر إلى حاسوب المالك (عقد §53): مشاركة نص/رابط من
+            // أي تطبيق أندرويد تهبط جرس الشريط العلوي على الكمبيوتر بنقرة.
+            if (intake.text != null && intake.text!.trim().isNotEmpty) ...[
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: connected
+                    ? () async {
+                        final t = intake.text!.trim();
+                        final isUrl = t.startsWith('http://') || t.startsWith('https://');
+                        final conn = ref.read(connectionProvider).value;
+                        final endpoint = conn?.endpoint;
+                        if (endpoint == null || !(conn?.isOnline ?? false)) return;
+                        try {
+                          final api = NexusApi(endpoint);
+                          await api.handoffPush(kind: isUrl ? 'url' : 'text', payload: t, sourceDevice: conn?.me?.name);
+                          api.close();
+                          ref.read(shareIntakeProvider.notifier).removeAt(index);
+                          ref.read(activityLogProvider.notifier).add(
+                                'أُرسلت المشاركة إلى الحاسوب (${isUrl ? 'رابط' : 'نص'})',
+                                kind: 'ok',
+                              );
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('handoff.sent'.tr())),
+                            );
+                          }
+                        } catch (_) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('handoff.failed'.tr())),
+                            );
+                          }
+                        }
+                      }
+                    : null,
+                icon: const Icon(Icons.send_to_mobile_rounded, size: 18),
+                label: Text('handoff.sendShort'.tr()),
+              ),
+            ],
             const SizedBox(width: 8),
             IconButton(
               tooltip: 'tx.dismiss'.tr(),

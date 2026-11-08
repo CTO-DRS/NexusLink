@@ -745,7 +745,8 @@
       "tooLong": "Le contenu dépasse la limite autorisée",
       "noHost": "Lien sans hôte valide",
       "rate": "Envoi trop rapide — patientez un instant puis réessayez"
-    }
+    },
+    "sendShort": "Vers PC"
   },
   "scan": {
     "title": "Scanner de documents",

@@ -745,7 +745,8 @@
       "tooLong": "Content exceeds the allowed limit",
       "noHost": "Link has no valid host",
       "rate": "Sending too fast — wait a moment and retry"
-    }
+    },
+    "sendShort": "To PC"
   },
   "scan": {
     "title": "Document Scanner",
