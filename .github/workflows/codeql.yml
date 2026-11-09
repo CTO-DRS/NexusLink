@@ -1,0 +1,52 @@
+# CodeQL — التحليل الساكن الأمني (SAST) على كل دفعة لأول main وكل خميس
+#
+# العقيدة: حرس الأسرار (security.yml) يصطاد المفاتيح المسربة، وبوابة الجودة
+# (quality.yml) تصطاد كسر الأنواع والبناء — وCodeQL يكمل الثلاثي بصطاد الأنماط
+# الأمنية في الكود نفسه: حقن SQL/أوامر · تجاوز مسار · تسريب معلومات ·
+# أعمدة برمجية خطرة (نمط py/sql injection في JS/TS).
+#
+# التصميم:
+#  · استعلامات security-extended + security-and-quality — تغطية واسعة بصدق.
+#  · JavaScript/TypeScript حصرًا (لغة الشجرة القابلة للتحليل الساكن).
+#  · صلاحيات قراءة حصرًا + security-events: write لكتابة التنبيهات.
+
+name: CodeQL — Static Security Analysis
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    - cron: "0 4 * * 4" # كل خميس 04:00 UTC — جولة دورية ضد أنماط جديدة
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended,security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"
