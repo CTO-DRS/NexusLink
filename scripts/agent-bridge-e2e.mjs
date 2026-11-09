@@ -160,7 +160,10 @@ console.log("—— §55 الماسح الموثق: مرآة دورة الوكي
   r = await postJson("/api/scan", { action: "seal", id: sid })
   const file = r.j?.file ?? ""
   // الختم يكتب في جذر pc-office (data/nexus-storage/pc-fs) + الهدف الافتراضي /Documents
-  const pdfOnDisk = file ? (() => { try { return fs.readFileSync(path.join(process.cwd(), "data/nexus-storage/pc-fs/Documents", file)) } catch { return null } })() : null
+  // درس مُقاس في §59: سيرفر standalone يغيّر cwd إلى .next/standalone — جذر القراءة
+  // قابل للتجاوز بـ--data-root (نمط scan-e2e)
+  const DATA_ROOT = (() => { const i = process.argv.indexOf("--data-root"); return i > 0 ? process.argv[i + 1] : path.join(process.cwd(), "data") })()
+  const pdfOnDisk = file ? (() => { try { return fs.readFileSync(path.join(DATA_ROOT, "nexus-storage/pc-fs/Documents", file)) } catch { return null } })() : null
   ok("س9 ختم → PDF حقيقي على قرص الكمبيوتر", r.status === 200 && r.j?.ok === true && r.j?.pages === 2 && pdfOnDisk && pdfOnDisk.subarray(0, 4).toString() === "%PDF", `bytes=${r.j?.bytes}`)
   ok("س10 نتيجة الختم file/bytes/pages/target كما يفككها الوكيل", typeof file === "string" && file.length > 0 && Number.isInteger(r.j?.bytes) && r.j.bytes > 0 && typeof r.j?.target === "string", `target=${r.j?.target}`)
 

@@ -10,7 +10,8 @@ import { store } from "./devices"
 import { socketCors } from "./socket-security" // SEC (M0.3 F4)
 import { isDeviceKilled, noteRefired } from "./emergency" // §48 — قائمة القتل عند إعادة الاتصال
 
-const PORT = 3006
+// منفذ الجسر قابل للتجاوز بالبيئة (نمط جسر الإنتاجية §59) — مكدسات E2E معزولة — الافتراضي 3006
+const PORT = Number(process.env.NEXUS_GUARD_PORT) || 3006
 
 // ---------------------------------------------------------------------------
 // FA-7 — التحكم باللمس والحقن (بديل AirMirror)

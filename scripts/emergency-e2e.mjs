@@ -115,7 +115,9 @@ if (!APP) {
     method: "POST", headers: { "Content-Type": "application/json", ...h }, body: JSON.stringify(body),
   })
   const EMERGENCY = path.join(LIVE_DIR, "emergency-kill.json")
-  const AUDIT = path.join(LIVE_DIR, "audit.jsonl")
+  // درس مُقاس في §59: مسار السجل صريح بـ--audit — يطابق NEXUSLINK_AUDIT_FILE
+  // للخادم حرفيًا (الافتراضي التاريخي <dir>/audit.jsonl يفترض سياسة موجبة بجواره)
+  const AUDIT = (() => { const i = process.argv.indexOf("--audit"); return i > 0 ? process.argv[i + 1] : path.join(LIVE_DIR, "audit.jsonl") })()
   const LAN = { "x-gw-client-ip": "192.168.1.77" }
   const PIN = "4848-abcd"
   const VICTIM = "phone-victim-a"
@@ -125,9 +127,12 @@ if (!APP) {
   await get("/api/guard/boot").catch(() => {})
   await new Promise((r) => setTimeout(r, 800))
 
-  /** عميل هاتف وهمي: يسجل بمعرّفه ويجمع الأحداث الواصلة. */
+  /** عميل هاتف وهمي: يسجل بمعرّفه ويجمع الأحداث الواصلة.
+   *  درس مُقاس في §59: منفذ جسر الحرس قابل للتجاوز بـ--guard — مكدسات E2E
+   *  المعزولة على منافذ بديلة وإلا صاب اتصالُنا جسرَ خادم 3000 الافتراضي */
+  const GUARD_URL = (() => { const i = process.argv.indexOf("--guard"); return i > 0 ? process.argv[i + 1] : "http://127.0.0.1:3006" })()
   function phoneClient(deviceId, events) {
-    const s = io("http://127.0.0.1:3006", { path: "/", transports: ["websocket", "polling"], forceNew: true, reconnection: false, timeout: 8000 })
+    const s = io(GUARD_URL, { path: "/", transports: ["websocket", "polling"], forceNew: true, reconnection: false, timeout: 8000 })
     const bag = events ?? []
     s.onAny((ev, ...args) => { if (ev === "dev:kill" || ev === "guard:arm") bag.push({ ev, d: args[0] ?? null }) })
     return { s, bag, hello: () => s.emit("guard:hello-phone", { name: `twin-${deviceId}`, deviceId }) }

@@ -12,10 +12,12 @@ import { appendOp, headSeq, opsSince, ackUpto, REPLAY_LIMIT } from "./oplog" // 
 import { markFirstValue } from "./pair-metrics" // M1.1 §30: ختم أول قيمة على التسييل
 import { CLIP_CONTENT_MAX } from "./clip-crypto" // §58
 import {
-  ensureClipRestKey, loadClipRestKey, sealClipContent, openClipContent,
-} from "./clip-at-rest-server" // §58 قفل الخزنة الساكن
+  ensureClipKeyFor, loadClipKeyRing, sealClipContent, openClipContent,
+} from "./clip-at-rest-server" // §58 قفل الخزنة الساكن + §59 مفاتيح الأجهزة
 
-const PORT = 3007
+// منفذ الجسر قابل للتجاوز بالبيئة (نمط خدمة comms التي تقرأ PORT) —
+// يتيح مكدسات E2E معزولة على منافذ بديلة دون مساس المكدس الحي — الافتراضي 3007
+const PORT = Number(process.env.NEXUS_PROD_PORT) || 3007
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
 
@@ -94,7 +96,7 @@ function clipOpPayload(item: ClipBroadcastItem, storedContent?: string): Record<
 function opForClient(
   op: { seq: number; opId: string; kind: string; deviceId: string; payload: Record<string, unknown>; at: number },
   local: boolean,
-  restKey: string | null,
+  restKeys: (kid: string | null) => string | null,
 ) {
   if (op.kind === "clip:new") {
     if (!local) {
@@ -102,7 +104,7 @@ function opForClient(
     }
     const c = op.payload.content
     if (typeof c === "string" && c.length > 0) {
-      const opened = openClipContent(c, restKey)
+      const opened = openClipContent(c, restKeys)
       if (!opened.ok) {
         return { ...op, payload: { ...op.payload, content: "", encrypted: true, delivery: "e2ee" } }
       }
@@ -141,9 +143,11 @@ export function ensureProdBridge() {
       }) => {
         try {
           // §58 — الختم قبل ملامسة القاعدة؛ البث والذاكرة نص صريح (نمط §57)
-          const restKey = await ensureClipRestKey()
+          // §59 — بمفتاح جهاز المُرسِل (هاتف/كمبيوتر — عزل مفاتيح لكل مصدر)
+          const devId = d?.deviceId || "galaxy-s24"
+          const { key: restKey, kid } = await ensureClipKeyFor(devId)
           const memContent = (d?.content || "").slice(0, CLIP_CONTENT_MAX)
-          const storedContent = sealClipContent(memContent, restKey)
+          const storedContent = sealClipContent(memContent, restKey, kid)
           const item = await db.prodClip.create({
             data: {
               deviceId: d?.deviceId || "galaxy-s24",
@@ -255,9 +259,10 @@ export function ensureProdBridge() {
           const since = Math.max(0, Math.floor(Number(d?.since ?? 0)) || 0)
           const local = isLocalSocket(socket.handshake)
           // §58 — مفتاح القفل يُحمّل مرة للدفعة: الإعادة المحلية تُفك شفافًا
-          const restKey = await loadClipRestKey()
+          // §59 — حلقة الأقفال: كل مغلف يُفك بمفتاح جهازه (kid ← مفتاح)
+          const ring = await loadClipKeyRing()
           const rows = await opsSince(since, REPLAY_LIMIT)
-          const ops = rows.map((o) => opForClient(o, local, restKey))
+          const ops = rows.map((o) => opForClient(o, local, ring.resolver))
           socket.emit("prod:replay", { ops, lastSeq: await headSeq(), truncated: rows.length >= REPLAY_LIMIT, local })
         } catch { /* ignore */ }
       })
@@ -323,9 +328,10 @@ function emitBridge(io2: SocketServer) {
  *  §58: القاعدة تستلم مغلف §58 — والبث نص صريح (القفل للقرص حصرًا). */
 export async function prodInjectClip(content: string, deviceName = "PC-OFFICE"): Promise<boolean> {
   try {
-    const restKey = await ensureClipRestKey()
+    // §59 — حقن الروتينات كتابة من الكمبيوتر — بمفتاح جهاز الكمبيوتر
+    const { key: restKey, kid } = await ensureClipKeyFor("pc-office")
     const memContent = content.slice(0, CLIP_CONTENT_MAX)
-    const storedContent = sealClipContent(memContent, restKey)
+    const storedContent = sealClipContent(memContent, restKey, kid)
     const item = await db.prodClip.create({
       data: {
         deviceId: "pc-office",

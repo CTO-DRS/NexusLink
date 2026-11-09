@@ -13,6 +13,13 @@
 //  - الأخطاء الثلاثة مغلقة: bad-envelope (الشكل) / no-key (المفتاح الغائب) /
 //    auth-failed (عبث أو مفتاح غلط) — لا انهيار أبدًا.
 //  - المفتاح: base64url يفك إلى 32 بايت بالضبط — فحص صارم قبل أي عملية.
+//
+// §59 — معرّف المفتاح kid (إضافة خالصة — §57 سليم حرفيًا): مغلف قد يحمل
+//  kid نصيًا بعد الوسم (ترتيب المفاتيح محفوظ — البادئة الأمامية لا تُمس) فيحل
+//  به عنوان المفتاح في حلقة مفاتيح الأجهزة المتعددة (خزنة الحافظة: مفتاح لكل
+//  جهاز). الفتح يقبل مفتاحًا مفردًا (نمط §57/§58 التاريخي — يتجاهل kid) أو
+//  حلالًا (kid ← مفتاح). kid الغائب في الحلقة = no-key بصدق، وkid الفاسد
+//  شكلًا = bad-envelope — ولا مسار انهيار جديد.
 
 import crypto from "node:crypto"
 import { newLocalKey } from "./backup-secure-core"
@@ -39,6 +46,30 @@ export interface AtRestEnvelope {
   ct: string
   /** وسم المصادقة GCM (16 بايت base64url) — بلا وسم لا فتح */
   tag: string
+  /** §59: معرّف المفتاح (اختياري) — عنوان في حلقة الأقفال لا مادة سرية */
+  kid?: string
+}
+
+/** §59 — معرّف مفتاح سالم: 1–64 محرفًا من [A-Za-z0-9._-] بمبدئ أبجد-رقمي */
+export function isValidKid(kid: unknown): kid is string {
+  return typeof kid === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(kid)
+}
+
+/** §59 — مصدر المفتاح عند الفتح: مفتاح مفرد (النمط التاريخي — يتجاهل kid)
+ *  أو حلال (kid ← مفتاح) لحلقات الأجهزة المتعددة */
+export type AtRestKeySource = string | null | ((kid: string | null) => string | null)
+
+/** §59 — استخراج kid من مغلف (قراءة شكل حصرًا — بلا فتح): غير الموجود أو
+ *  الفاسد يعود null — تُستخدم للتقارير وقرارات إعادة الختم الموجّه */
+export function atRestKid(payload: unknown): string | null {
+  if (typeof payload !== "string" || payload.length === 0) return null
+  try {
+    const j = JSON.parse(payload) as Record<string, unknown>
+    const kid = j.kid
+    return typeof kid === "string" && isValidKid(kid) ? kid : null
+  } catch {
+    return null
+  }
 }
 
 export type AtRestOpenOutcome =
@@ -53,10 +84,12 @@ export interface AtRestCage {
   readonly SEALED_MAX: number
   /** هل هذه الحمولة مغلّف هذا القفص؟ (الشكل حصرًا — لا محاولة فتح) */
   inspect(payload: unknown): "plain" | "sealed"
-  /** ختم حمولة: نص + مفتاح سليم → مغلف JSON نصي — IV عشوائي كل ختم */
-  seal(plain: string, key: string): string
-  /** فتح حمولة مختومة: الشكل ← المفتاح ← GCM — الأسباب الثلاثة مغلقة */
-  open(payload: string, key: string | null): AtRestOpenOutcome
+  /** ختم حمولة: نص + مفتاح سليم → مغلف JSON نصي — IV عشوائي كل ختم
+   *  §59: kid اختياري يُلحق بعد الوسم (البادئة الأمامية لا تُمس) */
+  seal(plain: string, key: string, kid?: string | null): string
+  /** فتح حمولة مختومة: الشكل ← المفتاح ← GCM — الأسباب الثلاثة مغلقة
+   *  §59: المفتاح مفرد أو حلال (kid ← مفتاح) لحلقات الأجهزة */
+  open(payload: string, keys: AtRestKeySource): AtRestOpenOutcome
   /** ختم دفعة نصوص: العاري يُختم والمختوم يُترك وبلا مفتاح لا شيء (ترحيل نقي) */
   sealTextsPure(items: Array<{ content: string }>, key: string | null): { sealed: number }
 }
@@ -94,7 +127,7 @@ export function createAtRestCage(opts: {
     }
   }
 
-  function seal(plain: string, key: string): string {
+  function seal(plain: string, key: string, kid?: string | null): string {
     if (!isValidLocalKey(key)) throw new Error("bad-key")
     const iv = crypto.randomBytes(AT_REST_IV_BYTES)
     const keyBuf = Buffer.from(key, "base64url")
@@ -108,14 +141,23 @@ export function createAtRestCage(opts: {
       ct: ct.toString("base64url"),
       tag: cipher.getAuthTag().toString("base64url"),
     }
+    // §59: kid يُلحق أخيرًا — ترتيب المفاتيح محفوظ فالبادئة الأمامية ثابتة
+    if (typeof kid === "string" && isValidKid(kid)) env.kid = kid
     return JSON.stringify(env)
   }
 
-  function open(payload: string, key: string | null): AtRestOpenOutcome {
+  function open(payload: string, keys: AtRestKeySource): AtRestOpenOutcome {
     if (inspect(payload) !== "sealed") return { ok: false, error: "bad-envelope" }
-    if (!isValidLocalKey(key)) return { ok: false, error: "no-key" }
     let env: AtRestEnvelope
     try { env = JSON.parse(payload) as AtRestEnvelope } catch { return { ok: false, error: "bad-envelope" } }
+    // §59: kid إن وُجد يجب أن يكون سالم الشكل — الفاسد مغلف فاسد بصدق
+    let kid: string | null = null
+    if (env.kid !== undefined) {
+      if (!isValidKid(env.kid)) return { ok: false, error: "bad-envelope" }
+      kid = env.kid
+    }
+    const key = typeof keys === "function" ? keys(kid) : keys
+    if (!isValidLocalKey(key)) return { ok: false, error: "no-key" }
     let iv: Buffer
     let ct: Buffer
     let tag: Buffer

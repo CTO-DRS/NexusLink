@@ -71,6 +71,9 @@ export type AuditKind =
   | "clip.crypto.rotate"
   | "clip.crypto.drop"
   | "clip.crypto.sealall"
+  // §59 — خزنة الأجهزة المتعددة (توليد مفتاح جهاز/تدوير جهاز مفرد — عدّادات حصرًا F6)
+  | "clip.crypto.multi.init"
+  | "clip.crypto.rotate.dev"
   // §54 — الدرع الاحتياطي المشفّر (إنشاء/استعادة/حذف/تقليم/جدولة/رفض — بلا مفاتيح ولا عبارة)
   | "backup.create"
   | "backup.restore"
@@ -130,6 +133,8 @@ const KINDS: ReadonlySet<string> = new Set<string>([
   "clip.crypto.rotate",
   "clip.crypto.drop",
   "clip.crypto.sealall",
+  "clip.crypto.multi.init",
+  "clip.crypto.rotate.dev",
   "backup.create",
   "backup.restore",
   "backup.delete",

@@ -118,7 +118,9 @@ if (!AUDIT_FILE || !POLICY_FILE || !PAIR_FILE) {
 let gwApp = null
 if (LAN) {
   gwApp = spawn(process.execPath, [path.join(process.cwd(), "mini-services", "gateway", "index.cjs")], {
-    env: { ...process.env, GATEWAY_PORT: "8197", GATEWAY_FALLBACK_PORT: "8198", REST_PORT: "3000" },
+    // درس مُقاس في §59: REST_PORT قابل للتجاوز (E2E_REST_PORT) — مكدسات E2E المعزولة
+    // على منافذ بديلة وإلا تصيب الوسيطة خادم 3000 الافتراضي فتضيع سجلاتها من ملف هذه البيئة
+    env: { ...process.env, GATEWAY_PORT: "8197", GATEWAY_FALLBACK_PORT: "8198", REST_PORT: process.env.E2E_REST_PORT || "3000" },
     stdio: ["ignore", "ignore", "ignore"],
   })
   for (let i = 0; i < 50; i++) {
