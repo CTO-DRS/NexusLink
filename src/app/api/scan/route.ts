@@ -2,10 +2,12 @@
 // ============================================================
 // GET  ?id=… → حالة الجلسة (بلا بايتات صور)
 // GET        → الجلسات المفتوحة
-// POST { action: "open" | "rotate" | "move" | "remove" | "seal" | "cancel" }
+// POST { action: "open" | "rotate" | "move" | "remove" | "filter" | "seal" | "cancel" }
 //  - open: { title? } — جلسة جديدة (سقف 3 مفتوحة)
 //  - rotate: { id, n, deg ∈ 0|90|180|270 } · move: { id, from, to } · remove: { id, n }
+//  - filter (§61): { id, n, filter ∈ none|gray|bw, thr? (1..254 مع bw حصرًا) }
 //  - seal: { id, targetFolder? } — يبني PDF ويكتبه في مجلد الكمبيوتر الافتراضي
+//    (صفحات §61 المعالَجة تُشتق في الذاكرة حصرًا — الأصل لا يُمس)
 //  - cancel: { id } — حذف الجلسة وصفحاتها
 // رفع الصفحات: POST /api/scan/page (multipart حقل file) + ?id=…
 import { NextResponse } from "next/server"
@@ -32,7 +34,7 @@ export async function POST(req: Request) {
   const id = String(body.id ?? "")
 
   if (action === "open") return NextResponse.json(await openScanSession(body))
-  if (action === "rotate" || action === "move" || action === "remove") {
+  if (action === "rotate" || action === "move" || action === "remove" || action === "filter") {
     const r = await actScanPage(id, action, body)
     return NextResponse.json(r, { status: r.ok ? 200 : r.error === "not-found" ? 404 : 400 })
   }

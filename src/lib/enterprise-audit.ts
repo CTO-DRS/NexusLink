@@ -89,6 +89,8 @@ export type AuditKind =
   | "scan.page.rotate"
   | "scan.page.move"
   | "scan.page.remove"
+  // §61 — اختيار معالجة صفحة (اسم الفلتر والعتبة وصفية حصرًا — لا محتوى صور)
+  | "scan.page.filter"
   | "scan.seal"
   | "scan.cancel"
   | "scan.denied"
@@ -148,6 +150,7 @@ const KINDS: ReadonlySet<string> = new Set<string>([
   "scan.page.rotate",
   "scan.page.move",
   "scan.page.remove",
+  "scan.page.filter",
   "scan.seal",
   "scan.cancel",
   "scan.denied",

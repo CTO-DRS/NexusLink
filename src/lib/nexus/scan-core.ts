@@ -7,13 +7,16 @@
 //  - AirDroid: يمر بوسيط حساب/سحابة — هنا جلسة محلية بلا حساب.
 //
 // الفكرة: الهاتف يصوّر صفحات ويدفعها (JPEG) لجلسة على الحاسوب؛ الجلسة تُرتب
-// (تدوير/إعادة ترتيب/حذف) ثم تُختم إلى PDF على جهاز المالك — مرور JPEG
-// نقيًا بلا إعادة ضغط ولا معالجة صور (حد صادق معلن).
+// (تدوير/إعادة ترتيب/حذف/معالجة §61) ثم تُختم إلى PDF على جهاز المالك —
+// مرور JPEG نقيًا افتراضيًا (filter="none") والمعالجة الاختيارية تُطبَّق
+// عند الختم حصرًا في الذاكرة (حد §61 الصادق).
 //
-// حدود صادقة (§55.حدود):
+// حدود صادقة (§55.حدود — المحدثة بعقد §61):
 //  - JPEG حصرًا (فحص بايتات السحر FFD8 حرفيًا لا الثقة بالترويسة).
-//  - بلا معالجة صور: لا عتبة ولا OCR ولا إعادة ضغط — الدوران بتحويل PDF
-//    خالص (بلا فقد) وباقي التحسين عمل لاحق معلن.
+//  - §61 (إغلاق الحد المعلن «عتبة/معالجة»): معالجة اختيارية لكل صفحة
+//    (رمادي محسّن أو أبيض وأسود بعتبة 1..254) تُطبّق عند الختم حصرًا
+//    في الذاكرة — ملف الصفحة الأصلي على القرص لا يُمس بايتيًا، ومرور
+//    §55 النقي يبقى المسار الافتراضي filter="none". OCR عمل لاحق معلن.
 //  - ≤ 30 صفحة لكل جلسة و≤ 12MB للصفحة و≤ 3 جلسات مفتوحة.
 //  - مولد PDF صفر-اعتماد (نمط §47) — DeviceRGB للصور (كاميرات الهواتف
 //    YCbCr→RGB؛ JPEG رماديّ نادر يُعلن بصدق في التوثيق).
@@ -25,12 +28,32 @@ export const SCAN_MAX_OPEN_SESSIONS = 3
 export const SCAN_ROTATIONS = [0, 90, 180, 270] as const
 export type ScanRotation = (typeof SCAN_ROTATIONS)[number]
 
+// §61 — فلتر الصفحة: none (مرور §55 النقي) · gray (رمادي محسّن) · bw (عتبة)
+export const SCAN_FILTERS = ["none", "gray", "bw"] as const
+export type ScanFilter = (typeof SCAN_FILTERS)[number]
+export const SCAN_THR_MIN = 1
+export const SCAN_THR_MAX = 254
+export const SCAN_THR_DEFAULT = 160
+
+export function isScanFilter(v: unknown): v is ScanFilter {
+  return (SCAN_FILTERS as readonly unknown[]).includes(v)
+}
+
+/** عتبة سليمة: عدد صحيح 1..254 — الغريب (0/255/كسري/غير رقمي) يرفض بصدق */
+export function isValidThreshold(v: unknown): v is number {
+  return typeof v === "number" && Number.isInteger(v) && v >= SCAN_THR_MIN && v <= SCAN_THR_MAX
+}
+
 export interface ScanPage {
   n: number
   name: string
   size: number
   rotate: ScanRotation
   at: number
+  /** §61 — المعالجة المختارة تُطبّق عند الختم حصرًا — الأصل على القرص لا يُمس */
+  filter: ScanFilter
+  /** عتبة الأبيض والأسود (1..254) — تعرف حصرًا حين filter="bw" */
+  thr?: number
 }
 
 export interface ScanSession {
@@ -115,4 +138,47 @@ export function removePage(s: ScanSession, n: number): { ok: true; session: Scan
   const pages = s.pages.filter((p) => p.n !== n)
   if (pages.length === s.pages.length) return { ok: false, error: "page-not-found" }
   return { ok: true, session: { ...s, pages } }
+}
+
+/**
+ * §61 — اختيار معالجة صفحة (أسباب مغلقة: page-not-found · bad-filter · bad-threshold).
+ * العتبة تعرف حصرًا مع bw (الغائبة تُسقط على SCAN_THR_DEFAULT) وتقديمها مع
+ * فلتر آخر رفض صادقًا — والعودة إلى none تحذف العتبة نهائيًا.
+ */
+export function setPageFilter(
+  s: ScanSession, n: number, filter: unknown, thr?: unknown,
+): { ok: true; session: ScanSession } | { ok: false; error: string } {
+  if (!isScanFilter(filter)) return { ok: false, error: "bad-filter" }
+  const idx = s.pages.findIndex((p) => p.n === n)
+  if (idx < 0) return { ok: false, error: "page-not-found" }
+  const f: ScanFilter = filter
+  if (f === "bw") {
+    const t = thr === undefined || thr === null ? SCAN_THR_DEFAULT : thr
+    if (!isValidThreshold(t)) return { ok: false, error: "bad-threshold" }
+    const pages = s.pages.map((p) => (p.n === n ? { ...p, filter: f, thr: t } : p))
+    return { ok: true, session: { ...s, pages } }
+  }
+  if (thr !== undefined && thr !== null) return { ok: false, error: "bad-threshold" }
+  const pages = s.pages.map((p) => {
+    if (p.n !== n) return p
+    const { thr: _drop, ...rest } = p
+    return { ...rest, filter: f }
+  })
+  return { ok: true, session: { ...s, pages } }
+}
+
+/**
+ * §61 — تطبيع جلسة مقروءة من القرص: صفحات ما قبل §61 بلا filter تصير "none"
+ * (ترحيل صامت للقراءة حصرًا — ملفات الصفحات نفسها لا تُمس) وأي thr يتيم
+ * مع فلتر غير bw يُنظف.
+ */
+export function normalizeScanSession(s: ScanSession): ScanSession {
+  if (!Array.isArray(s.pages)) return s
+  let changed = false
+  const pages = s.pages.map((p) => {
+    if (!isScanFilter(p.filter)) { changed = true; return { ...p, filter: "none" as ScanFilter } }
+    if (p.filter !== "bw" && "thr" in p) { changed = true; const { thr: _t, ...rest } = p; return rest as ScanPage }
+    return p
+  })
+  return changed ? { ...s, pages } : s
 }
