@@ -23,6 +23,7 @@ import {
   readDesktopMedia,
   writeDesktopMedia,
 } from "@/lib/nexus/desktop-shortcuts"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -50,6 +51,14 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
+  // FA-16 (تكليف 43): shortcuts-clip-security فعل المالك على الكمبيوتر — loopback حصرًا
+  if (!guardPcOnly(req, "settings.denied", "shortcuts-clip-security")) {
+    return NextResponse.json(
+      { ok: false, error: "pc-only", detail: "via-gateway-non-loopback" },
+      { status: 403 },
+    )
+  }
+
   const body = await req.json().catch(() => null)
   if (!body || typeof body !== "object") {
     return NextResponse.json({ error: "طلب غير صالح" }, { status: 400 })

@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { ensureSeed, serConversation, serMessage } from "@/lib/nexus/comms-server"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -27,6 +28,14 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // FA-16 (تكليف 43): sms-send-incoming فعل المالك على الكمبيوتر — loopback حصرًا
+  if (!guardPcOnly(req, "comms.denied", "sms-send-incoming")) {
+    return NextResponse.json(
+      { ok: false, error: "pc-only", detail: "via-gateway-non-loopback" },
+      { status: 403 },
+    )
+  }
+
   const body = await req.json().catch(() => null)
   const op = body?.op as string
 

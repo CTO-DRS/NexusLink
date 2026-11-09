@@ -5,6 +5,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { buildExport, applyRestore } from "@/lib/nexus/backup-export"
 import { prodEmit } from "@/lib/nexus/productivity-bridge"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -32,6 +33,11 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  // FA-16 (تكليف 43): backup-snapshot-restore فعل المالك على الكمبيوتر — loopback حصرًا
+  if (!guardPcOnly(req, "prod.denied", "backup-snapshot-restore")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
+
   const d = await req.json().catch(() => null)
   if (!d?.action) return Response.json({ ok: false, error: "إجراء مفقود" }, { status: 400 })
 
@@ -77,6 +83,11 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  // FA-16 (تكليف 43): backup-point-delete فعل المالك على الكمبيوتر — loopback حصرًا
+  if (!guardPcOnly(req, "prod.denied", "backup-point-delete")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
+
   const { id } = await req.json().catch(() => ({}))
   if (!id) return Response.json({ ok: false, error: "معرّف مفقود" }, { status: 400 })
   await db.prodBackup.delete({ where: { id } })

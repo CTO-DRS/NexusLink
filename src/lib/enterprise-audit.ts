@@ -99,6 +99,16 @@ export type AuditKind =
   // FA-14 (تكليف 41) — بوابة عمليات الكمبيوتر المدمرة عبر HTTP (fs/transfer) — أبعاد رفض حصرًا
   | "fs.denied"
   | "transfer.denied"
+  // FA-16 (تكليف 43) — الطبقة الثانية: بقية العمليات الحساسة عبر HTTP — أبعاد رفض حصرًا
+  // (pcap تصدير/تنزيل التقاط كامل · audit مسح سجلات التدقيق · settings قفل/محدّث/اختصارات
+  //  · comms سجلات SMS/مكالمات/إشعارات/DND · prod نسخ/استعادة/حافظة/أزواج · media كتابة قرص · apk كتابة+exec)
+  | "pcap.denied"
+  | "audit.denied"
+  | "settings.denied"
+  | "comms.denied"
+  | "prod.denied"
+  | "media.denied"
+  | "apk.denied"
 
 const KINDS: ReadonlySet<string> = new Set<string>([
   "pair.enable",
@@ -162,6 +172,13 @@ const KINDS: ReadonlySet<string> = new Set<string>([
   "scan.seal",
   "scan.cancel",
   "scan.denied",
+  "pcap.denied",
+  "audit.denied",
+  "settings.denied",
+  "comms.denied",
+  "prod.denied",
+  "media.denied",
+  "apk.denied",
 ])
 
 export interface AuditRecord {
