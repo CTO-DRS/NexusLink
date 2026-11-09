@@ -284,7 +284,7 @@ jobs:
           ls -la apps/desktop/src-tauri/target/portable/
 
       - name: Upload bundles
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.os-name }}
           path: |
@@ -301,7 +301,7 @@ jobs:
 
       - name: Upload updater signatures
         if: env.UPDATER_SIGN == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.os-name }}-sigs
           path: apps/desktop/src-tauri/target/release/bundle/**/*.sig
@@ -384,11 +384,11 @@ jobs:
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | cut -d' ' -f2 | cut -d'+' -f1)
           cp build/app/outputs/flutter-apk/app-release.apk "NexusLink-${VERSION}-release.apk"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android-apk
           path: nexuslink_mobile/NexusLink-*-release.apk
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android-aab
           path: nexuslink_mobile/build/app/outputs/bundle/release/app-release.aab
@@ -407,7 +407,7 @@ jobs:
         with: { channel: stable }
       - name: Build IPA (unsigned — TestFlight needs Apple account)
         run: echo "flutter build ipa --release --no-codesign"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ios
           path: dist/**
