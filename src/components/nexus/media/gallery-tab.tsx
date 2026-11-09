@@ -45,7 +45,7 @@ export function GalleryTab() {
 
   function openPreview(device: string, path: string, name: string, size: number, mtime: number) {
     const entry: FsEntry = {
-      name, path, type: "file", size, mtime,
+      name, path, type: "file", size, mtime, ext: "jpg",
       category: "image", mime: "image/jpeg",
     }
     setPreviewEntry(entry)

@@ -2330,3 +2330,28 @@ Stage Summary:
 - أساس E2E الويب: **1682 → 1698 (+16)** · i18n ثابت 3,855×5
 - التوثيق: enterprise-deploy §31 + ROADMAP موجة معاينة المعالجة
 - يبقى لاحقًا معلنًا: التقاط الكاميرا في الماسح (image_picker — يتطلب Dart) · OCR · القارئ الآلي لموضع الوسائط من مشغل الهاتف
+
+## تكليف 29 — تصفير أخطاء TypeScript القاعدية (TSC-ZERO)
+
+**التاريخ:** 2026-11-09 · **النطاق:** 12 ملفًا · صفر تغيير سلوك · صفر مخطط · صفر i18n جديد · صفر وسم
+
+### ماذا
+تصفير أخطاء tsc القاعدية الموثقة «‏24 = الأساس» حرفيًا إلى **صفر** — إصلاحات نمطية بحتة لا تلمس السلوك:
+1. `media-types.ts`: توسيع `MediaDeviceId` بـ`ipad-pro` (الجهاز موجود فعلًا في سجل الأجهزة والمعرض والبذرة — النوع كان أضيق من الواقع)
+2. `media-engine.ts`: `Float32Array<ArrayBuffer>` لمخزن AudioMeter (دقة أعمار TS5.7 للـTypedArray)
+3. `sec-socket.ts`: حذف `maxHttpBufferSize` (خيار خادم حصرًا — العميل يتجاهله)
+4. `guard-store.ts`: تصدير `ProxInfo` (كان مستوردًا في lock-screen وuse-guard-bridge فيفشل) + `kind: "ok" as const` ×4 (توسيع التضييق)
+5. `prod/profiles/route.ts`: تضييق `state` الصريح بدل الاختياري
+6. `storage/route.ts`: استيراد `FsEntry` الناقص
+7. `sync-engine.ts`: `names: string[]` بدل `never[]` الضمني
+8. `backup-export.ts`: استبدال `{ ...(src as never) }` بحمولة مبثوقة حقولًا معقمة (icon·networkName·photoSync·notifs·clipboard·folderSync — مطابقة لمسار الإنشاء) بدل نثر `never` الذي يعطّل فحص الأنواع كليًا على مسار الاستعادة replace
+9. `onboarding.tsx`: `icon` → `Icon` (عنصر JSX بلاس كابيتال وإلا يُقرأ وسم HTML)
+10. `guard/dashboard-tab.tsx`: مفاتيح هامش recharts الصحيحة `left/right` بدل `start/end`
+11. `guard/phone-mirror.tsx`: ربط `nextAlarm.a` بـ`AlarmEntry` الحقيقي بدل نسخة فضفاضة
+12. `gallery-tab.tsx`: `ext: "jpg"` في FsEntry الحرفي
+
+### الدرس المقيس
+الأساس الموثق «‏24 = الأساس» كان يُقاس به كل التزام جديد — تصفيره يحرّك خط الأساس نفسه: كل خطأ مستقبلي يصير مرئيًا فورًا لا مغمورًا في ضجيج القاعدة.
+
+### التحقق
+- tsc ‏**صفر** (كان 24) · lint نظيف · بناء إنتاجي أخضر كامل

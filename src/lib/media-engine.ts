@@ -735,7 +735,7 @@ export class AudioMeter {
   private ctx: AudioContext
   private analyser: AnalyserNode
   private src: MediaStreamAudioSourceNode | null = null
-  private data: Float32Array
+  private data: Float32Array<ArrayBuffer>
   private timer: number | null = null
   private fallback: (() => { rms: number; peak: number }) | null
 

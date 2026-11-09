@@ -78,7 +78,17 @@ export async function applyRestore(data: Record<string, unknown>, mode: "merge" 
     for (const p of keepBuiltin) {
       const src = profiles.find((x) => x.name === p.name)
       if (src) {
-        await db.netProfile.update({ where: { id: p.id }, data: { ...(src as never) } })
+        await db.netProfile.update({
+          where: { id: p.id },
+          data: {
+            icon: String(src.icon ?? "laptop"),
+            networkName: String(src.networkName ?? ""),
+            photoSync: src.photoSync !== false,
+            notifs: src.notifs !== false,
+            clipboard: src.clipboard !== false,
+            folderSync: src.folderSync !== false,
+          },
+        })
       }
     }
   }

@@ -6,7 +6,7 @@ import {
   Wifi, Bluetooth, Flashlight, BellOff, RotateCcw, Signal, BatteryCharging,
   BatteryFull, AlarmClock, BellRing, ShieldAlert, Eraser, Smartphone, Sun,
 } from "lucide-react"
-import { useGuard, alarmTime, nextAlarmIn } from "@/lib/guard-store"
+import { useGuard, alarmTime, nextAlarmIn, type AlarmEntry } from "@/lib/guard-store"
 import { RssiMeter } from "./guard-bits"
 import { cn } from "@/lib/utils"
 
@@ -72,7 +72,7 @@ export function PhoneMirror() {
 
 function HomeScreen({ hh, mm, nextAlarm, tiles, brightness }: {
   hh: string; mm: string
-  nextAlarm?: { a: { hour: number; minute: number; label: string }; in: number | null }
+  nextAlarm?: { a: AlarmEntry; in: number | null }
   tiles: { on: boolean; Icon: typeof Wifi }[]
   brightness: number
 }) {
