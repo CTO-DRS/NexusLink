@@ -142,6 +142,14 @@ export function ScanTab() {
                   <li key={p.n} className="flex flex-col gap-1 rounded-lg border px-2.5 py-1.5" data-testid="scan-page">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
+                        {/* §62 — معاينة حية بفلتر الصفحة الحالي (مفتاح v يكسر التخزين عند كل تغيير) */}
+                        <img
+                          src={`/api/scan/preview?id=${encodeURIComponent(session.id)}&n=${p.n}&v=${p.filter}:${p.thr ?? 0}`}
+                          alt={t("معاينة")}
+                          className="h-10 w-auto max-w-16 rounded border object-cover shrink-0 bg-muted"
+                          data-testid={`scan-preview-${p.n}`}
+                          loading="lazy"
+                        />
                         <Badge variant="outline" className="text-[9px] shrink-0" data-no-i18n>#{i + 1}</Badge>
                         <span className="text-[11px] font-mono truncate" dir="ltr">{p.name}</span>
                         <span className="text-[9px] text-muted-foreground shrink-0">{fmtSize(p.size)}</span>
