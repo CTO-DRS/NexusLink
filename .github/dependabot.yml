@@ -1,0 +1,30 @@
+# Dependabot — تحديثات اعتماديات آلية أسبوعية
+#
+# العقيدة: الثغرة المعروفة في اعتمادية قديمة أسهل ثغرة تُغلق — الفحص الأسبوعي
+# يرفع طلبات دمج جاهزة تمرّ ببوابة الجودة (quality.yml: lint + tsc + build)
+# وحرس الأسرار قبل أي دمج، فالتبني قرار واعٍ موثق لا انجراف صامت.
+#
+# النطاق: حزمة bun الجذرية (bun.lock) + حزم GitHub Actions الثلاث المستخدمة.
+
+version: 2
+
+updates:
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "ci"]
+    commit-message:
+      prefix: "ci"
