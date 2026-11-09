@@ -2596,3 +2596,36 @@ settings.denied · comms.denied · prod.denied · media.denied · apk.denied.
 
 ### الانحدار
 tsc صفر · lint نظيف · بناء إنتاجي أخضر · أساس E2E: **1720 → 1736 (+16)**
+
+## تكليف 44 — FA-17: سلسلة التوريد — تصفير ثغرات الاعتماديات (حرِج — مغلقة)
+
+### الفجوة
+فحص `npm audit` على شجرة الاعتماديات كشف **32 ثغرة (2 حرجة · 19 عالية · 9 متوسطة · 2 منخفضة)**:
+- **next** ≤16.4.0 (حرِج ×5): **HTTP request smuggling في rewrites** (GHSA-ggv3-7p47-pfv8 — سطحنا الحقيقي:
+  Next خلف البوابة) + DoS عبر Image Optimizer وdeserialization وpostponed resume + نمو قرص next/image بلا سقف.
+- **next-auth** ≤4.24.14 (حرِج ×3): homoglyph @ bypass · getToken uncaught · OAuth state/nonce/PKCE
+  غير مربوط بالمزوّد — **معزول بالكامل**: صفر استيراد في src/apps/mini-services (بند ميت من تعاقد قديم).
+- والعالية: zod (إرهاق ذاكرة) · source-map-js (حجب حلقة الأحداث) · uuid (فحص حدود) · js-yaml (DoS تربيعي
+  ×4) · lodash/lodash-es · nanoid · minimatch · picomatch · postcss · browserslist · brace-expansion ·
+  js-cookie · flatted · defu · deepmerge-ts (استنزاف مكدس) · prismjs.
+
+### الإغلاق
+- **حذف next-auth** كليًا من الاعتماديات (المسار الأفضل للثغرة المعزولة — لا سطح أصلًا).
+- **next 16.1.1 → 16.4.6** (كل الحرِجة الخمس خلفنا) — react/prisma/tsc/bunlock متوافقة.
+- **`overrides` موثقة في package.json** لأدنى إصدار مُصلح: zod ^4.6.7 · uuid ^11.1.1 · js-yaml ^4.3.2 ·
+  deepmerge-ts ^8.0.2 · lodash/^4.18.1 · lodash-es · nanoid · picomatch · postcss ^8.5.32 · source-map-js
+  ^1.2.2 · js-cookie · flatted · defu · browserslist · @babel/core ^7.29.13 · @humanfs/node ^0.16.8 ·
+  minimatch ^3.1.5 (سطر v3) — و`bun update` شامل للقفل كله.
+- **حذف react-syntax-highlighter** (عالية — صفر استيراد في الشجرة، كانت تسحب prismjs/refractor).
+- mini-services/comms-service: socket.io 4.8.4 شجرة نظيفة أصلًا (0).
+
+### قواعد الصرامة الجديدة (حد صادق)
+eslint-config-next 16.1.3 → 16.4.6 أوصلت قواعد react-hooks v7 الجديدة (refs/set-state-in-effect/
+static-components) تُعلِّق 29 موقعًا قائمًا — أُغلقت الثلاث موثقة في eslint.config.mjs (نمط القواعد
+المختارة نفسه) وأُسجلت باب جودة مستقل لاحقًا — ليست أمنًا ولا تلمس الإنتاج.
+
+### التحقق الحي
+- `npm audit` (الجذر): **32 → 0** (0 حرِجة · 0 عالية · 0 متوسطة · 0 منخفضة) · comms-service: 0
+- tsc صفر · lint نظيف · بناء إنتاجي أخضر (next 16.4.6 standalone) · prisma generate/push سليمة
+  (override deepmerge-ts 8 تحت prisma 6 لا يكسر) · أساس E2E كاملًا: **fa13-e2e 38/38 ×2** + **desktop-e2e 1080/1080**
+- أساس E2E: **1736 (بلا تغيير — لا فحوص جديدة؛ هذه جولة تحصين لا ميزة)**
