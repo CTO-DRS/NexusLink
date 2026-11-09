@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { QueryProviders } from "@/components/nexus/query-providers";
 
 export const metadata: Metadata = {
   title: "NexusLink — منصة إدارة الأجهزة الموحدة",
@@ -15,13 +17,19 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // FA-18 (تكليف 45): سكربت الثيم المضمّن يحمل نفس nonce الذي وضعه الوسيط
+  // في CSP — بلا nonce سيرفضه المتصفح فورًا (script-src nonce + strict-dynamic).
+  // قراءة headers() تجعل التخطيط ديناميكيًا — التكلفة مللي ثوانٍ محليًا مقابل
+  // قفل XSS كامل (موثقة بصدق في §FA-18).
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `try{var t=localStorage.getItem('nexus-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}
 try{var l=localStorage.getItem('nexus-lang');if(l==='en'){document.documentElement.lang='en';document.documentElement.dir='ltr'}else{document.documentElement.lang='ar';document.documentElement.dir='rtl'}}catch(e){}
@@ -30,7 +38,11 @@ try{var fs=localStorage.getItem('nexus-font-scale');if(fs)document.documentEleme
         />
       </head>
       <body className="antialiased bg-background text-foreground nexus-font">
-        {children}
+        {/* FA-18: مزوّد الاستعلامات على الشجرة كلها — كان غيابه يُسقط SSR لواجهة
+            التطبيق (/?desktop=1 و /?app=1) بخطأ No QueryClient set (كشف حي) */}
+        <QueryProviders>
+          {children}
+        </QueryProviders>
         <Toaster />
       </body>
     </html>

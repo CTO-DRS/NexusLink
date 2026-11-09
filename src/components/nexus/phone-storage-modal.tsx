@@ -64,8 +64,9 @@ export function PhoneStorageModal({
     if (!media) return
     setBusy(true)
     try {
-      const url = `http://${media.lanIp}:${media.port}/list?token=${encodeURIComponent(media.token)}&dir=${encodeURIComponent(dir)}`
-      const r = await fetch(url)
+      // FA-18 (تكليف 45): القائمة عبر وكيل نفس الأصل /api/phone-media/list —
+      // الوجهة والرمز على السيرفر حصرًا (connect-src 'self' صافية بلا استثناء)
+      const r = await fetch(`/api/phone-media/list?dir=${encodeURIComponent(dir)}`)
       const j = (await r.json()) as { ok?: boolean; entries?: PhoneEntry[] }
       setEntries(j.entries ?? [])
     } catch {

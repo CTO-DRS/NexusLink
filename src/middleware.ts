@@ -1,9 +1,17 @@
 // NexusLink — وسيط حرس الأصل للـAPI (تكليف 38 — CSRF على الخدمة المحلية)
+// + FA-18 (تكليف 45) — الطبقة الثالثة للمتصفح: CSP بالـnonce لمستندات HTML
 // =====================================================================
-// الثغرة المغلقة: صفحة إنترنت خبيثة في متصفح المالك تستطيع إرسال POST
+// الثغرة المغلقة (38): صفحة إنترنت خبيثة في متصفح المالك تستطيع إرسال POST
 // إلى http://localhost:3000/api/fs (أو أي مسار API) — المتصفح يبعث الطلب
 // والمسارات تفك JSON بلا نظر لنوع المحتوى (Request.json() يحلل دائمًا) —
 // «هجوم بالتنقل» drive-by يفتح ملفات وينسخ ويمسح بلا نقرة واحدة من المالك.
+//
+// الثغرة المغلقة (FA-18): الواجهة بلا CSP إطلاقًا — أي XSS في مكون React
+// ينفذ سكربتًا بحرية كاملة فوق سطح API المالك كله (fs/backup/input/comms).
+// العقيدة: `script-src 'self' 'nonce-…' 'strict-dynamic'` — أي سكربت بلا
+// nonce (مُحقن بالـDOM أو تعليق HTML) لا ينفذ، والـstrict-dynamic يمنع
+// الانتشار من سكربت موثوق إلى سكربت حقنه المهاجم. Next يطبّع nonce سكربتاته
+// تلقائيًا من ترويسة CSP المُمررة مع الطلب (النمط الرسمي الموثق في وثائق Next).
 //
 // العقيدة — نفس منطق socketCors() في socket-security.ts حرفيًا (نمط SEC M0.3 F4):
 //  · بلا ترويسة Origin (curl · وكيل الهاتف · سطح المكتب) → مسموح — عميل غير متصفح
@@ -41,7 +49,55 @@ function originAllowed(o: string): boolean {
   return false
 }
 
+/**
+ * FA-18 — سياسة CSP للمستندات الحية (مستندات HTML حصرًا).
+ * · script-src: nonce لكل طلب + strict-dynamic — القفل الحقيقي ضد XSS.
+ *   (وضع التطوير يحتاج 'unsafe-eval' — نحن إنتاج حصرًا، موثق لا مخفي).
+ * · style-src 'unsafe-inline': سمات style من مكتبات الواجهة + عنصر <style> في الرسوم.
+ * · img/media/frame: self + data:/blob: — معاينات محلية وQR وPDF فقط.
+ * · connect-src 'self' حصرًا: كل الجسور تعبر إعادة كتابة المسار نفس الأصل،
+ *   وقائمة وسائط الهاتف عبر وكيل /api/phone-media/list المحلي (FA-18).
+ * · object-src none + base-uri/form-action self + frame-ancestors self: تعميق.
+ */
+function cspFor(nonce: string): string {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "media-src 'self' blob:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "frame-src 'self' blob:",
+    "worker-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'self'",
+  ].join("; ")
+}
+
+function isHtmlDoc(req: NextRequest): boolean {
+  if (req.method !== "GET" && req.method !== "HEAD") return false
+  const accept = req.headers.get("accept") ?? ""
+  return accept.includes("text/html")
+}
+
 export function middleware(req: NextRequest) {
+  // FA-18 — مستند HTML: nonce جديد لكل طلب + CSP على الاستجابة، وترويسة
+  // CSP/x-nonce تُمرر مع الطلب كي يطبّع Next سكربتاته بنفس الـnonce.
+  if (isHtmlDoc(req)) {
+    const nonce = crypto.randomUUID()
+    const csp = cspFor(nonce)
+    const requestHeaders = new Headers(req.headers)
+    requestHeaders.set("x-nonce", nonce)
+    requestHeaders.set("content-security-policy", csp)
+    const res = NextResponse.next({ request: { headers: requestHeaders } })
+    res.headers.set("content-security-policy", csp)
+    return res
+  }
+
+  // حرس الأصل — مسارات API حصرًا (GET/HEAD/OPTIONS تمر دائمًا)
   if (SAFE_METHODS.has(req.method)) return NextResponse.next()
   const origin = req.headers.get("origin")
   if (!origin) return NextResponse.next() // curl · الوكيل · سطح المكتب — بلا متصفح
@@ -58,5 +114,7 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: "/api/:path*",
+  // كل المسارات ما عدا الأصول الساكنة المتجاهلة — فرع HTML يفرّق المستندات
+  // وفرع الأصل يحمي API حصرًا (الأصول بلا منطق ولا CSP).
+  matcher: ["/((?!_next/static|_next/image|fonts/|favicon.ico|logo.svg|robots.txt|seo/).*)"],
 }

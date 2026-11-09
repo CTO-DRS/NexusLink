@@ -37,7 +37,6 @@ export function StorageView() {
   }, [s.activeDeviceId])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- load() is async; state updates only after awaits
     load()
   }, [load])
 

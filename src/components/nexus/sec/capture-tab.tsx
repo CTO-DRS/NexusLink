@@ -58,6 +58,8 @@ export function CaptureTab() {
     const j = await r.json()
     if (j.ok) {
       toast.success(`صُنع pcap حقيقي (${j.packets} حزمة) — يفتح في Wireshark مباشرة`, { description: "جارٍ التنزيل…" })
+      // تنزيل ملف من مسار API — ليس تنقل صفحة داخلية (القاعدة تحسبه تنقلًا خطأً)
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = "/api/security/pcap"
       setCheck("wireshark", true)
     } else {
