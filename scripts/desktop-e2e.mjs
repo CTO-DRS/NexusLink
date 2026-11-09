@@ -4192,7 +4192,7 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     check("SEC-F6/source: بث الحافظة بقواعد هوية — broadcastClip تفرّق isLocalSocket (كامل للجهاز المحلي / بيانات وصفية للشبكة)",
       pbSrc.includes("export function broadcastClip") && pbSrc.includes("isLocalSocket(s.handshake)") && pbSrc.includes('content: "", encrypted: true, delivery: "e2ee"'), "productivity-bridge.ts")
     check("SEC-F6/source: المسارات الثلاثة عبر البث الموحد — clip:push وprodInjectClip وprodEmitClip (لا io.emit خام للحافظة)",
-      (pbSrc.match(/broadcastClip\(io2, item\)/g) || []).length >= 1 && pbSrc.includes("broadcastClip(io, item)") && pbSrc.includes("export function prodEmitClip"), "productivity-bridge.ts")
+      (pbSrc.match(/broadcastClip\(io2, /g) || []).length >= 1 && pbSrc.includes("broadcastClip(io, ") && pbSrc.includes("export function prodEmitClip"), "productivity-bridge.ts")
     const clipRoute = read("src/app/api/prod/clipboard/route.ts")
     check("SEC-F6/source: REST POST لا يبث clip:new خامًا — prodEmitClip في المسار",
       clipRoute.includes("prodEmitClip(") && !/prodEmit\(\s*["']clip:new["']/.test(clipRoute), "api/prod/clipboard/route.ts")
@@ -4718,8 +4718,8 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     check("SYNC/source: prod:resume + prod:ack على الجسر + رأس السجل في prod:hello",
       pbSyncSrc.includes('socket.on("prod:resume"') && pbSyncSrc.includes('socket.on("prod:ack"')
       && pbSyncSrc.includes('{ at: Date.now(), lastSeq }'), "handlers")
-    check("SYNC/source: حرس F6 على الاستئناف — عميل شبكي بيانات وصفية حصرًا (content:\"\" + e2ee)",
-      pbSyncSrc.includes('op.kind === "clip:new" && !local') && pbSyncSrc.includes('content: ""'), "F6 guard on replay")
+    check("SYNC/source: حرس F6 على الاستئناف — الحرس في السيرفر opForClient: عميل شبكي بيانات وصفية حصرًا (content:\"\" + delivery e2ee)",
+      pbSyncSrc.includes('op.kind === "clip:new"') && pbSyncSrc.includes("if (!local)") && pbSyncSrc.includes('content: ""') && pbSyncSrc.includes('delivery: "e2ee"'), "F6 guard server-side في productivity-bridge.ts")
     const upbSyncSrc = readSync("src/hooks/use-prod-bridge.ts")
     check("SYNC/source: عميل الويب — مؤشر محفوظ + استئناف عند الاتصال + تطبيق idempotent بالمعرف + قر",
       upbSyncSrc.includes("nl-prod-cursor") && upbSyncSrc.includes('socket.emit("prod:resume"')
@@ -5294,8 +5294,8 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     const pEs = flatCount("nexuslink_mobile/assets/translations/es.json")
     const pDe = flatCount("nexuslink_mobile/assets/translations/de.json")
     const pRu = flatCount("nexuslink_mobile/assets/translations/ru.json")
-    check("LANG-A11Y/source: ملفات الهاتف الأربع بتكافؤ مفاتيح كامل مع ar (619)",
-      pAr === 619 && pFr === 619 && pEs === 619 && pDe === 619 && pRu === 619, `ar=${pAr} fr=${pFr} es=${pEs} de=${pDe} ru=${pRu}`)
+    check("LANG-A11Y/source: ملفات الهاتف الأربع بتكافؤ مفاتيح كامل مع ar (685)",
+      pAr === 685 && pFr === 685 && pEs === 685 && pDe === 685 && pRu === 685, `ar=${pAr} fr=${pFr} es=${pEs} de=${pDe} ru=${pRu}`)
     const mainDart = readF("nexuslink_mobile/lib/main.dart")
     const chipsDart = readF("nexuslink_mobile/lib/presentation/language_chips.dart")
     const natives6 = (chipsDart.match(/'(العربية|English|Français|Español|Deutsch|Русский)'/g) || []).length
