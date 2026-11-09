@@ -131,25 +131,40 @@ class NexusApi {
 
   // ===========================================================================
   // §53 — التسليم اليدوي الذكي (SMART-HANDOFF): دفع من الهاتف إلى حاسوب المالك
+  // §60 — أنواع الدفع الكاملة من الهاتف: file-ref · media-position (إغلاق الحد
+  // المعلن من §56 حرفيًا — الأنواع الأربعة التي تعرفها نواة §53 كلها من الهاتف).
   // ---------------------------------------------------------------------------
   // POST /api/handoff {action:'push', kind, payload, sourceDevice, note}
   // الأسباب المغلقة مطابقة للسيرفر حرفيًا: unknown-kind · empty-payload ·
   // url-too-long (2048) · url-scheme (http/https حصرًا) · url-no-host ·
-  // text-too-long (8192) · rate-limited (429).
+  // text-too-long (8192) · ref-too-long (512 — للنوعين الجديدين) ·
+  // bad-media-position (JSON {media ≤200, positionMs صحيح 0..86400000}) ·
+  // note-too-long · source-too-long · rate-limited (429).
   // ===========================================================================
 
-  /// دفع رابط أو نص إلى قائمة التسليم على الكمبيوتر — يظهر في جرس الشريط العلوي.
-  /// يرمي [ApiException] برمز السبب الحرفي من السيرفر عند الرفض.
+  /// سقف مرجع الملف وموضع الوسائط (HANDOFF_REF_MAX في نواة §53 حرفيًا).
+  static const int handoffRefMax = 512;
+  /// سقف موضع الوسائط بالمللي ثانية (HANDOFF_POSITION_MAX_MS حرفيًا — 24 ساعة).
+  /// بلا فواصل أرقام: درس مقيس — فواصل `_` دخلت Dart في 3.6 والوكيل على 3.5.4.
+  static const int handoffPositionMaxMs = 86400000;
+  /// سقف اسم الوسيط داخل موضع الوسائط (parseMediaPosition حرفيًا).
+  static const int handoffMediaMax = 200;
+
+  /// دفع أي نوع من الأنواع الأربعة إلى قائمة التسليم على الكمبيوتر — يظهر في
+  /// جرس الشريط العلوي. يرمي [ApiException] برمز السبب الحرفي من السيرفر.
   Future<void> handoffPush({
-    required String kind, // 'url' | 'text'
+    required String kind, // 'url' | 'text' | 'file-ref' | 'media-position'
     required String payload,
     String? note,
     String? sourceDevice,
   }) async {
     const urlMax = 2048;
     const textMax = 8192;
-    // تحقق محلي مرآة للسيرفر — رسالة أسرع وبلا رحلة شبكة عبثية
-    if (kind != 'url' && kind != 'text') throw ApiException('unknown-kind');
+    // تحقق محلي مرآة للسيرفر — رسالة أسرع وبلا رحلة شبكة عبثية.
+    // كل سبب أدناه مطابق لنواة §53 validateHandoff حرفيًا (مرآة بايتية).
+    if (kind != 'url' && kind != 'text' && kind != 'file-ref' && kind != 'media-position') {
+      throw ApiException('unknown-kind');
+    }
     if (payload.trim().isEmpty) throw ApiException('empty-payload');
     if (kind == 'url') {
       if (payload.length > urlMax) throw ApiException('url-too-long');
@@ -158,8 +173,17 @@ class NexusApi {
         throw ApiException('url-scheme');
       }
       if (u.host.isEmpty) throw ApiException('url-no-host');
-    } else {
+    } else if (kind == 'text') {
       if (payload.length > textMax) throw ApiException('text-too-long');
+    } else if (kind == 'file-ref') {
+      // §60: مرجع الملف = مسار نصي ≤512 — السيرفر يقبل المسار كما هو والمعاينة
+      // اسم الملف الأخير (basename بفواصل / و \ في handoffPreview).
+      if (payload.length > handoffRefMax) throw ApiException('ref-too-long');
+    } else {
+      // §60: موضع الوسائط = JSON {media, positionMs} — مرآة parseMediaPosition
+      // بايتيًا: كائن لا مصفوفة · media نص 1..200 · positionMs صحيح 0..86400000.
+      if (payload.length > handoffRefMax) throw ApiException('ref-too-long');
+      if (!_isValidMediaPosition(payload)) throw ApiException('bad-media-position');
     }
     final res = await _client
         .post(
@@ -182,6 +206,60 @@ class NexusApi {
       throw ApiException('$err');
     }
   }
+
+  /// مرآة parseMediaPosition في نواة §53 بايتيًا: JSON كائن (لا مصفوفة) بحقلَي
+  /// media (نص 1..200) وpositionMs (صحيح 0..86400000) — ما عدا ذلك رفض صادق.
+  static bool _isValidMediaPosition(String payload) {
+    Object? j;
+    try {
+      j = jsonDecode(payload);
+    } catch (_) {
+      return false;
+    }
+    if (j is! Map) return false;
+    final media = j['media'];
+    if (media is! String || media.isEmpty || media.length > handoffMediaMax) return false;
+    final pos = j['positionMs'];
+    if (pos is! int || pos < 0 || pos > handoffPositionMaxMs) return false;
+    return true;
+  }
+
+  /// §60.أ — دفع مرجع ملف من الهاتف: المسار يهبط جرس الكمبيوتر والمعاينة
+  /// اسم الملف الأخير، و«فتح» في الجرس هو الفعل المقترح (نمط §53 حرفيًا).
+  Future<void> handoffPushFileRef({
+    required String ref,
+    String? note,
+    String? sourceDevice,
+  }) =>
+      handoffPush(
+        kind: 'file-ref',
+        payload: ref,
+        note: note,
+        sourceDevice: sourceDevice,
+      );
+
+  /// §60.أ — دفع موضع وسائط من الهاتف: «أكمل من حيث توقفت» على الكمبيوتر.
+  /// يبني الحمولة {"media":…,"positionMs":…} بعد تحقق محلي مرآة (بادئة §56).
+  Future<void> handoffPushMediaPosition({
+    required String media,
+    required int positionMs,
+    String? note,
+    String? sourceDevice,
+  }) {
+    if (media.isEmpty || media.length > handoffMediaMax) {
+      throw ApiException('bad-media-position');
+    }
+    if (positionMs < 0 || positionMs > handoffPositionMaxMs) {
+      throw ApiException('bad-media-position');
+    }
+    return handoffPush(
+      kind: 'media-position',
+      payload: jsonEncode({'media': media, 'positionMs': positionMs}),
+      note: note,
+      sourceDevice: sourceDevice,
+    );
+  }
+
 
   // ===========================================================================
   // §55 — الماسح الموثق الحي (SCAN-TO-PDF): دورة open → page → seal

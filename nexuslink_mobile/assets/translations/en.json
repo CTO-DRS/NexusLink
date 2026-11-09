@@ -744,11 +744,25 @@
       "scheme": "Link must start with http:// or https://",
       "tooLong": "Content exceeds the allowed limit",
       "noHost": "Link has no valid host",
-      "rate": "Sending too fast — wait a moment and retry"
+      "rate": "Sending too fast — wait a moment and retry",
+      "refLong": "File reference exceeds 512 characters",
+      "mediaBad": "Media name ≤200 chars and position in seconds"
     },
     "sendShort": "To PC",
     "paste": "From clipboard",
-    "clipboardEmpty": "Clipboard is empty — copy some text first"
+    "clipboardEmpty": "Clipboard is empty — copy some text first",
+    "kindUrl": "Link",
+    "kindText": "Text",
+    "kindRef": "File reference",
+    "kindMedia": "Media position",
+    "pickFile": "Pick a file from the phone",
+    "filePicked": "File: {name}",
+    "refHint": "File path as shown on the computer — ≤512 chars",
+    "mediaName": "Media name",
+    "mediaNameHint": "e.g. lecture-ai.mp4",
+    "positionLabel": "Position in seconds",
+    "positionHint": "e.g. 125",
+    "noFile": "No file picked"
   },
   "scan": {
     "title": "Document Scanner",
