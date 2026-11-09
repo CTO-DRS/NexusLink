@@ -310,7 +310,7 @@ jobs:
       # على وسوم v*: إرفاق تلقائي بالإصدار
       - name: Attach bundles to release (tag push)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             apps/desktop/src-tauri/target/release/bundle/**/*.AppImage
@@ -327,7 +327,7 @@ jobs:
       # على dispatch: إرفاق اختياري صريح (محمي افتراضيًا — لا يستبدل أصول موقعة)
       - name: Attach bundles to release (manual dispatch, opt-in)
         if: inputs.attach_to_release == true
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.release_tag }}
           files: |
@@ -394,7 +394,7 @@ jobs:
           path: nexuslink_mobile/build/app/outputs/bundle/release/app-release.aab
       - name: Attach APK to release (tag push)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: nexuslink_mobile/NexusLink-*-release.apk
 
@@ -498,7 +498,7 @@ jobs:
         run: cd dist && sha256sum * > SHA256SUMS.txt
       - name: Attach static release page
         run: cp public/NexusLink-Release-Page.html dist/
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           draft: true
           generate_release_notes: true
