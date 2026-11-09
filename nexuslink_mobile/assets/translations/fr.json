@@ -744,11 +744,25 @@
       "scheme": "Le lien doit commencer par http:// ou https://",
       "tooLong": "Le contenu dépasse la limite autorisée",
       "noHost": "Lien sans hôte valide",
-      "rate": "Envoi trop rapide — patientez un instant puis réessayez"
+      "rate": "Envoi trop rapide — patientez un instant puis réessayez",
+      "refLong": "La référence de fichier dépasse 512 caractères",
+      "mediaBad": "Nom du média ≤200 caractères et position en secondes"
     },
     "sendShort": "Vers PC",
     "paste": "Depuis le presse-papiers",
-    "clipboardEmpty": "Presse-papiers vide — copiez d'abord du texte"
+    "clipboardEmpty": "Presse-papiers vide — copiez d'abord du texte",
+    "kindUrl": "Lien",
+    "kindText": "Texte",
+    "kindRef": "Référence de fichier",
+    "kindMedia": "Position média",
+    "pickFile": "Choisir un fichier du téléphone",
+    "filePicked": "Fichier : {name}",
+    "refHint": "Chemin du fichier tel qu'affiché sur l'ordinateur — ≤512 caractères",
+    "mediaName": "Nom du média",
+    "mediaNameHint": "ex. : conference-ia.mp4",
+    "positionLabel": "Position en secondes",
+    "positionHint": "ex. : 125",
+    "noFile": "Aucun fichier choisi"
   },
   "scan": {
     "title": "Scanner de documents",

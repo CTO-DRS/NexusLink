@@ -744,11 +744,25 @@
       "scheme": "El enlace debe empezar por http:// o https://",
       "tooLong": "El contenido supera el límite permitido",
       "noHost": "El enlace no tiene un host válido",
-      "rate": "Envío demasiado rápido — espera un momento y reintenta"
+      "rate": "Envío demasiado rápido — espera un momento y reintenta",
+      "refLong": "La referencia de archivo supera los 512 caracteres",
+      "mediaBad": "Nombre del medio ≤200 caracteres y posición en segundos"
     },
     "sendShort": "Al PC",
     "paste": "Del portapapeles",
-    "clipboardEmpty": "Portapapeles vacío — copia texto primero"
+    "clipboardEmpty": "Portapapeles vacío — copia texto primero",
+    "kindUrl": "Enlace",
+    "kindText": "Texto",
+    "kindRef": "Referencia de archivo",
+    "kindMedia": "Posición multimedia",
+    "pickFile": "Elegir un archivo del teléfono",
+    "filePicked": "Archivo: {name}",
+    "refHint": "Ruta del archivo tal como se muestra en el ordenador — ≤512 caracteres",
+    "mediaName": "Nombre del medio",
+    "mediaNameHint": "p. ej.: clase-ia.mp4",
+    "positionLabel": "Posición en segundos",
+    "positionHint": "p. ej.: 125",
+    "noFile": "Ningún archivo elegido"
   },
   "scan": {
     "title": "Escáner de documentos",

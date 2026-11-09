@@ -744,11 +744,25 @@
       "scheme": "Link muss mit http:// oder https:// beginnen",
       "tooLong": "Inhalt überschreitet das zulässige Limit",
       "noHost": "Link ohne gültigen Host",
-      "rate": "Zu schnell gesendet — kurz warten und wiederholen"
+      "rate": "Zu schnell gesendet — kurz warten und wiederholen",
+      "refLong": "Dateireferenz überschreitet 512 Zeichen",
+      "mediaBad": "Medienname ≤200 Zeichen und Position in Sekunden"
     },
     "sendShort": "Zum PC",
     "paste": "Aus der Zwischenablage",
-    "clipboardEmpty": "Zwischenablage ist leer — zuerst Text kopieren"
+    "clipboardEmpty": "Zwischenablage ist leer — zuerst Text kopieren",
+    "kindUrl": "Link",
+    "kindText": "Text",
+    "kindRef": "Dateireferenz",
+    "kindMedia": "Medienposition",
+    "pickFile": "Datei vom Handy wählen",
+    "filePicked": "Datei: {name}",
+    "refHint": "Dateipfad wie am Computer angezeigt — ≤512 Zeichen",
+    "mediaName": "Medienname",
+    "mediaNameHint": "z. B. vorlesung-ki.mp4",
+    "positionLabel": "Position in Sekunden",
+    "positionHint": "z. B. 125",
+    "noFile": "Keine Datei ausgewählt"
   },
   "scan": {
     "title": "Dokument-Scanner",
