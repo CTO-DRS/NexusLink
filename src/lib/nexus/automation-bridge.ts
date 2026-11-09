@@ -18,7 +18,7 @@ import { onAutomationFact } from "./automation-facts"
 import { evalSustainedTrigger, MIN_DURATION_MIN, MAX_DURATION_MIN } from "./automation-health"
 import { loadPersistedRules, persistRuleUpsert, persistRuleDelete, persistFire, loadPersistedFires, markFiresSeenDb } from "./automation-persist"
 import { pluginHasCapability, isPluginLive } from "./marketplace" // الفرض اللحظي (§35.ب)
-import { socketCors } from "./socket-security" // SEC (M0.3 F4)
+import { socketCors, isLocalSocket, realClientIp } from "./socket-security" // SEC (M0.3 F4) + FA-13
 import {
   TRIGGER_KINDS, ACTION_KINDS, isSustainedTrigger, COMPOSITE_STATE_KINDS, isCompositeStateKind,
   type AutoRule, type AutoRunEntry, type AutoStatePayload, type AutoFiredPayload, type AutoFireEntry, type AutoTrigger,
@@ -573,11 +573,27 @@ export function ensureAutomationBridge() {
     })
     io = io2
 
+    // SEC (FA-13): إدارة الروتينات من الجهاز نفسه حصرًا — الروتين ينفّذ أفعالًا
+    // حقيقية على الكمبيوتر (إيقاظ WoL، حقن حافظة، إشعارات)؛ سوكِت شبكي لا
+    // ينشئ/يعدّل/يشغّل روتبنًا — وإلا صار قناة تنفيذ عن بُعد للشبكة المحلية.
+    let rejLast = 0
+    const pcOnly = (socket: { handshake: { address?: string; headers?: Record<string, string | string[] | undefined> }; emit?: (ev: string, d?: unknown) => unknown }, ev: string): boolean => {
+      if (isLocalSocket(socket.handshake)) return true
+      socket.emit?.("auto:rejected", { reason: "local-only", ev, at: Date.now() })
+      const now = Date.now()
+      if (now - rejLast > 3000) {
+        rejLast = now
+        console.warn(`[automation-bridge] SEC: رفض ${ev} من عميل شبكي ${realClientIp(socket.handshake)}`)
+      }
+      return false
+    }
+
     io2.on("connection", (socket) => {
       socket.emit("auto:hello", { at: Date.now() })
       socket.emit("auto:state", buildState())
 
       socket.on("rule:upsert", async (d: { rule?: unknown; id?: string }) => {
+        if (!pcOnly(socket, "rule:upsert")) return // FA-13
         const clean = await sanitizeRule(d?.rule, typeof d?.id === "string" && d.id ? d.id : undefined)
         if ("error" in clean) {
           socket.emit("auto:rejected", { error: clean.error, at: Date.now() })
@@ -599,6 +615,7 @@ export function ensureAutomationBridge() {
       })
 
       socket.on("rule:delete", (d: { id?: string }) => {
+        if (!pcOnly(socket, "rule:delete")) return // FA-13
         if (!d?.id) return
         rules = rules.filter((r) => r.id !== d.id)
         onceFired.delete(d.id)
@@ -610,6 +627,7 @@ export function ensureAutomationBridge() {
       })
 
       socket.on("rule:toggle", (d: { id?: string; enabled?: boolean }) => {
+        if (!pcOnly(socket, "rule:toggle")) return // FA-13
         if (!d?.id) return
         rules = rules.map((r) => (r.id === d.id ? { ...r, enabled: d.enabled !== false } : r))
         const updated = rules.find((r) => r.id === d.id)
@@ -618,6 +636,7 @@ export function ensureAutomationBridge() {
       })
 
       socket.on("rule:run-now", (d: { id?: string }, ack?: (r: Record<string, unknown>) => void) => {
+        if (!pcOnly(socket, "rule:run-now")) return // FA-13
         const rule = rules.find((r) => r.id === d?.id)
         if (!rule) {
           socket.emit("auto:rejected", { error: "قاعدة غير موجودة", at: Date.now() })
@@ -662,6 +681,7 @@ export function ensureAutomationBridge() {
       // والنتيجة للمطالب حصرًا (socket.emit لا بث) — بلا سجل تشغيل ولا ترسيخ ولا
       // أي مسٍ للتسليح أو الإحصاءات: auto:state لا يتغير أبدًا بفعل فحص.
       socket.on("rule:test", (d: { trigger?: unknown }) => {
+        if (!pcOnly(socket, "rule:test")) return // FA-13
         const tr = (d?.trigger ?? {}) as Record<string, unknown>
         const tKind = String(tr.kind ?? "")
         if (!isSustainedTrigger(tKind as AutoTrigger["kind"])) {
@@ -686,6 +706,7 @@ export function ensureAutomationBridge() {
       })
 
       socket.on("log:clear", () => {
+        if (!pcOnly(socket, "log:clear")) return // FA-13
         runLog = []
         broadcastState()
       })

@@ -7,7 +7,7 @@ import { createServer } from "http"
 import { Server as SocketServer } from "socket.io"
 import { applyAgentTx } from "./transfer-engine"
 import { store } from "./devices"
-import { socketCors } from "./socket-security" // SEC (M0.3 F4)
+import { socketCors, isLocalSocket, realClientIp } from "./socket-security" // SEC (M0.3 F4) + FA-13
 import { isDeviceKilled, noteRefired } from "./emergency" // §48 — قائمة القتل عند إعادة الاتصال
 
 // منفذ الجسر قابل للتجاوز بالبيئة (نمط جسر الإنتاجية §59) — مكدسات E2E معزولة — الافتراضي 3006
@@ -305,6 +305,22 @@ export function ensureGuardBridge() {
     io = io2
     g.__nexusGuardIo = io2
 
+    // SEC (FA-13): بوابة أوامر الكمبيوتر — الرن/الفقدان/المسح/الإعدادات وأوامر
+    // القرب تُصدر من واجهة الكمبيوتر على الجهاز نفسه حصرًا. سوكِت شبكي يُرفض
+    // تسجيلًا — وإلا استطاع أي جهاز على الشبكة مسح الهاتف (dev:wipe) أو قفل
+    // الكمبيوتر (prox:manual-lock) أو قلب إعدادات الحماية.
+    let rejLast = 0
+    const pcOnly = (socket: { handshake: { address?: string; headers?: Record<string, string | string[] | undefined> }; emit?: (ev: string, d?: unknown) => unknown }, ev: string): boolean => {
+      if (isLocalSocket(socket.handshake)) return true
+      socket.emit?.("dev:ctl-rejected", { reason: "local-only", ev, at: Date.now() })
+      const now = Date.now()
+      if (now - rejLast > 3000) {
+        rejLast = now
+        log(io2, `SEC: رفض أمر كمبيوتر (${ev}) من عميل شبكي ${realClientIp(socket.handshake)} — من الجهاز نفسه حصرًا`, "warn")
+      }
+      return false
+    }
+
     io2.on("connection", (socket) => {
       socket.emit("guard:hello", {
         prox: { ...prox, state: proxState, rssi: presence?.rssi ?? null, source: presence?.source ?? null },
@@ -414,22 +430,28 @@ export function ensureGuardBridge() {
 
       // ==== منارة القرب ====
       socket.on("prox:beacon", (d: { rssi?: number; device?: string }) => {
+        // FA-13: المنارة الحقيقية من وكيل مسجّل حصرًا — وإلا انتحل غريب «قرب»
+        // وهمي يُبقي الكمبيوتر مفتوحًا (تعطيل حرس القرب من بعيد).
+        if (agentReg().socketId !== socket.id && !agentsReg().has(socket.id)) return
         lastRealBeacon = Date.now()
         presence = { rssi: Number(d?.rssi ?? -55), last: lastRealBeacon, source: "real" }
       })
       socket.on("prox:sim", (d: { rssi?: number }) => {
+        if (!pcOnly(socket, "prox:sim")) return // FA-13
         // محاكاة من الكمبيوتر — تُستخدم فقط عند غياب منارة حقيقية
         presence = { rssi: Number(d?.rssi ?? -50), last: Date.now(), source: "sim" }
       })
 
       // ==== قفل/فتح يدوي من الكمبيوتر ====
       socket.on("prox:manual-lock", () => {
+        if (!pcOnly(socket, "prox:manual-lock")) return // FA-13
         proxState = "locked"
         graceSince = 0
         log(io2, "قفل يدوي من لوحة الحماية", "info")
         io2.emit("pc:lock", { reason: "manual", at: Date.now() })
       })
       socket.on("prox:manual-unlock", () => {
+        if (!pcOnly(socket, "prox:manual-unlock")) return // FA-13
         if (!prox.enabled) {
           proxState = "disabled"
         } else {
@@ -442,6 +464,7 @@ export function ensureGuardBridge() {
 
       // ==== إعدادات القرب ====
       socket.on("guard:settings", (d: Partial<ProxSettings>) => {
+        if (!pcOnly(socket, "guard:settings")) return // FA-13
         if (typeof d.enabled === "boolean") prox.enabled = d.enabled
         if (typeof d.thresholdRssi === "number") prox.thresholdRssi = d.thresholdRssi
         if (typeof d.graceSec === "number" && d.graceSec >= 3 && d.graceSec <= 120) prox.graceSec = d.graceSec
@@ -458,6 +481,9 @@ export function ensureGuardBridge() {
       const CMDS = ["dev:ring", "dev:ring-stop", "dev:light", "dev:lost", "dev:lost-off", "dev:wipe", "dev:alarm", "dev:qs", "dev:app"] as const
       for (const ev of CMDS) {
         socket.on(ev, (data: Record<string, unknown>) => {
+          // FA-13: أوامر الكمبيوتر→الهاتف (وبينها المسح عن بُعد dev:wipe)
+          // من واجهة الجهاز نفسه حصرًا — سوكِت شبكي لا يصدرها إطلاقًا.
+          if (!pcOnly(socket, ev)) return
           if (ev === "dev:ring") log(io2, "أمر: رنين قوي على الهاتف — تجاوز الوضع الصامت", "in")
           else if (ev === "dev:ring-stop") log(io2, "أمر: إيقاف الرنين", "info")
           else if (ev === "dev:light") log(io2, `أمر: ${data?.on ? "إضاءة الشاشة/الفلاش" : "إطفاء الإضاءة"} على الهاتف`, "in")
@@ -493,6 +519,21 @@ export function ensureGuardBridge() {
       // ==== FA-7: جلسة التحكم — توجيه مباشر للوكيل مع حاجز الثقة ====
       socket.on("dev:ctl-start", (d: { from?: string; name?: string }) => {
         const from = String(d?.from ?? "").trim()
+        // FA-13: ربط الهوية — وكيل مسجّل لا يطلب تحكمًا باسم جهاز آخر،
+        // وسوكِت غير وكيل (واجهة الويب) من الجهاز نفسه حصرًا. (نفس عقد
+        // p2p:ctl-start أدناه — كان dev:ctl-start الحلقة الأضعف.)
+        const ctlSender = agentDeviceIdOf(socket.id)
+        if (ctlSender) {
+          if (ctlSender !== from) {
+            log(io2, `SEC: رفض تحكم — الوكيل ${ctlSender} انتحل هوية ${from || "مجهول"}`, "warn")
+            socket.emit("dev:ctl-rejected", { reason: "identity", from, at: Date.now() })
+            return
+          }
+        } else if (!isLocalSocket(socket.handshake)) {
+          socket.emit("dev:ctl-rejected", { reason: "local-only", from, at: Date.now() })
+          log(io2, `SEC: رفض طلب تحكم من عميل شبكي ${realClientIp(socket.handshake)} — واجهة الجهاز نفسه حصرًا`, "warn")
+          return
+        }
         const dev = store().devices.find((x) => x.id === from)
         if (!dev || !dev.trusted) {
           log(io2, `رفض محاولة تحكم من جهاز غير موثوق: ${from || "مجهول"}`, "warn")
@@ -518,6 +559,8 @@ export function ensureGuardBridge() {
       })
 
       socket.on("dev:ctl-stop", () => {
+        // FA-13: إيقاف الجلسة من واجهة الجهاز نفسه أو من وكيل مسجّل حصرًا
+        if (!isLocalSocket(socket.handshake) && agentReg().socketId !== socket.id && !agentsReg().has(socket.id)) return
         guardEmitToAgent("dev:ctl-stop", { at: Date.now() })
       })
 
@@ -583,6 +626,9 @@ export function ensureGuardBridge() {
       // الأساسي). سوكِت الويب → المسار القائم إلى الوكيل الأساسي كما كان.
       socket.on("dev:touch", (d: Record<string, unknown>) => {
         if (!touchAllowed(socket.id)) return
+        // FA-13: مسار الويب (بلا وكيل مسجّل) من الجهاز نفسه حصرًا — حقن اللمس
+        // من سوكِت شبكي = تحكم كامل بالهاتف بلا جلسة ولا ثقة.
+        if (!agentDeviceIdOf(socket.id) && !isLocalSocket(socket.handshake)) return
         const op = String(d?.op ?? "")
         if (!TOUCH_OPS.has(op)) return
         const payload: Record<string, unknown> = { op }
@@ -612,6 +658,7 @@ export function ensureGuardBridge() {
       })
 
       socket.on("dev:text", (d: { text?: string }) => {
+        if (!agentDeviceIdOf(socket.id) && !isLocalSocket(socket.handshake)) return // FA-13
         const text = String(d?.text ?? "")
         if (text.length > 2000) return
         const senderDevice = agentDeviceIdOf(socket.id)
@@ -631,6 +678,7 @@ export function ensureGuardBridge() {
       })
 
       socket.on("dev:key", (d: { action?: string }) => {
+        if (!agentDeviceIdOf(socket.id) && !isLocalSocket(socket.handshake)) return // FA-13
         const action = String(d?.action ?? "")
         if (!KEY_ACTIONS.has(action)) return
         const senderDevice = agentDeviceIdOf(socket.id)

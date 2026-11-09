@@ -15,7 +15,7 @@ import { db } from "@/lib/db"
 import { store as deviceStore } from "./devices"
 import { secureWipe, wipableFiles } from "./secure-wipe"
 import { nexusStorageRoot } from "./data-root"
-import { socketCors } from "./socket-security" // SEC (M0.3 F4)
+import { socketCors, isLocalSocket, realClientIp } from "./socket-security" // SEC (M0.3 F4) + FA-13
 
 const PORT = 3009
 export const SUITE = "X25519 · HKDF-SHA256 · AES-256-GCM · PBKDF2(150k)"
@@ -151,6 +151,23 @@ export function ensureSecurityBridge() {
       if (!s) void db.secState.create({ data: { id: "main" } }).catch(() => { /* ignore */ })
     })
 
+    // SEC (FA-13): بوابة أوامر الكمبيوتر — الأوامر المدمِّرة/حساسة الحالة تُصدر
+    // من الجهاز نفسه حصرًا (واجهة الويب المحلية عبر البوابة أو مباشرة). سوكِت
+    // شبكي (هاتف أو غريب) يُرفض تسجيلًا — وإلا استطاع جهاز على الشبكة أن
+    // يوثّق نفسه (sec:trust-decision) أو يمسح ملفات الكمبيوتر (wipe:run) أو
+    // يُصدر أوامر القفل/المسح للهاتف (sec:lock/lost/wipe-cmd).
+    let rejLast = 0
+    const pcOnly = (socket: Socket, ev: string): boolean => {
+      if (isLocalSocket(socket.handshake)) return true
+      socket.emit("sec:rejected", { reason: "local-only", ev, at: Date.now() })
+      const now = Date.now()
+      if (now - rejLast > 3000) {
+        rejLast = now
+        void audit({ actor: "غريب", action: "rejected", detail: `رفض أمر ${ev} من عميل شبكي (${realClientIp(socket.handshake)}) — أوامر الكمبيوتر من الجهاز نفسه حصرًا`, severity: "warn" })
+      }
+      return false
+    }
+
     io2.on("connection", (socket) => {
       // ==== الترحيب + فحص الثقة ====
       socket.emit("sec:hello", { port: PORT, suite: SUITE, peers: securityBridgeStatus().peers, stealth: !!g.__nexusSecStealth, counters: counters() })
@@ -243,11 +260,18 @@ export function ensureSecurityBridge() {
       })
 
       // ==== الالتقاط والفحص ====
-      socket.on("sec:capture-get", () => socket.emit("sec:capture", { frames: wire() }))
-      socket.on("sec:capture-clear", () => { wire().length = 0; io2?.emit("sec:capture-cleared") })
+      socket.on("sec:capture-get", () => {
+        if (!pcOnly(socket, "sec:capture-get")) return // FA-13 — اعتراض الأسلاك للكمبيوتر
+        socket.emit("sec:capture", { frames: wire() })
+      })
+      socket.on("sec:capture-clear", () => {
+        if (!pcOnly(socket, "sec:capture-clear")) return // FA-13
+        wire().length = 0; io2?.emit("sec:capture-cleared")
+      })
 
       // ==== تنبيه محاكاة جهاز غريب ====
       socket.on("sec:stranger-probe", (d: { name?: string }) => {
+        if (!pcOnly(socket, "sec:stranger-probe")) return // FA-13 — بث التنبيهات الوهمية للكمبيوتر حصرًا
         const name = String(d?.name || `جهاز غير معروف (${["Redmi-X3", "Huawei-P40", "oppo-reno"][Math.floor(Math.random() * 3)]})`)
         const deviceId = "stranger-" + uid().slice(0, 6)
         const isBlocked = blocked().some((b) => b.name === name)
@@ -255,6 +279,8 @@ export function ensureSecurityBridge() {
       })
 
       socket.on("sec:trust-decision", async (d: { alertId?: string; deviceId?: string; name?: string; decision?: "block" | "once" | "trust" }) => {
+        // FA-13: قرار الثقة للكمبيوتر حصرًا — عميل شبكي لا يوثّق نفسه ولا غيره
+        if (!pcOnly(socket, "sec:trust-decision")) return
         const al = alerts().find((a) => a.id === d?.alertId)
         if (al) al.resolved = d?.decision ?? "ignored"
         const name = String(d?.name || al?.name || "جهاز")
@@ -287,6 +313,7 @@ export function ensureSecurityBridge() {
 
       // ==== الصلاحيات (لكل ميزة مفتاح) ====
       socket.on("sec:perm-set", async (d: { feature?: string; deviceId?: string; enabled?: boolean }) => {
+        if (!pcOnly(socket, "sec:perm-set")) return // FA-13
         if (!d?.feature || !d?.deviceId) return
         const rule = await db.permRule.upsert({
           where: { feature_deviceId: { feature: d.feature, deviceId: d.deviceId } },
@@ -303,18 +330,24 @@ export function ensureSecurityBridge() {
 
       // ==== سجل التدقيق ====
       socket.on("audit:get", async (d: { limit?: number }) => {
+        if (!pcOnly(socket, "audit:get")) return // FA-13 — سجل التدقيق للكمبيوتر
         const rows = await db.auditEvent.findMany({ orderBy: { at: "desc" }, take: Math.min(d?.limit ?? 200, 400) })
         socket.emit("audit:list", rows.map((r) => ({ ...r, at: r.at.getTime() })))
       })
       socket.on("audit:clear", async () => {
+        if (!pcOnly(socket, "audit:clear")) return // FA-13
         await db.auditEvent.deleteMany({})
         io2?.emit("audit:cleared")
         await audit({ actor: "الكمبيوتر", action: "settings", detail: "تم تفريغ سجل التدقيق (بعد تحقق PIN)", severity: "warn" })
       })
 
       // ==== الحذف الآمن ====
-      socket.on("wipe:list", async () => socket.emit("wipe:files", await wipableFiles()))
+      socket.on("wipe:list", async () => {
+        if (!pcOnly(socket, "wipe:list")) return // FA-13 — قائمة ملفات الكمبيوتر لا تُسرَّب للشبكة
+        socket.emit("wipe:files", await wipableFiles())
+      })
       socket.on("wipe:run", async (d: { deviceId?: string; vPath?: string; passes?: number; stealth?: boolean }) => {
+        if (!pcOnly(socket, "wipe:run")) return // FA-13 — الحذف الآمن من الكمبيوتر حصرًا
         if (!d?.deviceId || !d?.vPath) return
         const vPath = String(d.vPath)
         const deviceId = String(d.deviceId)
@@ -337,6 +370,7 @@ export function ensureSecurityBridge() {
 
       // ==== التخفي + حالة قفل الهاتف ====
       socket.on("sec:stealth-set", (d: { on?: boolean }) => {
+        if (!pcOnly(socket, "sec:stealth-set")) return // FA-13
         g.__nexusSecStealth = !!d?.on
         io2.emit("sec:stealth", { on: !!d?.on })
         void db.secState.upsert({ where: { id: "main" }, create: { id: "main", stealthMode: !!d?.on }, update: { stealthMode: !!d?.on } }).catch(() => { /* ignore */ })
@@ -344,6 +378,7 @@ export function ensureSecurityBridge() {
       socket.on("sec:lock-state", (d: Record<string, unknown>) => io2.emit("sec:lock-state", d)) // من الهاتف: حالة القفل
       socket.on("sec:lock-cmd", (d: Record<string, unknown>) => {
         // من الكمبيوتر: أمر قفل الهاتف — يمر عبر القناة المشفرة في العميل، والترحيل هنا
+        if (!pcOnly(socket, "sec:lock-cmd")) return // FA-13
         tapWire({ channel: "e2e", from: "pc-office", to: "galaxy-s24", kind: "lock-cmd", len: JSON.stringify(d).length, hex: Buffer.from(JSON.stringify(d), "utf8").subarray(0, 96).toString("hex"), b64: Buffer.from(JSON.stringify(d), "utf8").toString("base64"), encrypted: false })
         for (const [, c] of clients()) if (c.role === "phone") io2.to(c.sid).emit("sec:lock-cmd", d)
       })
@@ -351,11 +386,13 @@ export function ensureSecurityBridge() {
       // ==== FA-10: وضع الفقدان الكامل + المسح الآمن لملفات الهاتف ====
       // sec:lost-cmd {message?, locate?} — الكمبيوتر يفعّل وضع الفقدان: القفل + رسالة على الشاشة + بيانات الموقع
       socket.on("sec:lost-cmd", (d: Record<string, unknown>) => {
+        if (!pcOnly(socket, "sec:lost-cmd")) return // FA-13
         tapWire({ channel: "e2e", from: "pc-office", to: "galaxy-s24", kind: "lost-cmd", len: JSON.stringify(d).length, hex: Buffer.from(JSON.stringify(d), "utf8").subarray(0, 96).toString("hex"), b64: Buffer.from(JSON.stringify(d), "utf8").toString("base64"), encrypted: false })
         for (const [, c] of clients()) if (c.role === "phone") io2.to(c.sid).emit("sec:lost-cmd", d)
       })
       // sec:wipe-cmd {passes?} — الكمبيوتر يأمر الهاتف بمسح الملفات المستلمة حذفًا آمنًا
       socket.on("sec:wipe-cmd", (d: Record<string, unknown>) => {
+        if (!pcOnly(socket, "sec:wipe-cmd")) return // FA-13
         tapWire({ channel: "e2e", from: "pc-office", to: "galaxy-s24", kind: "wipe-cmd", len: JSON.stringify(d).length, hex: Buffer.from(JSON.stringify(d), "utf8").subarray(0, 96).toString("hex"), b64: Buffer.from(JSON.stringify(d), "utf8").toString("base64"), encrypted: false })
         for (const [, c] of clients()) if (c.role === "phone") io2.to(c.sid).emit("sec:wipe-cmd", d)
       })

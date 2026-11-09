@@ -6,7 +6,7 @@
 // تنبيهات الحركة والبكاء، أوامر البث وعرض الشرائح.
 import { createServer } from "http"
 import { Server as SocketServer } from "socket.io"
-import { socketCors } from "./socket-security" // SEC (M0.3 F4)
+import { socketCors, isLocalSocket } from "./socket-security" // SEC (M0.3 F4) + FA-13
 
 const PORT = 3005
 
@@ -225,6 +225,12 @@ export function ensureMediaBridge() {
       // ==== مصراع عن بُعد: الكمبيوتر يطلب التقاط صورة ====
       // FA-8: يُمرَّر flash (فلاش/كشاف أثناء العد) و camera (أمامية/خلفية) للهاتف الحقيقي
       socket.on("cam:shutter", (data: { timer: number; flash?: boolean; camera?: string }) => {
+        // FA-13: مصراع الكاميرا من واجهة الجهاز نفسه حصرًا — سوكِت شبكي
+        // يُطلق كاميرا الهاتف عن بُعد = انتهاك خصوصية صريح.
+        if (!isLocalSocket(socket.handshake)) {
+          socket.emit("media:rejected", { reason: "local-only", ev: "cam:shutter", at: Date.now() })
+          return
+        }
         const t = Math.max(0, Math.min(30, Number(data?.timer ?? 0)))
         const flash = data?.flash === true
         const camera = data?.camera === "front" ? "front" : "back"
@@ -241,6 +247,7 @@ export function ensureMediaBridge() {
 
       // ==== FA-8: أوامر وسائط للهاتف الحقيقي — تمرير شفاف مع قائمة بيضاء ====
       socket.on("cam:cmd", (data: Record<string, unknown>) => {
+        if (!isLocalSocket(socket.handshake)) return // FA-13 — أوامر الكاميرا للجهاز نفسه
         const action = String(data?.action ?? "")
         if (!CAM_CMDS.has(action)) return
         const out: Record<string, unknown> = { action, at: Date.now() }

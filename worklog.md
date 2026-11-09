@@ -2433,3 +2433,40 @@ Stage Summary:
 ### الدرس المقيس
 «يعمل على جهازي» سرْد سبب: سطر cd صلب وحيد كان يجعل كل بوابات الاستنساخ الخارجي حمراء
 زورًا — قابلية النقل شرط لصدق البوابة كحاجز.
+
+## تكليف 40 — FA-13: بوابة أوامر الكمبيوتر على جسور socket.io الأربعة (SEC-FA13)
+
+**التاريخ:** 2026-11-09 · **النطاق:** 4 جسور · نمط F4 الموحد · tsc صفر · lint نظيف
+
+### الثغرة النمطية
+المصافحة محمية (socketCors — F3) والأدوار محمية (F4/F5/F9) — لكن **أوامر الكمبيوتر
+المدمِّرة نفسها** كانت مفتوحة على أي سوكِت يعبر المصافحة. أسوأها: `sec:trust-decision`
+(العميل غير الموثوق يبقى متصلًا فيوثّق نفسه بنداء واحد) · `dev:wipe` (مسح الهاتف عن
+بُعد من أي جهاز شبكي) · `wipe:run` (حذف آمن لملفات الكمبيوتر) · `cam:shutter` (إطلاق
+كاميرا الهاتف) · `rule:run-now` (قناة تنفيذ روتبنات عن بُعد) · `prox:beacon` (منارة
+قرب وهمية تُبقي الكمبيوتر مفتوحًا) · `dev:ctl-start` بلا ربط هوية (انتحال جهاز موثوق)
+· `dev:touch/text/key` بمسار ويب بلا بوابة (حقن لمس كامل).
+
+### الإغلاق — بوابة `pcOnly()` موحدة (`isLocalSocket`)
+- **security-bridge (3009):** حرس على `sec:trust-decision` · `wipe:list/run` ·
+  `sec:perm-set` · `audit:get/clear` · `sec:stealth-set` · `sec:lock/lost/wipe-cmd` ·
+  `sec:stranger-probe` · `sec:capture-get/clear` — رفض مُعلن `sec:rejected` + تدقيق مُخنَّق 3ث.
+- **guard-bridge (3006):** حرس على حلقة CMDS كاملة (dev:ring/lost/wipe/alarm/qs/app…)
+  · `prox:manual-lock/unlock` · `guard:settings` · `prox:sim` — و`prox:beacon` لوكيل
+  مسجّل حصرًا — و`dev:ctl-start` بربط هوية (وكيل = اسمه هو، ويب = الجهاز نفسه — عقد
+  p2p:ctl-start) — و`dev:touch/text/key` بمسار ويب من الجهاز نفسه — و`dev:ctl-stop`
+  محلي أو وكيل مسجّل.
+- **automation-bridge (3008):** حرس على `rule:upsert/delete/toggle/run-now/test` · `log:clear`.
+- **media-bridge (3005):** حرس على `cam:shutter/cam:cmd` (خصوصية الكاميرا) —
+  وأحداث الإبلاغ/البث الهاتفية بقيت مفتوحة كما صُمم (cast/secondscreen/sensor/frames).
+- **remote-bridge (3004):** لم يُمسّ — كانت الأنضج أصلًا (F4/F5/F9).
+
+### الحجّة المعمارية
+هاتف يصل عبر البوابة يحمل `x-gw-client-ip` حقيقيًا (البوابة تستبدل الترويسة حرفيًا)
+فلا يعدو محليًا أبدًا — والواجهة المحلية loopback فيمر — وعملاء E2E كلهم loopback
+فلا انحدار. أحداث الإبلاغ الهاتفية (sec:lock-state · prox:beacon · cast:cmd ·
+sec:frame المرحّل الأعمى) بلا حرس كما صُمم — الحرس على **الأوامر المُصدَرة من
+الكمبيوتر** حصرًا، لا على القناة.
+
+### التحقق
+tsc صفر · eslint نظيف · التوثيق: docs/security-audit.md §FA-13 (عالية — مغلقة).
