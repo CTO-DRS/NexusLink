@@ -105,11 +105,11 @@ export function Onboarding() {
   const next = () => setStep((s) => Math.min(total - 1, s + 1))
   const prev = () => setStep((s) => Math.max(0, s - 1))
 
-  const permCard = (icon: LucideIcon, title: string, why: string, denied: string, action?: React.ReactNode, state?: string) => (
+  const permCard = (Icon: LucideIcon, title: string, why: string, denied: string, action?: React.ReactNode, state?: string) => (
     <div className="rounded-2xl border p-4 space-y-2">
       <div className="flex items-center gap-2.5">
         <div className="w-8 h-8 rounded-xl bg-primary/12 text-primary grid place-items-center shrink-0">
-          <icon className="w-4 h-4" />
+          <Icon className="w-4 h-4" />
         </div>
         <div className="font-semibold text-sm flex-1">{title}</div>
         {state && (

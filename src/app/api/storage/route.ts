@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createHash } from "crypto"
 import { promises as fs } from "fs"
 import { walk, DEVICE_ROOTS } from "@/lib/nexus/fs-server"
-import type { DuplicateGroup, StorageAnalysis } from "@/lib/nexus/types"
+import type { DuplicateGroup, StorageAnalysis, FsEntry } from "@/lib/nexus/types"
 
 export const dynamic = "force-dynamic"
 

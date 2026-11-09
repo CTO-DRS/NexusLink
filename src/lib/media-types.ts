@@ -1,7 +1,7 @@
 // NexusLink — أنواع المرحلة 7: طبقة الوسائط والكاميرا
 // كاميرا الهاتف كويب كام · مراقبة · مراقبة الأطفال · ميكروفون · بث · معرض
 
-export type MediaDeviceId = "galaxy-s24" | "redmi-note13" | "pc-office" | "nexus-tv"
+export type MediaDeviceId = "galaxy-s24" | "redmi-note13" | "pc-office" | "nexus-tv" | "ipad-pro"
 
 export type ScreenTarget = "pc" | "tv"
 

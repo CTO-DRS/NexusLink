@@ -86,7 +86,7 @@ export interface GuardLog {
 
 export type ProxState = "near" | "grace" | "locked" | "disabled"
 
-interface ProxInfo {
+export interface ProxInfo {
   enabled: boolean
   thresholdRssi: number
   graceSec: number
@@ -308,7 +308,7 @@ export const useGuard = create<GuardState>((set, get) => ({
   finishBackup: (fileName, path, _bytes) => {
     set({
       backup: null,
-      logs: [{ id: uid(), text: `نسخة احتياطية APK حُفظت في الكمبيوتر: Downloads/Backups/${fileName}`, kind: "ok", at: Date.now() }, ...get().logs].slice(0, 120),
+      logs: [{ id: uid(), text: `نسخة احتياطية APK حُفظت في الكمبيوتر: Downloads/Backups/${fileName}`, kind: "ok" as const, at: Date.now() }, ...get().logs].slice(0, 120),
     })
     void path
     void _bytes
@@ -334,7 +334,7 @@ export const useGuard = create<GuardState>((set, get) => ({
     set({
       install: null,
       apps: [app, ...get().apps],
-      logs: [{ id: uid(), text: `تم تثبيت «${ins.name}» على الهاتف (${Math.round(ins.sizeMB)}MB)`, kind: "ok", at: Date.now() }, ...get().logs].slice(0, 120),
+      logs: [{ id: uid(), text: `تم تثبيت «${ins.name}» على الهاتف (${Math.round(ins.sizeMB)}MB)`, kind: "ok" as const, at: Date.now() }, ...get().logs].slice(0, 120),
     })
     get().nudgeStorage(ins.sizeMB)
     get().setCheck("apps")
@@ -344,7 +344,7 @@ export const useGuard = create<GuardState>((set, get) => ({
     if (!app) return
     set({
       apps: get().apps.filter((a) => a.pkg !== pkg),
-      logs: [{ id: uid(), text: `أُزيل تطبيق «${app.name}» من الهاتف وتحرر ${app.sizeMB}MB`, kind: "ok", at: Date.now() }, ...get().logs].slice(0, 120),
+      logs: [{ id: uid(), text: `أُزيل تطبيق «${app.name}» من الهاتف وتحرر ${app.sizeMB}MB`, kind: "ok" as const, at: Date.now() }, ...get().logs].slice(0, 120),
     })
     get().nudgeStorage(-app.sizeMB)
     get().setCheck("apps")
@@ -354,7 +354,7 @@ export const useGuard = create<GuardState>((set, get) => ({
   addAlarm: (a) =>
     set((s) => ({
       alarms: [...s.alarms, { ...a, id: uid() }],
-      logs: [{ id: uid(), text: `منبه جديد ${String(a.hour).padStart(2, "0")}:${String(a.minute).padStart(2, "0")} — ${a.label}`, kind: "ok", at: Date.now() }, ...s.logs].slice(0, 120),
+      logs: [{ id: uid(), text: `منبه جديد ${String(a.hour).padStart(2, "0")}:${String(a.minute).padStart(2, "0")} — ${a.label}`, kind: "ok" as const, at: Date.now() }, ...s.logs].slice(0, 120),
     })),
   updateAlarm: (id, patch) =>
     set((s) => ({ alarms: s.alarms.map((a) => (a.id === id ? { ...a, ...patch } : a)) })),

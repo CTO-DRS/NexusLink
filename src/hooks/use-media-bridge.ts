@@ -131,9 +131,10 @@ export function useMediaBridge() {
     // ==== تحكم هاتف حقيقي بالبث والشرائح ====
     socket.on("cast:cmd", (d: { action: string; value?: number }) => {
       const a = d?.action
+      const cast = st().cast
       if (a === "toggle") st().castToggle()
-      else if (a === "play" && st().cast && !st().cast.playing) st().castToggle()
-      else if (a === "pause" && st().cast && st().cast.playing) st().castToggle()
+      else if (a === "play" && cast && !cast.playing) st().castToggle()
+      else if (a === "pause" && cast && cast.playing) st().castToggle()
       else if (a === "volume") st().castVolume(d.value ?? 80)
       else if (a === "mute") st().castMute()
       else if (a === "stop") st().stopCast()
