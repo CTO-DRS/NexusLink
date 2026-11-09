@@ -2,7 +2,8 @@
 # §58 — بوابات الجولتين المتتاليتين: إقلاع نظيف لكل جولة (نمط gates-e57)
 # البوابة الجديدة (قفل الخزنة الساكن) + انحدارا §50 (خزنة الحافظة) و§57 (قفل التسليم)
 set -u
-cd /home/z/my-project/nexuslink_repo
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
 
 kill_server() {
   pkill -f "next dev" 2>/dev/null

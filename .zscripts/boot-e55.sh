@@ -2,14 +2,15 @@
 # §53–§55 — إقلاع تطبيق Next.js ببيئة بوابات الموجة الثانية كاملة
 # التسليم اليدوي + الدرع المشفّر + الماسح الموثق (نمط boot-e50/boot-e54)
 set -u
-cd /home/z/my-project/nexuslink_repo
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
 E55=/tmp/nexuslink-e55-live
 mkdir -p "$E55"
 # حالة نظيفة: لا قائمة تسليم ولا نسخ ولا جلسات مسح + سجل تدقيق جديد
 rm -f "$E55/handoff.json" "$E55/backup-secure.json" "$E55/audit.jsonl"
 rm -rf "$E55/backups" "$E55/scans"
 
-export DATABASE_URL="file:/home/z/my-project/nexuslink_repo/db/custom.db"
+export DATABASE_URL="file:$ROOT/db/custom.db"
 export NEXUSLINK_HANDOFF_FILE="$E55/handoff.json"
 export NEXUSLINK_BACKUP_DIR="$E55/backups"
 export NEXUSLINK_BACKUP_SCHEDULE_FILE="$E55/backup-secure.json"
