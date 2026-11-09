@@ -16,6 +16,7 @@ import {
   deleteSecureBackup, pruneSecureBackups, enableSchedule, disableSchedule,
   rotateLocalKey, scheduleTick, guardLocal,
 } from "@/lib/nexus/backup-secure-server"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -27,6 +28,16 @@ export async function POST(req: Request) {
   let body: Record<string, unknown> = {}
   try { body = await req.json() } catch { /* بلا جسم */ }
   const action = String(body.action ?? "")
+
+  // FA-14 (تكليف 41): إنشاء/تحقق/استعادة/حذف/تقليم أفعال مدمرة أو محاولة
+  // فك على النسخ المشفرة — loopback حصرًا (عقيدة FA-13 على HTTP). الجدولة
+  // أدناه كانت محمية بحرس loopback نمط §37 أصلًا (guardLocal).
+  if (action !== "schedule-tick" && !guardPcOnly(req, "backup.denied", action)) {
+    return NextResponse.json(
+      { ok: false, error: "backup-admin-loopback-only", detail: "via-gateway-non-loopback" },
+      { status: 403 },
+    )
+  }
 
   if (action === "create") {
     const kind = body.kind === "scheduled" ? "scheduled" : "manual"

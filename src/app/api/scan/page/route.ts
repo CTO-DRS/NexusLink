@@ -2,10 +2,18 @@
 // فحص السحر FFD8 حرفيًا لا الثقة بالترويسة (نمط §51: الرفع من متصفح/وكيل)
 import { NextResponse } from "next/server"
 import { addScanPage } from "@/lib/nexus/scan-server"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
 export async function POST(req: Request) {
+  // FA-14 (تكليف 41): رفع صفحات الماسح يكتب بايتات في جلسة المالك — loopback حصرًا
+  if (!guardPcOnly(req, "scan.denied", "page")) {
+    return NextResponse.json(
+      { ok: false, error: "pc-only", detail: "via-gateway-non-loopback" },
+      { status: 403 },
+    )
+  }
   const url = new URL(req.url)
   const id = url.searchParams.get("id") ?? ""
   if (!id) return NextResponse.json({ ok: false, error: "missing-session" }, { status: 400 })

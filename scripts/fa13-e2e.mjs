@@ -1,5 +1,5 @@
-// FA-13 — تحقق E2E حي: بوابة أوامر الكمبيوتر على الجسور (تكليف 40)
-// عميل محلي (loopback) يمر · عميل "شبكي" (عنوان LAN للجهاز نفسه) يُرفض local-only
+// FA-13/FA-14 — تحقق E2E حي: بوابة أوامر الكمبيوتر على الجسور وعلى HTTP (تكليف 40/41)
+// عميل محلي (loopback) يمر · عميل "شبكي" (عنوان LAN للجهاز نفسه) يُرفض local-only/pc-only
 // ملاحظة: المنفذ 8207 افتراضيًا — بيئات الاستضافة تعترض منافذ الويب (80/81/443)
 // شفافيًا فلا يصل العميل للبوابة أصلًا؛ سطح المكتب الحقيقي يستخدم 81 (FA13_GW_PORT للتجاوز).
 // الاستخدام: node scripts/fa13-e2e.mjs   (المكدس عامر: next standalone + بوابة)
@@ -8,6 +8,7 @@ import os from 'node:os'
 import { io } from 'socket.io-client'
 
 const GW = { host: '127.0.0.1', port: Number(process.env.FA13_GW_PORT) || 8207 }
+const REST = { host: '127.0.0.1', port: 3000 }
 const results = []
 function check(name, ok, detail = '') {
   results.push({ name, ok })
@@ -15,6 +16,25 @@ function check(name, ok, detail = '') {
 }
 function lanIp() {
   return Object.values(os.networkInterfaces()).flat().find((i) => i && !i.internal && i.family === 'IPv4')?.address || ''
+}
+function reqJson(host, port, path, method, body) {
+  return new Promise((res, rej) => {
+    const data = body === undefined ? null : Buffer.from(JSON.stringify(body))
+    const r = request({ host, port, path, method, headers: data ? {
+      'content-type': 'application/json', 'content-length': data.length,
+    } : {} }, (resp) => {
+      let raw = ''
+      resp.on('data', (c) => { raw += c })
+      resp.on('end', () => {
+        let j = null
+        try { j = JSON.parse(raw) } catch { /* بلا جسم */ }
+        res({ status: resp.statusCode, json: j, raw })
+      })
+    })
+    r.on('error', rej)
+    if (data) r.write(data)
+    r.end()
+  })
 }
 function waitEvent(sock, ev, ms = 4000) {
   return new Promise((res) => {
@@ -119,6 +139,29 @@ if (!LAN) { console.log('FAIL بلا عنوان LAN — لا يمكن محاكا
   spoof.disconnect()
 }
 
+// ==== 6) FA-14 عبر HTTP (تكليف 41) — العمليات المدمرة على الكمبيوتر loopback حصرًا ====
+{
+  const probe = `fa14-probe-${Date.now()}`
+  const fsLan = await reqJson(LAN, GW.port, '/api/fs', 'POST', { op: 'mkdir', device: 'galaxy-s24', path: '/', name: probe })
+  check('FA14/FS/lan: mkdir على قرص الكمبيوتر من عميل شبكي عبر البوابة → 403 pc-only',
+    fsLan.status === 403 && fsLan.json?.error === 'pc-only', JSON.stringify(fsLan.json)?.slice(0, 90))
+  const fsLoc = await reqJson(REST.host, REST.port, '/api/fs', 'POST', { op: 'mkdir', deviceId: 'galaxy-s24', path: '/', name: probe })
+  check('FA14/FS/loopback: mkdir المحلي يصل المعالج (ok:true)',
+    fsLoc.status === 200 && fsLoc.json?.ok === true, JSON.stringify(fsLoc.json)?.slice(0, 90))
+  const fsDel = await reqJson(REST.host, REST.port, '/api/fs', 'POST', { op: 'delete', deviceId: 'galaxy-s24', paths: [`/${probe}`] })
+  check('FA14/FS/loopback: delete المحلي يصل المعالج وينظف الأثر',
+    fsDel.status === 200 && fsDel.json?.ok === true, JSON.stringify(fsDel.json)?.slice(0, 90))
+  const bkLan = await reqJson(LAN, GW.port, '/api/backup-secure', 'POST', { action: 'delete', file: 'fa14-x.zip' })
+  check('FA14/BACKUP/lan: حذف نسخة احتياطية من عميل شبكي → 403 loopback-only',
+    bkLan.status === 403, JSON.stringify(bkLan.json)?.slice(0, 90))
+  const txLan = await reqJson(LAN, GW.port, '/api/transfer', 'POST', { action: 'pause', id: 'fa14-x' })
+  check('FA14/TRANSFER/lan: إيقاف مهمة نقل من عميل شبكي → 403 (قبل فحص وجود المهمة)',
+    txLan.status === 403 && txLan.json?.error === 'pc-only', JSON.stringify(txLan.json)?.slice(0, 90))
+  const scLan = await reqJson(LAN, GW.port, '/api/scan', 'POST', { action: 'open' })
+  check('FA14/SCAN/lan: فتح جلسة ماسح من عميل شبكي → 403',
+    scLan.status === 403, JSON.stringify(scLan.json)?.slice(0, 90))
+}
+
 const fails = results.filter((r) => !r.ok).length
-console.log(`\n=== FA-13 E2E: ${results.length - fails}/${results.length} PASS ===`)
+console.log(`\n=== FA-13+FA-14 E2E: ${results.length - fails}/${results.length} PASS ===`)
 process.exit(fails ? 1 : 0)

@@ -96,6 +96,9 @@ export type AuditKind =
   | "scan.seal"
   | "scan.cancel"
   | "scan.denied"
+  // FA-14 (تكليف 41) — بوابة عمليات الكمبيوتر المدمرة عبر HTTP (fs/transfer) — أبعاد رفض حصرًا
+  | "fs.denied"
+  | "transfer.denied"
 
 const KINDS: ReadonlySet<string> = new Set<string>([
   "pair.enable",
@@ -147,6 +150,8 @@ const KINDS: ReadonlySet<string> = new Set<string>([
   "backup.schedule.disable",
   "backup.schedule.rotate",
   "backup.denied",
+  "fs.denied",
+  "transfer.denied",
   "scan.session.open",
   "scan.page.add",
   "scan.page.rotate",
