@@ -1,10 +1,11 @@
-// FA-13/FA-14 — تحقق E2E حي: بوابة أوامر الكمبيوتر على الجسور وعلى HTTP (تكليف 40/41)
+// FA-13/14/15 — تحقق E2E حي: بوابة أوامر الكمبيوتر على الجسور وعلى HTTP وعلى جسر comms (تكليف 40/41/42)
 // عميل محلي (loopback) يمر · عميل "شبكي" (عنوان LAN للجهاز نفسه) يُرفض local-only/pc-only
 // ملاحظة: المنفذ 8207 افتراضيًا — بيئات الاستضافة تعترض منافذ الويب (80/81/443)
 // شفافيًا فلا يصل العميل للبوابة أصلًا؛ سطح المكتب الحقيقي يستخدم 81 (FA13_GW_PORT للتجاوز).
 // الاستخدام: node scripts/fa13-e2e.mjs   (المكدس عامر: next standalone + بوابة)
 import { request } from 'node:http'
 import os from 'node:os'
+import { spawn } from 'node:child_process'
 import { io } from 'socket.io-client'
 
 const GW = { host: '127.0.0.1', port: Number(process.env.FA13_GW_PORT) || 8207 }
@@ -162,6 +163,53 @@ if (!LAN) { console.log('FAIL بلا عنوان LAN — لا يمكن محاكا
     scLan.status === 403, JSON.stringify(scLan.json)?.slice(0, 90))
 }
 
+// ==== 7) FA-15 عبر جسر comms 3003 (تكليف 42) — أوامر الهاتف من الكمبيوتر حصرًا ====
+{
+  // الجسر خدمة مستقلة يديرها procman في الإنتاج — إن لم تكن عاملة نقرّبها محليًا للفحص
+  let commsProc = null
+  const commsUp = await new Promise((res) => {
+    const r = request({ host: '127.0.0.1', port: 3003, path: '/status', method: 'GET', timeout: 1500 }, (resp) => { resp.resume(); res(resp.statusCode === 200) })
+    r.on('error', () => res(false))
+    r.on('timeout', () => { r.destroy(); res(false) })
+    r.end()
+  })
+  if (!commsUp) {
+    commsProc = spawn(process.execPath, ['mini-services/comms-service/index.ts'], { stdio: 'ignore', cwd: process.cwd() })
+    await new Promise((res) => setTimeout(res, 2500))
+  }
+  const lan = await connect(`http://${LAN}:3003`)
+  let p = waitEvent(lan, 'phone:rejected')
+  lan.emit('phone:sms-send', { messageId: 'fa15-a', address: '+966500000000', body: 'fa15' })
+  const rej = await p
+  check('COMMS3003/lan: phone:sms-send من عميل شبكي → phone:rejected local-only',
+    !!rej && rej.reason === 'local-only' && rej.ev === 'phone:sms-send', JSON.stringify(rej))
+  p = waitEvent(lan, 'phone:rejected', 2500)
+  lan.emit('phone:call-dial', { callId: 'fa15-b', number: '+966500000001' })
+  const rej2 = await p
+  check('COMMS3003/lan: phone:call-dial (طلب مكالمة) من عميل شبكي → رفض',
+    !!rej2 && rej2.ev === 'phone:call-dial', JSON.stringify(rej2))
+  lan.disconnect()
+  const loc = await connect('http://127.0.0.1:3003')
+  const pd = waitEvent(loc, 'dnd:state')
+  loc.emit('phone:dnd-set', { enabled: true })
+  const dnd = await pd
+  check('COMMS3003/loopback: phone:dnd-set المحلي يصل المعالج (dnd:state)',
+    !!dnd && dnd.enabled === true && dnd.source === 'pc', JSON.stringify(dnd))
+  const pd2 = waitEvent(loc, 'dnd:state')
+  loc.emit('phone:dnd-set', { enabled: false })
+  await pd2
+  loc.disconnect()
+  // عبر البوابة من LAN برمز مزوّر → البوابة تستبدل الترويسة → الجسر يرفض
+  const spoof = await connect(`http://${LAN}:${GW.port}/?XTransformPort=3003`, { extraHeaders: { 'x-gw-client-ip': '127.0.0.1' } })
+  const ps = waitEvent(spoof, 'phone:rejected')
+  spoof.emit('phone:simulate', { kind: 'gmail' })
+  const rej3 = await ps
+  check('COMMS/GW/spoof: عميل شبكي عبر البوابة يزوّر الترويسة → رفض local-only',
+    !!rej3 && rej3.reason === 'local-only', JSON.stringify(rej3))
+  spoof.disconnect()
+  if (commsProc) commsProc.kill()
+}
+
 const fails = results.filter((r) => !r.ok).length
-console.log(`\n=== FA-13+FA-14 E2E: ${results.length - fails}/${results.length} PASS ===`)
+console.log(`\n=== FA-13+14+15 E2E: ${results.length - fails}/${results.length} PASS ===`)
 process.exit(fails ? 1 : 0)

@@ -2532,3 +2532,29 @@ scan · scan/page. **الحدود الصادقة**: القراءات GET بمس�
 
 ### الانحدار
 tsc صفر · lint نظيف · بناء إنتاجي أخضر · أساس E2E: **1710 → 1716 (+6)**
+
+## تكليف 42 — FA-15: أوامر الهاتف على جسر comms بلا بوابة محلية → pcOnly (عالية — مغلقة)
+
+### الفجوة
+جسر comms (3003) كان الغائب عن سلسلة FA-13: المصافحة محمية (originAllowed)
+لكن أوامر phone:* التسعة كلها تُنفَّذ من أي سوكِت: sms-send (**SMS باسم المالك
+لأي رقم**) · call-dial (**مكالمة صادرة لأي رقم** + تحكم answer/reject/end) ·
+reply-action (رد على المحادثات باسم المالك) · simulate (**حقن إشعارات مزيفة** —
+قوالب تصيّد واقعية) · dnd-set/auto-mode (قلب عدم الإزعاج عن بُعد).
+
+### الإغلاق
+pcOnly() داخل comms-service/index.ts — isLocalHandshake ازدواج موثق عن
+isLocalSocket (socket-security): loopback فعلي أو عبر البوابة بترويسة
+x-gw-client-ip التي تستبدلها البوابة حرفًا. رفض مُعلن phone:rejected
+{reason:"local-only", ev} + سجل مخنَّق 3ث في سجل الهاتف. أحداث الإبلاغ والبث
+(bridge:hello/phone:log/sms:status/call:state/dnd:state) بقيت كما صُمم.
+
+### التحقق الحي — `scripts/fa13-e2e.mjs` ‏18 → 22 فحصًا ×2 جولتين
+- COMMS3003/lan: phone:sms-send + phone:call-dial من عميل شبكي → phone:rejected
+- COMMS3003/loopback: phone:dnd-set المحلي يصل المعالج (dnd:state source:"pc")
+- COMMS/GW/spoof: عبر البوابة برمز مزوّر → البوابة تستبدلها → رفض local-only
+- الجسر يُقلَّع ذاتيًا في الفحص إن لم يكن عاملاً (node index.ts — نمط procman)
+- الانحدار الكامل: **desktop-e2e 1080/1080**
+
+### الانحدار
+tsc صفر (جذر + comms) · بناء إنتاجي أخضر · أساس E2E: **1716 → 1720 (+4)**

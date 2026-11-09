@@ -202,6 +202,39 @@ io = new Server(httpServer, {
   pingInterval: 25000,
 })
 
+// FA-15 (تكليف 42 — docs/security-audit.md): بوابة أوامر الهاتف — من الكمبيوتر حصرًا
+// ============================================================
+// المصافحة محمية (originAllowed) — لكن أوامر phone:* كانت تُنفّذ من أي سوكِت
+// يعبرها: جهاز على الشبكة المحلية يستطيع (قبل الإغلاق) إرسال SMS باسم المالك،
+// والرد على محادثاته، وطلب مكالمات صادرة لأي رقم، وقلب «عدم الإزعاج»، وحقن
+// إشعارات مزيفة (تصيّد: «تمت استعادة كلمة المرور بنجاح»). العقيدة نفسها التي
+// أغلقت FA-13 على الجسور الأربعة: أوامر يصدرها الكمبيوتر/واجهته = loopback
+// حصرًا. الازدواج عن socket-security.ts موثق — خدمة مستقلة بلا حزمة مشتركة
+// (نمط middleware — أي تعديل قادم يمس الموضعين معًا).
+type HandshakeLike = { address?: string; headers?: Record<string, string | string[] | undefined> }
+const LOOPBACK_IP = /^(127\.\d{1,3}\.\d{1,3}\.\d{1,3}|::1)$/
+function isLocalHandshake(h: HandshakeLike): boolean {
+  const remote = String(h?.address ?? '').replace(/^::ffff:/, '')
+  if (!LOOPBACK_IP.test(remote)) return false
+  // الواصل عبر البوابة: الترويسة التي تستبدلها البوابة حرفًا (F4) هي الحسم
+  const fwd = h?.headers?.['x-gw-client-ip']
+  const v = Array.isArray(fwd) ? fwd[0] : fwd
+  if (v) return LOOPBACK_IP.test(String(v).trim().replace(/^::ffff:/, ''))
+  return true
+}
+let rejLast = 0
+const pcOnly = (socket: { handshake: HandshakeLike; emit?: (ev: string, d?: unknown) => unknown }, ev: string): boolean => {
+  if (isLocalHandshake(socket.handshake)) return true
+  const now = Date.now()
+  if (now - rejLast > 3000) {
+    rejLast = now
+    phoneLog(`رفض أمر هاتف من عميل شبكي (local-only): ${ev}`, 'info')
+    console.warn('[SEC/FA-15] local-only rejected:', ev)
+  }
+  socket.emit?.('phone:rejected', { reason: 'local-only', ev, at: now })
+  return false
+}
+
 // فحص جاهزية + حالة (يقرؤه مدير العمليات في تطبيق سطح المكتب و tray)
 // socket.io مُنشأ بـ path:'/' (العقد: يقبل أي مسار) — engine.io يطالب بكل المسارات
 // ويكتب 400 قبل أي مستمع آخر. الحل: نلتقط مستمع engine حرفيًا ونغلّفه:
@@ -244,6 +277,7 @@ io.on('connection', (socket) => {
 
   // ==== محاكي الهاتف ====
   socket.on('phone:simulate', (data: { kind: string }) => {
+    if (!pcOnly(socket, 'phone:simulate')) return
     switch (data?.kind) {
       case 'whatsapp': case 'telegram': case 'gmail': case 'instagram': case 'youtube': case 'slack': {
         const t = pick(NOTIF_TEMPLATES.filter((x) => x.appId === data.kind)) ??
@@ -271,6 +305,7 @@ io.on('connection', (socket) => {
   })
 
   socket.on('phone:auto-mode', (data: { enabled: boolean }) => {
+    if (!pcOnly(socket, 'phone:auto-mode')) return
     phone.autoMode = !!data?.enabled
     scheduleAuto()
     phoneLog(phone.autoMode ? 'وضع المحاكاة التلقائية مفعّل' : 'تم إيقاف المحاكاة التلقائية', 'info')
@@ -278,6 +313,7 @@ io.on('connection', (socket) => {
 
   // ==== الرد السريع من الإشعار ====
   socket.on('phone:reply-action', (data: { notifId: string; appId: string; text: string }) => {
+    if (!pcOnly(socket, 'phone:reply-action')) return
     const app = APPS[data?.appId]
     phoneLog(`رد سريع عبر ${app?.name ?? data?.appId}: «${data?.text}»`, 'out')
     setTimeout(() => {
@@ -292,6 +328,7 @@ io.on('connection', (socket) => {
 
   // ==== إرسال SMS من الكمبيوتر ====
   socket.on('phone:sms-send', async (data: { messageId: string; address: string; body: string; contactName?: string }) => {
+    if (!pcOnly(socket, 'phone:sms-send')) return
     phoneLog(`إرسال SMS إلى ${data.contactName ?? data.address}: ${data.body}`, 'out')
     setTimeout(() => {
       io?.emit('sms:status', { messageId: data.messageId, status: 'sent' })
@@ -315,6 +352,7 @@ io.on('connection', (socket) => {
 
   // ==== المكالمات ====
   socket.on('phone:call-dial', (data: { callId: string; number: string; contactName?: string }) => {
+    if (!pcOnly(socket, 'phone:call-dial')) return
     if (phone.activeCall || phone.ringingCall) {
       io?.emit('call:state', { callId: data.callId, state: 'ended', busy: true })
       return
@@ -332,6 +370,7 @@ io.on('connection', (socket) => {
   })
 
   socket.on('phone:call-answer', (data: { callId: string }) => {
+    if (!pcOnly(socket, 'phone:call-answer')) return
     if (phone.ringingCall?.id === data.callId) {
       clearTimeout(phone.ringingCall.timeout)
       const r = phone.ringingCall
@@ -343,6 +382,7 @@ io.on('connection', (socket) => {
   })
 
   socket.on('phone:call-reject', (data: { callId: string }) => {
+    if (!pcOnly(socket, 'phone:call-reject')) return
     if (phone.ringingCall?.id === data.callId) {
       clearTimeout(phone.ringingCall.timeout)
       const r = phone.ringingCall
@@ -354,11 +394,13 @@ io.on('connection', (socket) => {
   })
 
   socket.on('phone:call-end', (data: { callId: string; durationSec: number; direction: 'in' | 'out'; number: string; contactName?: string }) => {
+    if (!pcOnly(socket, 'phone:call-end')) return
     if (phone.activeCall?.id === data.callId) endActiveCall(data.durationSec, 'الكمبيوتر')
   })
 
   // ==== مزامنة عدم الإزعاج (من الكمبيوتر) ====
   socket.on('phone:dnd-set', (data: { enabled: boolean }) => {
+    if (!pcOnly(socket, 'phone:dnd-set')) return
     phone.dnd = !!data?.enabled
     phoneLog(phone.dnd ? 'الهاتف: تفعيل عدم الإزعاج (أمر مزامنة من الكمبيوتر)' : 'الهاتف: إيقاف عدم الإزعاج (من الكمبيوتر)', phone.dnd ? 'ok' : 'info')
     io?.emit('dnd:state', { enabled: phone.dnd, source: 'pc' })
