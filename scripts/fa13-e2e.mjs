@@ -1,4 +1,4 @@
-// FA-13/14/15 — تحقق E2E حي: بوابة أوامر الكمبيوتر على الجسور وعلى HTTP وعلى جسر comms (تكليف 40/41/42)
+// FA-13/14/15/16 — تحقق E2E حي: بوابة أوامر الكمبيوتر على الجسور وعلى HTTP وعلى جسر comms والطبقة الثانية (تكليف 40/41/42/43)
 // عميل محلي (loopback) يمر · عميل "شبكي" (عنوان LAN للجهاز نفسه) يُرفض local-only/pc-only
 // ملاحظة: المنفذ 8207 افتراضيًا — بيئات الاستضافة تعترض منافذ الويب (80/81/443)
 // شفافيًا فلا يصل العميل للبوابة أصلًا؛ سطح المكتب الحقيقي يستخدم 81 (FA13_GW_PORT للتجاوز).
@@ -210,6 +210,49 @@ if (!LAN) { console.log('FAIL بلا عنوان LAN — لا يمكن محاكا
   if (commsProc) commsProc.kill()
 }
 
+// ==== 8) FA-16 عبر HTTP (تكليف 43) — الطبقة الثانية: بقية العمليات الحساسة loopback حصرًا ====
+{
+  const LAN403 = (r) => r.status === 403 && r.json?.error === 'pc-only'
+  // 8.أ pcap — تنزيل التقاط كامل (خصوصية/أدلة جنائية)
+  const pcapLan = await reqJson(LAN, GW.port, '/api/security/pcap', 'GET')
+  check('FA16/PCAP/lan: تنزيل pcap من عميل شبكي عبر البوابة → 403 pc-only', LAN403(pcapLan), `status=${pcapLan.status}`)
+  const pcapLoc = await reqJson(REST.host, REST.port, '/api/security/pcap', 'POST')
+  check('FA16/PCAP/loopback: تصدير pcap المحلي يصل المعالج (200 بلا 403)', pcapLoc.status === 200, `status=${pcapLoc.status} ok=${pcapLoc.json?.ok}`)
+  // 8.ب مسح سجلات التدقيق — العراقة: محو الأثر
+  const auLan = await reqJson(LAN, GW.port, '/api/security/audit', 'DELETE')
+  check('FA16/AUDIT/lan: مسح كامل سجل التدقيق من عميل شبكي → 403', LAN403(auLan), `status=${auLan.status}`)
+  const naLoc = await reqJson(REST.host, REST.port, '/api/desktop/audit', 'POST', { action: 'native-fa16-selftest', detail: 'loopback-alive', severity: 'info', actor: 'fa16' })
+  check('FA16/AUDIT/loopback: POST سجل الأصيلة من محلي (مسار Rust) يصل المعالج', naLoc.status === 200 && naLoc.json?.ok === true, JSON.stringify(naLoc.json)?.slice(0, 80))
+  // 8.ج الإعدادات — تعطيل القفل/المحدّث من الشبكة
+  const stLan = await reqJson(LAN, GW.port, '/api/desktop/settings', 'PUT', { appLock: false })
+  check('FA16/SETTINGS/lan: قلب appLock من عميل شبكي → 403', LAN403(stLan), `status=${stLan.status}`)
+  const scLan = await reqJson(LAN, GW.port, '/api/desktop/shortcuts', 'PUT', { shortcuts: {} })
+  check('FA16/SHORTCUTS/lan: اختطاف الاختصارات من عميل شبكي → 403', LAN403(scLan), `status=${scLan.status}`)
+  // 8.د comms — إرسال/حقن SMS و DND عبر HTTP (الجسر المحلي يمر loopback)
+  const smsLan = await reqJson(LAN, GW.port, '/api/comms/sms', 'POST', { op: 'send', conversationId: 'x', text: 'fa16' })
+  check('FA16/SMS/lan: إرسال SMS عبر HTTP من عميل شبكي → 403', LAN403(smsLan), `status=${smsLan.status}`)
+  const smsLoc = await reqJson(REST.host, REST.port, '/api/comms/sms', 'POST', { op: 'incoming', address: 'fa16-selftest', text: 'fa16-bridge-alive' })
+  check('FA16/SMS/loopback: حقن incoming من الجسر المحلي يصل المعالج (ok:true)', smsLoc.status === 200 && smsLoc.json?.ok === true, JSON.stringify(smsLoc.json)?.slice(0, 80))
+  const dndLan = await reqJson(LAN, GW.port, '/api/comms/phone', 'PATCH', { dnd: true })
+  check('FA16/DND/lan: قلب عدم الإزعاج عبر HTTP من عميل شبكي → 403 (فئة phone:dnd-set)', LAN403(dndLan), `status=${dndLan.status}`)
+  const ntLan = await reqJson(LAN, GW.port, '/api/comms/notifications/action', 'POST', { id: 'fa16-x', action: 'delete' })
+  check('FA16/NOTIF/lan: حذف إشعار من عميل شبكي → 403 (قبل أي فحص)', LAN403(ntLan), `status=${ntLan.status}`)
+  const flLan = await reqJson(LAN, GW.port, '/api/comms/filter', 'PATCH', { mute: {} })
+  check('FA16/FILTER/lan: عبث قواعد الفلترة من عميل شبكي → 403', LAN403(flLan), `status=${flLan.status}`)
+  // 8.هـ prod — استعادة ببيانات مضمّنة · مسح الحافظة · إطلاق مزامنة زوج
+  const bkLan = await reqJson(LAN, GW.port, '/api/prod/backup', 'POST', { action: 'restore', data: { type: 'nexuslink-backup' } })
+  check('FA16/PRODBK/lan: استعادة نسخة (ببيانات مضمّنة) من عميل شبكي → 403 قبل أي استعادة', LAN403(bkLan), `status=${bkLan.status}`)
+  const clLan = await reqJson(LAN, GW.port, '/api/prod/clipboard', 'DELETE')
+  check('FA16/CLIP/lan: مسح سجل الحافظة الموحدة من عميل شبكي → 403', LAN403(clLan), `status=${clLan.status}`)
+  const prLan = await reqJson(LAN, GW.port, '/api/prod/pairs/run', 'POST', { id: 'fa16-x' })
+  check('FA16/PAIRS/lan: إطلاق مزامنة زوج من عميل شبكي → 403', LAN403(prLan), `status=${prLan.status}`)
+  // 8.و كتابة قرص فعلي — التقاط الكاميرا ونسخ APK
+  const capLan = await reqJson(LAN, GW.port, '/api/media/capture', 'POST', { device: 'galaxy-s24', dir: 'DCIM/Camera', dataUrl: 'data:image/jpeg;base64,x' })
+  check('FA16/CAPTURE/lan: حفظ صورة كاميرا على القرص من عميل شبكي → 403', LAN403(capLan), `status=${capLan.status}`)
+  const apkLan = await reqJson(LAN, GW.port, '/api/guard/backup-apk', 'POST', { pkg: 'evil.pkg', app: 'Evil', version: '1', sizeMB: 1 })
+  check('FA16/APK/lan: كتابة APK + exec من عميل شبكي → 403', LAN403(apkLan), `status=${apkLan.status}`)
+}
+
 const fails = results.filter((r) => !r.ok).length
-console.log(`\n=== FA-13+14+15 E2E: ${results.length - fails}/${results.length} PASS ===`)
+console.log(`\n=== FA-13+14+15+16 E2E: ${results.length - fails}/${results.length} PASS ===`)
 process.exit(fails ? 1 : 0)

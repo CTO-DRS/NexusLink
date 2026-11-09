@@ -8,10 +8,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { writeNativeAudit } from "@/lib/nexus/desktop-hardening"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
 export async function POST(req: NextRequest) {
+  // FA-16 (تكليف 43): native-audit-write فعل المالك على الكمبيوتر — loopback حصرًا
+  if (!guardPcOnly(req, "audit.denied", "native-audit-write")) {
+    return NextResponse.json(
+      { ok: false, error: "pc-only", detail: "via-gateway-non-loopback" },
+      { status: 403 },
+    )
+  }
+
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
   if (!body || typeof body !== "object") {
     return NextResponse.json({ error: "طلب غير صالح" }, { status: 400 })
@@ -64,7 +73,15 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(req: Request) {
+  // FA-16 (تكليف 43): native-audit-clear فعل المالك على الكمبيوتر — loopback حصرًا
+  if (!guardPcOnly(req, "audit.denied", "native-audit-clear")) {
+    return NextResponse.json(
+      { ok: false, error: "pc-only", detail: "via-gateway-non-loopback" },
+      { status: 403 },
+    )
+  }
+
   try {
     const res = await db.auditEvent.deleteMany({ where: { action: { startsWith: "native-" } } })
     return NextResponse.json({ ok: true, deleted: res.count })

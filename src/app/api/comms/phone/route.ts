@@ -1,6 +1,7 @@
 // /api/comms/phone — حالة الهاتف: مزامنة وضع عدم الإزعاج
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -10,6 +11,14 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
+  // FA-16 (تكليف 43): phone-dnd فعل المالك على الكمبيوتر — loopback حصرًا
+  if (!guardPcOnly(req, "comms.denied", "phone-dnd")) {
+    return NextResponse.json(
+      { ok: false, error: "pc-only", detail: "via-gateway-non-loopback" },
+      { status: 403 },
+    )
+  }
+
   const body = await req.json().catch(() => ({}))
   const data: { dnd?: boolean; dndSource?: string | null } = {}
   if (typeof body.dnd === "boolean") {

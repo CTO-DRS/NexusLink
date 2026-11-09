@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { readDesktopHardening, writeDesktopHardening } from "@/lib/nexus/desktop-hardening"
 import { readEnterprisePolicy, LOCKABLE_SETTINGS } from "@/lib/enterprise-policy"
 import { appendAudit, observePolicy } from "@/lib/enterprise-audit"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -28,6 +29,14 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
+  // FA-16 (تكليف 43): lockable-settings فعل المالك على الكمبيوتر — loopback حصرًا
+  if (!guardPcOnly(req, "settings.denied", "lockable-settings")) {
+    return NextResponse.json(
+      { ok: false, error: "pc-only", detail: "via-gateway-non-loopback" },
+      { status: 403 },
+    )
+  }
+
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
   if (!body || typeof body !== "object") {
     return NextResponse.json({ error: "طلب غير صالح" }, { status: 400 })

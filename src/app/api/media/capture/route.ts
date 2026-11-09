@@ -1,17 +1,26 @@
 // حفظ الصور الملتقطة عن بُعد من كاميرا الهاتف إلى تخزين الجهاز الحقيقي.
 // POST { device, dir, dataUrl } → يكتب ملف JPEG فعلي في data/nexus-storage
 // فيظهر تلقائياً في متصفح الملفات ومعرض الصور.
-import { NextRequest } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { promises as fs } from "fs"
 import path from "path"
 import { DEVICE_ROOTS } from "@/lib/nexus/fs-server"
 import { mediaBroadcast } from "@/lib/nexus/media-bridge"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
 const ALLOWED_DIRS = ["DCIM/Camera", "DCIM/Security"]
 
 export async function POST(req: NextRequest) {
+  // FA-16 (تكليف 43): remote-capture-save فعل المالك على الكمبيوتر — loopback حصرًا
+  if (!guardPcOnly(req, "media.denied", "remote-capture-save")) {
+    return NextResponse.json(
+      { ok: false, error: "pc-only", detail: "via-gateway-non-loopback" },
+      { status: 403 },
+    )
+  }
+
   try {
     const body = (await req.json()) as {
       device?: string

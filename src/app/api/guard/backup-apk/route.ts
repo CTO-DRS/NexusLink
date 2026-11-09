@@ -6,6 +6,7 @@ import path from "path"
 import { execFile } from "child_process"
 import { promisify } from "util"
 import { DEVICE_ROOTS } from "@/lib/nexus/fs-server"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 const exec = promisify(execFile)
 export const dynamic = "force-dynamic"
@@ -26,6 +27,14 @@ const MANIFEST = (pkg: string, app: string, ver: string) =>
 `
 
 export async function POST(req: NextRequest) {
+  // FA-16 (تكليف 43): apk-backup-write فعل المالك على الكمبيوتر — loopback حصرًا
+  if (!guardPcOnly(req, "apk.denied", "apk-backup-write")) {
+    return NextResponse.json(
+      { ok: false, error: "pc-only", detail: "via-gateway-non-loopback" },
+      { status: 403 },
+    )
+  }
+
   const { pkg, app, version, sizeMB } = await req.json()
   if (!pkg || !app) {
     return NextResponse.json({ ok: false, error: "بيانات ناقصة" }, { status: 400 })

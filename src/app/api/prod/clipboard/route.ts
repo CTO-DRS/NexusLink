@@ -23,6 +23,7 @@ import {
   sealClipContent, openClipContent,
 } from "@/lib/nexus/clip-at-rest-server"
 import { ringKeyCount } from "@/lib/nexus/clip-multikey"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -51,6 +52,11 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  // FA-16 (تكليف 43): clip-add فعل المالك على الكمبيوتر — loopback حصرًا
+  if (!guardPcOnly(req, "prod.denied", "clip-add")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
+
   const d = await req.json().catch(() => null)
   if (!d) return Response.json({ ok: false, error: "بيانات غير صالحة" }, { status: 400 })
 
@@ -105,7 +111,12 @@ export async function POST(req: Request) {
   return Response.json({ ok: true, item: serClipItem(memItem), tags: cls.tags, atRest: { active: key !== null, keyed: !!kid } })
 }
 
-export async function DELETE() {
+export async function DELETE(req: Request) {
+  // FA-16 (تكليف 43): clip-clear فعل المالك على الكمبيوتر — loopback حصرًا
+  if (!guardPcOnly(req, "prod.denied", "clip-clear")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
+
   await db.prodClip.deleteMany({})
   prodEmit("clip:cleared", { at: Date.now() })
   return Response.json({ ok: true })
@@ -113,6 +124,11 @@ export async function DELETE() {
 
 /** استلام ملف فعلي: نسخ بايتات الملف من جهاز المصدر إلى تنزيلات الكمبيوتر */
 export async function PUT(req: Request) {
+  // FA-16 (تكليف 43): clip-file-pull فعل المالك على الكمبيوتر — loopback حصرًا
+  if (!guardPcOnly(req, "prod.denied", "clip-file-pull")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
+
   const { id } = await req.json().catch(() => ({}))
   if (!id) return Response.json({ ok: false, error: "معرّف مفقود" }, { status: 400 })
   const item = await db.prodClip.findUnique({ where: { id } })
