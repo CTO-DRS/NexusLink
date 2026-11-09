@@ -2500,3 +2500,35 @@ tsc صفر · eslint نظيف · التوثيق: docs/security-audit.md §FA-13 
 2. desktop-e2e يتطلب: `.env` بلا علامات اقتباس حول DATABASE_URL + `bunx prisma
    generate/db push` + `bun run build` + `bash apps/desktop/build-resources.sh`
    (موارد gateway/comms لـ procman) — كلها محلية gitignored.
+
+## تكليف 41 — FA-14: العمليات المدمرة على HTTP بلا بوابة محلية → guardPcOnly موحّد (عالية — مغلقة)
+
+### الفجوة
+FA-13 أغلقت أوامر الكمبيوتر على الجسور — لكن طبقة REST عبر البوابة حملت النمط
+نفسه في أجزاء لم تُمسّ: `/api/fs` POST (`runOps`: حذف/نقل/إعادة تسمية/نسخ/ضغط/
+فك على **القرص الفعلي**) · `/api/backup-secure` (حذف/تقليم/استعادة replace/تحقق
+عبارة/إنشاء — الجدولة وحدها كانت محمية) · `/api/transfer` (إيقاف/استئناف/إلغاء
+مهام المالك) · `/api/scan` + `/api/scan/page` (جلسات الماسح — الختم يكتب PDF في
+مجلد الكمبيوتر). أي عميل عبر البوابة (ترويسة x-gw-client-ip غير loopback)
+ينفّذها كلها — بينما نقاط إدارة أخرى كانت محمية أصلًا (§37/§48/§51/§54/§55/§59).
+
+### الإغلاق
+`src/lib/nexus/http-guard.ts` جديد: `guardPcOnly(req, auditKind, action)` —
+تعميم لحرس guardLocal (§54): بلا ترويسة (اتصال مباشر؛ Next على 127.0.0.1 حصرًا)
+أو ترويسة loopback → يمرّ · خلاف ذلك **403 {ok:false,error:"pc-only"}** + تدقيق
+مؤسسي (`fs.denied`/`transfer.denied` نوعان جديدان؛ `backup.denied`/`scan.denied`
+قائمة) بمخفف 3 ثوانٍ كنمط الجسور. البوابة قبل قراءة الجسم وفحص الوجود. طبّقت على
+الخمس: fs · backup-secure (باستثناء نبضة schedule-tick الداخلية) · transfer ·
+scan · scan/page. **الحدود الصادقة**: القراءات GET بمستوى كشف مساوٍ لواجهة
+الأجهزة القائمة (حد §36 «منظر لا باب») — البوابة للأفعال المدمرة حصرًا.
+
+### التحقق الحي — `scripts/fa13-e2e.mjs` ‏12 → 18 فحصًا ×2 جولتين
+- FA14/FS/lan: mkdir على قرص الكمبيوتر من عميل شبكي عبر البوابة → 403 pc-only
+- FA14/FS/loopback: mkdir المحلي يصل المعالج (ok:true) + delete ينظف الأثر
+- FA14/BACKUP/lan: حذف نسخة احتياطية من الشبكة → 403 loopback-only
+- FA14/TRANSFER/lan: إيقاف مهمة من الشبكة → 403 قبل فحص وجود المهمة
+- FA14/SCAN/lan: فتح جلسة ماسح من الشبكة → 403
+- والمحلي في كل المفاتيح يصل المعالج — الانحدار الكامل: **desktop-e2e 1080/1080**
+
+### الانحدار
+tsc صفر · lint نظيف · بناء إنتاجي أخضر · أساس E2E: **1710 → 1716 (+6)**

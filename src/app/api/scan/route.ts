@@ -14,6 +14,7 @@ import { NextResponse } from "next/server"
 import {
   openScanSession, getScanSession, addScanPage, actScanPage, cancelScanSession, sealScanSession, openSessions,
 } from "@/lib/nexus/scan-server"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -28,6 +29,14 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  // FA-14 (تكليف 41): إدارة جلسات الماسح تكتب PDF في مجلد الكمبيوتر عند الختم
+  // وتنشئ جلسات باسم المالك — loopback حصرًا (عقيدة FA-13 على HTTP)
+  if (!guardPcOnly(req, "scan.denied", "session")) {
+    return NextResponse.json(
+      { ok: false, error: "pc-only", detail: "via-gateway-non-loopback" },
+      { status: 403 },
+    )
+  }
   let body: Record<string, unknown> = {}
   try { body = await req.json() } catch { /* بلا جسم */ }
   const action = String(body.action ?? "")

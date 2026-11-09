@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { jobs, verifyChunkHash } from "@/lib/nexus/transfer-engine"
 import { abortSession, uploadSessions } from "@/lib/nexus/upload-sessions"
 import { guardEmitToAgent } from "@/lib/nexus/guard-bridge"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -11,6 +12,14 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  // FA-14 (تكليف 41): إيقاف/استئناف/إلغاء/تحقق مهام النقل أفعال المالك على
+  // الكمبيوتر — loopback حصرًا (عقيدة FA-13 على HTTP) — قبل فحص وجود المهمة
+  if (!guardPcOnly(req, "transfer.denied", "jobs")) {
+    return NextResponse.json(
+      { ok: false, error: "pc-only", detail: "via-gateway-non-loopback" },
+      { status: 403 },
+    )
+  }
   const { action, id } = await req.json()
   const job = jobs().get(id)
   if (!job) return NextResponse.json({ error: "المهمة غير موجودة" }, { status: 404 })
