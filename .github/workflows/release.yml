@@ -38,7 +38,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run lint
@@ -78,7 +78,7 @@ jobs:
             node-triple: "aarch64-apple-darwin"
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
 
@@ -310,7 +310,7 @@ jobs:
       # على وسوم v*: إرفاق تلقائي بالإصدار
       - name: Attach bundles to release (tag push)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             apps/desktop/src-tauri/target/release/bundle/**/*.AppImage
@@ -327,7 +327,7 @@ jobs:
       # على dispatch: إرفاق اختياري صريح (محمي افتراضيًا — لا يستبدل أصول موقعة)
       - name: Attach bundles to release (manual dispatch, opt-in)
         if: inputs.attach_to_release == true
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.release_tag }}
           files: |
@@ -347,7 +347,7 @@ jobs:
       run:
         working-directory: nexuslink_mobile
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
         with: { distribution: temurin, java-version: "17" }
       - uses: subosito/flutter-action@v2
@@ -394,7 +394,7 @@ jobs:
           path: nexuslink_mobile/build/app/outputs/bundle/release/app-release.aab
       - name: Attach APK to release (tag push)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: nexuslink_mobile/NexusLink-*-release.apk
 
@@ -402,7 +402,7 @@ jobs:
     needs: test
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with: { channel: stable }
       - name: Build IPA (unsigned — TestFlight needs Apple account)
@@ -419,7 +419,7 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with: { merge-multiple: true, path: dist }
       # الأصول تهبط متداخلة (bundle/<type>/…) لأن upload-artifact يخزّن نسبةً لجذر
@@ -498,7 +498,7 @@ jobs:
         run: cd dist && sha256sum * > SHA256SUMS.txt
       - name: Attach static release page
         run: cp public/NexusLink-Release-Page.html dist/
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           draft: true
           generate_release_notes: true
