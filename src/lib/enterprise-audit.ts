@@ -91,6 +91,8 @@ export type AuditKind =
   | "scan.page.remove"
   // §61 — اختيار معالجة صفحة (اسم الفلتر والعتبة وصفية حصرًا — لا محتوى صور)
   | "scan.page.filter"
+  // §62 — معاينة المعالجة الحية (الصفحة واسم الفلتر وصفية حصرًا — لا بايتات)
+  | "scan.preview"
   | "scan.seal"
   | "scan.cancel"
   | "scan.denied"
@@ -151,6 +153,7 @@ const KINDS: ReadonlySet<string> = new Set<string>([
   "scan.page.move",
   "scan.page.remove",
   "scan.page.filter",
+  "scan.preview",
   "scan.seal",
   "scan.cancel",
   "scan.denied",

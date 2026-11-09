@@ -25,6 +25,8 @@ function isLoopbackIp(ip: string): boolean {
 }
 
 const pageLimiter = createRateLimiter({ max: 60, windowMs: 60_000 })
+// §62 — معاينة المعالجة الحية: معدل أوفر من الرفع (قراءة + اشتقاق اختياري)
+const previewLimiter = createRateLimiter({ max: 120, windowMs: 60_000 })
 
 let counter = 0
 function newSessionId(): string {
@@ -173,6 +175,43 @@ export async function cancelScanSession(id: string) {
   removeSessionDir(id)
   await appendAudit("scan.cancel", true, "local", { id: id.slice(0, 24), pages: s.pages.length })
   return { ok: true as const }
+}
+
+/**
+ * §62 — معاينة المعالجة الحية: بايتات JPEG للصفحة بعد فلترها الحالي — نفس
+ * منطق الختم حرفًا حرفًا (none → الأصل كما رُفع · gray/bw → اشتقاق الذاكرة)
+ * فما يراه المستخدم قبل الختم هو ما سيُختم بعده بلا مفاجأة. الجلسة المفتوحة
+ * حصرًا والصفحة الحاضرة حصرًا ومعدل 120/د (أوفّر من الرفع 60/د — الاشتقاق
+ * أرخص من الشرح) والرد بلا تخزين (no-store) فكل معاينة انعكاس لحظي صادق.
+ */
+export async function previewScanPage(id: string, n: number, rateKey = "preview") {
+  if (!Number.isInteger(n)) return { ok: false as const, error: "page-not-found" as const, status: 400 }
+  const s = readSession(id)
+  if (!s) return { ok: false as const, error: "not-found" as const, status: 404 }
+  const p = s.pages.find((pg) => pg.n === n)
+  if (!p) return { ok: false as const, error: "page-not-found" as const, status: 400 }
+  if (!previewLimiter.hit(rateKey, Date.now())) {
+    await appendAudit("scan.denied", false, "local", { reason: "rate-limited", id: id.slice(0, 24), via: "preview" })
+    return { ok: false as const, error: "rate-limited" as const, status: 429 }
+  }
+  let bytes: Buffer
+  try {
+    bytes = fs.readFileSync(path.join(sessionDir(id), p.name))
+  } catch {
+    await appendAudit("scan.denied", false, "local", { reason: "page-file-missing", id: id.slice(0, 24), page: p.n, via: "preview" })
+    return { ok: false as const, error: "page-file-missing" as const, status: 400 }
+  }
+  if (p.filter === "gray" || p.filter === "bw") {
+    const d = await deriveScanPage(bytes, p.filter, p.thr)
+    if (!d.ok) {
+      await appendAudit("scan.denied", false, "local", { reason: d.error, id: id.slice(0, 24), page: p.n, via: "preview" })
+      return { ok: false as const, error: d.error as "derive-failed" | "derived-too-large" | "bad-dimensions" | "bad-filter" | "bad-threshold", status: 400 }
+    }
+    // التدقيق وصفية حصرًا — لا محتوى ولا أحجام مصفّى (الفحص البايتي للبوابة عبر الرد مباشرة)
+    await appendAudit("scan.preview", true, "local", { id: id.slice(0, 24), page: p.n, filter: p.filter })
+    return { ok: true as const, bytes: d.page.bytes, filter: p.filter }
+  }
+  return { ok: true as const, bytes, filter: "none" as const }
 }
 
 /** الختم: بناء PDF من الصفحات بالترتيب — صفحات §61 المعالَجة تُشتق في الذاكرة حصرًا (الأصل لا يُمس) */
