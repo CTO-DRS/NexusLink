@@ -254,7 +254,9 @@ export async function runOps(p: OpsPayload): Promise<{ ok: boolean; message: str
       const { promisify } = await import("util")
       const exec = promisify(execFile)
       const names = (p.paths || []).map((vp) => path.basename(vp))
-      await exec("zip", ["-q", "-r", zipAbs, ...names], { cwd: resolveSafe(deviceId, parentV) })
+      // فاصل -- حتمي: اسم ملف يبدأ بـ- يُفسَّر خيارًا واسم يبدأ بـ@ يُقرأ قائمة
+      // أسماء — الفاصل ينهي كل معالجة وسائط zip قبل الأسماء (تكليف 37)
+      await exec("zip", ["-q", "-r", zipAbs, "--", ...names], { cwd: resolveSafe(deviceId, parentV) })
       return { ok: true, message: `تم إنشاء ${zipName}` }
     }
     case "extract": {
