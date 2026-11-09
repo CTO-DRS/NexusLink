@@ -420,7 +420,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with: { merge-multiple: true, path: dist }
       # الأصول تهبط متداخلة (bundle/<type>/…) لأن upload-artifact يخزّن نسبةً لجذر
       # البحث (LCA) — وv1.0.0 لم تمرّ بهذا المسار أبدًا (release job تُخطّى على dispatch
