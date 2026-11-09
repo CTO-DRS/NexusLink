@@ -48,7 +48,7 @@ jobs:
           echo "site: index.html $(wc -c < _site/index.html) bytes"
           echo "seo files:"; ls -A _site/
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
