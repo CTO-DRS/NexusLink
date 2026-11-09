@@ -2,13 +2,14 @@
 # §50–§52 — إقلاع تطبيق Next.js ببيئة بوابات الخزنة والضيف والتركيز (الطور ب)
 # ملفات الحالة في مجلد حي مشترك — المسار يقرأها لحظيًا (نمط §37/§48/§49).
 set -u
-cd /home/z/my-project/nexuslink_repo
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
 E50=/tmp/nexuslink-e50-live
 mkdir -p "$E50"
 # حالة نظيفة: لا ضيف ولا تركيز + سجل تدقيق جديد
 rm -f "$E50/guest-share.json" "$E50/focus.json" "$E50/audit.jsonl"
 
-export DATABASE_URL="file:/home/z/my-project/nexuslink_repo/db/custom.db"
+export DATABASE_URL="file:$ROOT/db/custom.db"
 export NEXUSLINK_GUEST_FILE="$E50/guest-share.json"
 export NEXUSLINK_FOCUS_FILE="$E50/focus.json"
 export NEXUSLINK_AUDIT_FILE="$E50/audit.jsonl"

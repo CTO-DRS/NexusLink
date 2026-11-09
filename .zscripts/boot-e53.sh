@@ -2,13 +2,14 @@
 # §53 — إقلاع تطبيق Next.js ببيئة بوابات التسليم اليدوي الذكي (نمط boot-e50)
 # ملف الحالة في مجلد حي مشترك — المسار يقرأه لحظيًا.
 set -u
-cd /home/z/my-project/nexuslink_repo
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
 E53=/tmp/nexuslink-e53-live
 mkdir -p "$E53"
 # حالة نظيفة: لا قائمة تسليم + سجل تدقيق جديد
 rm -f "$E53/handoff.json" "$E53/audit.jsonl"
 
-export DATABASE_URL="file:/home/z/my-project/nexuslink_repo/db/custom.db"
+export DATABASE_URL="file:$ROOT/db/custom.db"
 export NEXUSLINK_HANDOFF_FILE="$E53/handoff.json"
 export NEXUSLINK_AUDIT_FILE="$E53/audit.jsonl"
 

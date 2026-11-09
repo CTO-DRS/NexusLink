@@ -2,13 +2,14 @@
 # §57 — إقلاع تطبيق Next.js ببيئة بوابة قفل التسليم الساكن (نمط boot-e53)
 # ملف الحالة في مجلد حي مشترك — المسار يقرأه لحظيًا.
 set -u
-cd /home/z/my-project/nexuslink_repo
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
 E57=/tmp/nexuslink-e57-live
 mkdir -p "$E57"
 # حالة نظيفة: لا قائمة تسليم + سجل تدقيق جديد (المفتاح يبقى في القاعدة — قصد)
 rm -f "$E57/handoff.json" "$E57/audit.jsonl"
 
-export DATABASE_URL="file:/home/z/my-project/nexuslink_repo/db/custom.db"
+export DATABASE_URL="file:$ROOT/db/custom.db"
 export NEXUSLINK_HANDOFF_FILE="$E57/handoff.json"
 export NEXUSLINK_AUDIT_FILE="$E57/audit.jsonl"
 

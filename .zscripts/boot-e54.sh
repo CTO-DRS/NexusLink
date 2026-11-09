@@ -2,14 +2,15 @@
 # §53+§54 — إقلاع تطبيق Next.js ببيئة بوابات التسليم اليدوي والدرع المشفّر
 # ملفات الحالة في مجلد حي مشترك — المسارات تقرأها لحظيًا (نمط §37/§48/§49/§50).
 set -u
-cd /home/z/my-project/nexuslink_repo
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
 E54=/tmp/nexuslink-e54-live
 mkdir -p "$E54"
 # حالة نظيفة: لا قائمة تسليم ولا نسخ ولا جدولة + سجل تدقيق جديد
 rm -f "$E54/handoff.json" "$E54/backup-secure.json" "$E54/audit.jsonl"
 rm -rf "$E54/backups"
 
-export DATABASE_URL="file:/home/z/my-project/nexuslink_repo/db/custom.db"
+export DATABASE_URL="file:$ROOT/db/custom.db"
 export NEXUSLINK_HANDOFF_FILE="$E54/handoff.json"
 export NEXUSLINK_BACKUP_DIR="$E54/backups"
 export NEXUSLINK_BACKUP_SCHEDULE_FILE="$E54/backup-secure.json"

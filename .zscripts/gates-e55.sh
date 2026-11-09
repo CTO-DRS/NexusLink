@@ -1,7 +1,8 @@
 #!/bin/bash
 # §53–§55 — بوابات الجولتين المتتاليتين للموجة الثانية كاملة (نمط gates-e54)
 set -u
-cd /home/z/my-project/nexuslink_repo
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
 
 kill_server() {
   pkill -f "next dev" 2>/dev/null

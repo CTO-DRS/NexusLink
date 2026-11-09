@@ -1,7 +1,8 @@
 #!/bin/bash
 # §50–§52 — بوابات الجولتين المتتاليتين: إقلاع نظيف لكل جولة (نمط boot-e47/boot-e48)
 set -u
-cd /home/z/my-project/nexuslink_repo
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
 
 kill_server() {
   pkill -f "next dev" 2>/dev/null
