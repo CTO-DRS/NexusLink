@@ -18,25 +18,35 @@ import { purgeExpired, serClipItem } from "@/lib/nexus/clip-vault-server"
 import { vaultStats } from "@/lib/nexus/clip-vault-core"
 import { CLIP_CONTENT_MAX } from "@/lib/nexus/clip-crypto"
 import {
-  ensureClipRestKey, loadClipRestKey,
+  ensureClipKeyFor, loadClipKeyRing,
   openClipRows, dropUnopenableClipRows, migratePlainClipRows,
   sealClipContent, openClipContent,
 } from "@/lib/nexus/clip-at-rest-server"
+import { ringKeyCount } from "@/lib/nexus/clip-multikey"
 
 export const dynamic = "force-dynamic"
 
 export async function GET() {
   await purgeExpired().catch(() => 0)
   const rows = await db.prodClip.findMany({ orderBy: { createdAt: "desc" }, take: 50 })
-  const key = await loadClipRestKey()
-  const { rows: opened, dropped } = openClipRows(rows, key)
+  // §59 — حلقة الأقفال: كل صف يُفك بمفتاح جهازه (kid مغلفه) وv1 بالمفتاح الموحد
+  const ring = await loadClipKeyRing()
+  // §58/§59 — الترحيل الصامت على المحتوى الخام المخزن حصرًا (قبل الفك) —
+  // درس مُقاس من ب9.ب: تمرير الصفوف بعد الفك كان يعيد ختم كل صف في كل قراءة
+  // بIV طازج (تضخيم كتابة موروث من §58) — الصحيح: يُفحص المخزن الخام فيُختم
+  // القديم العاري مرة واحدة ولا يُكتب المختوم أبدًا على القراءة.
+  const migrated = await migratePlainClipRows(rows, ring).catch(() => 0)
+  const { rows: opened, dropped } = openClipRows(rows, ring.resolver)
   if (dropped.length > 0) await dropUnopenableClipRows(dropped, "list")
-  // §58 — الترحيل الصامت: النص العاري القديم يُختم عند أول قراءة (نمط §57)
-  const migrated = await migratePlainClipRows(opened, key).catch(() => 0)
   return Response.json({
     items: opened.map((i) => serClipItem(i)),
     vault: vaultStats(opened, Date.now()),
-    atRest: { active: key !== null, migrated, dropped: dropped.length },
+    atRest: {
+      active: ring.legacy !== null || ring.byKid.size > 0,
+      keys: ringKeyCount(ring),
+      migrated,
+      dropped: dropped.length,
+    },
   })
 }
 
@@ -60,9 +70,10 @@ export async function POST(req: Request) {
     expiresAtFrom: typeof d.expiresAt === "number" ? d.expiresAt : null,
   })
   // §58 — الختم قبل ملامسة القاعدة: التصنيف على النص الصريح ثم الختم (نمط §57)
-  const key = await ensureClipRestKey()
+  // §59 — بمفتاح جهاز الصاحب (توليد عند أول كتابة لكل جهاز) — kid بالمغلف
+  const { key, kid } = await ensureClipKeyFor(deviceId)
   const memContent = contentStr.slice(0, CLIP_CONTENT_MAX)
-  const storedContent = sealClipContent(memContent, key)
+  const storedContent = sealClipContent(memContent, key, kid)
   const item = await db.prodClip.create({
     data: {
       deviceId,
@@ -91,7 +102,7 @@ export async function POST(req: Request) {
     actor: item.deviceName || item.deviceId,
     deviceId: item.deviceId,
   }).catch(() => null)
-  return Response.json({ ok: true, item: serClipItem(memItem), tags: cls.tags, atRest: { active: key !== null } })
+  return Response.json({ ok: true, item: serClipItem(memItem), tags: cls.tags, atRest: { active: key !== null, keyed: !!kid } })
 }
 
 export async function DELETE() {
@@ -127,8 +138,9 @@ export async function PUT(req: Request) {
     const updated = await db.prodClip.update({ where: { id }, data: { received: true } })
     prodEmit("clip:received", { id, name: path.basename(target), bytes: st.size, at: Date.now() })
     // §58: العائد شفاف — محتوى مقروء لا مغلف (نمط القراءة الموحد)
-    const restKey = await loadClipRestKey()
-    const oc = openClipContent(updated.content, restKey)
+    // §59: الفك بحلقة الأقفال (kid ← مفتاح جهازه)
+    const ring = await loadClipKeyRing()
+    const oc = openClipContent(updated.content, ring.resolver)
     const openedItem = { ...updated, content: oc.ok ? oc.content : "" }
     return Response.json({ ok: true, name: path.basename(target), bytes: st.size, item: openedItem })
   } catch (e) {

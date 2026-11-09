@@ -59,8 +59,9 @@ export function ClipboardTab() {
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<ProdClipItem[] | null>(null)
   // §58 — قفل الخزنة الساكن: حالة حية من القائمة (نشط + عدّاد الترحيل)
-  const [rest, setRest] = useState<{ active: boolean; migrated?: number; dropped?: number } | null>(null)
-  const [restBusy, setRestBusy] = useState<"" | "seal" | "rotate">("")
+  // §59 — حلقة الأقفال: عدد الأقفال (الموحد + الأجهزة) وأسماء الأجهزة المقفولة
+  const [rest, setRest] = useState<{ active: boolean; keys?: number; devices?: string[]; migrated?: number; dropped?: number } | null>(null)
+  const [restBusy, setRestBusy] = useState<"" | "seal" | "rotate" | `dev:${string}`>("")
 
   useEffect(() => {
     void loadClipMax().then((v) => { if (v) setClipMaxLocal(v) })
@@ -111,17 +112,20 @@ export function ClipboardTab() {
     await reloadClips()
   }
 
-  /** §58 — تدوير القفل: مفتاح جديد وإعادة ختم شاملة — والمفتاح لا يُعرض أبدًا */
-  async function rotateKeyNow() {
-    setRestBusy("rotate")
+  /** §58 — تدوير القفل: مفتاح جديد وإعادة ختم شاملة — والمفتاح لا يُعرض أبدًا
+   *  §59 — بdeviceId: تدوير جهاز مفرد — صفوفه حصرًا والأجهزة الأخرى لا تُمس */
+  async function rotateKeyNow(deviceId?: string) {
+    setRestBusy(deviceId ? `dev:${deviceId}` : "rotate")
     try {
       const r = await fetch("/api/prod/clipboard/vault", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "rotate-key" }),
+        body: JSON.stringify(deviceId ? { action: "rotate-key", deviceId } : { action: "rotate-key" }),
       })
       const j = await r.json()
-      if (j.ok) toast.success("دُوّر القفل — كل الصفوف أُعيد ختمها بمفتاح جديد", { description: `أعيد ختم: ${j.resealed ?? 0} · سقط: ${j.dropped ?? 0}` })
-      else toast.error("تعذّر التدوير", { description: String(j.error || "") })
+      if (j.ok) {
+        if (deviceId) toast.success(`دُوّر قفل «${deviceId}» — صفوفه أُعيد ختمها بمفتاح جديد`, { description: `أعيد ختم: ${j.resealed ?? 0} · سقط: ${j.dropped ?? 0}` })
+        else toast.success("دُوّرت الأقفال كلها — كل جهاز بمفتاحه الجديد", { description: `أعيد ختم: ${j.resealed ?? 0} · سقط: ${j.dropped ?? 0} · أقفال: ${j.keys ?? ""}` })
+      } else toast.error("تعذّر التدوير", { description: String(j.error || "") })
     } catch { toast.error("تعذّر الاتصال") }
     setRestBusy("")
     await reloadClips()
@@ -359,14 +363,15 @@ export function ClipboardTab() {
             {rest?.active && (
               <Badge variant="secondary" className="rounded-full text-[9.5px] gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                 <Lock className="w-2.5 h-2.5" /> مقفول على القرص §58
+                {typeof rest.keys === "number" ? ` · ${rest.keys} ${rest.keys === 1 ? "قفل" : "أقفال"}` : ""}
                 {typeof rest.migrated === "number" && rest.migrated > 0 ? ` · رُحّل ${rest.migrated}` : ""}
               </Badge>
             )}
             <Button variant="ghost" size="sm" disabled={restBusy !== ""} className="h-7 rounded-lg gap-1 text-[10.5px]" onClick={() => void sealAllNow()} aria-label="ختم السجل كاملًا (§58)">
               <Stamp className="w-3.5 h-3.5" /> {restBusy === "seal" ? "يختم…" : "ختم السجل"}
             </Button>
-            <Button variant="ghost" size="sm" disabled={restBusy !== ""} className="h-7 rounded-lg gap-1 text-[10.5px]" onClick={() => void rotateKeyNow()} aria-label="تدوير قفل الخزنة (§58)">
-              <KeyRound className="w-3.5 h-3.5" /> {restBusy === "rotate" ? "يدوّر…" : "تدوير القفل"}
+            <Button variant="ghost" size="sm" disabled={restBusy !== ""} className="h-7 rounded-lg gap-1 text-[10.5px]" onClick={() => void rotateKeyNow()} aria-label="تدوير أقفال الخزنة كلها (§58/§59)">
+              <KeyRound className="w-3.5 h-3.5" /> {restBusy === "rotate" ? "يدوّر…" : "تدوير الأقفال"}
             </Button>
             {clips.length > 0 && !query.trim() && (
               <Button variant="ghost" size="sm" className="h-7 rounded-lg gap-1 text-[10.5px] text-red-500 hover:text-red-600" onClick={() => void clearAll()}>
@@ -418,6 +423,17 @@ export function ClipboardTab() {
                       )}
                     </div>
                     <div className="flex flex-col gap-1 shrink-0">
+                      {rest?.active && (
+                        <Button
+                          variant="ghost" size="icon"
+                          className="w-7 h-7 rounded-lg text-emerald-600 hover:text-emerald-700"
+                          aria-label={`تدوير مفتاح هذا الجهاز — ${c.deviceId} (§59)`}
+                          disabled={restBusy !== ""}
+                          onClick={() => void rotateKeyNow(c.deviceId)}
+                        >
+                          {restBusy === `dev:${c.deviceId}` ? <KeyRound className="w-3.5 h-3.5 animate-pulse" /> : <KeyRound className="w-3.5 h-3.5" />}
+                        </Button>
+                      )}
                       {c.kind === "text" && c.masked && (
                         <Button variant="ghost" size="icon" className="w-7 h-7 rounded-lg text-amber-600" aria-label="كشف العنصر الحساس (مُدقَّق)" onClick={() => void reveal(c.id)}>
                           <Eye className="w-3.5 h-3.5" />
@@ -494,7 +510,7 @@ export function ClipboardTab() {
             <span className="font-semibold text-foreground">خزنة الحافظة (§50):</span> الحساس (رمز دخول/كلمة سر/بطاقة) يُقنَّع تلقائيًا وينتهي بعد 15 دقيقة — الكشف المقصود مُدقَّق، والتدبيس يحفظ ما لا تريد فقدانه، واللصق المؤقت يختفي بذاته.
           </p>
           <p className="text-muted-foreground">
-            <span className="font-semibold text-foreground">القفل الساكن (§58):</span> كل عنصر يُختم AES-256-GCM قبل ملامسة القاعدة — من يسرق ملف القاعدة يرى مغلفات لا نصوصك. «ختم السجل» يغلق القديم فورًا، و«تدوير القفل» يعيد الختم بمفتاح جديد يُنسى القديم بعده.
+            <span className="font-semibold text-foreground">القفل الساكن (§58/§59):</span> كل عنصر يُختم AES-256-GCM قبل ملامسة القاعدة — ومن يسرق ملف القاعدة يرى مغلفات لا نصوصك. وكل جهاز يقفصه بمفتاحه الخاص: تسريب مفتاح هاتف لا يفتح بايتًا من الكمبيوتر والعكس. «ختم السجل» يغلق القديم فورًا، و«تدوير الأقفال» يعيد الختم كله بمفاتيح جديدة، وزر المفتاح على كل صف يدوّر قفل جهازه وحده.
           </p>
         </div>
       </aside>

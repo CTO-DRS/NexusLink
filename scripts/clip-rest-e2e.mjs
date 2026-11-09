@@ -223,18 +223,20 @@ if (!APP || !DB_PATH) {
   r = await postJson("/api/prod/clipboard/vault", { action: "rotate-key" }, { "x-gw-client-ip": "10.0.0.9" })
   ok("ب18 تدوير من خارج الجهاز → 403", r.status === 403 && r.j?.error === "clip-admin-loopback-only")
 
-  // ب19–ب21 — الجسر الحي (سوكِت 3007): الدفع مغلف في القاعدة وسجل العمليات معه
+  // ب19–ب21 — الجسر الحي (سوكِت الجسر): الدفع مغلف في القاعدة وسجل العمليات معه
   const { io: sockClient } = await import("socket.io-client")
   const sock = sockClient(BRIDGE, { path: "/", transports: ["websocket"], timeout: 8000 })
   const sockEmit = (ev, payload) => new Promise((res) => sock.emit(ev, payload, res))
   const sockOnce = (ev, ms = 6000) => new Promise((res) => { const t = setTimeout(() => res(null), ms); sock.once(ev, (d) => { clearTimeout(t); res(d) }) })
+  // درس مُقاس في §59: مستمع الترحيب يُسجّل قبل الاتصال — ما بعده سباق يُفقد hello
+  // فيصير المؤشر صفرًا فتعود أول 200 عملية القديمة لا عمليتنا (فشل ب21 في قواعد السجلات الطويلة)
+  const helloEarly = sockOnce("prod:hello", 6000)
   await new Promise((res) => { sock.on("connect", res); sock.on("connect_error", res); sock.connect() })
   const connected = sock.connected
   ok("ب19 اتصال الجسر الحي محلي", connected)
   if (connected) {
     // مؤشر الاستئناف = رأس السجل عند الاتصال (prod:hello) — فيشمل الإعادة عمليتنا حصرًا
-    const helloP = sockOnce("prod:hello", 5000)
-    const hello = (await helloP) ?? {}
+    const hello = (await Promise.race([helloEarly, sockOnce("prod:hello", 3000)])) ?? {}
     const replayP = sockOnce("prod:replay")
     sock.emit("clip:push", { deviceId: "e58-honeypot", deviceName: "هاتف القفل", kind: "text", content: SOCKET_TEXT, mode: "manual" })
     await new Promise((res) => setTimeout(res, 1200))
@@ -249,13 +251,14 @@ if (!APP || !DB_PATH) {
     ok("ب21 الإعادة المحلية شفافة: النص يعود كاملًا من فوق المغلف", false, "بلا اتصال")
   }
 
-  // ب22 — سجل §39: أنواع crypto الأربعة موثقة بلا أي محتوى
+  // ب22 — سجل §39: أنواع crypto الموثقة بلا أي محتوى — §59: التهيئة الطبيعية
+  // أصبحت لكل جهاز (multi.init) فـ«init» الموحد يظل بديلًا مشروعًا (الأجهزة الشاردة/الفشل)
   r = await getJson("/api/enterprise/audit?limit=500")
   const evs = r.j?.events ?? []
   const kindsSet = new Set(evs.map((e) => e.k))
-  const cryptoKinds = ["clip.crypto.init", "clip.crypto.rotate", "clip.crypto.drop", "clip.crypto.sealall"].filter((k) => kindsSet.has(k))
+  const cryptoKinds = ["clip.crypto.init", "clip.crypto.multi.init", "clip.crypto.rotate", "clip.crypto.drop", "clip.crypto.sealall"].filter((k) => kindsSet.has(k))
   const noLeak = evs.every((e) => !JSON.stringify(e.d ?? {}).includes(SECRET_NEEDLE) && !JSON.stringify(e.d ?? {}).includes("عاري-قديم"))
-  ok("ب22 سجل §39: أنواع crypto الأربعة موثقة بلا محتوى", cryptoKinds.length === 4 && noLeak, `kinds=${cryptoKinds.join(",")}`)
+  ok("ب22 سجل §39: rotate/drop/sealall مع تهيئة (init أو multi.init لكل جهاز — عقد §59) بلا محتوى", ["clip.crypto.rotate", "clip.crypto.drop", "clip.crypto.sealall"].every((k) => kindsSet.has(k)) && (cryptoKinds.includes("clip.crypto.init") || cryptoKinds.includes("clip.crypto.multi.init")) && noLeak, `kinds=${cryptoKinds.join(",")}`)
 
   // ب23 — مسح نهائي: القاعدة تفقد كل المغلفات (فعل الحذف القديم سليم)
   r = await fetch(base + "/api/prod/clipboard", { method: "DELETE" })

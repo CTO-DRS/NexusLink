@@ -144,10 +144,13 @@ if (!APP) {
   ok("ب8 جلسة غائبة → 404", r.status === 404 && r.j?.error === "not-found")
 
   // ب9 — الختم إلى مجلد الكمبيوتر الافتراضي وقراءة PDF من القرص
+  // درس مُقاس في §59: سيرفر standalone يغيّر cwd إلى .next/standalone فُكتب PDF
+  // تحت .next/standalone/data — جذر بيانات القراءة قابل للتجاوز بـ--data-root
   r = await postJson("/api/scan", { action: "seal", id: sid })
   const sealedName = r.j?.file
   ok("ب9 ختم: ملف PDF بعدد صفحات وحجم", r.status === 200 && r.j?.ok === true && sealedName?.endsWith(".pdf") && r.j.pages === 2 && r.j.bytes > 400)
-  const pdfPath = path.join(process.cwd(), "data", "nexus-storage", "pc-fs", "Documents", sealedName)
+  const DATA_ROOT = (() => { const i = process.argv.indexOf("--data-root"); return i > 0 ? process.argv[i + 1] : path.join(process.cwd(), "data") })()
+  const pdfPath = path.join(DATA_ROOT, "nexus-storage", "pc-fs", "Documents", sealedName)
   const pdfBuf = fs.readFileSync(pdfPath)
   const pdfStr = pdfBuf.toString("binary")
   ok("ب10 PDF على القرص: صفحتان DCTDecode وEOF", pdfBuf.subarray(0, 8).toString("binary") === "%PDF-1.4" && (pdfStr.match(/\/Subtype \/Image/g) || []).length === 2 && pdfStr.includes("/Filter /DCTDecode") && pdfStr.trimEnd().endsWith("%%EOF"))

@@ -14,9 +14,10 @@
 //  - delete: حذف عنصر واحد بمعرفه.
 //  - sweep: تطهير المنتهي (غير المثبت) الآن — idempotent.
 //  - seal-all (§58): ختم كل النص العاري في السجل — عدّاد حصرًا.
-//  - rotate-key (§58): مفتاح جديد وإعادة ختم شاملة — loopback حصرًا.
+//  - rotate-key (§58/§59): تدوير شامل — أو جهاز مفرد بdeviceId (§59):
+//    يد محلية حصرًا (حرس loopback نمط §37/§51/§57) والمفاتيح لا تُعرض أبدًا.
 // صفر مخطط جديد: أعمدة ProdClip الإضافية الثلاثة (نمط الترقية الآمنة §26.ط)
-// ومفتاح §58 في DesktopSetting صفر-مخطط (نمط §34.ب/§54/§57).
+// ومفاتيح §58/§59 في DesktopSetting صفر-مخطط (نمط §34.ب/§54/§57/§59).
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { prodEmit } from "@/lib/nexus/productivity-bridge"
@@ -25,10 +26,11 @@ import { appendAudit } from "@/lib/enterprise-audit"
 import { searchClips, vaultStats } from "@/lib/nexus/clip-vault-core"
 import { purgeExpired, serClipItem } from "@/lib/nexus/clip-vault-server"
 import {
-  loadClipRestKey, openClipRows, dropUnopenableClipRows,
+  loadClipKeyRing, openClipRows, dropUnopenableClipRows,
   migratePlainClipRows, openClipContent,
-  sealAllClipRows, rotateClipRestKey,
+  sealAllClipRows, rotateClipRestKey, rotateClipKeyFor,
 } from "@/lib/nexus/clip-at-rest-server"
+import { ringDevices, ringKeyCount } from "@/lib/nexus/clip-multikey"
 
 export const dynamic = "force-dynamic"
 
@@ -42,21 +44,30 @@ export async function GET(req: Request) {
   const q = url.searchParams.get("q") ?? ""
   const take = q ? 400 : 50 // البحث يفحص أعمق من عرض «آخر 50» التعاقدي (§11 يبقى كما هو)
   const rows = await db.prodClip.findMany({ orderBy: { createdAt: "desc" }, take })
-  const key = await loadClipRestKey()
-  const { rows: opened, dropped } = openClipRows(rows, key)
+  // §59 — حلقة الأقفال: كل صف يُفك بمفتاح جهازه (kid مغلفه) وv1 بالمفتاح الموحد
+  const ring = await loadClipKeyRing()
+  // §58/§59 — الترحيل على الخام المخزن قبل الفك حصرًا (درس ب9.ب: بلا إعادة ختم على القراءة)
+  const migrated = await migratePlainClipRows(rows, ring).catch(() => 0)
+  const { rows: opened, dropped } = openClipRows(rows, ring.resolver)
   if (dropped.length > 0) await dropUnopenableClipRows(dropped, "vault")
-  const migrated = await migratePlainClipRows(opened, key).catch(() => 0)
+  const restStatus = {
+    active: ring.legacy !== null || ring.byKid.size > 0,
+    keys: ringKeyCount(ring),
+    devices: ringDevices(ring).map((d) => d.device),
+    migrated,
+    dropped: dropped.length,
+  }
   if (q.trim()) {
     const hits = searchClips(opened, q)
     const byId = new Map(opened.map((r) => [r.id, r]))
     const items = hits.map((h) => (byId.get(h.id) ? serClipItem(byId.get(h.id)!) : null)).filter(Boolean)
-    return NextResponse.json({ ok: true, q, items, atRest: { active: key !== null, migrated, dropped: dropped.length } })
+    return NextResponse.json({ ok: true, q, items, atRest: restStatus })
   }
   return NextResponse.json({
     ok: true,
     items: opened.map((r) => serClipItem(r)),
     vault: vaultStats(opened, Date.now()),
-    atRest: { active: key !== null, migrated, dropped: dropped.length },
+    atRest: restStatus,
   })
 }
 
@@ -76,7 +87,8 @@ export async function POST(req: Request) {
     return NextResponse.json(r, { status: r.ok ? 200 : 500 })
   }
 
-  // §58 — تدوير القفل: يد محلية حصرًا (نمط §37/§51/§57) — والمفتاح لا يُعرض
+  // §58/§59 — تدوير الأقفال: يد محلية حصرًا (نمط §37/§51/§57) — والمفاتيح لا تُعرض
+  // §59: بdeviceId يُدار قفل الجهاز المفرد (صفوفه حصرًا) — وبدونه الشامل
   if (action === "rotate-key") {
     const fwd = req.headers.get("x-gw-client-ip")
     if (fwd && !isLoopbackIp(fwd)) {
@@ -86,6 +98,8 @@ export async function POST(req: Request) {
         { status: 403 },
       )
     }
+    const devId = body?.deviceId ? String(body.deviceId) : null
+    if (devId) return NextResponse.json(await rotateClipKeyFor(devId))
     return NextResponse.json(await rotateClipRestKey())
   }
 
@@ -93,8 +107,9 @@ export async function POST(req: Request) {
   const raw = await db.prodClip.findUnique({ where: { id } })
   if (!raw) return NextResponse.json({ ok: false, error: "عنصر غير موجود" }, { status: 404 })
   // §58 — الصف يُفك عند حدود القرص قبل أي فعل (القاعدة مغلفات والذاكرة نص)
-  const key = await loadClipRestKey()
-  const openedRow = openClipContent(raw.content, key)
+  // §59 — الفك بحلقة الأقفال (kid ← مفتاح جهازه)
+  const ring = await loadClipKeyRing()
+  const openedRow = openClipContent(raw.content, ring.resolver)
   if (!openedRow.ok) {
     // غير قابل للفك: يُسقط فرديًا بصدق (نمط §57) — لا كشف ولا فعل على قناغة ميتة
     await dropUnopenableClipRows([raw.id], "vault-act")
