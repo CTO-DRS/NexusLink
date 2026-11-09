@@ -40,6 +40,10 @@ jobs:
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile
 
+      # الخدمات المصغّرة حزم مستقلة بعتمادياتها (tsconfig الجذري يشملها بـ**/*.ts)
+      - name: Install mini-services dependencies
+        run: cd mini-services/comms-service && bun install
+
       - name: Generate Prisma client
         run: bunx prisma generate
 
