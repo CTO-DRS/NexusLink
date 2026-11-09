@@ -3,6 +3,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/CTO-DRS/NexusLink)](https://github.com/CTO-DRS/NexusLink/releases/latest)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-009b8f)](https://cto-drs.github.io/NexusLink/)
 [![Website](https://img.shields.io/website?url=https%3A%2F%2Fcto-drs.github.io%2FNexusLink%2F&up_color=009b8f)](https://cto-drs.github.io/NexusLink/)
+[![Quality Gate](https://github.com/CTO-DRS/NexusLink/actions/workflows/quality.yml/badge.svg)](https://github.com/CTO-DRS/NexusLink/actions/workflows/quality.yml)
 [![Commit activity](https://img.shields.io/github/commit-activity/m/CTO-DRS/NexusLink)](https://github.com/CTO-DRS/NexusLink/commits/main)
 [![Last commit](https://img.shields.io/github/last-commit/CTO-DRS/NexusLink)](https://github.com/CTO-DRS/NexusLink/commits/main)
 
@@ -12,7 +13,8 @@
 > Windows 10/11 · macOS 12+ · Linux x64 · Android 8+ (iOS: وسائط/ملفات/حافظة فقط — حد معلن) ·
 > ازدواجية ترخيص صادقة: نواة مملوكة + مجموعة مفتوحة MIT (انظر `LICENSE` و`docs/OPEN-COMPONENTS.md`) ·
 > لا سحابة · لا حسابات · لا تتبع · تشفير X25519 + AES-256-GCM من الطرف للطرف ·
-> 6 لغات (ar · en · fr · es · de · ru) · 1316 فحص E2E عبر 49 عقدًا موثقًا.
+> 6 لغات (ar · en · fr · es · de · ru) · 1698 فحص E2E عبر 49 عقدًا موثقًا ·
+> بوابة جودة آلية على كل دفعة (lint + tsc صفر + بناء إنتاجي) وحرس أسرار وDependabot أسبوعي.
 
 منصة واحدة تربط هاتفك بجهاز الكمبيوتر — كل شيء محلي على شبكتك، بلا سحابة وبلا حسابات.
 هذا الملف يشرح التشغيل الكامل: **سطح المكتب (المركز) ← الهاتف (الوكيل) ← الاختبار المشترك**،
