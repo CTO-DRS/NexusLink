@@ -3828,7 +3828,6 @@
   "حُذفت النسخة": "Copia eliminada", 
   "الاحتفاظ: آخر 10 يدوية و5 مجدولة — البقية تُطرد حتميًا. التدوير يغلق النسخ المجدولة القديمة بصدق.": "Retención: últimas 10 manuales y 5 programadas — el resto se expulsa. La rotación bloquea honestamente las antiguas.", 
   "الماسح الموثق الحي (§55)": "Escáner de documentos en vivo (§55)", 
-  "صفحات JPEG من هاتفك تُدمج في PDF على هذا الحاسوب حصرًا — بلا سحابة ولا معالجة صور (مرور نقي)": "Páginas JPEG de tu teléfono a PDF solo en esta computadora — sin nube ni procesamiento (paso sin pérdidas)", 
   "صفحة": "página", 
   "لا جلسة مفتوحة": "Sin sesión abierta", 
   "عنوان المسح (مثلًا: عقد الإيجار)": "Título del escaneo (p. ej., contrato)", 
@@ -3847,5 +3846,12 @@
   "الحدود: 30 صفحة لكل جلسة و12MB للصفحة و3 جلسات مفتوحة — JPEG حصرًا بفحص السحر حرفيًا": "Límites: 30 páginas por sesión, 12MB por página, 3 sesiones abiertas — solo JPEG, verificado por firma", 
   "صفحة المسح": "Página escaneada", 
   "القائمة مقفلة على القرص — حمولات مشفرة لا نصًّا عاريًا": "Cola sellada en disco — cargas cifradas, nunca texto plano", 
-  "سيُختم القرص تلقائيًا عند أول دفعة تسليم": "El sellado del disco se activa en el primer envío"
+  "سيُختم القرص تلقائيًا عند أول دفعة تسليم": "El sellado del disco se activa en el primer envío", 
+  "صفحات JPEG من هاتفك تُدمج في PDF على هذا الحاسوب حصرًا — بلا سحابة، ومعالجة اختيارية تُطبَّق عند الختم فقط (الأصل لا يُمس)": "Las páginas JPEG de tu teléfono se convierten en un PDF solo en este equipo — sin nube, mejora opcional aplicada únicamente al sellar (el original nunca se toca)", 
+  "بلا معالجة": "Sin procesamiento", 
+  "رمادي محسّن": "Gris mejorado", 
+  "أبيض وأسود": "Blanco y negro", 
+  "حد العتبة": "Umbral", 
+  "المعالجة": "Procesamiento", 
+  "المعالجة في الذاكرة عند الختم حصرًا — ملف الصفحة الأصلي على القرص لا يُمس": "El procesamiento ocurre en memoria solo al sellar — el archivo de página original en disco nunca se toca"
 }

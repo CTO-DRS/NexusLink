@@ -3828,7 +3828,6 @@
   "حُذفت النسخة": "Backup deleted", 
   "الاحتفاظ: آخر 10 يدوية و5 مجدولة — البقية تُطرد حتميًا. التدوير يغلق النسخ المجدولة القديمة بصدق.": "Retention: last 10 manual and 5 scheduled — the rest are evicted deterministically. Rotation honestly locks older scheduled backups.", 
   "الماسح الموثق الحي (§55)": "Live document scanner (§55)", 
-  "صفحات JPEG من هاتفك تُدمج في PDF على هذا الحاسوب حصرًا — بلا سحابة ولا معالجة صور (مرور نقي)": "JPEG pages from your phone become a PDF on this computer only — no cloud, no image processing (lossless passthrough)", 
   "صفحة": "page", 
   "لا جلسة مفتوحة": "No open session", 
   "عنوان المسح (مثلًا: عقد الإيجار)": "Scan title (e.g., rental contract)", 
@@ -3847,5 +3846,12 @@
   "الحدود: 30 صفحة لكل جلسة و12MB للصفحة و3 جلسات مفتوحة — JPEG حصرًا بفحص السحر حرفيًا": "Limits: 30 pages per session, 12MB per page, 3 open sessions — JPEG only, verified by magic bytes", 
   "صفحة المسح": "Scan page", 
   "القائمة مقفلة على القرص — حمولات مشفرة لا نصًّا عاريًا": "Queue sealed on disk — payloads encrypted, never bare text", 
-  "سيُختم القرص تلقائيًا عند أول دفعة تسليم": "Disk sealing activates automatically on the first handoff push"
+  "سيُختم القرص تلقائيًا عند أول دفعة تسليم": "Disk sealing activates automatically on the first handoff push", 
+  "صفحات JPEG من هاتفك تُدمج في PDF على هذا الحاسوب حصرًا — بلا سحابة، ومعالجة اختيارية تُطبَّق عند الختم فقط (الأصل لا يُمس)": "JPEG pages from your phone become one PDF on this computer only — no cloud, optional enhancement applied at seal time only (the original is never touched)", 
+  "بلا معالجة": "No processing", 
+  "رمادي محسّن": "Enhanced gray", 
+  "أبيض وأسود": "Black & white", 
+  "حد العتبة": "Threshold", 
+  "المعالجة": "Processing", 
+  "المعالجة في الذاكرة عند الختم حصرًا — ملف الصفحة الأصلي على القرص لا يُمس": "Processing happens in memory at seal time only — the original page file on disk is never touched"
 }

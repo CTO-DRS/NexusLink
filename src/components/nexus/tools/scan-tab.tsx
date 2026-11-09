@@ -1,18 +1,23 @@
 "use client"
 // عقد §55 — الماسح الموثق الحي — تبويب الأدوات
-// جلسة مسح: الصفحات (JPEG) من الهاتف تُدفع للجلسة على الحاسوب، ترتيب وتدوير،
-// ثم ختم إلى PDF محلي (مرور JPEG نقي — بلا سحابة ولا معالجة صور).
-import { useCallback, useEffect, useState } from "react"
+// جلسة مسح: الصفحات (JPEG) من الهاتف تُدفع للجلسة على الحاسوب، ترتيب وتدوير
+// ومعالجة اختيارية (§61: رمادي محسّن / أبيض وأسود بعتبة)، ثم ختم إلى PDF
+// محلي — المعالجة عند الختم حصرًا في الذاكرة (الأصل لا يُمس).
+import { useCallback, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { useI18n } from "@/lib/i18n"
 import { toast } from "sonner"
-import { ScanLine, RotateCw, ArrowUp, ArrowDown, Trash2, FileCheck2, X, Plus, Image as ImageIcon } from "lucide-react"
+import { ScanLine, RotateCw, ArrowUp, ArrowDown, Trash2, FileCheck2, X, Plus, Image as ImageIcon, Wand2 } from "lucide-react"
 
-interface ScanPageView { n: number; name: string; size: number; rotate: number; at: number }
+interface ScanPageView { n: number; name: string; size: number; rotate: number; at: number; filter: string; thr: number | null }
 interface SessionView { id: string; title: string; status: string; createdAt: number; pages: ScanPageView[] }
+
+const FILTERS = ["none", "gray", "bw"] as const
+const THR_MIN = 1
+const THR_MAX = 254
 
 function fmtSize(n: number): string {
   return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`
@@ -30,10 +35,6 @@ export function ScanTab() {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((j: SessionView | { session?: SessionView }) => setSession("session" in j ? (j.session ?? null) : null))
       .catch(() => setSession(null))
-  }, [])
-  useEffect(() => {
-    // لا استطلاع خلفي — تحديث عند كل فعل فقط (نمط نبض الفتح)
-    return () => { /* تنظيف لا شيء */ }
   }, [])
 
   const post = async (body: Record<string, unknown>, okMsg?: string) => {
@@ -70,6 +71,21 @@ export function ScanTab() {
     load(session.id)
   }
 
+  const setFilter = async (n: number, filter: string, thr?: number) => {
+    const body: Record<string, unknown> = { action: "filter", id: session?.id, n, filter }
+    if (filter === "bw" && thr !== undefined) body.thr = thr
+    await post(body)
+  }
+
+  const submitThreshold = async (p: ScanPageView, raw: string) => {
+    const v = Number(raw)
+    if (!Number.isInteger(v) || v < THR_MIN || v > THR_MAX) {
+      toast.error(`${t("حد العتبة")}: ${THR_MIN}–${THR_MAX}`)
+      return
+    }
+    await setFilter(p.n, "bw", v)
+  }
+
   return (
     <Card>
       <CardContent className="p-5 space-y-4">
@@ -80,7 +96,7 @@ export function ScanTab() {
               {t("الماسح الموثق الحي (§55)")}
             </h3>
             <p className="text-xs text-muted-foreground mt-1">
-              {t("صفحات JPEG من هاتفك تُدمج في PDF على هذا الحاسوب حصرًا — بلا سحابة ولا معالجة صور (مرور نقي)")}
+              {t("صفحات JPEG من هاتفك تُدمج في PDF على هذا الحاسوب حصرًا — بلا سحابة، ومعالجة اختيارية تُطبَّق عند الختم فقط (الأصل لا يُمس)")}
             </p>
           </div>
           {session ? (
@@ -123,32 +139,58 @@ export function ScanTab() {
             ) : (
               <ul className="space-y-1.5" data-testid="scan-pages">
                 {session.pages.map((p, i) => (
-                  <li key={p.n} className="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5" data-testid="scan-page">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Badge variant="outline" className="text-[9px] shrink-0" data-no-i18n>#{i + 1}</Badge>
-                      <span className="text-[11px] font-mono truncate" dir="ltr">{p.name}</span>
-                      <span className="text-[9px] text-muted-foreground shrink-0">{fmtSize(p.size)}</span>
-                      {p.rotate !== 0 && <Badge variant="secondary" className="text-[9px] shrink-0" data-no-i18n>{p.rotate}°</Badge>}
+                  <li key={p.n} className="flex flex-col gap-1 rounded-lg border px-2.5 py-1.5" data-testid="scan-page">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Badge variant="outline" className="text-[9px] shrink-0" data-no-i18n>#{i + 1}</Badge>
+                        <span className="text-[11px] font-mono truncate" dir="ltr">{p.name}</span>
+                        <span className="text-[9px] text-muted-foreground shrink-0">{fmtSize(p.size)}</span>
+                        {p.rotate !== 0 && <Badge variant="secondary" className="text-[9px] shrink-0" data-no-i18n>{p.rotate}°</Badge>}
+                        {p.filter === "gray" && <Badge variant="secondary" className="text-[9px] shrink-0 gap-0.5" data-testid={`scan-filter-active-${p.n}`}><Wand2 className="w-2.5 h-2.5" />{t("رمادي محسّن")}</Badge>}
+                        {p.filter === "bw" && <Badge variant="secondary" className="text-[9px] shrink-0 gap-0.5" data-testid={`scan-filter-active-${p.n}`}><Wand2 className="w-2.5 h-2.5" />{t("أبيض وأسود")} <span data-no-i18n dir="ltr">@{p.thr ?? 160}</span></Badge>}
+                      </div>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        {[0, 90, 180, 270].map((deg) => (
+                          <Button key={deg} size="icon" variant={p.rotate === deg ? "secondary" : "ghost"} className="h-6 w-6 text-[9px]" aria-label={`${t("تدوير")} ${deg}`}
+                            onClick={() => void post({ action: "rotate", id: session.id, n: p.n, deg })}>
+                            {deg === 0 ? "0°" : <RotateCw className="w-3 h-3" />}
+                          </Button>
+                        ))}
+                        <Button size="icon" variant="ghost" className="h-6 w-6" aria-label={t("للأعلى")} disabled={i === 0}
+                          onClick={() => void post({ action: "move", id: session.id, from: i, to: i - 1 })}>
+                          <ArrowUp className="w-3 h-3" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" aria-label={t("للأسفل")} disabled={i === session.pages.length - 1}
+                          onClick={() => void post({ action: "move", id: session.id, from: i, to: i + 1 })}>
+                          <ArrowDown className="w-3 h-3" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" aria-label={t("حذف")}
+                          onClick={() => void post({ action: "remove", id: session.id, n: p.n })}>
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      {[0, 90, 180, 270].map((deg) => (
-                        <Button key={deg} size="icon" variant={p.rotate === deg ? "secondary" : "ghost"} className="h-6 w-6 text-[9px]" aria-label={`${t("تدوير")} ${deg}`}
-                          onClick={() => void post({ action: "rotate", id: session.id, n: p.n, deg })}>
-                          {deg === 0 ? "0°" : <RotateCw className="w-3 h-3" />}
+                    <div className="flex flex-wrap items-center gap-1 ps-1">
+                      <span className="text-[9px] text-muted-foreground shrink-0">{t("المعالجة")}:</span>
+                      {FILTERS.map((f) => (
+                        <Button key={f} size="sm" variant={p.filter === f ? "secondary" : "ghost"}
+                          className="h-5 px-1.5 text-[9px] font-normal rounded-md"
+                          disabled={busy}
+                          data-testid={`scan-filter-${p.n}-${f}`}
+                          onClick={() => void setFilter(p.n, f)}>
+                          {f === "none" ? t("بلا معالجة") : f === "gray" ? t("رمادي محسّن") : t("أبيض وأسود")}
                         </Button>
                       ))}
-                      <Button size="icon" variant="ghost" className="h-6 w-6" aria-label={t("للأعلى")} disabled={i === 0}
-                        onClick={() => void post({ action: "move", id: session.id, from: i, to: i - 1 })}>
-                        <ArrowUp className="w-3 h-3" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-6 w-6" aria-label={t("للأسفل")} disabled={i === session.pages.length - 1}
-                        onClick={() => void post({ action: "move", id: session.id, from: i, to: i + 1 })}>
-                        <ArrowDown className="w-3 h-3" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-6 w-6" aria-label={t("حذف")}
-                        onClick={() => void post({ action: "remove", id: session.id, n: p.n })}>
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
+                      {p.filter === "bw" && (
+                        <span className="inline-flex items-center gap-1 shrink-0">
+                          <span className="text-[9px] text-muted-foreground">{t("حد العتبة")}</span>
+                          <Input type="number" min={THR_MIN} max={THR_MAX} defaultValue={p.thr ?? 160}
+                            className="h-5 w-14 text-[10px] px-1 h-5" dir="ltr"
+                            data-testid={`scan-thr-${p.n}`}
+                            onBlur={(e) => { const v = e.target.value; if (v !== String(p.thr ?? 160)) void submitThreshold(p, v) }}
+                            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur() }} />
+                        </span>
+                      )}
                     </div>
                   </li>
                 ))}
@@ -156,6 +198,9 @@ export function ScanTab() {
             )}
           </>
         )}
+        <p className="text-[9px] text-muted-foreground">
+          {t("المعالجة في الذاكرة عند الختم حصرًا — ملف الصفحة الأصلي على القرص لا يُمس")}
+        </p>
         <p className="text-[9px] text-muted-foreground">
           {t("الحدود: 30 صفحة لكل جلسة و12MB للصفحة و3 جلسات مفتوحة — JPEG حصرًا بفحص السحر حرفيًا")}
         </p>

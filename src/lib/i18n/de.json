@@ -3828,7 +3828,6 @@
   "حُذفت النسخة": "Backup gelöscht", 
   "الاحتفاظ: آخر 10 يدوية و5 مجدولة — البقية تُطرد حتميًا. التدوير يغلق النسخ المجدولة القديمة بصدق.": "Aufbewahrung: letzte 10 manuelle und 5 geplante — der Rest wird verdrängt. Rotation sperrt ältere ehrlich.", 
   "الماسح الموثق الحي (§55)": "Live-Dokumentenscanner (§55)", 
-  "صفحات JPEG من هاتفك تُدمج في PDF على هذا الحاسوب حصرًا — بلا سحابة ولا معالجة صور (مرور نقي)": "JPEG-Seiten vom Handy werden nur auf diesem PC zu PDF — ohne Cloud oder Bildbearbeitung (verlustfrei)", 
   "صفحة": "Seite", 
   "لا جلسة مفتوحة": "Keine offene Sitzung", 
   "عنوان المسح (مثلًا: عقد الإيجار)": "Scantitel (z. B. Mietvertrag)", 
@@ -3847,5 +3846,12 @@
   "الحدود: 30 صفحة لكل جلسة و12MB للصفحة و3 جلسات مفتوحة — JPEG حصرًا بفحص السحر حرفيًا": "Grenzen: 30 Seiten pro Sitzung, 12MB pro Seite, 3 offene Sitzungen — nur JPEG, per Signatur geprüft", 
   "صفحة المسح": "Scanseite", 
   "القائمة مقفلة على القرص — حمولات مشفرة لا نصًّا عاريًا": "Warteschlange auf der Festplatte versiegelt — Nutzdaten verschlüsselt, nie Klartext", 
-  "سيُختم القرص تلقائيًا عند أول دفعة تسليم": "Die Festplatten-Versiegelung aktiviert sich beim ersten Senden"
+  "سيُختم القرص تلقائيًا عند أول دفعة تسليم": "Die Festplatten-Versiegelung aktiviert sich beim ersten Senden", 
+  "صفحات JPEG من هاتفك تُدمج في PDF على هذا الحاسوب حصرًا — بلا سحابة، ومعالجة اختيارية تُطبَّق عند الختم فقط (الأصل لا يُمس)": "JPEG-Seiten von Ihrem Telefon werden nur auf diesem Computer zu einem PDF — ohne Cloud, optionale Verbesserung nur beim Versiegeln (das Original bleibt unangetastet)", 
+  "بلا معالجة": "Ohne Verarbeitung", 
+  "رمادي محسّن": "Verbessertes Grau", 
+  "أبيض وأسود": "Schwarzweiß", 
+  "حد العتبة": "Schwelle", 
+  "المعالجة": "Verarbeitung", 
+  "المعالجة في الذاكرة عند الختم حصرًا — ملف الصفحة الأصلي على القرص لا يُمس": "Verarbeitung erfolgt nur im Speicher beim Versiegeln — die ursprüngliche Seitendatei auf der Festplatte bleibt unangetastet"
 }

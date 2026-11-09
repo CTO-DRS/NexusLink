@@ -3828,7 +3828,6 @@
   "حُذفت النسخة": "Sauvegarde supprimée", 
   "الاحتفاظ: آخر 10 يدوية و5 مجدولة — البقية تُطرد حتميًا. التدوير يغلق النسخ المجدولة القديمة بصدق.": "Rétention : 10 manuelles et 5 planifiées au plus — le reste est évincé. La rotation verrouille honnêtement les anciennes planifiées.", 
   "الماسح الموثق الحي (§55)": "Scanner de documents en direct (§55)", 
-  "صفحات JPEG من هاتفك تُدمج في PDF على هذا الحاسوب حصرًا — بلا سحابة ولا معالجة صور (مرور نقي)": "Pages JPEG de votre téléphone en PDF sur cet ordinateur uniquement — sans cloud ni retouche (transfert sans perte)", 
   "صفحة": "page", 
   "لا جلسة مفتوحة": "Aucune session ouverte", 
   "عنوان المسح (مثلًا: عقد الإيجار)": "Titre du scan (ex. : bail)", 
@@ -3847,5 +3846,12 @@
   "الحدود: 30 صفحة لكل جلسة و12MB للصفحة و3 جلسات مفتوحة — JPEG حصرًا بفحص السحر حرفيًا": "Limites : 30 pages par session, 12 Mo par page, 3 sessions ouvertes — JPEG uniquement, vérifié par signature", 
   "صفحة المسح": "Page scannée", 
   "القائمة مقفلة على القرص — حمولات مشفرة لا نصًّا عاريًا": "File scellée sur disque — charges chiffrées, jamais en texte brut", 
-  "سيُختم القرص تلقائيًا عند أول دفعة تسليم": "Le scellement du disque s'active dès le premier envoi"
+  "سيُختم القرص تلقائيًا عند أول دفعة تسليم": "Le scellement du disque s'active dès le premier envoi", 
+  "صفحات JPEG من هاتفك تُدمج في PDF على هذا الحاسوب حصرًا — بلا سحابة، ومعالجة اختيارية تُطبَّق عند الختم فقط (الأصل لا يُمس)": "Les pages JPEG de votre téléphone deviennent un PDF sur cet ordinateur uniquement — sans cloud, amélioration optionnelle appliquée uniquement au scellement (l'original n'est jamais modifié)", 
+  "بلا معالجة": "Sans traitement", 
+  "رمادي محسّن": "Gris amélioré", 
+  "أبيض وأسود": "Noir et blanc", 
+  "حد العتبة": "Seuil", 
+  "المعالجة": "Traitement", 
+  "المعالجة في الذاكرة عند الختم حصرًا — ملف الصفحة الأصلي على القرص لا يُمس": "Le traitement se fait en mémoire au scellement uniquement — le fichier de page original sur disque n'est jamais modifié"
 }

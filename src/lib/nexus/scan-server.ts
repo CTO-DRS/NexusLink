@@ -9,11 +9,12 @@ import { resolveSafe } from "./fs-server"
 import { appendAudit } from "@/lib/enterprise-audit"
 import { createRateLimiter } from "./guest-core"
 import {
-  sanitizeScanTitle, scanPdfFileName, rotatePage, movePage, removePage,
+  sanitizeScanTitle, scanPdfFileName, rotatePage, movePage, removePage, setPageFilter, normalizeScanSession,
   isJpegBytes, jpegDimensions,
   SCAN_MAX_PAGES, SCAN_PAGE_MAX_BYTES, SCAN_MAX_OPEN_SESSIONS,
   type ScanSession, type ScanRotation,
 } from "./scan-core"
+import { deriveScanPage } from "./scan-image"
 import { buildScanPdf } from "./scan-pdf"
 
 const SCANS_ROOT = process.env.NEXUSLINK_SCANS_DIR || path.join(process.cwd(), ".zstate", "scans")
@@ -39,7 +40,7 @@ function sessionDir(id: string): string {
 function readSession(id: string): ScanSession | null {
   try {
     const j = JSON.parse(fs.readFileSync(path.join(sessionDir(id), "session.json"), "utf8")) as ScanSession
-    if (j && typeof j.id === "string" && Array.isArray(j.pages) && j.status === "open") return j
+    if (j && typeof j.id === "string" && Array.isArray(j.pages) && j.status === "open") return normalizeScanSession(j)
     return null
   } catch {
     return null
@@ -96,7 +97,7 @@ export function getScanSession(id: string) {
 }
 
 function publicSession(s: ScanSession) {
-  return { id: s.id, title: s.title, status: s.status, createdAt: s.createdAt, sealedFile: s.sealedFile ?? null, pages: s.pages.map((p) => ({ n: p.n, name: p.name, size: p.size, rotate: p.rotate, at: p.at })) }
+  return { id: s.id, title: s.title, status: s.status, createdAt: s.createdAt, sealedFile: s.sealedFile ?? null, pages: s.pages.map((p) => ({ n: p.n, name: p.name, size: p.size, rotate: p.rotate, at: p.at, filter: p.filter, thr: p.thr ?? null })) }
 }
 
 /** دفع صفحة JPEG (multipart من الوكيل/الواجهة) — فحص السحر والسقف حرفيًا */
@@ -128,18 +129,19 @@ export async function addScanPage(id: string, bytes: Buffer, rateKey = "page") {
   const name = `p-${String(n).padStart(3, "0")}.jpg`
   fs.mkdirSync(sessionDir(id), { recursive: true, mode: 0o700 })
   fs.writeFileSync(path.join(sessionDir(id), name), bytes, { mode: 0o600 })
-  const next: ScanSession = { ...s, pages: [...s.pages, { n, name, size: bytes.length, rotate: 0, at: Date.now() }] }
+  const next: ScanSession = { ...s, pages: [...s.pages, { n, name, size: bytes.length, rotate: 0, at: Date.now(), filter: "none" }] }
   writeSession(next)
   await appendAudit("scan.page.add", true, "local", { id: id.slice(0, 24), page: n, bytes: bytes.length, w: dims.w, h: dims.h })
   return { ok: true as const, page: { n, name, size: bytes.length, rotate: 0 as ScanRotation, at: next.pages[next.pages.length - 1].at } }
 }
 
-export async function actScanPage(id: string, action: "rotate" | "move" | "remove", args: Record<string, unknown>) {
+export async function actScanPage(id: string, action: "rotate" | "move" | "remove" | "filter", args: Record<string, unknown>) {
   const s = readSession(id)
   if (!s) return { ok: false, error: "not-found" as const }
   let r: { ok: true; session: ScanSession } | { ok: false; error: string }
   if (action === "rotate") r = rotatePage(s, Number(args.n), Number(args.deg))
   else if (action === "move") r = movePage(s, Number(args.from), Number(args.to))
+  else if (action === "filter") r = setPageFilter(s, Number(args.n), args.filter, args.thr)
   else {
     r = removePage(s, Number(args.n))
     if (r.ok) {
@@ -152,7 +154,16 @@ export async function actScanPage(id: string, action: "rotate" | "move" | "remov
     return { ok: false, error: r.error }
   }
   writeSession(r.session)
-  await appendAudit(action === "rotate" ? "scan.page.rotate" : action === "move" ? "scan.page.move" : "scan.page.remove", true, "local", { id: id.slice(0, 24), args: { n: Number(args.n), deg: Number(args.deg), from: Number(args.from), to: Number(args.to) } })
+  const kind = action === "rotate" ? "scan.page.rotate" : action === "move" ? "scan.page.move" : action === "filter" ? "scan.page.filter" : "scan.page.remove"
+  await appendAudit(kind, true, "local", {
+    id: id.slice(0, 24),
+    args: {
+      n: Number(args.n), deg: Number(args.deg), from: Number(args.from), to: Number(args.to),
+      // §61 — بيانات الفلتر وصفية حصرًا (اسم الفلتر والعتبة — لا محتوى صور)
+      filter: typeof args.filter === "string" ? args.filter.slice(0, 8) : undefined,
+      thr: args.thr === undefined || args.thr === null ? undefined : Number(args.thr),
+    },
+  })
   return { ok: true as const, session: publicSession(r.session) }
 }
 
@@ -164,7 +175,7 @@ export async function cancelScanSession(id: string) {
   return { ok: true as const }
 }
 
-/** الختم: بناء PDF من الصفحات بالترتيب وكتابته في مجلد الكمبيوتر الافتراضي */
+/** الختم: بناء PDF من الصفحات بالترتيب — صفحات §61 المعالَجة تُشتق في الذاكرة حصرًا (الأصل لا يُمس) */
 export async function sealScanSession(id: string, targetFolder?: string) {
   const s = readSession(id)
   if (!s) return { ok: false, error: "not-found" as const }
@@ -173,15 +184,27 @@ export async function sealScanSession(id: string, targetFolder?: string) {
     return { ok: false, error: "no-pages" as const }
   }
   const items: import("./scan-pdf").ScanPdfItem[] = []
+  let filtered = 0
   for (const p of [...s.pages].sort((a, b) => a.n - b.n)) {
     try {
       const bytes = fs.readFileSync(path.join(sessionDir(id), p.name))
-      const d = jpegDimensions(bytes)
-      if (!d) {
-        await appendAudit("scan.denied", false, "local", { reason: "bad-dimensions", id: id.slice(0, 24), page: p.n })
-        return { ok: false, error: "bad-dimensions" as const }
+      if (p.filter === "gray" || p.filter === "bw") {
+        // §61 — الاشتقاق في الذاكرة حصرًا: الناتج JPEG سليم يُفحص بالسحر والأبعاد قبل الدخول
+        const d = await deriveScanPage(bytes, p.filter, p.thr)
+        if (!d.ok) {
+          await appendAudit("scan.denied", false, "local", { reason: d.error, id: id.slice(0, 24), page: p.n, filter: p.filter })
+          return { ok: false, error: d.error as "derive-failed" | "derived-too-large" | "bad-dimensions" | "bad-filter" | "bad-threshold" }
+        }
+        items.push({ bytes: d.page.bytes, rotate: p.rotate, w: d.page.w, h: d.page.h })
+        filtered++
+      } else {
+        const d = jpegDimensions(bytes)
+        if (!d) {
+          await appendAudit("scan.denied", false, "local", { reason: "bad-dimensions", id: id.slice(0, 24), page: p.n })
+          return { ok: false, error: "bad-dimensions" as const }
+        }
+        items.push({ bytes, rotate: p.rotate, w: d.w, h: d.h })
       }
-      items.push({ bytes, rotate: p.rotate, w: d.w, h: d.h })
     } catch {
       await appendAudit("scan.denied", false, "local", { reason: "page-file-missing", id: id.slice(0, 24), page: p.n })
       return { ok: false, error: "page-file-missing" as const }
@@ -205,7 +228,7 @@ export async function sealScanSession(id: string, targetFolder?: string) {
   const sealed: ScanSession = { ...s, status: "sealed", sealedFile: file }
   removeSessionDir(id)
   await appendAudit("scan.seal", true, "local", {
-    id: id.slice(0, 24), pages: items.length, bytes: built.pdf.length, file: file.slice(0, 60),
+    id: id.slice(0, 24), pages: items.length, bytes: built.pdf.length, filtered, file: file.slice(0, 60),
   })
-  return { ok: true as const, file, bytes: built.pdf.length, pages: items.length, target: targetFolder ?? DEFAULT_TARGET }
+  return { ok: true as const, file, bytes: built.pdf.length, pages: items.length, filtered, target: targetFolder ?? DEFAULT_TARGET }
 }
