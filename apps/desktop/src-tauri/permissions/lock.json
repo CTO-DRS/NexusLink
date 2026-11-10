@@ -1,0 +1,73 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "set": [
+    {
+      "identifier": "lock",
+      "description": "FA-19 — مجموعة قفل التطبيق: حالة + ضبط/مسح PIN + تحقق PIN + بيومتري + قفل الآن",
+      "permissions": [
+        "allow-lock-state",
+        "allow-lock-set-pin",
+        "allow-lock-clear-pin",
+        "allow-lock-verify-pin",
+        "allow-lock-biometric",
+        "allow-lock-now-cmd"
+      ]
+    }
+  ],
+  "permission": [
+    {
+      "identifier": "allow-lock-state",
+      "description": "منح أمر التطبيق lock_state حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "lock_state"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-lock-set-pin",
+      "description": "منح أمر التطبيق lock_set_pin حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "lock_set_pin"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-lock-clear-pin",
+      "description": "منح أمر التطبيق lock_clear_pin حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "lock_clear_pin"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-lock-verify-pin",
+      "description": "منح أمر التطبيق lock_verify_pin حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "lock_verify_pin"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-lock-biometric",
+      "description": "منح أمر التطبيق lock_biometric حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "lock_biometric"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-lock-now-cmd",
+      "description": "منح أمر التطبيق lock_now_cmd حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "lock_now_cmd"
+        ]
+      }
+    }
+  ]
+}

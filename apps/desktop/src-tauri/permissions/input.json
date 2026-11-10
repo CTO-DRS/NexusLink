@@ -1,0 +1,53 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "set": [
+    {
+      "identifier": "input",
+      "description": "FA-19 — مجموعة جلسة التحكم الحية: تنفيذ أحداث اللمس/الكيبورد + صلاحيات المنصة",
+      "permissions": [
+        "allow-input-exec",
+        "allow-input-session",
+        "allow-input-permission",
+        "allow-input-open-permissions"
+      ]
+    }
+  ],
+  "permission": [
+    {
+      "identifier": "allow-input-exec",
+      "description": "منح أمر التطبيق input_exec حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "input_exec"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-input-session",
+      "description": "منح أمر التطبيق input_session حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "input_session"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-input-permission",
+      "description": "منح أمر التطبيق input_permission حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "input_permission"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-input-open-permissions",
+      "description": "منح أمر التطبيق input_open_permissions حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "input_open_permissions"
+        ]
+      }
+    }
+  ]
+}

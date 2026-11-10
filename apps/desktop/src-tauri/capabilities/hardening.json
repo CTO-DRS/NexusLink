@@ -1,7 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "hardening-dialog",
-  "description": "FA-harden (عقد §16 بند 5) — صلاحية حوار الحفظ الأصلي لتصدير تقرير التشخيص من نافذة التطبيق؛ باقي أوامر الإضافات تبقى مسدودة (أقل سطح هجوم) والطبقة الأصلية في Rust لا تحتاج صلاحيات",
-  "windows": ["main", "splash", "lock"],
-  "permissions": ["dialog:allow-save"]
+  "identifier": "hardening-local",
+  "description": "FA-19 — نوافذ المحتوى المحلي (سياق local): splash تحصي أحداث الحالة (desktop://status عبر core:event) و lock تتحقق بـ PIN/بيومتري (مجموعة lock). بعد إضافة بيان صلاحيات التطبيق (permissions/) يصبح حارس ACL فعّالًا للمحلي أيضًا (has_app_manifest) — أي أمر من هاتين النافذتين يُمنح هنا صراحة أو يُرفض. حوار الحفظ انتقل إلى main-remote-ipc حيث مستدعيه الفعلي (أصل بعيد).",
+  "windows": [
+    "splash",
+    "lock"
+  ],
+  "permissions": [
+    "core:event:default",
+    "lock"
+  ]
 }

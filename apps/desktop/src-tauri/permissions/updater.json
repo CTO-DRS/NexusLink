@@ -1,0 +1,33 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "set": [
+    {
+      "identifier": "updater",
+      "description": "FA-19 — مجموعة المحدّث الموقّع: قراءة الحالة + فحص يدوي (التثبيت داخلي Rust حصرًا)",
+      "permissions": [
+        "allow-updater-state",
+        "allow-updater-check-now"
+      ]
+    }
+  ],
+  "permission": [
+    {
+      "identifier": "allow-updater-state",
+      "description": "منح أمر التطبيق updater_state حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "updater_state"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-updater-check-now",
+      "description": "منح أمر التطبيق updater_check_now حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "updater_check_now"
+        ]
+      }
+    }
+  ]
+}
