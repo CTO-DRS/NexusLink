@@ -1,34 +1,14 @@
 "use client"
 
 import { useEffect, useRef } from "react"
+import dynamic from "next/dynamic"
 import { useNexus, initPolishPrefs, type ShortcutAction } from "@/lib/store"
 import { useI18n, initLang, announce, cycleLang, langMeta } from "@/lib/i18n"
 import { Toaster } from "@/components/ui/sonner"
 import { TopBar } from "@/components/nexus/top-bar"
 import { Dock } from "@/components/nexus/dock"
 import { DevicesView } from "@/components/nexus/devices-view"
-import { FilesView } from "@/components/nexus/files-view"
-import { TransfersView } from "@/components/nexus/transfers-view"
-import { StorageView } from "@/components/nexus/storage-view"
-import { SettingsView } from "@/components/nexus/settings-view"
-import { PreviewModal } from "@/components/nexus/preview-modal"
-import { CommsView } from "@/components/nexus/comms-view"
-import { SimulatorView } from "@/components/nexus/comms/simulator-view"
-import { RemoteView } from "@/components/nexus/remote/remote-view"
-import { MediaView } from "@/components/nexus/media/media-view"
-import { GuardView } from "@/components/nexus/guard/guard-view"
-import { ProdView } from "@/components/nexus/prod/prod-view"
-import { SecView } from "@/components/nexus/sec/sec-view"
-import { AutomationView } from "@/components/nexus/automation/automation-view"
-import { IntelView } from "@/components/nexus/intel/intel-view"
-import { UnifiedSearch } from "@/components/nexus/unified-search"
-import { ToolsView } from "@/components/nexus/tools/tools-view"
-import { Onboarding } from "@/components/nexus/onboarding"
-import { CommandPalette, ShortcutsOverlay } from "@/components/nexus/command-palette"
 import { DesktopBridge } from "@/components/nexus/desktop-bridge"
-import { LockScreen } from "@/components/nexus/guard/lock-screen"
-import { CallOverlay } from "@/components/nexus/comms/call-overlay"
-import { CommsToaster } from "@/components/nexus/comms/comms-toaster"
 import { useCommsBridge, syncDnd } from "@/hooks/use-comms"
 import { useComms } from "@/lib/comms-store"
 import { useGuard } from "@/lib/guard-store"
@@ -37,6 +17,53 @@ import { useMediaBridge } from "@/hooks/use-media-bridge"
 import { useGuardBridge } from "@/hooks/use-guard-bridge"
 import { useProdBridge } from "@/hooks/use-prod-bridge"
 import { useAutomationBridge } from "@/hooks/use-automation-bridge"
+
+/**
+ * تكليف 49 (M1 PERF): كانت الوحدات الخمس عشرة (~5,900 سطر) وrecharts كله
+ * تُستورد ثابتًا رغم أن وحدة واحدة تُعرض في كل لحظة — أول تحميل كان ينقل
+ * ~3MB JS ويفسّرها قبل أول رسم. الآن: الوحدة الافتراضية (devices) والهيكل
+ * المرئي فورًا يبقيان متزامنين، وكل وحدة أخرى تُحمّل عند أول فتح لها
+ * (next/dynamic — chunk مستقل لكل وحدة) والنوافذ العلوية عند أول حاجة.
+ * سلوك الواجهة كما هو: نفس المكونات، نفس الحالة، نفس الاختصارات —
+ * التغيير في موعد وصول الكود لا في ما يفعله.
+ */
+/** هيكل تحميل مصغّر — نفس ارتفاع المنطقة تقريبًا بلا قفز تخطيط */
+function ViewFallback() {
+  return (
+    <div className="nexus-enter space-y-3" aria-busy="true">
+      <div className="h-8 w-64 rounded-lg bg-muted/60 animate-pulse" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {Array.from({ length: 6 }, (_, i) => (
+          <div key={i} className="h-24 rounded-xl bg-muted/40 animate-pulse" />
+        ))}
+      </div>
+    </div>
+  )
+}
+const FilesView = dynamic(() => import("@/components/nexus/files-view").then((m) => m.FilesView), { loading: ViewFallback })
+const TransfersView = dynamic(() => import("@/components/nexus/transfers-view").then((m) => m.TransfersView), { loading: ViewFallback })
+const StorageView = dynamic(() => import("@/components/nexus/storage-view").then((m) => m.StorageView), { loading: ViewFallback })
+const SettingsView = dynamic(() => import("@/components/nexus/settings-view").then((m) => m.SettingsView), { loading: ViewFallback })
+const CommsView = dynamic(() => import("@/components/nexus/comms-view").then((m) => m.CommsView), { loading: ViewFallback })
+const SimulatorView = dynamic(() => import("@/components/nexus/comms/simulator-view").then((m) => m.SimulatorView), { loading: ViewFallback })
+const RemoteView = dynamic(() => import("@/components/nexus/remote/remote-view").then((m) => m.RemoteView), { loading: ViewFallback })
+const MediaView = dynamic(() => import("@/components/nexus/media/media-view").then((m) => m.MediaView), { loading: ViewFallback })
+const GuardView = dynamic(() => import("@/components/nexus/guard/guard-view").then((m) => m.GuardView), { loading: ViewFallback })
+const ProdView = dynamic(() => import("@/components/nexus/prod/prod-view").then((m) => m.ProdView), { loading: ViewFallback })
+const SecView = dynamic(() => import("@/components/nexus/sec/sec-view").then((m) => m.SecView), { loading: ViewFallback })
+const AutomationView = dynamic(() => import("@/components/nexus/automation/automation-view").then((m) => m.AutomationView), { loading: ViewFallback })
+const IntelView = dynamic(() => import("@/components/nexus/intel/intel-view").then((m) => m.IntelView), { loading: ViewFallback })
+const ToolsView = dynamic(() => import("@/components/nexus/tools/tools-view").then((m) => m.ToolsView), { loading: ViewFallback })
+
+// النوافذ العلوية — أول حاجة فقط (مفتوحة بقيمة حالة، لا تُرى في أول رسم)
+const PreviewModal = dynamic(() => import("@/components/nexus/preview-modal").then((m) => m.PreviewModal), { ssr: false })
+const Onboarding = dynamic(() => import("@/components/nexus/onboarding").then((m) => m.Onboarding), { ssr: false })
+const CommandPalette = dynamic(() => import("@/components/nexus/command-palette").then((m) => m.CommandPalette), { ssr: false })
+const ShortcutsOverlay = dynamic(() => import("@/components/nexus/command-palette").then((m) => m.ShortcutsOverlay), { ssr: false })
+const UnifiedSearch = dynamic(() => import("@/components/nexus/unified-search").then((m) => m.UnifiedSearch), { ssr: false })
+const LockScreen = dynamic(() => import("@/components/nexus/guard/lock-screen").then((m) => m.LockScreen), { ssr: false })
+const CallOverlay = dynamic(() => import("@/components/nexus/comms/call-overlay").then((m) => m.CallOverlay), { ssr: false })
+const CommsToaster = dynamic(() => import("@/components/nexus/comms/comms-toaster").then((m) => m.CommsToaster), { ssr: false })
 
 /**
  * واجهة تطبيق NexusLink الكاملة (12 وحدة).
@@ -64,6 +91,17 @@ export function NexusApp() {
   const onboarded = useNexus((s) => s.onboarded)
   const setDevices = useNexus((s) => s.setDevices)
   const setTransfers = useNexus((s) => s.setTransfers)
+  // تكليف 49: أعلام النوافذ العلوية — التركيب عند الحاجة لا عند الإقلاع
+  // (next/dynamic يبدأ جلب الchunk لحظة التركيب حتى لو يرسم null —
+  // التركيب الشرطي يجعل الجلب نفسه عند أول فتح فعلي).
+  const previewEntry = useNexus((s) => s.previewEntry)
+  const onboardingOpen = useNexus((s) => s.onboardingOpen)
+  const paletteOpen = useNexus((s) => s.paletteOpen)
+  const unifiedSearchOpen = useNexus((s) => s.unifiedSearchOpen)
+  const shortcutsHelpOpen = useNexus((s) => s.shortcutsHelpOpen)
+  const pcLocked = useGuard((s) => s.pcLocked)
+  const liveCall = useComms((s) => s.liveCall)
+  const toastCount = useComms((s) => s.toasts.length)
   const bootedRef = useRef(false)
 
   // جسر الاتصالات: أحداث فورية (إشعارات، SMS، مكالمات، DND)
@@ -216,14 +254,14 @@ export function NexusApp() {
         </main>
         <Dock />
       </div>
-      <PreviewModal />
-      <CallOverlay />
-      <CommsToaster />
-      <Onboarding />
-      <CommandPalette />
-      <UnifiedSearch />
-      <ShortcutsOverlay />
-      <LockScreen />
+      {previewEntry && <PreviewModal />}
+      {liveCall && <CallOverlay />}
+      {toastCount > 0 && <CommsToaster />}
+      {onboardingOpen && <Onboarding />}
+      {paletteOpen && <CommandPalette />}
+      {unifiedSearchOpen && <UnifiedSearch />}
+      {shortcutsHelpOpen && <ShortcutsOverlay />}
+      {pcLocked && <LockScreen />}
       <Toaster position="bottom-center" richColors />
       <DesktopBridge />
       {!onboarded && <span className="sr-only" aria-hidden />}

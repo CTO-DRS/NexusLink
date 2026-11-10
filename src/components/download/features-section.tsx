@@ -1,6 +1,6 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { Reveal } from "@/components/site/reveal"
 import {
   ClipboardPaste,
   FolderSync,
@@ -71,13 +71,7 @@ export function FeaturesSection() {
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map((f, i) => (
-            <motion.div
-              key={f.titleKey}
-              initial={{ opacity: 0, y: 18 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.4, delay: (i % 4) * 0.06 }}
-            >
+            <Reveal key={f.titleKey} delay={(i % 4) * 0.06}>
               <Card className="h-full gap-3 rounded-2xl border-0 bg-card shadow-sm transition-shadow hover:shadow-md">
                 <CardContent className="space-y-2.5 p-5">
                   <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -87,7 +81,7 @@ export function FeaturesSection() {
                   <p className="text-sm leading-relaxed text-muted-foreground">{t(f.bodyKey)}</p>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Reveal>
           ))}
         </div>
       </div>

@@ -1,8 +1,8 @@
 "use client"
 
-import { motion } from "framer-motion"
 import { MonitorDown, QrCode, Wifi } from "lucide-react"
 import { useI18n } from "@/lib/i18n"
+import { Reveal } from "./reveal"
 
 /**
  * «كيف يعمل» — ثلاث خطوات فعلية من تجربة المنتج الحقيقية:
@@ -49,12 +49,10 @@ export function HowItWorks() {
 
         <ol className="mt-10 grid gap-5 md:grid-cols-3">
           {STEPS.map((step, i) => (
-            <motion.li
+            <Reveal
               key={step.num}
-              initial={{ opacity: 0, y: 18 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-60px" }}
-              transition={{ duration: 0.45, delay: i * 0.1 }}
+              as="li"
+              delay={i * 0.1}
               className="relative rounded-2xl border bg-card p-6"
             >
               <div className="flex items-center gap-3">
@@ -67,7 +65,7 @@ export function HowItWorks() {
               </div>
               <h3 className="mt-4 text-lg font-semibold">{t(step.titleKey)}</h3>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{t(step.bodyKey)}</p>
-            </motion.li>
+            </Reveal>
           ))}
         </ol>
 

@@ -350,3 +350,28 @@ html[data-sr="on"] *:focus-visible {
 @keyframes dash {
   to { stroke-dashoffset: -28; }
 }
+
+/* ===== تكليف 49 (M1 PERF) — نظام reveal بالـCSS حصرًا (إزاحة framer-motion عن مسار الإقلاع) =====
+   نفس لغة الحركة السابقة (opacity+y، تأخيرات متدرجة) بلا مكتبة — البداية مخفية
+   وتُشغّل عند الدخول في المنظر (IntersectionObserver) أو فورًا (load)،
+   مع احترام تفضيل تقليل الحركة الموجود في المنصة (html.motion-reduced + النظامي). */
+.nx-reveal { opacity: 0; transform: translateY(14px); }
+.nx-reveal-in { animation: nx-reveal-in 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+@keyframes nx-reveal-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+html.motion-reduced .nx-reveal,
+html.motion-reduced .nx-reveal-in { opacity: 1 !important; transform: none !important; animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .nx-reveal, .nx-reveal-in { opacity: 1 !important; transform: none !important; animation: none !important; }
+}
+
+/* دخول بطاقة إشعارات comms (كان framer x:-40+scale) — بلا خروج متحرك (إغلاق فوري) */
+@keyframes nx-toast-in {
+  from { opacity: 0; transform: translateX(-40px) scale(0.95); }
+  to { opacity: 1; transform: none; }
+}
+.nx-toast-in { animation: nx-toast-in 0.28s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+html.motion-reduced .nx-toast-in { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .nx-toast-in { animation: none !important; } }

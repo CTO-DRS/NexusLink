@@ -1,9 +1,9 @@
 "use client"
 
-import { motion } from "framer-motion"
 import { FileCheck, KeyRound, Lock, ShieldCheck } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { useI18n } from "@/lib/i18n"
+import { Reveal } from "./reveal"
 
 /**
  * الأمان — من العقد التشفيري الفعلي للمشروع (docs/protocol-contract.md):
@@ -56,13 +56,7 @@ export function SecuritySection() {
 
         <div className="mt-10 grid gap-5 sm:grid-cols-2">
           {ITEMS.map((item, i) => (
-            <motion.div
-              key={item.titleKey}
-              initial={{ opacity: 0, y: 18 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-60px" }}
-              transition={{ duration: 0.45, delay: (i % 2) * 0.1 }}
-            >
+            <Reveal key={item.titleKey} delay={(i % 2) * 0.1}>
               <Card className="h-full border-border/60">
                 <CardContent className="flex gap-4 p-6">
                   <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
@@ -76,7 +70,7 @@ export function SecuritySection() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Reveal>
           ))}
         </div>
       </div>

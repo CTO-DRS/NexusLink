@@ -1,7 +1,6 @@
 "use client"
 // توستات الإشعارات الفورية — ظهور لحظي مع رد سريع مدمج
 import { useEffect, useState } from "react"
-import { AnimatePresence, motion } from "framer-motion"
 import { useComms, relTime } from "@/lib/comms-store"
 import { useProd } from "@/lib/prod-store"
 import { quickReplyToNotification } from "@/hooks/use-comms"
@@ -35,12 +34,8 @@ function ToastCard({ toastId }: { toastId: string }) {
   }
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, x: -40, scale: 0.95 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={{ opacity: 0, x: -40, scale: 0.95 }}
-      className="w-[min(88vw,340px)] rounded-2xl border bg-card/95 backdrop-blur-xl shadow-2xl p-3 relative overflow-hidden"
+    <div
+      className="nx-toast-in w-[min(88vw,340px)] rounded-2xl border bg-card/95 backdrop-blur-xl shadow-2xl p-3 relative overflow-hidden"
       role="alert"
     >
       <span className="absolute inset-y-0 start-0 w-1" style={{ background: meta.color }} />
@@ -84,7 +79,7 @@ function ToastCard({ toastId }: { toastId: string }) {
           )}
         </div>
       </div>
-    </motion.div>
+    </div>
   )
 }
 
@@ -95,11 +90,9 @@ export function CommsToaster() {
   const shown = notifsPaused ? [] : toasts.slice(-3)
   return (
     <div className="fixed bottom-24 start-4 z-[80] flex flex-col gap-2" aria-live="polite">
-      <AnimatePresence>
-        {shown.map((t) => (
-          <ToastCard key={t.id} toastId={t.id} />
-        ))}
-      </AnimatePresence>
+      {shown.map((t) => (
+        <ToastCard key={t.id} toastId={t.id} />
+      ))}
     </div>
   )
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { RevealLoad } from "./reveal"
 import { CloudOff, Download, Laptop, LayoutGrid, ShieldCheck, Smartphone } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -57,32 +57,26 @@ export function HomeHero() {
             </Badge>
           </div>
 
-          <motion.h1
+          <RevealLoad
+            as="h1"
             id="home-title"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
             className="text-balance text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl"
           >
             {t("حوّل أجهزتك إلى منظومة واحدة… بلا سحابة")}
-          </motion.h1>
+          </RevealLoad>
 
-          <motion.p
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
+          <RevealLoad
+            delay={0.1}
             className="mx-auto mt-5 max-w-2xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg"
           >
             {t(
               "NexusLink يربط هاتفك بجهاز الكمبيوتر محليًا على شبكتك: حافظة مشتركة، نقل ملفات يستأنف بعد الانقطاع، تحكم عن بُعد، مرآة إشعارات ورسائل ومكالمات، وكاميرا افتراضية — كل قناة مشفرة من الطرف إلى الطرف، وكل شيء يعمل على أجهزتك أنت."
             )}
-          </motion.p>
+          </RevealLoad>
 
           {/* CTAs */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
+          <RevealLoad
+            delay={0.2}
             className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row"
           >
             <Button size="lg" className="h-12 min-w-56 gap-2 text-base" asChild>
@@ -97,7 +91,7 @@ export function HomeHero() {
                 {t("تجربة واجهة التطبيق")}
               </a>
             </Button>
-          </motion.div>
+          </RevealLoad>
 
           {/* trust row */}
           <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
@@ -117,10 +111,8 @@ export function HomeHero() {
         </div>
 
         {/* devices visual */}
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
+        <RevealLoad
+          delay={0.3}
           className="mx-auto mt-14 max-w-3xl"
           aria-hidden="true"
         >
@@ -181,7 +173,7 @@ export function HomeHero() {
           <p className="mt-4 text-center text-sm text-muted-foreground">
             {t("كمبيوتر + هاتف على شبكتك المحلية")}
           </p>
-        </motion.div>
+        </RevealLoad>
       </div>
     </section>
   )

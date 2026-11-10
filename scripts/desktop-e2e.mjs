@@ -3027,7 +3027,7 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
         && healthRouteH.includes('"report"') && healthRouteH.includes("Math.min(100, Math.round(body.battery))")
         && healthRouteH.includes("Math.max(0, Math.round(body.rttMs))"), "route contract")
       check("HEALTH: الواجهة — HealthPanel أعلى صفحة الأجهزة (مخططا خط + محدد نافذة + التقاط عينة + تنبيهات)",
-        devViewH.includes('import { HealthPanel } from "@/components/nexus/health-panel"') && devViewH.includes("<HealthPanel />")
+        devViewH.includes('import("@/components/nexus/health-panel")') && devViewH.includes("<DeferredHealthPanel />")
         && panelH.includes("LineChart") && panelH.includes("force-sample")
         && panelH.includes('setWindow_') && panelH.includes("مركز صحة الأجهزة"), "panel UI")
       check("HEALTH: الترقية الآمنة — CREATE TABLE IF NOT EXISTS للجدولين في db.ts (نمط §23 بلا مساس بالبيانات)",

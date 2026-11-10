@@ -1,7 +1,5 @@
 "use client"
 
-import { useState } from "react"
-import { useNexus, fmtSize } from "@/lib/store"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -16,9 +14,32 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import type { NexusDevice } from "@/lib/nexus/types"
-import { HealthPanel } from "@/components/nexus/health-panel"
+import { useEffect, useState } from "react"
+import { useNexus, fmtSize } from "@/lib/store"
+import dynamic from "next/dynamic"
 import { PairPanel } from "@/components/nexus/pair-panel"
 import { AssistBanner, AssistCodeBlock } from "@/components/nexus/assist-panel"
+
+// تكليف 49 (M1 PERF): HealthPanel يسحب recharts (~374KB) — كسول + مؤجّل حتى بعد
+// حدث load: الهيكل يُرى فورًا، وجلب/تجميع recharts لا ينافس أول رسم.
+const HealthPanel = dynamic(
+  () => import("@/components/nexus/health-panel").then((m) => m.HealthPanel),
+  { loading: () => <div className="h-44 rounded-xl bg-muted/40 animate-pulse" aria-busy="true" /> },
+)
+function DeferredHealthPanel() {
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    const go = () => { const tm = setTimeout(() => setReady(true), 120); cleanup = () => clearTimeout(tm) }
+    let cleanup: () => void = () => {}
+    if (document.readyState === "complete") go()
+    else {
+      window.addEventListener("load", go, { once: true })
+      cleanup = () => window.removeEventListener("load", go)
+    }
+    return () => cleanup()
+  }, [])
+  return ready ? <HealthPanel /> : <div className="h-44 rounded-xl bg-muted/40 animate-pulse" aria-busy="true" />
+}
 
 const kindIcon = (k: string) => (k === "phone" ? Smartphone : k === "tablet" ? Tablet : k === "tv" ? Tv : Monitor)
 const modeLabel = (m: string) => (m === "wifi" ? "واي فاي" : m === "hotspot" ? "نقطة اتصال" : "USB")
@@ -208,7 +229,7 @@ export function DevicesView() {
 
   return (
     <div className="space-y-6">
-      <HealthPanel />
+      <DeferredHealthPanel />
 
       {/* §46 — لافتة المساعدة الحية: موافقة على الطلبات + قطع بضغطة */}
       <AssistBanner />

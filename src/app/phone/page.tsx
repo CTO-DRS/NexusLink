@@ -12,9 +12,14 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { getMediaSocket, mediaRole, rtcSignal, slideshowCmd, castCmd } from "@/lib/media-socket"
 import { blobToDataUrl } from "@/lib/media-engine"
-import { usePhoneGuard, GuardPhoneTab, GuardOverlays } from "@/components/nexus/guard/phone-guard"
-import { PhoneProdTab } from "@/components/nexus/prod/phone-prod"
-import { PhoneSecTab } from "@/components/nexus/sec/phone-sec"
+import { usePhoneGuard } from "@/components/nexus/guard/phone-guard"
+import dynamic from "next/dynamic"
+// تكليف 49 (M1 PERF): تبويبات الهاتف (~1,300 سطر: حماية/إنتاجية/أمن) تُحمّل عند فتح
+// تبويبها لا مع أول رسم للكاميرا — نفس المكونات، موعد وصول الكود فقط.
+const GuardPhoneTab = dynamic(() => import("@/components/nexus/guard/phone-guard").then((m) => m.GuardPhoneTab), { loading: () => <div className="h-64 rounded-xl bg-muted/40 animate-pulse" aria-busy="true" /> })
+const GuardOverlays = dynamic(() => import("@/components/nexus/guard/phone-guard").then((m) => m.GuardOverlays), { ssr: false })
+const PhoneProdTab = dynamic(() => import("@/components/nexus/prod/phone-prod").then((m) => m.PhoneProdTab), { loading: () => <div className="h-64 rounded-xl bg-muted/40 animate-pulse" aria-busy="true" /> })
+const PhoneSecTab = dynamic(() => import("@/components/nexus/sec/phone-sec").then((m) => m.PhoneSecTab), { loading: () => <div className="h-64 rounded-xl bg-muted/40 animate-pulse" aria-busy="true" /> })
 import { cn } from "@/lib/utils"
 
 type PhoneTab = "cam" | "mic" | "baby" | "remote" | "guard" | "prod" | "sec"
