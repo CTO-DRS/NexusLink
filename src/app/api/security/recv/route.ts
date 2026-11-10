@@ -4,12 +4,17 @@ import { NextRequest } from "next/server"
 import { promises as fs } from "fs"
 import path from "path"
 import { nexusStorageRoot } from "@/lib/nexus/data-root"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
 const RECV = path.join(nexusStorageRoot(), "media", "Download")
 
 export async function POST(req: NextRequest) {
+  // FA-22 (تكليف 51): كتابة ملف مستلم على قرص الكمبيوتر — loopback حصرًا (نمط FA-16)
+  if (!guardPcOnly(req, "sec.denied", "secure-recv")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
   try {
     const { name, dataB64, sha256 } = (await req.json()) as { name?: string; dataB64?: string; sha256?: string }
     if (!name || !dataB64) return Response.json({ ok: false, error: "بيانات ناقصة" }, { status: 400 })

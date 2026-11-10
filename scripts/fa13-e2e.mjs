@@ -253,6 +253,74 @@ if (!LAN) { console.log('FAIL بلا عنوان LAN — لا يمكن محاكا
   check('FA16/APK/lan: كتابة APK + exec من عميل شبكي → 403', LAN403(apkLan), `status=${apkLan.status}`)
 }
 
+// ==== 9) FA-22 عبر HTTP (تكليف 51) — الموجة الثالثة: مسارات أُضيفت بعد FA-16 هربت من الحرس الثاني ====
+{
+  const LAN403 = (r) => r.status === 403 && r.json?.error === 'pc-only'
+  // تهيئة طبقة الإنتاجية (بذور prodState/الملفات/الأزواج — idempotent) لفحوص loopback الحية
+  await reqJson(REST.host, REST.port, '/api/prod/boot', 'GET')
+  // 9.أ خزنة الحافظة — محتوى مفكوك يُعرض (كلمات سر/رموز OTP — أعلى حساسية في prod)
+  const vlLan = await reqJson(LAN, GW.port, '/api/prod/clipboard/vault', 'GET')
+  check('FA22/VAULT/lan: قائمة الخزنة بمحتواها المفكوك من عميل شبكي → 403', LAN403(vlLan), `status=${vlLan.status}`)
+  const vrLan = await reqJson(LAN, GW.port, '/api/prod/clipboard/vault', 'POST', { action: 'reveal', id: 'fa22-x' })
+  check('FA22/VAULT/lan: كشف عنصر حساس من عميل شبكي → 403', LAN403(vrLan), `status=${vrLan.status}`)
+  const vkLan = await reqJson(LAN, GW.port, '/api/prod/clipboard/vault', 'POST', { action: 'rotate-key' })
+  check('FA22/VAULT/lan: تدوير مفتاح الخزنة من عميل شبكي → 403 (اليد المحلية الموحدة حرسًا واحدًا)', LAN403(vkLan), `status=${vkLan.status}`)
+  const vlLoc = await reqJson(REST.host, REST.port, '/api/prod/clipboard/vault', 'GET')
+  check('FA22/VAULT/loopback: قائمة الخزنة محليًا كما كانت (ok:true)', vlLoc.status === 200 && vlLoc.json?.ok === true, `status=${vlLoc.status} ok=${vlLoc.json?.ok}`)
+  const vkLoc = await reqJson(REST.host, REST.port, '/api/prod/clipboard/vault', 'POST', { action: 'rotate-key', deviceId: 'fa22-selftest' })
+  check('FA22/VAULT/loopback: تدوير قفل جهاز محليًا يعمل (منطق §59 حي — الحرس يمر)', vkLoc.status === 200 && vkLoc.json?.ok === true, `status=${vkLoc.status} ok=${vkLoc.json?.ok} keys=${vkLoc.json?.keys}`)
+  // 9.ب أزواج المزامنة — إدارة مجلدات الكمبيوتر (إنشاء mkdir/تصفح/حذف) — الإطلاق كان محروسًا (FA-16) والإدارة مفتوحة!
+  const ppLan = await reqJson(LAN, GW.port, '/api/prod/pairs', 'POST', { deviceA: 'a', folderA: 'fa22a', deviceB: 'b', folderB: 'fa22b' })
+  check('FA22/PAIRS/lan: إنشاء زوج مزامنة (mkdir على القرص) من عميل شبكي → 403', LAN403(ppLan), `status=${ppLan.status}`)
+  const puLan = await reqJson(LAN, GW.port, '/api/prod/pairs', 'PUT', { deviceId: 'fa22-x' })
+  check('FA22/PAIRS/lan: استعراض مجلدات الكمبيوتر (listDir) من عميل شبكي → 403', LAN403(puLan), `status=${puLan.status}`)
+  const pdLan = await reqJson(LAN, GW.port, '/api/prod/pairs', 'DELETE', { id: 'fa22-x' })
+  check('FA22/PAIRS/lan: حذف زوج مزامنة من عميل شبكي → 403', LAN403(pdLan), `status=${pdLan.status}`)
+  const ppLoc = await reqJson(REST.host, REST.port, '/api/prod/pairs', 'POST', { deviceA: 'x', folderA: 'fa22', deviceB: 'x', folderB: 'fa22' })
+  check('FA22/PAIRS/loopback: الحرس يمر محليًا ويعبر للتحقق التعاقدي (400 مجلدان متطابقان)', ppLoc.status === 400 && ppLoc.json?.error === 'اختر مجلدين مختلفين', `status=${ppLoc.status} err=${ppLoc.json?.error}`)
+  // 9.ج الملفات الشخصية — قلب بوابة الإشعارات عبر CRUD
+  const pfLan = await reqJson(LAN, GW.port, '/api/prod/profiles', 'POST', { name: 'fa22', networkName: 'net' })
+  check('FA22/PROFILES/lan: إنشاء ملف شخصي من عميل شبكي → 403', LAN403(pfLan), `status=${pfLan.status}`)
+  const pfxLan = await reqJson(LAN, GW.port, '/api/prod/profiles', 'DELETE', { id: 'fa22-x' })
+  check('FA22/PROFILES/lan: حذف ملف شخصي من عميل شبكي → 403', LAN403(pfxLan), `status=${pfxLan.status}`)
+  const pfLoc = await reqJson(REST.host, REST.port, '/api/prod/profiles', 'POST', {})
+  check('FA22/PROFILES/loopback: الحرس يمر محليًا (400 «الاسم واسم الشبكة مطلوبان»)', pfLoc.status === 400, `status=${pfLoc.status} err=${pfLoc.json?.error}`)
+  // 9.د حالة الإنتاجية والشبكة — وضع الحافظة وقلب الإشعارات
+  const psLan = await reqJson(LAN, GW.port, '/api/prod/state', 'PATCH', { clipMode: 'manual' })
+  check('FA22/STATE/lan: قلب وضع الحافظة الموحدة من عميل شبكي → 403', LAN403(psLan), `status=${psLan.status}`)
+  const psLoc = await reqJson(REST.host, REST.port, '/api/prod/state', 'PATCH', { clipMode: 'auto' })
+  check('FA22/STATE/loopback: PATCH الحالة محليًا كما كانت (ok:true)', psLoc.status === 200 && psLoc.json?.ok === true, `status=${psLoc.status}`)
+  const pnLan = await reqJson(LAN, GW.port, '/api/prod/network', 'POST', { network: 'Office-Net' })
+  check('FA22/NETWORK/lan: تبديل الشبكة (قلب notifsPaused) من عميل شبكي → 403', LAN403(pnLan), `status=${pnLan.status}`)
+  const pnLoc = await reqJson(REST.host, REST.port, '/api/prod/network', 'POST', {})
+  check('FA22/NETWORK/loopback: الحرس يمر محليًا (400 «اسم الشبكة مطلوب»)', pnLoc.status === 400, `status=${pnLoc.status} err=${pnLoc.json?.error}`)
+  // 9.هـ مساعدة الأجهزة — موافقة المالك على اقتران مساعدة = إدارة اقتران: يد الكمبيوتر حصرًا
+  // (طلب/قطع/طي تبقى قنوات أجهزة موثقة — الفحص يثبت أن consent حصرًا هو المقفول)
+  const acLan = await reqJson(LAN, GW.port, '/api/devices/assist', 'POST', { action: 'consent', accept: true, pendingId: 'fa22-x' })
+  check('FA22/ASSIST/lan: موافقة مالك على طلب اقتران من عميل شبكي → 403 (فئة pair.admin)', LAN403(acLan), `status=${acLan.status}`)
+  const aqLan = await reqJson(LAN, GW.port, '/api/devices/assist', 'POST', { action: 'request', assistCode: '000000' })
+  check('FA22/ASSIST/lan: طلب المساعدة (قناة جهاز موثقة برمز) لا يُقفل — يعبر للحرس التعاقدي للرمز', aqLan.status === 403 && aqLan.json?.error !== 'pc-only', `status=${aqLan.status} err=${String(aqLan.json?.error ?? aqLan.json?.reason)?.slice(0, 40)}`)
+  const acLoc = await reqJson(REST.host, REST.port, '/api/devices/assist', 'POST', { action: 'consent', accept: true, pendingId: 'no-such' })
+  check('FA22/ASSIST/loopback: موافقة محلية تعبر الحرس لمنطق الموافقة (404 لا طلب مطابق)', acLoc.status === 404, `status=${acLoc.status} err=${acLoc.json?.error}`)
+  // 9.و الأمن — جرد ملفات المسح الآمن وكتابة المستلامات على القرص
+  const wpLan = await reqJson(LAN, GW.port, '/api/security/wipe', 'GET')
+  check('FA22/WIPE/lan: جرد الملفات القابلة للمسح من عميل شبكي → 403', LAN403(wpLan), `status=${wpLan.status}`)
+  const wpLoc = await reqJson(REST.host, REST.port, '/api/security/wipe', 'GET')
+  check('FA22/WIPE/loopback: الجرد محليًا كما كان (ok:true)', wpLoc.status === 200 && wpLoc.json?.ok === true, `status=${wpLoc.status}`)
+  const rcLan = await reqJson(LAN, GW.port, '/api/security/recv', 'POST', { name: 'fa22.bin', dataB64: 'aGk=' })
+  check('FA22/RECV/lan: كتابة ملف مستلم على قرص الكمبيوتر من عميل شبكي → 403', LAN403(rcLan), `status=${rcLan.status}`)
+  const rcLoc = await reqJson(REST.host, REST.port, '/api/security/recv', 'POST', {})
+  check('FA22/RECV/loopback: الحرس يمر محليًا (400 بيانات ناقصة — لا كتابة)', rcLoc.status === 400, `status=${rcLoc.status}`)
+  // 9.ز الماسح — معاينة الوثائق (توثيق §62 نفسه قال «العيادة على حاسوب المالك حصرًا» وكان الحرس معلنًا بلا تنفيذ)
+  const spLan = await reqJson(LAN, GW.port, '/api/scan/preview?id=fa22&n=1', 'GET')
+  check('FA22/SCAN-PREV/lan: معاينة وثائق الماسح من عميل شبكي → 403 قبل أي 404', LAN403(spLan), `status=${spLan.status}`)
+  const spLoc = await reqJson(REST.host, REST.port, '/api/scan/preview?id=fa22&n=1', 'GET')
+  check('FA22/SCAN-PREV/loopback: المعاينة محليًا تعبر الحرس لمنطق الجلسة (404 لا جلسة)', spLoc.status === 404, `status=${spLoc.status}`)
+  // 9.ح فحص APK — تنفيذ subprocess (unzip) فعل المالك حصرًا
+  const akLan = await reqJson(LAN, GW.port, '/api/apk', 'POST', { deviceId: 'fa22-x', path: 'x.apk' })
+  check('FA22/APK/lan: فحص APK (exec unzip) من عميل شبكي → 403 قبل أي تنفيذ', LAN403(akLan), `status=${akLan.status}`)
+}
+
 const fails = results.filter((r) => !r.ok).length
-console.log(`\n=== FA-13+14+15+16 E2E: ${results.length - fails}/${results.length} PASS ===`)
+console.log(`\n=== FA-13+14+15+16+22 E2E: ${results.length - fails}/${results.length} PASS ===`)
 process.exit(fails ? 1 : 0)

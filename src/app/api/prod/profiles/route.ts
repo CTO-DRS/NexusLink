@@ -1,6 +1,7 @@
 // ملفات تعريف الشبكات — CRUD + تفعيل
 import { db } from "@/lib/db"
 import { prodEmit } from "@/lib/nexus/productivity-bridge"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -11,6 +12,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  // FA-22 (تكليف 51): إنشاء ملف شخصي (بوابة الإشعارات) — loopback حصرًا (نمط FA-16)
+  if (!guardPcOnly(req, "prod.denied", "profile-create")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
   const d = await req.json().catch(() => null)
   if (!d?.name || !d?.networkName) {
     return Response.json({ ok: false, error: "الاسم واسم الشبكة مطلوبان" }, { status: 400 })
@@ -30,6 +35,10 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  // FA-22 (تكليف 51): تعديل ملف شخصي — loopback حصرًا (نمط FA-16)
+  if (!guardPcOnly(req, "prod.denied", "profile-update")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
   const d = await req.json().catch(() => null)
   if (!d?.id) return Response.json({ ok: false, error: "معرّف مفقود" }, { status: 400 })
   const data: Record<string, unknown> = {}
@@ -51,6 +60,10 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  // FA-22 (تكليف 51): حذف ملف شخصي — loopback حصرًا (نمط FA-16)
+  if (!guardPcOnly(req, "prod.denied", "profile-delete")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
   const { id } = await req.json().catch(() => ({}))
   if (!id) return Response.json({ ok: false, error: "معرّف مفقود" }, { status: 400 })
   const prof = await db.netProfile.findUnique({ where: { id } })

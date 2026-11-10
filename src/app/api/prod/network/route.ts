@@ -1,6 +1,7 @@
 // الشبكة الحالية — قراءة/تبديل (محاكاة انتقال بين شبكات LAN)
 import { db } from "@/lib/db"
 import { applyNetwork } from "@/lib/nexus/productivity-bridge"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -15,6 +16,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  // FA-22 (تكليف 51): تبديل الشبكة (قلب بوابة الإشعارات) فعل المالك — loopback حصرًا (نمط FA-16)
+  if (!guardPcOnly(req, "prod.denied", "network-switch")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
   const { network } = await req.json().catch(() => ({}))
   if (!network || typeof network !== "string") {
     return Response.json({ ok: false, error: "اسم الشبكة مطلوب" }, { status: 400 })

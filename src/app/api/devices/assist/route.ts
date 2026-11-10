@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 import { store, heartbeatBump, PAIRING_TTL_MS, type AssistPending } from "@/lib/nexus/devices"
 import { verifyAssistCode, deriveAssistCode, MAX_ASSIST_ATTEMPTS, ASSIST_CODE_TTL_MS } from "@/lib/nexus/assist-code"
 import { ensureDeviceRoot } from "@/lib/nexus/fs-server"
@@ -121,6 +122,13 @@ export async function POST(req: NextRequest) {
 
     /* ── 2) موافقة المالك: القبول يسجّل ويفتح جلسة — الرفض يطوي ── */
     case "consent": {
+  // FA-22 (تكليف 51): موافقة المالك على اقتران مساعدة = إدارة اقتران (يد الكمبيوتر حصرًا) — loopback حصرًا (نمط FA-16)
+  if (!guardPcOnly(req, "pair.admin.denied", "assist-consent")) {
+    return NextResponse.json(
+      { ok: false, error: "pc-only", detail: "via-gateway-non-loopback" },
+      { status: 403 },
+    )
+  }
       if (!s.assistPending || s.assistPending.id !== String(body.pendingId ?? "")) {
         return NextResponse.json({ ok: false, error: "لا طلب معلّق مطابق — ربما طُوي أو استُبدل" }, { status: 404 })
       }
