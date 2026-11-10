@@ -51,7 +51,9 @@ export function GuestShareTab() {
     } catch { /* الشبكة سقطت — تبقى الحالة الأخيرة */ }
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    void Promise.resolve().then(() => load())
+  }, [load])
 
   async function act(action: string, extra: Record<string, unknown> = {}) {
     setBusy(true)

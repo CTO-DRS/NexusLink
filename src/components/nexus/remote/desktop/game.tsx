@@ -32,8 +32,24 @@ export function GameWindow() {
   const pos = useRef({ x: 0.5, y: 0.72 })
   const trail = useRef<{ x: number; y: number }[]>([])
   const [tick, setTick] = useState(0)
-  const [jumping, setJumping] = useState(false)
-  const [hornBubble, setHornBubble] = useState(false)
+  // Q1 (تكليف 52): الرندر من لقطات حالة تُحدَّث في حلقة اللعبة نفسها لا من refs مباشرة
+  const [car, setCar] = useState({ x: 0.5, y: 0.72 })
+  const [trailPts, setTrailPts] = useState<{ x: number; y: number }[]>([])
+  // القفز والصافرة طوابع زمنية تُضبط عند تغيّر التتابع (ضبط أثناء الرندر النمط الموثق) لا setState متزامن في effect
+  const [jumpAt, setJumpAt] = useState(0)
+  const [jumpSeqSeen, setJumpSeqSeen] = useState(jumpSeq)
+  if (jumpSeqSeen !== jumpSeq) {
+    setJumpSeqSeen(jumpSeq)
+    setJumpAt(jumpSeq === 0 ? 0 : Date.now())
+  }
+  const [hornAt, setHornAt] = useState(0)
+  const [hornSeqSeen, setHornSeqSeen] = useState(hornSeq)
+  if (hornSeqSeen !== hornSeq) {
+    setHornSeqSeen(hornSeq)
+    setHornAt(hornSeq === 0 ? 0 : Date.now())
+  }
+  const jumping = jumpAt !== 0
+  const hornBubble = hornAt !== 0
 
   // حلقة اللعبة — تقرأ العصا مباشرة من المخزن
   useEffect(() => {
@@ -54,30 +70,32 @@ export function GameWindow() {
       } else if (trail.current.length > 0) {
         trail.current.shift()
       }
-      if (frame++ % 2 === 0) setTick((t) => t + 1)
+      if (frame++ % 2 === 0) {
+        setCar({ x: pos.current.x, y: pos.current.y })
+        setTrailPts(trail.current.slice())
+        setTick((t) => t + 1)
+      }
       raf = requestAnimationFrame(loop)
     }
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  // قفزة
+  // قفزة — إعادة الضبط بعد 650ms (الضبط غير المتزامن داخل المؤقّت لا يُعد setState متزامنًا)
   useEffect(() => {
-    if (jumpSeq === 0) return
-    setJumping(true)
-    const t = setTimeout(() => setJumping(false), 650)
+    if (!jumpAt) return
+    const t = setTimeout(() => setJumpAt(0), 650)
     return () => clearTimeout(t)
-  }, [jumpSeq])
+  }, [jumpAt])
 
-  // صافرة
+  // صافرة — الصوت side-effect خارج الرندر والفقاعة مشتقة من الطابع الزمني
   useEffect(() => {
-    if (hornSeq === 0) return
-    setHornBubble(true)
+    if (!hornAt) return
     beep(520, 160)
     setTimeout(() => beep(660, 180), 170)
-    const t = setTimeout(() => setHornBubble(false), 1000)
+    const t = setTimeout(() => setHornAt(0), 1000)
     return () => clearTimeout(t)
-  }, [hornSeq])
+  }, [hornAt])
 
   const angle = Math.atan2(stick.x, -stick.y) * (180 / Math.PI)
 
@@ -103,11 +121,11 @@ export function GameWindow() {
         <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-[repeating-linear-gradient(180deg,transparent_0_18px,rgba(255,255,255,0.35)_18px_34px)]" />
 
         {/* أثر الحركة */}
-        {trail.current.map((p, i) => (
+        {trailPts.map((p, i) => (
           <span
             key={`${tick}-${i}`}
             className="absolute w-1.5 h-1.5 rounded-full bg-teal-400/40"
-            style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%`, transform: "translate(-50%,-50%)", opacity: (i + 1) / trail.current.length * 0.5 }}
+            style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%`, transform: "translate(-50%,-50%)", opacity: (i + 1) / trailPts.length * 0.5 }}
           />
         ))}
 
@@ -115,8 +133,8 @@ export function GameWindow() {
         <div
           className={`absolute transition-[filter] ${jumping ? "scale-125 drop-shadow-[0_14px_8px_rgba(0,0,0,0.55)]" : ""}`}
           style={{
-            left: `${pos.current.x * 100}%`,
-            top: `${pos.current.y * 100}%`,
+            left: `${car.x * 100}%`,
+            top: `${car.y * 100}%`,
             transform: `translate(-50%,-50%) rotate(${angle * 0.25}deg) ${jumping ? "translateY(-26px)" : ""}`,
             transition: "transform 0.12s linear",
             fontSize: 30,
@@ -130,7 +148,7 @@ export function GameWindow() {
         {hornBubble && (
           <span
             className="absolute text-[13px] font-bold bg-amber-400 text-amber-950 rounded-full px-2 py-0.5 shadow"
-            style={{ left: `${pos.current.x * 100}%`, top: `${Math.max(6, pos.current.y * 100 - 14)}%`, transform: "translate(-50%,-50%)" }}
+            style={{ left: `${car.x * 100}%`, top: `${Math.max(6, car.y * 100 - 14)}%`, transform: "translate(-50%,-50%)" }}
           >
             📢 بيب بيب!
           </span>

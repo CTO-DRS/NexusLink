@@ -29,7 +29,11 @@ const mk = (text: string, kind: Kind = "info"): Line => ({ id: ++seq, text, kind
 
 export function CliTerminal() {
   const { t } = useI18n()
-  const [lines, setLines] = useState<Line[]>([])
+  // Q1 (تكليف 52): سطر الترحيب تهيئة كسولة لا setState متزامن في effect
+  const [lines, setLines] = useState<Line[]>(() => [
+    mk("NexusLink CLI 2.4.1 — nexus shell", "cmd"),
+    mk(t("اكتب help لعرض الأوامر المتاحة"), "dim"),
+  ])
   const [input, setInput] = useState("")
   const [histIdx, setHistIdx] = useState(-1)
   const historyRef = useRef<string[]>([])
@@ -38,14 +42,6 @@ export function CliTerminal() {
   const setView = useNexus((s) => s.setView)
 
   const push = (...ls: Line[]) => setLines((prev) => [...prev.slice(-300), ...ls])
-
-  useEffect(() => {
-    setLines([
-      mk("NexusLink CLI 2.4.1 — nexus shell", "cmd"),
-      mk(t("اكتب help لعرض الأوامر المتاحة"), "dim"),
-    ])
-     
-  }, [])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })

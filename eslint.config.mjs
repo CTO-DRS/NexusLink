@@ -20,11 +20,12 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "react-hooks/exhaustive-deps": "off",
     "react-hooks/purity": "off",
     // قواعد صرامة المُصرِّف الجديدة في eslint-plugin-react-hooks (رُفعت مع eslint-config-next 16.4.6 — تكليف 44)
-    // تُعلِّق 29 موقعًا قائمًا (refs أثناء الرندر / setState متزامن في effect / مكوّنات ثابتة) —
-    // إعادة هيكلتها المكافئة باب جودة مستقل لاحقًا، لا في باب سلسلة التوريد الأمني.
-    "react-hooks/refs": "off",
-    "react-hooks/set-state-in-effect": "off",
-    "react-hooks/static-components": "off",
+    // كانت معلقة على 29 موقعًا قائمًا — Q1 (تكليف 52) أعادت هيكلتها كلها مكافئة بلا تغيير سلوكي
+    // (لقطات حالة في حلقة اللعبة · useSyncExternalStore للتخزين والوسائط · ضبط أثناء الرندر للتصفير
+    // · مهلة مايكروتاسك للجلب بعد الالتزام · تهيئة كسولة للمحطة) — الآن بوابة رجوع دائمة: أي موقع جديد يفشل بأول جولة.
+    "react-hooks/refs": "error",
+    "react-hooks/set-state-in-effect": "error",
+    "react-hooks/static-components": "error",
     "react/no-unescaped-entities": "off",
     "react/display-name": "off",
     "react/prop-types": "off",

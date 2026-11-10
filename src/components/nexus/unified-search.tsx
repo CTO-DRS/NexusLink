@@ -57,9 +57,15 @@ export function UnifiedSearch() {
     }
   }, [])
 
+  // Q1 (تكليف 52): تصفير النتائج عند فراغ الاستعلام ضبط أثناء الرندر (النمط الموثق) لا setState متزامن في effect
+  const [qSeen, setQSeen] = useState(q)
+  if (qSeen !== q) {
+    setQSeen(q)
+    if (!q.trim()) setPayload(null)
+  }
+
   useEffect(() => {
-    if (timer.current) clearTimeout(timer.current)
-    if (!q.trim()) { setPayload(null); return }
+    if (!q.trim()) return
     timer.current = setTimeout(() => void run(q), 220)
     return () => { if (timer.current) clearTimeout(timer.current) }
   }, [q, run])

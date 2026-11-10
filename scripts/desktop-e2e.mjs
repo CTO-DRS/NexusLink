@@ -6717,6 +6717,22 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
       !nexusDirLM.some((f) => /connector/i.test(f)), `files=${nexusDirLM.length}`)
   }
 
+  // ================= Q1 — بوابة الجودة الدائمة: قواعد react-hooks v7 الصارمة مفعّلة بلا رجوع (تكليف 52) =================
+  // العقد: القواعد الثلاث (refs · set-state-in-effect · static-components) = "error" حصرًا في eslint.config.mjs —
+  // الموقع المعلق القديم (29 موقعًا منذ تكليف 44) أعيدت هيكلته مكافئةً في Q1؛ أي انقلاب صامت لـoff يفشل بأول جولة.
+  {
+    const fsQ = (await import("node:fs")).default
+    const cfgQ = fsQ.readFileSync(new URL("../eslint.config.mjs", import.meta.url), "utf8")
+    for (const rule of ["react-hooks/refs", "react-hooks/set-state-in-effect", "react-hooks/static-components"]) {
+      const re = new RegExp(`"${rule}":\\s*"([a-z-]+)"`)
+      const m = cfgQ.match(re)
+      check(`Q1/src: ${rule} بوابة دائمة = error (لا انقلاب صامت)`,
+        !!m && m[1] === "error", m ? `value=${m[1]}` : "rule-missing")
+    }
+    check("Q1/src: تعليق الإعداد يوثق إعادة الهيكلة وموجة Q1 (تكليف 52) — العقد مقروء من نفس الملف",
+      cfgQ.includes("تكليف 52") && cfgQ.includes("بوابة رجوع دائمة"), "doc↔config")
+  }
+
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {
