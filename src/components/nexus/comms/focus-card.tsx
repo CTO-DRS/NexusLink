@@ -48,7 +48,9 @@ export function FocusCard() {
     } catch { /* الشبكة سقطت */ }
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    void Promise.resolve().then(() => load())
+  }, [load])
 
   useEffect(() => {
     timer.current = setInterval(() => setTick((x) => x + 1), 1000)

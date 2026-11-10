@@ -41,12 +41,15 @@ function DeferredHealthPanel() {
   return ready ? <HealthPanel /> : <div className="h-44 rounded-xl bg-muted/40 animate-pulse" aria-busy="true" />
 }
 
-const kindIcon = (k: string) => (k === "phone" ? Smartphone : k === "tablet" ? Tablet : k === "tv" ? Tv : Monitor)
+// Q1 (تكليف 52): أيقونة الجهاز تُرسَم بشرط مباشر لا استدعاء مُنشئ لمكوّن أثناء الرندر
+function DeviceIcon({ kind }: { kind: string }) {
+  const K = kind === "phone" ? Smartphone : kind === "tablet" ? Tablet : kind === "tv" ? Tv : Monitor
+  return <K className="w-6 h-6" />
+}
 const modeLabel = (m: string) => (m === "wifi" ? "واي فاي" : m === "hotspot" ? "نقطة اتصال" : "USB")
 
 function DeviceCard({ d }: { d: NexusDevice }) {
   const { setActiveDeviceId, setView } = useNexus()
-  const Icon = kindIcon(d.kind)
   const online = d.state === "connected"
   const usedPct = Math.round((d.storageUsed / d.storageTotal) * 100)
 
@@ -65,7 +68,7 @@ function DeviceCard({ d }: { d: NexusDevice }) {
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className={`relative w-12 h-12 rounded-2xl grid place-items-center ${online ? "bg-primary/12 text-primary" : "bg-muted text-muted-foreground"}`}>
-              <Icon className="w-6 h-6" />
+              <DeviceIcon kind={d.kind} />
               <span className={`absolute -bottom-0.5 -end-0.5 w-3.5 h-3.5 rounded-full border-2 border-card ${online ? "bg-emerald-500 nexus-live" : "bg-zinc-400"}`} />
             </div>
             <div>

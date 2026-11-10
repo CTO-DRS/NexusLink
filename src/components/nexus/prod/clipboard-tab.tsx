@@ -58,6 +58,12 @@ export function ClipboardTab() {
   // §50 — خزنة الحافظة: بحث + كشف مقصود + تدبيس
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<ProdClipItem[] | null>(null)
+  // Q1 (تكليف 52): تصفير نتائج البحث عند فراغ الاستعلام ضبط أثناء الرندر (النمط الموثق) لا setState متزامن في effect
+  const [querySeen, setQuerySeen] = useState(query)
+  if (querySeen !== query) {
+    setQuerySeen(query)
+    if (!query.trim()) setResults(null)
+  }
   // §58 — قفل الخزنة الساكن: حالة حية من القائمة (نشط + عدّاد الترحيل)
   // §59 — حلقة الأقفال: عدد الأقفال (الموحد + الأجهزة) وأسماء الأجهزة المقفولة
   const [rest, setRest] = useState<{ active: boolean; keys?: number; devices?: string[]; migrated?: number; dropped?: number } | null>(null)
@@ -70,7 +76,7 @@ export function ClipboardTab() {
   // §50 — بحث الخزنة المُؤجّل: نتائج مرتبة من المسار الفرعي حصرًا
   useEffect(() => {
     const q = query.trim()
-    if (!q) { setResults(null); return }
+    if (!q) return
     const id = setTimeout(async () => {
       try {
         const r = await fetch(`/api/prod/clipboard/vault?q=${encodeURIComponent(q)}`, { cache: "no-store" })
@@ -93,7 +99,7 @@ export function ClipboardTab() {
 
   // §58 — حالة القفل الساكن حية منذ التركيب
   useEffect(() => {
-    void reloadClips()
+    void Promise.resolve().then(() => reloadClips())
   }, [])
 
   /** §58 — ختم السجل كاملًا: كل النص العاري فوق القاعدة يُختم الآن */

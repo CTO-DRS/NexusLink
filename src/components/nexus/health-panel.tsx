@@ -3,7 +3,7 @@
 // مركز صحة الأجهزة (عقد §27) — لوحة داخل صفحة الأجهزة
 // عينات زمنية (بطارية/استجابة/إتاحة) + تنبيهات عبور — تُحدَّث كل 30 ثانية
 // مع زر التقاط عينة فوري ومحدد نافذة (1س/6س/24س).
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNexus } from "@/lib/store"
 import { useI18n } from "@/lib/i18n"
 import { Card, CardContent } from "@/components/ui/card"
@@ -46,19 +46,17 @@ export function HealthPanel() {
   const [window_, setWindow_] = useState<"1h" | "6h" | "24h">("1h")
   const [snap, setSnap] = useState<HealthSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
-  const wref = useRef(window_)
-  wref.current = window_
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (w: "1h" | "6h" | "24h" = window_) => {
     try {
-      const r = await fetch(`/api/devices/health?device=all&window=${wref.current}`)
+      const r = await fetch(`/api/devices/health?device=all&window=${w}`)
       if (r.ok) setSnap(await r.json())
     } catch { /* الشبكة تقطع — التحديث القادم يعيد المحاولة */ }
-  }, [])
+  }, [window_])
 
   useEffect(() => {
-    load()
-    const iv = setInterval(load, 30_000)
+    void Promise.resolve().then(() => load())
+    const iv = setInterval(() => load(), 30_000)
     return () => clearInterval(iv)
   }, [load, window_])
 
@@ -157,7 +155,7 @@ export function HealthPanel() {
             <Button size="sm" variant="outline" className="gap-1.5" disabled={busy} onClick={capture}>
               <Camera className="w-3.5 h-3.5" /> {t("التقاط عينة الآن")}
             </Button>
-            <Button size="sm" variant="ghost" className="gap-1.5" onClick={load} aria-label={t("تحديث")}>
+            <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => void load()} aria-label={t("تحديث")}>
               <RefreshCcw className={`w-3.5 h-3.5 ${busy ? "animate-spin" : ""}`} />
             </Button>
           </div>

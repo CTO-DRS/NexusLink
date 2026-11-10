@@ -64,7 +64,9 @@ export function EmergencyTab() {
     }
   }, [])
 
-  useEffect(() => { void refresh() }, [refresh])
+  useEffect(() => {
+    void Promise.resolve().then(() => refresh())
+  }, [refresh])
 
   const arm = async () => {
     if (pin.length < 4) {

@@ -54,10 +54,13 @@ export function Reveal({
 } & Record<string, unknown>) {
   const ref = useRef<HTMLElement | null>(null)
   const [inView, setInView] = useState(false)
+  // Q1 (تكليف 52): غياب IntersectionObserver مشتق أثناء الرندر لا setState متزامن في effect
+  const noIO = typeof IntersectionObserver === "undefined"
+  const shown = noIO || inView
   useEffect(() => {
+    if (noIO) return
     const el = ref.current
     if (!el) return
-    if (typeof IntersectionObserver === "undefined") { setInView(true); return }
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
@@ -68,12 +71,12 @@ export function Reveal({
     )
     io.observe(el)
     return () => io.disconnect()
-  }, [])
+  }, [noIO])
   const Tag = as as "div"
   return (
     <Tag
       ref={ref as never}
-      className={`nx-reveal ${inView ? "nx-reveal-in" : ""} ${className}`.trim()}
+      className={`nx-reveal ${shown ? "nx-reveal-in" : ""} ${className}`.trim()}
       style={delay ? { ...(style ?? {}), animationDelay: `${delay}s` } : style}
       {...rest}
     >

@@ -46,10 +46,16 @@ export function PhoneStorageModal({
   const [busy, setBusy] = useState(false)
   const [streaming, setStreaming] = useState<string | null>(null)
 
+  // Q1 (تكليف 52): إعادة ضبط حالة الفتح ضبطًا أثناء الرندر (النمط الموثق) لا setState متزامن في effect
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (prevOpen !== open) {
+    setPrevOpen(open)
+    if (open) setState("loading")
+  }
+
   // نقطة الوسائط من الحالة الموحدة (جاهزية الخدمة على الهاتف)
   useEffect(() => {
     if (!open) return
-    setState("loading")
     void fetchAgentMedia().then((m) => {
       if (m) {
         setMedia(m)
@@ -78,7 +84,7 @@ export function PhoneStorageModal({
   }, [media, dir])
 
   useEffect(() => {
-    if (open && state === "ready") void load()
+    if (open && state === "ready") void Promise.resolve().then(() => load())
   }, [open, state, load])
 
   const play = async (e: PhoneEntry) => {

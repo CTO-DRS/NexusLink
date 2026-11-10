@@ -401,7 +401,7 @@ export function FilesView() {
                 }}
                 onToggle={(e) => s.toggleSelect(e.path)}
                 actions={entryActions}
-                realPaths={realPaths.current}
+                realPaths={realPaths}
               />
             ) : (
               <ListView
@@ -414,7 +414,7 @@ export function FilesView() {
                 }}
                 onToggle={(e) => s.toggleSelect(e.path)}
                 actions={entryActions}
-                realPaths={realPaths.current}
+                realPaths={realPaths}
               />
             )}
           </div>
@@ -510,7 +510,7 @@ export function FilesView() {
  * بلا Hooks (نقاط البداية على مستوى الوحدة مفتاحها مسار الملف) — يُستدعى داخل map. */
 const dragStartPts = new Map<string, { x: number; y: number }>()
 
-function dragOutHandlers(deviceId: string, e: FsEntry, realPaths: Map<string, string>) {
+function dragOutHandlers(deviceId: string, e: FsEntry, realPaths: { current: Map<string, string> }) {
   if (e.type !== "file" || !isDesktopShell()) {
     return {}
   }
@@ -524,7 +524,7 @@ function dragOutHandlers(deviceId: string, e: FsEntry, realPaths: Map<string, st
       if (!st) return
       if (Math.abs(ev.clientX - st.x) + Math.abs(ev.clientY - st.y) > 12) {
         dragStartPts.delete(e.path)
-        const real = realPaths.get(e.path)
+        const real = realPaths.current.get(e.path)
         if (!real) {
           toast.error("هذا الملف ليس نسخة محلية — اسحب ملفات الكمبيوتر الحقيقية فقط")
           return
@@ -545,7 +545,7 @@ function Grid({ items, deviceId, selection, onOpen, onToggle, actions, realPaths
   onOpen: (e: FsEntry) => void
   onToggle: (e: FsEntry) => void
   actions: (e: FsEntry) => React.ReactNode
-  realPaths: Map<string, string>
+  realPaths: { current: Map<string, string> }
 }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
@@ -611,7 +611,7 @@ function ListView({ items, selection, onOpen, onToggle, actions, deviceId, realP
   onToggle: (e: FsEntry) => void
   actions: (e: FsEntry) => React.ReactNode
   deviceId: string
-  realPaths: Map<string, string>
+  realPaths: { current: Map<string, string> }
 }) {
   return (
     <div className="space-y-0.5">

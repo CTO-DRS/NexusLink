@@ -37,7 +37,8 @@ export function StorageView() {
   }, [s.activeDeviceId])
 
   useEffect(() => {
-    load()
+    // Q1 (تكليف 52): الجلب عبر مهلة مايكروتاسك — الحملات بعد الالتزام لا رندر متتالٍ متزامن
+    void Promise.resolve().then(() => load())
   }, [load])
 
   const usedPct = analysis ? Math.round((analysis.usedBytes / analysis.totalBytes) * 100) : 0

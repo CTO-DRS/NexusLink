@@ -690,7 +690,7 @@ function BuildsTab() {
   }, [])
 
   useEffect(() => {
-    void check()
+    void Promise.resolve().then(() => check())
   }, [check])
 
   const platforms = [

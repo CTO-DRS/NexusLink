@@ -2,7 +2,7 @@
 // NexusLink — المرحلة 10: تبويب الأمان في صفحة الهاتف الحقيقي (/phone)
 // قفل التطبيق: PIN + نمط + بصمة/وجه (WebAuthn حقيقي عبر HTTPS)
 // + صلاحيات لكل ميزة (الإنفاذ محلي هنا) + إرسال مشفر (لصق/تخفي) + استقبال الأوامر
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { toast } from "sonner"
 import {
   ShieldCheck, LockKeyhole, Fingerprint, Delete, Ghost, Send, KeyRound,
@@ -29,13 +29,38 @@ interface LockCfg {
 function loadCfg(): LockCfg {
   try { return { autoLockSec: 60, ...JSON.parse(localStorage.getItem("nl-sec-lock") || "{}") } } catch { return { autoLockSec: 60 } }
 }
-function saveCfg(cfg: LockCfg) { localStorage.setItem("nl-sec-lock", JSON.stringify(cfg)) }
+// Q1 (تكليف 52): الإعداد متجر خارجي حقيقي (useSyncExternalStore) — لقطة الخادم الافتراضية ولاقطة العميل من التخزين
+// مع كاش مرجعي مستقر، وsaveCfg يُعلم المشتركين — لا setState متزامن في effect للتهيئة ولا ref يُقرأ في الرندر.
+const DEFAULT_CFG: LockCfg = { autoLockSec: 60 }
+const NL_SEC_CFG_EVENT = "nl-sec-cfg"
+let cfgCache: { raw: string; val: LockCfg } | null = null
+function parseCfgRaw(raw: string): LockCfg {
+  try { return { autoLockSec: 60, ...JSON.parse(raw) } } catch { return DEFAULT_CFG }
+}
+function readCfg(): LockCfg {
+  let raw = "{}"
+  try { raw = localStorage.getItem("nl-sec-lock") || "{}" } catch { raw = "{}" }
+  if (!cfgCache || cfgCache.raw !== raw) cfgCache = { raw, val: parseCfgRaw(raw) }
+  return cfgCache.val
+}
+function subscribeCfg(cb: () => void) {
+  window.addEventListener(NL_SEC_CFG_EVENT, cb)
+  window.addEventListener("storage", cb)
+  return () => {
+    window.removeEventListener(NL_SEC_CFG_EVENT, cb)
+    window.removeEventListener("storage", cb)
+  }
+}
+function saveCfg(cfg: LockCfg) {
+  localStorage.setItem("nl-sec-lock", JSON.stringify(cfg))
+  try { window.dispatchEvent(new Event(NL_SEC_CFG_EVENT)) } catch { /* ignore */ }
+}
 
 export function PhoneSecTab() {
   // جسر الأمان بدور الهاتف — يستقبل الأوامر المشفرة (رن/قفل) ويتحقق من الصلاحيات
   useSecBridge("phone")
   const { kexDone, perms, stealth, transfer, receivedClip, phoneLock, setCheck } = useSec()
-  const [cfg, setCfg] = useState<LockCfg>(() => ({ autoLockSec: 60 }))
+  const cfg = useSyncExternalStore(subscribeCfg, readCfg, () => DEFAULT_CFG)
   const [locked, setLocked] = useState(false)
   const [pin, setPin] = useState("")
   const [pinStage, setPinStage] = useState<"idle" | "set1" | "set2" | "unlock">("idle")
@@ -44,21 +69,18 @@ export function PhoneSecTab() {
   const [patternStage, setPatternStage] = useState<"idle" | "set1" | "set2" | "unlock">("idle")
   const [patternFirst, setPatternFirst] = useState<number[]>([])
   const [clipText, setClipText] = useState("")
-  const [biometricReady, setBiometricReady] = useState(false)
-  const failedRef = useRef(0)
+  const [authAvail, setAuthAvail] = useState(false)
+  const [failed, setFailed] = useState(0)
   const idleRef = useRef<number | null>(null)
+  const biometricReady = !!cfg.credId || authAvail
 
-  // تهيئة
+  // WebAuthn متاح؟ (اضبط من رد غير متزامن — لا setState متزامن في effect)
   useEffect(() => {
-    const c = loadCfg()
-    setCfg(c)
-    if (c.credId) setBiometricReady(true)
-    // WebAuthn متاح؟
     void (async () => {
       try {
         const available = await (window as unknown as { PublicKeyCredential?: { isUserVerifyingPlatformAuthenticatorAvailable?: () => Promise<boolean> } })
           .PublicKeyCredential?.isUserVerifyingPlatformAuthenticatorAvailable?.()
-        setBiometricReady((prev) => prev || !!available)
+        setAuthAvail(!!available)
       } catch { /* ignore */ }
     })()
   }, [])
@@ -80,7 +102,7 @@ export function PhoneSecTab() {
 
   const doUnlock = useCallback(() => {
     ;(window as unknown as { __nlSecLocked?: boolean }).__nlSecLocked = false
-    failedRef.current = 0
+    setFailed(0)
     setLocked(false)
     setPin(""); setPattern([]); setPinStage("idle"); setPatternStage("idle")
     clientAudit({ actor: "Galaxy-S24", action: "unlock", detail: "فُتح قفل تطبيق الهاتف", severity: "info" })
@@ -132,7 +154,7 @@ export function PhoneSecTab() {
       if (!cred) throw new Error("أُلغيت العملية")
       const c = loadCfg()
       c.credId = toB64(new Uint8Array(cred.rawId))
-      saveCfg(c); setCfg(c)
+      saveCfg(c)
       toast.success("سُجّلت البصمة/الوجه بنجاح — جهازك نفسه هو المفتاح")
       announce(locked, c)
     } catch (e) {
@@ -152,7 +174,7 @@ export function PhoneSecTab() {
       })
       doUnlock()
     } catch {
-      failedRef.current++
+      setFailed((n) => n + 1)
       toast.error("لم يُتحقق من البصمة")
     }
   }
@@ -177,7 +199,7 @@ export function PhoneSecTab() {
       return
     }
     const stored = await pbkdf2Hash(value)
-    const c = loadCfg(); c.pin = stored; saveCfg(c); setCfg(c)
+    const c = loadCfg(); c.pin = stored; saveCfg(c)
     setPin(""); setPinStage("idle"); setPinFirst("")
     toast.success("ضُبط رمز القفل — مخزن بـ PBKDF2-SHA256 (150 ألف تكرار)")
     announce(locked, c)
@@ -187,13 +209,14 @@ export function PhoneSecTab() {
     const ok = await pbkdf2Verify(value, loadCfg().pin!)
     if (ok) doUnlock()
     else {
-      failedRef.current++
+      const n = failed + 1
+      setFailed(n)
       setPin("")
-      if (failedRef.current >= 3) {
+      if (n >= 3) {
         toast.error("3 محاولات فاشلة — انتظر 20 ثانية قبل المحاولة مجدداً")
         await new Promise((r) => setTimeout(r, 20000))
-        failedRef.current = 0
-      } else toast.error(`رمز خاطئ (محاولة ${failedRef.current}/3)`)
+        setFailed(0)
+      } else toast.error(`رمز خاطئ (محاولة ${n}/3)`)
     }
   }
 
@@ -213,7 +236,7 @@ export function PhoneSecTab() {
       }
       void (async () => {
         const stored = await pbkdf2Hash(seq.join("-"))
-        const c = loadCfg(); c.pattern = stored; saveCfg(c); setCfg(c)
+        const c = loadCfg(); c.pattern = stored; saveCfg(c)
         setPattern([]); setPatternStage("idle")
         toast.success("ضُبط نمط القفل — مخزن بـ PBKDF2 (لا يُحفظ الرسم أبداً)")
         announce(locked, c)
@@ -224,7 +247,7 @@ export function PhoneSecTab() {
       void (async () => {
         const ok = await pbkdf2Verify(seq.join("-"), loadCfg().pattern!)
         if (ok) doUnlock()
-        else { failedRef.current++; setPattern([]); toast.error(`نمط خاطئ (محاولة ${failedRef.current}/3)`) }
+        else { const n = failed + 1; setFailed(n); setPattern([]); toast.error(`نمط خاطئ (محاولة ${n}/3)`) }
       })()
     }
   }
@@ -306,7 +329,7 @@ export function PhoneSecTab() {
           </Button>
         )}
 
-        {(failedRef.current >= 3) && (
+        {(failed >= 3) && (
           <div className="text-[12px] text-red-500 font-bold animate-pulse">محاولات فاشلة متكررة — البروتوكول يبطئك عمداً</div>
         )}
       </div>
@@ -364,7 +387,7 @@ export function PhoneSecTab() {
             </div>
           )}
           {cfg.pin && pinStage === "idle" && (
-            <Button size="sm" variant="ghost" className="h-6 text-[10px] text-muted-foreground" onClick={() => { setCfg(loadCfg()); toast.info("لتغيير الرمز: امسحه من إعدادات المتصفح أو أعد الضبط") }}>تغيير</Button>
+            <Button size="sm" variant="ghost" className="h-6 text-[10px] text-muted-foreground" onClick={() => { window.dispatchEvent(new Event("nl-sec-cfg")); toast.info("لتغيير الرمز: امسحه من إعدادات المتصفح أو أعد الضبط") }}>تغيير</Button>
           )}
         </div>
 
@@ -403,7 +426,7 @@ export function PhoneSecTab() {
           <div className="text-[12px] font-bold flex items-center gap-1.5"><Timer className="w-3.5 h-3.5" /> قفل تلقائي</div>
           <select
             value={cfg.autoLockSec}
-            onChange={(e) => { const c = { ...loadCfg(), autoLockSec: Number(e.target.value) }; saveCfg(c); setCfg(c); announce(locked, c) }}
+            onChange={(e) => { const c = { ...loadCfg(), autoLockSec: Number(e.target.value) }; saveCfg(c); announce(locked, c) }}
             className="h-7 rounded-lg border bg-background px-2 text-[11px]"
             aria-label="مدة القفل التلقائي"
           >
