@@ -107,5 +107,51 @@ check('FA18/PROXY/gw-loopback: عبر البوابة من loopback يمر (503 �
 const wcjs = await reqRaw(REST.host, REST.port, '/web-client/app.js')
 check('FA18/WEBCLIENT: app.js للعميل المستقل يُخدوم كما هو', wcjs.status === 200 && wcjs.raw.includes('makeGuardedFetch'), `status=${wcjs.status}`)
 
+// ==== 8) وكيل الإصدارات الحية (تكليف 50 — FA-21): نفس الأصل + كاش + لقطة صادقة ====
+// القصة: use-release-info كان يجلب api.github.com من المتصفح — مصدود CSP بضمانة على كل تحميل
+// (سبقية معلنة في حدود تكليف 49) — فظل الموقع يعرض v1.1.0-fix4 والإصدار الحي v3.1.0.
+const relSrc = readFileSync('src/hooks/use-release-info.ts', 'utf8')
+const relRoute = readFileSync('src/app/api/releases/latest/route.ts', 'utf8')
+const relData = readFileSync('src/lib/download-site-data.ts', 'utf8')
+
+check('FA18/REL/src: مصدر العميل يجلب نفس الأصل حصرًا — صفر طلب خارجي في المتصفح',
+  relSrc.includes('fetch("/api/releases/latest"') && !/fetch\(["'`]https?:\/\//.test(relSrc), '')
+check('FA18/REL/src: العنوان العلوي للوكيل ثابت حرفيًا (صفر دخل عميل ⇒ صفر SSRF بنيويًا)',
+  relRoute.includes('https://api.github.com/repos/CTO-DRS/NexusLink/releases/latest')
+  && !relRoute.includes('searchParams') && !relRoute.includes('req.url'), '')
+check('FA18/REL/src: فشل المنبع يهبط للقطة المضمّنة بصدق live=false',
+  relRoute.includes('snapshotPayload') && relRoute.includes('live: false'), '')
+check('FA18/REL/src: اللقطة المضمّنة v3.1.0 حقيقية — صفر أسماء 1.1.0 مغروسة والأسماء مُعاملَة بالإصدار',
+  relData.includes('tag: "v3.1.0"') && relData.includes('{{v}}') && !relData.includes('1.1.0-fix4'), '')
+const relGuides = readFileSync('src/components/download/install-guides.tsx', 'utf8') + readFileSync('src/components/download/verify-section.tsx', 'utf8')
+check('FA18/REL/src: أدلة التثبيت وأوامر التحقق مُعاملَة بالإصدار — صفر أسماء أصول 1.1.0 مغروسة',
+  relGuides.includes('{{v}}') && !relGuides.includes('NexusLink_1.1.0') && !relGuides.includes('NexusLink-1.1.0'), '')
+
+const tRel0 = Date.now()
+const rel1 = await reqRaw(REST.host, REST.port, '/api/releases/latest')
+const relMs1 = Date.now() - tRel0
+let relJson = null
+try { relJson = JSON.parse(rel1.raw) } catch {}
+check('FA18/REL/live: الوكيل يجيب 200 JSON بعقدة كاملة (tag/version/publishedAt/assets غير فارغة)',
+  rel1.status === 200 && relJson?.ok === true && !!relJson?.tag && !!relJson?.version && !!relJson?.publishedAt
+  && Object.keys(relJson?.assets ?? {}).length > 0,
+  `status=${rel1.status} tag=${relJson?.tag ?? '—'} assets=${Object.keys(relJson?.assets ?? {}).length}`)
+check('FA18/REL/live: النسخة محسومة من الوسم (releaseVersion) وكل أصل name/bytes>0',
+  relJson && relJson.version === relJson.tag.replace(/^v/, '').replace(/-fix\d+$/, '')
+  && Object.values(relJson.assets).every((a) => a?.name && a?.bytes > 0),
+  `version=${relJson?.version ?? '—'}`)
+const cacheHdr = rel1.headers['x-release-cache'] || ''
+check('FA18/REL/live: ترويسة x-release-cache صادقة (hit|miss|fallback)',
+  ['hit', 'miss', 'fallback'].includes(cacheHdr), `header=${cacheHdr} (${relMs1}ms)`)
+const tRel1 = Date.now()
+const rel2 = await reqRaw(REST.host, REST.port, '/api/releases/latest')
+const relMs2 = Date.now() - tRel1
+const cacheHdr2 = rel2.headers['x-release-cache'] || ''
+check('FA18/REL/live: الاستدعاء الثاني من الكاش (ليس miss) وسريع <400ms',
+  rel2.status === 200 && cacheHdr2 !== 'miss' && ['hit', 'fallback'].includes(cacheHdr2) && relMs2 < 400,
+  `header=${cacheHdr2} (${relMs2}ms)`)
+check('FA18/REL/live: live يطابق مصدر البيانات (حي=true مع miss/hit · لقطة=false مع fallback)',
+  relJson && ((cacheHdr === 'fallback' || cacheHdr2 === 'fallback') ? relJson.live === false : true), `live=${relJson?.live}`)
+
 console.log(`\n=== fa18-e2e: ${results.filter(r => r.ok).length}/${results.length} ===`)
 process.exit(failed ? 1 : 0)
