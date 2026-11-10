@@ -13,7 +13,6 @@
  *   إشارة مزامن لفحوص E2E (عقد §31.أ).
  */
 import { create } from "zustand"
-import RAW_MAP from "./ar-en-map.json"
 
 export type Lang = "ar" | "en" | "fr" | "es" | "de" | "ru"
 
@@ -82,14 +81,21 @@ function buildDict(raw: Record<string, string>): Dict {
   return { exact, patterns }
 }
 
-const EN_DICT = buildDict(RAW_MAP as Record<string, string>)
+/* تكليف 49 (M1 PERF): خريطة ar↔en ‏426KB كانت تُستورد ثابتًا فتُحلل عند الإقلاع
+   في كل تحميل (404KB من أول بايت) — رغم أن العربية افتراضية ولا تحتاجها، وأن
+   §31.أ موثقة «تحميل كسول — الحزمة الأساسية لا تتضخم». الآن عبر المسار نفسه:
+   تُجلب import() عند أول حاجة لوضع en حصرًا، ونافذة «قيد التحميل» تُعاد رسمها
+   بآلية mapRev نفسها الموجودة لـ fr/es/de/ru — بلا أي تغيير سلوكي بعد الجاهزية. */
+let EN_DICT: Dict | null = null
 
-/* loaded non-ar/non-en dicts (عقد §31.أ — تحميل كسول) */
-const DICTS: Partial<Record<Lang, Dict | "loading">> = { en: EN_DICT }
+/* loaded non-ar dicts (عقد §31.أ — تحميل كسول) */
+const DICTS: Partial<Record<Lang, Dict | "loading">> = {}
 let dictWaiters: Array<() => void> = []
 
 async function loadMap(lang: Lang): Promise<Record<string, string> | null> {
   switch (lang) {
+    case "en":
+      return ((await import("./ar-en-map.json")).default ?? null) as Record<string, string> | null
     case "fr":
       return ((await import("./i18n/fr.json")).default ?? null) as Record<string, string> | null
     case "es":
@@ -116,6 +122,7 @@ async function ensureDict(lang: Lang): Promise<Dict | null> {
     const raw = await loadMap(lang)
     const d = raw ? buildDict(raw) : null
     DICTS[lang] = d ?? undefined
+    if (lang === "en") EN_DICT = d
     return d
   } catch {
     DICTS[lang] = undefined

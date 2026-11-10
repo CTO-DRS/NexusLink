@@ -1,9 +1,9 @@
 "use client"
 
-import { motion } from "framer-motion"
 import { Download, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n"
+import { Reveal } from "./reveal"
 import { REPO_URL } from "@/lib/download-site-data"
 
 /** نداء الختام: تنزيل أو استعراض المستودع المفتوح. */
@@ -15,11 +15,8 @@ export function CtaBand() {
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
         <div className="absolute start-1/2 top-0 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl rtl:translate-x-1/2" />
       </div>
-      <motion.div
-        initial={{ opacity: 0, y: 18 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-60px" }}
-        transition={{ duration: 0.5 }}
+      <Reveal
+        delay={0}
         className="relative mx-auto max-w-3xl px-4 py-16 text-center sm:py-20"
       >
         <h2 id="cta-title" className="text-3xl font-bold tracking-tight sm:text-4xl">
@@ -44,7 +41,7 @@ export function CtaBand() {
             </a>
           </Button>
         </div>
-      </motion.div>
+      </Reveal>
     </section>
   )
 }

@@ -1,6 +1,5 @@
 "use client"
 
-import { motion } from "framer-motion"
 import { useI18n } from "@/lib/i18n"
 
 /**
@@ -14,6 +13,8 @@ const STATS = [
   { value: "428", labelKey: "فحص E2E آلي أخضر على المشروع" },
 ]
 
+import { Reveal } from "./reveal"
+
 export function StatsBand() {
   const { t } = useI18n()
 
@@ -22,18 +23,12 @@ export function StatsBand() {
       <div className="mx-auto max-w-6xl px-4 py-10">
         <dl className="grid grid-cols-2 gap-6 text-center lg:grid-cols-4">
           {STATS.map((s, i) => (
-            <motion.div
-              key={s.value}
-              initial={{ opacity: 0, y: 14 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.4, delay: i * 0.08 }}
-            >
+            <Reveal key={s.value} delay={i * 0.08}>
               <dt className="order-2 mt-1 text-sm text-muted-foreground">{t(s.labelKey)}</dt>
               <dd className="order-1 text-3xl font-extrabold tracking-tight text-primary sm:text-4xl" dir="ltr">
                 {s.value}
               </dd>
-            </motion.div>
+            </Reveal>
           ))}
         </dl>
         <p className="mt-6 text-center text-xs text-muted-foreground">

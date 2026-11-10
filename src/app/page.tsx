@@ -1,5 +1,4 @@
-import { NexusApp } from "@/components/nexus/nexus-app"
-import { SiteHome } from "@/components/site/site-home"
+import dynamic from "next/dynamic"
 
 /**
  * فصل مسار الجذر بعقد صريح:
@@ -7,7 +6,15 @@ import { SiteHome } from "@/components/site/site-home"
  *  · /?app=1     — واجهة التطبيق في المتصفح دون جسر سطح المكتب (يستخدمها /phone)
  *  · /           — الموقع الرسمي للمنتج (الرئيسية) لأي زائر آخر
  * الفصل يجري في الخادم عبر searchParams — بلا وميض ولا إعادة توجيه.
+ *
+ * تكليف 49 (M1 PERF): كان الاستيراد الثابت للطرفين يجعل كلا النمطين يدفعان ثمن
+ * حزمة الآخر كاملة (~3MB JS أولية على /). الفصل الديناميكي: زائر الموقع لا
+ * ينفّذ سطرًا من التطبيق، ومستخدم التطبيق لا ينفّذ سطرًا من الموقع —
+ * العقد نصيًا كما هو (نفس searchParams ونفس المكونات) والفصل في التحميل حصرًا.
  */
+const NexusApp = dynamic(() => import("@/components/nexus/nexus-app").then((m) => m.NexusApp))
+const SiteHome = dynamic(() => import("@/components/site/site-home").then((m) => m.SiteHome))
+
 export default async function Home({
   searchParams,
 }: {

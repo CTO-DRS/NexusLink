@@ -1,13 +1,13 @@
 "use client"
 
 import { useMemo } from "react"
-import { motion } from "framer-motion"
 import { CloudOff, Download, Globe, Laptop, MonitorSmartphone, ShieldCheck, Smartphone } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n"
 import { useReleaseInfo } from "@/hooks/use-release-info"
 import { useClientOS } from "@/hooks/use-client-os"
+import { RevealLoad } from "@/components/site/reveal"
 import {
   assetUrl,
   formatMB,
@@ -81,32 +81,26 @@ export function Hero() {
             </Badge>
           </div>
 
-          <motion.h1
+          <RevealLoad
+            as="h1"
             id="hero-title"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
             className="text-balance text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl"
           >
             {t("اربط أجهزتك… بخصوصية كاملة")}
-          </motion.h1>
+          </RevealLoad>
 
-          <motion.p
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
+          <RevealLoad
+            delay={0.1}
             className="mx-auto mt-5 max-w-2xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg"
           >
             {t(
               "NexusLink يصل هاتفك بجهاز الكمبيوتر محليًا على شبكتك: حافظة مشتركة، نقل ملفات، تحكم عن بُعد، ومرآة شاشة — بتشفير من الطرف إلى الطرف ودون أي سحابة."
             )}
-          </motion.p>
+          </RevealLoad>
 
           {/* CTAs */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
+          <RevealLoad
+            delay={0.2}
             className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row"
           >
             {primary ? (
@@ -133,7 +127,7 @@ export function Hero() {
                 {t("صفحة النشر")}
               </a>
             </Button>
-          </motion.div>
+          </RevealLoad>
 
           {/* meta line */}
           <p className="mt-4 text-sm text-muted-foreground">
@@ -161,10 +155,8 @@ export function Hero() {
         </div>
 
         {/* devices visual */}
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
+        <RevealLoad
+          delay={0.3}
           className="mx-auto mt-14 max-w-3xl"
           aria-hidden="true"
         >
@@ -225,7 +217,7 @@ export function Hero() {
           <p className="mt-4 text-center text-sm text-muted-foreground">
             {t("كمبيوتر + هاتف على شبكتك المحلية")}
           </p>
-        </motion.div>
+        </RevealLoad>
       </div>
     </section>
   )

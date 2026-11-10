@@ -1,9 +1,9 @@
 "use client"
 
-import { motion } from "framer-motion"
 import { Apple, Download, Monitor, Smartphone, Triangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n"
+import { Reveal } from "./reveal"
 
 /**
  * المنصات — من مصفوفة البناء الفعلية (release.yml يبني الخمس):
@@ -37,20 +37,13 @@ export function PlatformsStrip() {
 
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {PLATFORMS.map((p, i) => (
-            <motion.div
-              key={p.name}
-              initial={{ opacity: 0, y: 18 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-60px" }}
-              transition={{ duration: 0.45, delay: i * 0.08 }}
-              className="rounded-2xl border bg-card p-6 text-center"
-            >
+            <Reveal key={p.name} delay={i * 0.08} className="rounded-2xl border bg-card p-6 text-center">
               <span className="mx-auto grid size-12 place-items-center rounded-xl bg-primary/10 text-primary">
                 <p.icon className="size-6" aria-hidden="true" />
               </span>
               <h3 className="mt-3 text-lg font-bold">{p.name}</h3>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{t(p.descKey)}</p>
-            </motion.div>
+            </Reveal>
           ))}
         </div>
 
