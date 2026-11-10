@@ -1,0 +1,53 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "set": [
+    {
+      "identifier": "diag",
+      "description": "FA-19 — مجموعة التشخيص الأصلي: منافذ الخدمات + اختبار السرعة + تصدير التقرير + الخمول",
+      "permissions": [
+        "allow-diag-sidecar-ports",
+        "allow-diag-speed-test",
+        "allow-diag-export",
+        "allow-diag-idle-state"
+      ]
+    }
+  ],
+  "permission": [
+    {
+      "identifier": "allow-diag-sidecar-ports",
+      "description": "منح أمر التطبيق diag_sidecar_ports حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "diag_sidecar_ports"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-diag-speed-test",
+      "description": "منح أمر التطبيق diag_speed_test حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "diag_speed_test"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-diag-export",
+      "description": "منح أمر التطبيق diag_export حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "diag_export"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-diag-idle-state",
+      "description": "منح أمر التطبيق diag_idle_state حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "diag_idle_state"
+        ]
+      }
+    }
+  ]
+}

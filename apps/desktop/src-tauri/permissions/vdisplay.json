@@ -1,0 +1,43 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "set": [
+    {
+      "identifier": "vdisplay",
+      "description": "FA-19 — مجموعة الشاشة الافتراضية: حالة + تشغيل/إطفاء وقت الرِجِيم",
+      "permissions": [
+        "allow-vdisplay-status",
+        "allow-vdisplay-enable",
+        "allow-vdisplay-disable"
+      ]
+    }
+  ],
+  "permission": [
+    {
+      "identifier": "allow-vdisplay-status",
+      "description": "منح أمر التطبيق vdisplay_status حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "vdisplay_status"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-vdisplay-enable",
+      "description": "منح أمر التطبيق vdisplay_enable حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "vdisplay_enable"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-vdisplay-disable",
+      "description": "منح أمر التطبيق vdisplay_disable حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "vdisplay_disable"
+        ]
+      }
+    }
+  ]
+}

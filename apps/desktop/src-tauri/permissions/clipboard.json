@@ -1,0 +1,33 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "set": [
+    {
+      "identifier": "clipboard",
+      "description": "FA-19 — مجموعة الحافظة الموحدة: تطبيق نص/صورة واصل من الهاتف وإرسال فوري",
+      "permissions": [
+        "allow-clip-apply",
+        "allow-clip-send-now"
+      ]
+    }
+  ],
+  "permission": [
+    {
+      "identifier": "allow-clip-apply",
+      "description": "منح أمر التطبيق clip_apply حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "clip_apply"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-clip-send-now",
+      "description": "منح أمر التطبيق clip_send_now حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "clip_send_now"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,163 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "set": [
+    {
+      "identifier": "media",
+      "description": "FA-19 — مجموعة الوسائط: بث الشاشة (SDP/ICE) + الكاميرا الافتراضية + المشغل والإعدادات",
+      "permissions": [
+        "allow-media-screen-start",
+        "allow-media-screen-answer",
+        "allow-media-screen-ice",
+        "allow-media-screen-stop",
+        "allow-media-screen-set",
+        "allow-media-status",
+        "allow-media-vcam-start",
+        "allow-media-vcam-stop",
+        "allow-media-vcam-status",
+        "allow-media-vcam-install",
+        "allow-media-open-player",
+        "allow-media-open-sound-settings",
+        "allow-media-answer",
+        "allow-media-ice",
+        "allow-media-kind-stop"
+      ]
+    }
+  ],
+  "permission": [
+    {
+      "identifier": "allow-media-screen-start",
+      "description": "منح أمر التطبيق media_screen_start حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "media_screen_start"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-media-screen-answer",
+      "description": "منح أمر التطبيق media_screen_answer حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "media_screen_answer"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-media-screen-ice",
+      "description": "منح أمر التطبيق media_screen_ice حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "media_screen_ice"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-media-screen-stop",
+      "description": "منح أمر التطبيق media_screen_stop حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "media_screen_stop"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-media-screen-set",
+      "description": "منح أمر التطبيق media_screen_set حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "media_screen_set"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-media-status",
+      "description": "منح أمر التطبيق media_status حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "media_status"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-media-vcam-start",
+      "description": "منح أمر التطبيق media_vcam_start حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "media_vcam_start"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-media-vcam-stop",
+      "description": "منح أمر التطبيق media_vcam_stop حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "media_vcam_stop"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-media-vcam-status",
+      "description": "منح أمر التطبيق media_vcam_status حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "media_vcam_status"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-media-vcam-install",
+      "description": "منح أمر التطبيق media_vcam_install حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "media_vcam_install"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-media-open-player",
+      "description": "منح أمر التطبيق media_open_player حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "media_open_player"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-media-open-sound-settings",
+      "description": "منح أمر التطبيق media_open_sound_settings حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "media_open_sound_settings"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-media-answer",
+      "description": "منح أمر التطبيق media_answer حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "media_answer"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-media-ice",
+      "description": "منح أمر التطبيق media_ice حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "media_ice"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-media-kind-stop",
+      "description": "منح أمر التطبيق media_kind_stop حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "media_kind_stop"
+        ]
+      }
+    }
+  ]
+}

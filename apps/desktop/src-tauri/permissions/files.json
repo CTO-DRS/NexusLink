@@ -1,0 +1,53 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "set": [
+    {
+      "identifier": "files",
+      "description": "FA-19 — مجموعة دمج الملفات: إظهار في المستكشف + بث فيديو الهاتف + قائمة السياق",
+      "permissions": [
+        "allow-files-reveal",
+        "allow-files-stream-open",
+        "allow-files-stream-cancel",
+        "allow-files-context-menu"
+      ]
+    }
+  ],
+  "permission": [
+    {
+      "identifier": "allow-files-reveal",
+      "description": "منح أمر التطبيق files_reveal حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "files_reveal"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-files-stream-open",
+      "description": "منح أمر التطبيق files_stream_open حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "files_stream_open"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-files-stream-cancel",
+      "description": "منح أمر التطبيق files_stream_cancel حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "files_stream_cancel"
+        ]
+      }
+    },
+    {
+      "identifier": "allow-files-context-menu",
+      "description": "منح أمر التطبيق files_context_menu حصرًا (FA-19 — مستدعى من ويبفيو مجدول)",
+      "commands": {
+        "allow": [
+          "files_context_menu"
+        ]
+      }
+    }
+  ]
+}
