@@ -8,13 +8,14 @@
 import { NexusLink, NexusError } from "../sdk/index.mjs"
 
 const argv = process.argv.slice(2)
-const flags = { port: 3000, url: "", json: false }
+const flags = { port: 3000, url: "", json: false, timeout: 0 }
 const args = []
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (a === "--port") flags.port = Number(argv[++i])
   else if (a === "--url") flags.url = argv[++i]
   else if (a === "--json") flags.json = true
+  else if (a === "--timeout") flags.timeout = Number(argv[++i])
   else args.push(a)
 }
 
@@ -28,7 +29,7 @@ function fail(msg, code = 1) {
 
 const HELP = `NexusLink CLI (عقد 2.0 — محلي حصرًا)
 
-الاستخدام: node cli/nexus.mjs <أمر> [معاملات] [--port 3000 | --url http://127.0.0.1:3000] [--json]
+الاستخدام: node cli/nexus.mjs <أمر> [معاملات] [--port 3000 | --url http://127.0.0.1:3000] [--json] [--timeout 10000]
 
 الأوامر:
   version                     إصدار التطبيق وسجل الإصدارات
@@ -54,12 +55,19 @@ const HELP = `NexusLink CLI (عقد 2.0 — محلي حصرًا)
   node cli/nexus.mjs status
   node cli/nexus.mjs automation add "تنبيه" '{"trigger":{"kind":"battery.below","threshold":20},"action":{"kind":"notify","text":"بطارية منخفضة"}}'
   node cli/nexus.mjs search ملاحظات --json
+
+--timeout: مهلة كل طلب بالمللي ثانية (افتراضي 10000 — عقد §34.هـ)
 `
 
 async function main() {
+  if (!Number.isInteger(flags.port) || flags.port <= 0) fail("--port يجب أن يكون منفذًا موجبًا")
+  if (flags.timeout !== 0 && (!Number.isFinite(flags.timeout) || flags.timeout <= 0)) fail("--timeout يجب أن يكون عددًا مللي ثانية موجبًا")
   let nx
   try {
-    nx = new NexusLink(flags.url ? { url: flags.url } : { port: flags.port })
+    nx = new NexusLink({
+      ...(flags.url ? { url: flags.url } : { port: flags.port }),
+      ...(flags.timeout ? { timeoutMs: flags.timeout } : {}),
+    })
   } catch (e) {
     fail(e instanceof NexusError ? e.message : String(e))
   }
@@ -77,7 +85,12 @@ async function main() {
       if (!d) fail("الجهاز غير موجود", 2)
       out(d); return
     }
-    case "ops": out(await nx.ops(rest[0] !== undefined ? Number(rest[0]) : undefined)); return
+    case "ops": {
+      // درس بطارية 47: الوسيط الثاني يقع في sub لا rest — ops 120 كانت تتجاهل since صامتة!
+      const s = sub !== undefined ? Number(sub) : undefined
+      if (s !== undefined && (!Number.isInteger(s) || s < 0)) fail("since يجب أن يكون عددًا صحيحًا ≥ 0 (مثال: ops 120)")
+      out(await nx.ops(s)); return
+    }
     case "transfers": out((await nx.transfers()).jobs); return
     case "search": {
       const q = sub ? [sub, ...rest].join(" ") : ""

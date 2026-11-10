@@ -55,18 +55,37 @@ export function canonicalize(value: unknown): string {
   return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalize(obj[k])}`).join(",")}}`
 }
 
-export async function getChannelKey(): Promise<{ key: string; fp: string }> {
-  await dbReady
-  const row = await db.desktopSetting.findUnique({ where: { key: MARKET_KEY_SETTING } })
-  let key = row?.value
-  if (!key || !/^[0-9a-f]{64}$/.test(key)) {
-    key = crypto.randomBytes(32).toString("hex")
-    await db.desktopSetting.upsert({
-      where: { key: MARKET_KEY_SETTING },
-      create: { key: MARKET_KEY_SETTING, value: key },
-      update: { value: key },
-    })
+/** ضمانة مرة-واحدة لكل عملية (درس بطارية SDK — تكليف 47): ‏GET /api/marketplace كانت
+ *  تستدعي getChannelKey مرتين متوازيتين (Promise.all) — عند أول استخدام على جهاز جديد
+ *  يولّد كل نداء مفتاحًا عشوائيًا مختلفًا: توقيعات القناة بمفتاح وبصمة keyFp المعلنة
+ *  بمفتاح آخر فائز بالكتابة الأخيرة — **أول تثبيت من أول رد يفشل دائمًا** «التوقيع
+ *  لا يطابق المحتوى». النداءان الآن يتقاسمان طيرانًا واحدًا (single-flight) فيقرآن
+ *  الصف نفسه بعد كتابته — وتوقيعات الناشر أدق من ذلك فلا تتأثر. */
+let channelKeyEnsured: Promise<void> | null = null
+async function ensureChannelKey(): Promise<void> {
+  if (!channelKeyEnsured) {
+    channelKeyEnsured = (async () => {
+      await dbReady
+      const row = await db.desktopSetting.findUnique({ where: { key: MARKET_KEY_SETTING } })
+      if (row?.value && /^[0-9a-f]{64}$/.test(row.value)) return
+      const key = crypto.randomBytes(32).toString("hex")
+      await db.desktopSetting.upsert({
+        where: { key: MARKET_KEY_SETTING },
+        create: { key: MARKET_KEY_SETTING, value: key },
+        update: { value: key },
+      })
+    })()
+    channelKeyEnsured.catch(() => { channelKeyEnsured = null }) // فشل → اسمح بإعادة المحاولة لاحقًا
   }
+  await channelKeyEnsured
+}
+
+export async function getChannelKey(): Promise<{ key: string; fp: string }> {
+  await ensureChannelKey()
+  const row = await db.desktopSetting.findUnique({ where: { key: MARKET_KEY_SETTING } })
+  const key = row?.value && /^[0-9a-f]{64}$/.test(row.value)
+    ? row.value
+    : crypto.randomBytes(32).toString("hex") // بُعد الضمانة لا يجب أن يُطقال — دفاعي حصرًا
   const fp = crypto.createHash("sha256").update(key).digest("hex").slice(0, 16)
   return { key, fp }
 }

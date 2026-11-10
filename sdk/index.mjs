@@ -7,7 +7,8 @@
 // الجهاز هو الحدود (contract 2.0 — «الأجهزة والنقل والأتمتة»).
 // النقل: REST عادي على المنفذ المحلي — لا socket.io من الطرف الثالث.
 
-const LOCALHOST_RE = /^(https?:\/\/)?(127\.0\.0\.1|\[::1\]|localhost)(:\d+)?$/i
+const LOCALHOST_RE = /^(https?:\/\/)?(127\.0\.0\.1|\[::1\]|localhost)(:\d+)?\/?$/i
+const DEFAULT_TIMEOUT_MS = 10_000 // عقد §34.هـ: مهلة افتراضية معلنة — بلا تعليق أبدي
 
 /** خطأ موحد للطرف الثالث: status رقم وmessage واضح */
 export class NexusError extends Error {
@@ -29,24 +30,39 @@ export class NexusError extends Error {
  *   const rules = await nx.automation.list()
  */
 export class NexusLink {
-  constructor({ port = 3000, url } = {}) {
+  constructor({ port = 3000, url, timeoutMs } = {}) {
     const base = url || `http://127.0.0.1:${port}`
     if (!LOCALHOST_RE.test(base)) {
       // الحرس التعاقدي: الـSDK لا يتحدث إلا مع الجهاز المحلي
+      // (يقبل شريحة مائلة وحيدة زائدة — يرفض أي مسار أعمق أو مضيف خارجي أو مخطط آخر)
       throw new NexusError(0, `NexusLink SDK محلي حصرًا — رفض العنوان: ${base}`, "constructor")
     }
     this.base = base.replace(/\/$/, "")
+    const t = Number(timeoutMs)
+    this.timeoutMs = Number.isFinite(t) && t > 0 && t <= 120_000 ? Math.floor(t) : DEFAULT_TIMEOUT_MS
   }
 
   async #req(path, { method = "GET", body } = {}) {
     let res
+    const ctl =
+      typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+        ? AbortSignal.timeout(this.timeoutMs)
+        : undefined
     try {
       res = await fetch(`${this.base}${path}`, {
         method,
+        // عقد النقل الحرفي: الجهاز هو الحدود — أي تحويل (redirect) يُرفض بدل اتباعه
+        // لوجهة قد تكون خارج الجهاز (307/308 يُعيدان الجسم والرمز إلى الغريب)
+        redirect: "error",
         headers: body !== undefined ? { "content-type": "application/json" } : undefined,
         body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: ctl,
       })
     } catch (e) {
+      const name = e?.name || ctl?.reason?.name || ""
+      if (name === "TimeoutError" || name === "AbortError") {
+        throw new NexusError(0, `انتهت مهلة الطلب (${this.timeoutMs}ms) — ${path}`, path)
+      }
       throw new NexusError(0, `لا اتصال بالخادم المحلي (${this.base}) — ${e.message}`, path)
     }
     const text = await res.text().catch(() => "")
@@ -76,8 +92,18 @@ export class NexusLink {
   }
 
   // ————— النقل والمزامنة —————
-  /** حالة سجل العمليات القابل للاستئناف (offline-first — عقد §32) — قراءة حصرًا */
-  ops(since) { return this.#req(`/api/sync/ops${since !== undefined ? `?since=${Number(since)}` : ""}`) }
+  /** حالة سجل العمليات القابل للاستئناف (offline-first — عقد §32) — قراءة حصرًا
+   *  since عدد صحيح ≥ 0 حصرًا — غير الصالح NexusError ‏400 مسببًا (لا since=NaN صامت) */
+  ops(since) {
+    if (since !== undefined) {
+      const n = Number(since)
+      if (!Number.isInteger(n) || n < 0) {
+        throw new NexusError(400, `since يجب أن يكون عددًا صحيحًا ≥ 0 — وصل: ${String(since)}`, "/api/sync/ops")
+      }
+      return this.#req(`/api/sync/ops?since=${n}`)
+    }
+    return this.#req("/api/sync/ops")
+  }
   /** قوائم النقل النشطة */
   transfers() { return this.#req("/api/transfer") }
 
