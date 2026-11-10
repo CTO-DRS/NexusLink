@@ -177,6 +177,9 @@ export async function GET() {
       portable: true,
       signature: "minisign (Ed25519) — tauri-plugin-updater",
       changelog: history,
+      // عقد §34.أ حرفيًا (تكليف 47): الدليل العام يوثق version() → { current, history }
+      // — الاسم البديل يكمل العقد للطرف الثالث (changelog يبقى لمستهلكيه القائمين)
+      history,
       policy: { minimumVersion, belowMinimum },
       t: Date.now(),
     },
