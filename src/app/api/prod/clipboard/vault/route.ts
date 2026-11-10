@@ -22,7 +22,6 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { prodEmit } from "@/lib/nexus/productivity-bridge"
 import { writeServerAudit } from "@/lib/nexus/desktop-hardening"
-import { appendAudit } from "@/lib/enterprise-audit"
 import { searchClips, vaultStats } from "@/lib/nexus/clip-vault-core"
 import { purgeExpired, serClipItem } from "@/lib/nexus/clip-vault-server"
 import {
@@ -31,14 +30,15 @@ import {
   sealAllClipRows, rotateClipRestKey, rotateClipKeyFor,
 } from "@/lib/nexus/clip-at-rest-server"
 import { ringDevices, ringKeyCount } from "@/lib/nexus/clip-multikey"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
-function isLoopbackIp(ip: string): boolean {
-  return ip === "::1" || ip === "::ffff:127.0.0.1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)
-}
-
 export async function GET(req: Request) {
+  // FA-22 (تكليف 51): قائمة الخزنة بمحتواها المفكوك فعل المالك على الكمبيوتر — loopback حصرًا (نمط FA-16)
+  if (!guardPcOnly(req, "prod.denied", "vault-list")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
   await purgeExpired().catch(() => 0)
   const url = new URL(req.url)
   const q = url.searchParams.get("q") ?? ""
@@ -72,6 +72,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  // FA-22 (تكليف 51): أفعال الخزنة (كشف/تدبيس/حذف/ختم/تدوير) يد المالك على الكمبيوتر — loopback حصرًا (نمط FA-16)
+  if (!guardPcOnly(req, "prod.denied", "vault-action")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
   const body = await req.json().catch(() => null)
   const action = String(body?.action ?? "")
   const id = body?.id ? String(body.id) : null
@@ -87,17 +91,10 @@ export async function POST(req: Request) {
     return NextResponse.json(r, { status: r.ok ? 200 : 500 })
   }
 
-  // §58/§59 — تدوير الأقفال: يد محلية حصرًا (نمط §37/§51/§57) — والمفاتيح لا تُعرض
+  // §58/§59 — تدوير الأقفال: يد محلية حصرًا — FA-22 وحّد الحرس أعلاه (guardPcOnly)
+  // بدل الكتلة اليدوية القديمة (نفس الشرط: loopback حصرًا) — والمفاتيح لا تُعرض
   // §59: بdeviceId يُدار قفل الجهاز المفرد (صفوفه حصرًا) — وبدونه الشامل
   if (action === "rotate-key") {
-    const fwd = req.headers.get("x-gw-client-ip")
-    if (fwd && !isLoopbackIp(fwd)) {
-      await appendAudit("clip.crypto.rotate", false, "remote", { reason: "loopback" })
-      return NextResponse.json(
-        { ok: false, error: "clip-admin-loopback-only", detail: "via-gateway-non-loopback" },
-        { status: 403 },
-      )
-    }
     const devId = body?.deviceId ? String(body.deviceId) : null
     if (devId) return NextResponse.json(await rotateClipKeyFor(devId))
     return NextResponse.json(await rotateClipRestKey())

@@ -1,6 +1,7 @@
 // حالة الإنتاجية العامة — قراءة/تحديث (وضع الحافظة، مزامنة الصور)
 import { db } from "@/lib/db"
 import { prodEmit } from "@/lib/nexus/productivity-bridge"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -10,6 +11,10 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
+  // FA-22 (تكليف 51): قلب وضع الحافظة/مزامنة الصور فعل المالك — loopback حصرًا (نمط FA-16)
+  if (!guardPcOnly(req, "prod.denied", "prod-state")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
   const d = await req.json().catch(() => null)
   if (!d) return Response.json({ ok: false, error: "بيانات غير صالحة" }, { status: 400 })
   const data: Record<string, unknown> = {}

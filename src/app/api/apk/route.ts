@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { resolveSafe } from "@/lib/nexus/fs-server"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 import { execFile } from "child_process"
 import { promisify } from "util"
 
@@ -8,6 +9,13 @@ export const dynamic = "force-dynamic"
 
 /** Inspect an APK: real zip listing + naive manifest parsing. */
 export async function POST(req: NextRequest) {
+  // FA-22 (تكليف 51): فحص APK (تنفيذ unzip) فعل المالك على الكمبيوتر — loopback حصرًا (نمط FA-16)
+  if (!guardPcOnly(req, "apk.denied", "apk-inspect")) {
+    return NextResponse.json(
+      { ok: false, error: "pc-only", detail: "via-gateway-non-loopback" },
+      { status: 403 },
+    )
+  }
   const { deviceId, path } = await req.json()
   try {
     const abs = resolveSafe(deviceId, path)

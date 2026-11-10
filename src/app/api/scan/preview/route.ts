@@ -7,10 +7,15 @@
 // في أي JSON — الصورة تُقدَّم بايتات مباشرة).
 import { NextResponse } from "next/server"
 import { previewScanPage } from "@/lib/nexus/scan-server"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
 export async function GET(req: Request) {
+  // FA-22 (تكليف 51): معاينة وثائق الماسح فعل المالك على الكمبيوتر — loopback حصرًا (نمط FA-16)
+  if (!guardPcOnly(req, "scan.denied", "scan-preview")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
   const url = new URL(req.url)
   const id = url.searchParams.get("id") ?? ""
   const n = Number(url.searchParams.get("n"))

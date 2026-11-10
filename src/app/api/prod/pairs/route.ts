@@ -2,6 +2,7 @@
 import { db } from "@/lib/db"
 import { resolveSafe, listDir } from "@/lib/nexus/fs-server"
 import { prodEmit } from "@/lib/nexus/productivity-bridge"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -14,6 +15,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  // FA-22 (تكليف 51): إنشاء زوج مزامنة (mkdir على قرص الكمبيوتر) — loopback حصرًا (نمط FA-16)
+  if (!guardPcOnly(req, "prod.denied", "pair-create")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
   const d = await req.json().catch(() => null)
   if (!d?.deviceA || !d?.folderA || !d?.deviceB || !d?.folderB) {
     return Response.json({ ok: false, error: "حدّد الجهازين والمجلدين" }, { status: 400 })
@@ -42,6 +47,10 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  // FA-22 (تكليف 51): تعديل زوج مزامنة — loopback حصرًا (نمط FA-16)
+  if (!guardPcOnly(req, "prod.denied", "pair-update")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
   const d = await req.json().catch(() => null)
   if (!d?.id) return Response.json({ ok: false, error: "معرّف مفقود" }, { status: 400 })
   const data: Record<string, unknown> = {}
@@ -52,6 +61,10 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  // FA-22 (تكليف 51): حذف زوج مزامنة — loopback حصرًا (نمط FA-16)
+  if (!guardPcOnly(req, "prod.denied", "pair-delete")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
   const { id } = await req.json().catch(() => ({}))
   if (!id) return Response.json({ ok: false, error: "معرّف مفقود" }, { status: 400 })
   await db.syncPair.delete({ where: { id } })
@@ -60,6 +73,10 @@ export async function DELETE(req: Request) {
 
 /** استعراض مجلدات جهاز لاختيار زوج المزامنة */
 export async function PUT(req: Request) {
+  // FA-22 (تكليف 51): استعراض مجلدات الكمبيوتر لاختيار الزوج — loopback حصرًا (نمط FA-16)
+  if (!guardPcOnly(req, "prod.denied", "pair-browse")) {
+    return Response.json({ ok: false, error: "pc-only", detail: "via-gateway-non-loopback" }, { status: 403 })
+  }
   const { deviceId, path } = await req.json().catch(() => ({}))
   if (!deviceId) return Response.json({ ok: false, error: "جهاز مفقود" }, { status: 400 })
   try {
