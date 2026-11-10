@@ -17,8 +17,12 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "@typescript-eslint/no-unused-disable-directive": "off",
     
     // React rules
-    "react-hooks/exhaustive-deps": "off",
-    "react-hooks/purity": "off",
+    // القاعدتان المعلقتان منذ تكليف 44 — Q2 (تكليف 53) أعادت هيكلتها كلها موقعًا موقعًا (22 موقعًا في 16 ملفًا):
+    // exhaustive-deps عبر محدّدات فردية بدل كائن المتجر الكامل (zustand getState داخل الcallbacks) · latest-ref
+    // لمصراع الهاتف · اشتراك متجر لع-knownApps وطوابع القفز/الصافرة · useId حتمي بدل Math.random في الهيكل —
+    // purity عبر لقطات now حالة تُضبط عند الحدث/الدورة حصرًا لا Date.now أثناء الرندر — الآن بوابة رجوع دائمة.
+    "react-hooks/exhaustive-deps": "error",
+    "react-hooks/purity": "error",
     // قواعد صرامة المُصرِّف الجديدة في eslint-plugin-react-hooks (رُفعت مع eslint-config-next 16.4.6 — تكليف 44)
     // كانت معلقة على 29 موقعًا قائمًا — Q1 (تكليف 52) أعادت هيكلتها كلها مكافئة بلا تغيير سلوكي
     // (لقطات حالة في حلقة اللعبة · useSyncExternalStore للتخزين والوسائط · ضبط أثناء الرندر للتصفير

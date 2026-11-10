@@ -46,11 +46,13 @@ export function HealthPanel() {
   const [window_, setWindow_] = useState<"1h" | "6h" | "24h">("1h")
   const [snap, setSnap] = useState<HealthSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
+  // Q2 (تكليف 53): لقطة now حالة تُضبط مع كل دورة عيّنة — لا Date.now أثناء الرندر
+  const [now, setNow] = useState<number | null>(null)
 
   const load = useCallback(async (w: "1h" | "6h" | "24h" = window_) => {
     try {
       const r = await fetch(`/api/devices/health?device=all&window=${w}`)
-      if (r.ok) setSnap(await r.json())
+      if (r.ok) { setSnap(await r.json()); setNow(Date.now()) }
     } catch { /* الشبكة تقطع — التحديث القادم يعيد المحاولة */ }
   }, [window_])
 
@@ -93,7 +95,7 @@ export function HealthPanel() {
   }, [snap])
 
   const relTime = (ts: number) => {
-    const diff = Math.max(0, Date.now() - ts)
+    const diff = Math.max(0, (now ?? 0) - ts)
     const m = Math.floor(diff / 60_000)
     if (lang === "en") return m < 1 ? "just now" : m < 60 ? `${m}m ago` : `${Math.floor(m / 60)}h ago`
     if (m < 1) return "الآن"

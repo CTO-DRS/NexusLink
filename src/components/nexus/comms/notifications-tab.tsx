@@ -135,15 +135,18 @@ function NotificationCard({ id }: { id: string }) {
 
 function RulesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const filter = useComms((s) => s.filter)
+  // Q2 (تكليف 53): اشتراك حي بالإشعارات بدل hack الاعتماد على open مع getState —
+  // القائمة حية مع كل إشعار جديد لا عند فتح النافذة حصرًا، والتبعيات سليمة بلا أي قيمة زائدة.
+  const notifications = useComms((s) => s.notifications)
 
   const knownApps = useMemo(() => {
     const seen = new Map<string, { id: string; name: string; color: string }>()
-    for (const n of useComms.getState().notifications) {
+    for (const n of notifications) {
       const m = appMeta(n.appId)
       seen.set(m.id, { id: m.id, name: m.name, color: m.color })
     }
     return [...seen.values()]
-  }, [open])
+  }, [notifications])
 
   const quietActive = filter.quietUntil && new Date(filter.quietUntil) > new Date()
 

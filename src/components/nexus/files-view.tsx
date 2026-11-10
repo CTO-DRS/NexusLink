@@ -47,6 +47,10 @@ const SORT_LABEL: Record<SortKey, string> = {
 
 export function FilesView() {
   const s = useNexus()
+  // Q2 (تكليف 53): محدّدات فردية للحقول التي تعيد إطلاق الجلب/البحث — بدل تبعية كائن المتجر الكامل
+  const activeDeviceId = useNexus((st) => st.activeDeviceId)
+  const cwd = useNexus((st) => st.cwd)
+  const searchQuery = useNexus((st) => st.searchQuery)
   const [renameOpen, setRenameOpen] = useState<FsEntry | null>(null)
   const [renameVal, setRenameVal] = useState("")
   const [mkdirOpen, setMkdirOpen] = useState(false)
@@ -75,16 +79,18 @@ export function FilesView() {
   }, [s.searchResults, s.entries, s.sortKey, s.sortAsc])
 
   const load = useCallback(async () => {
-    s.setLoading(true)
+    // Q2 (تكليف 53): الحوالات والمُحدّثات عبر لقطة المتجر داخل الcallback — الهوية مستقرة والتبعيات فردية
+    const st = useNexus.getState()
+    st.setLoading(true)
     try {
-      const url = `/api/fs?device=${s.activeDeviceId}&path=${encodeURIComponent(s.cwd)}`
+      const url = `/api/fs?device=${activeDeviceId}&path=${encodeURIComponent(cwd)}`
       const r = await fetch(url)
       const j = await r.json()
-      s.setEntries(j.entries || [])
+      st.setEntries(j.entries || [])
     } finally {
-      s.setLoading(false)
+      st.setLoading(false)
     }
-  }, [s.activeDeviceId, s.cwd])
+  }, [activeDeviceId, cwd])
 
   useEffect(() => { load() }, [load])
 
@@ -107,14 +113,14 @@ export function FilesView() {
   // search debounce
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current)
-    const q = s.searchQuery.trim()
-    if (!q) { s.setSearchResults(null); return }
+    const q = searchQuery.trim()
+    if (!q) { useNexus.getState().setSearchResults(null); return }
     searchTimer.current = setTimeout(async () => {
-      const r = await fetch(`/api/fs?device=${s.activeDeviceId}&q=${encodeURIComponent(q)}`)
+      const r = await fetch(`/api/fs?device=${activeDeviceId}&q=${encodeURIComponent(q)}`)
       const j = await r.json()
-      s.setSearchResults(j.entries || [])
+      useNexus.getState().setSearchResults(j.entries || [])
     }, 350)
-  }, [s.searchQuery, s.activeDeviceId])
+  }, [searchQuery, activeDeviceId])
 
   const op = async (body: Record<string, unknown>, okMsg?: string) => {
     setBusy(true)

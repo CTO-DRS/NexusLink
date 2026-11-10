@@ -25,8 +25,6 @@ export function GameWindow() {
   const stick = useDesktop((s) => s.stick)
   const boost = useDesktop((s) => s.gameBoost)
   const score = useDesktop((s) => s.gameScore)
-  const jumpSeq = useDesktop((s) => s.gameJumpSeq)
-  const hornSeq = useDesktop((s) => s.gameHornSeq)
 
   const areaRef = useRef<HTMLDivElement>(null)
   const pos = useRef({ x: 0.5, y: 0.72 })
@@ -35,19 +33,16 @@ export function GameWindow() {
   // Q1 (تكليف 52): الرندر من لقطات حالة تُحدَّث في حلقة اللعبة نفسها لا من refs مباشرة
   const [car, setCar] = useState({ x: 0.5, y: 0.72 })
   const [trailPts, setTrailPts] = useState<{ x: number; y: number }[]>([])
-  // القفز والصافرة طوابع زمنية تُضبط عند تغيّر التتابع (ضبط أثناء الرندر النمط الموثق) لا setState متزامن في effect
+  // Q2 (تكليف 53): طوابع القفز/الصافرة تُضبط في اشتراك المتجر عند الحدث حصرًا —
+  // لا Date.now ولا ضبط أثناء الرندر — والانقضاء المحلي عند إغلاق النافذة محفوظ كما هو.
   const [jumpAt, setJumpAt] = useState(0)
-  const [jumpSeqSeen, setJumpSeqSeen] = useState(jumpSeq)
-  if (jumpSeqSeen !== jumpSeq) {
-    setJumpSeqSeen(jumpSeq)
-    setJumpAt(jumpSeq === 0 ? 0 : Date.now())
-  }
   const [hornAt, setHornAt] = useState(0)
-  const [hornSeqSeen, setHornSeqSeen] = useState(hornSeq)
-  if (hornSeqSeen !== hornSeq) {
-    setHornSeqSeen(hornSeq)
-    setHornAt(hornSeq === 0 ? 0 : Date.now())
-  }
+  useEffect(() => (
+    useDesktop.subscribe((st, prev) => {
+      if (st.gameJumpSeq !== prev.gameJumpSeq) setJumpAt(st.gameJumpSeq === 0 ? 0 : Date.now())
+      if (st.gameHornSeq !== prev.gameHornSeq) setHornAt(st.gameHornSeq === 0 ? 0 : Date.now())
+    })
+  ), [])
   const jumping = jumpAt !== 0
   const hornBubble = hornAt !== 0
 

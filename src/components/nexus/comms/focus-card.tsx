@@ -36,7 +36,8 @@ export function FocusCard() {
   const [minutes, setMinutes] = useState(45)
   const [suppress, setSuppress] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [tick, setTick] = useState(0)
+  // Q2 (تكليف 53): لقطة now حالة تُضبط في نبضة الثانية وعند أول التزام — لا Date.now أثناء الرندر
+  const [now, setNow] = useState<number | null>(null)
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const load = useCallback(async () => {
@@ -46,14 +47,15 @@ export function FocusCard() {
       setSt(j)
       if (j?.restoredJustNow) toast(t("انقضى وضع التركيز واستُعيدت الحالة السابقة"))
     } catch { /* الشبكة سقطت */ }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void Promise.resolve().then(() => load())
   }, [load])
 
   useEffect(() => {
-    timer.current = setInterval(() => setTick((x) => x + 1), 1000)
+    timer.current = setInterval(() => setNow(Date.now()), 1000)
+    void Promise.resolve().then(() => setNow(Date.now()))
     return () => { if (timer.current) clearInterval(timer.current) }
   }, [])
 
@@ -80,8 +82,7 @@ export function FocusCard() {
     }
   }
 
-  const remaining = st?.active && st.until ? Math.max(0, st.until - Date.now()) : 0
-  void tick // إعادة الحساب كل ثانية
+  const remaining = st?.active && st.until ? Math.max(0, st.until - (now ?? 0)) : 0
   const mm = Math.floor(remaining / 60_000)
   const ss = Math.floor((remaining % 60_000) / 1000)
 

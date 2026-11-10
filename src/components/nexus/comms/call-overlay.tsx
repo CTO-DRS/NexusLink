@@ -1,6 +1,6 @@
 "use client"
 // نافذة المكالمة الشاملة — واردة/صادرة/نشطة — الصوت عبر سماعات الكمبيوتر
-import { useEffect, useReducer, useState } from "react"
+import { useEffect, useState } from "react"
 import { useComms, initials, avatarColor } from "@/lib/comms-store"
 import { answerCall, rejectCall, endCallOnPhone } from "@/lib/comms-socket"
 import { logEndedCall } from "@/hooks/use-comms"
@@ -20,18 +20,20 @@ export function CallOverlay() {
   const setLiveCall = useComms((s) => s.setLiveCall)
   const [muted, setMuted] = useState(false)
   const [speaker, setSpeaker] = useState(true)
-  // نبضة إعادة رسم كل ثانية أثناء المكالمة النشطة
-  const [, tick] = useReducer((x: number) => x + 1, 0)
+  // Q2 (تكليف 53): لقطة now حالة تُضبط في نبضة الثانية وعند بدء المكالمة — لا Date.now أثناء الرندر
+  // (تُغني النبضة المُخفّض سابقًا — إعادة الرسم كل ثانية من نفس المصدر)
+  const [now, setNow] = useState<number | null>(null)
 
   useEffect(() => {
     if (liveCall?.state !== "active" || !liveCall.startedAt) return
-    const iv = setInterval(tick, 1000)
+    const iv = setInterval(() => setNow(Date.now()), 1000)
+    void Promise.resolve().then(() => setNow(Date.now()))
     return () => clearInterval(iv)
   }, [liveCall?.state, liveCall?.startedAt])
 
   const elapsed =
     liveCall?.state === "active" && liveCall.startedAt
-      ? Math.floor((Date.now() - liveCall.startedAt) / 1000)
+      ? Math.max(0, Math.floor(((now ?? 0) - liveCall.startedAt) / 1000))
       : 0
 
   if (!liveCall) return null

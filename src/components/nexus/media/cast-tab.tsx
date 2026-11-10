@@ -30,6 +30,15 @@ export function CastTab() {
   const castSeek = useMedia((s) => s.castSeek)
   const castVolume = useMedia((s) => s.castVolume)
   const castMute = useMedia((s) => s.castMute)
+  // Q2 (تكليف 53): محدّدات فردية لحقول cast المحرّكة للeffects — بلا تبعية كائن cast الكامل
+  // (يُعاد إنشاؤه كل نبضة تقدم ~700ms أثناء التشغيل) فلا إعادة تشغيل غير مضفرة.
+  const castId = useMedia((s) => s.cast?.media.id)
+  const castTarget = useMedia((s) => s.cast?.target)
+  const castPlaying = useMedia((s) => s.cast?.playing)
+  const castVol = useMedia((s) => s.cast?.volume)
+  const castMuted = useMedia((s) => s.cast?.muted)
+  // نبضة معادل الصوت عبر لقطة now حالة أثناء التشغيل حصرًا — لا Date.now أثناء الرندر
+  const [eqNow, setEqNow] = useState(0)
 
   const [target, setTarget] = useState<"tv" | "pc">("tv")
 
@@ -54,20 +63,21 @@ export function CastTab() {
     const pc = pcRef.current
     if (!tv || !pc) return
     // أفرغ غير النشط دائماً
-    if (cast?.target !== "tv" && tv.src !== window.location.href) { tv.removeAttribute("src"); tv.load() }
-    if (cast?.target !== "pc" && pc.src !== window.location.href) { pc.removeAttribute("src"); pc.load() }
-    if (!cast) return
-    const el = getReceiver(cast.target)
+    if (castTarget !== "tv" && tv.src !== window.location.href) { tv.removeAttribute("src"); tv.load() }
+    if (castTarget !== "pc" && pc.src !== window.location.href) { pc.removeAttribute("src"); pc.load() }
+    const c = useMedia.getState().cast
+    if (!c || castId == null) return
+    const el = getReceiver(c.target)
     if (!el) return
-    const url = `/api/preview?device=${cast.media.device}&path=${encodeURIComponent(cast.media.path)}`
+    const url = `/api/preview?device=${c.media.device}&path=${encodeURIComponent(c.media.path)}`
     const cur = el.src
     const fresh = cur !== new URL(url, window.location.origin).href
     if (fresh) {
       el.src = url
       el.load()
     }
-    el.volume = cast.volume / 100
-    el.muted = cast.muted
+    el.volume = (castVol ?? c.volume) / 100
+    el.muted = castMuted === true
 
     // تشغيل موثوق: محاولة مباشرة + عند جهوزية البيانات + تراجع لكتم عند رفض التشغيل التلقائي
     const tryPlay = () => {
@@ -79,16 +89,15 @@ export function CastTab() {
         }
       })
     }
-    if (cast.playing) {
+    if (castPlaying) {
       if (fresh) el.addEventListener("canplay", tryPlay, { once: true })
       tryPlay()
     }
-  }, [cast?.media.id, cast?.target, cast?.playing, cast?.volume, cast?.muted])
+  }, [castId, castTarget, castPlaying, castVol, castMuted])
 
   // مزامنة التقدم من عنصر المستقبل
   useEffect(() => {
-    if (!cast) return
-    const el = getReceiver(cast.target)
+    const el = castId == null || !castTarget ? null : getReceiver(castTarget)
     if (!el) return
     let last = 0
     const onTime = () => {
@@ -107,7 +116,15 @@ export function CastTab() {
       el.removeEventListener("ended", onEnd)
       el.removeEventListener("pause", onTime)
     }
-  }, [cast?.media.id, cast?.target])
+  }, [castId, castTarget])
+
+  // Q2 (تكليف 53): نبضة المعادل أثناء التشغيل حصرًا — تُضبط عند الحدث لا أثناء الرندر
+  useEffect(() => {
+    if (!castPlaying) return
+    const iv = setInterval(() => setEqNow(Date.now()), 300)
+    void Promise.resolve().then(() => setEqNow(Date.now()))
+    return () => clearInterval(iv)
+  }, [castPlaying])
 
   const remote = (action: string, value?: number) => {
     castCmd({ action, value, target })
@@ -241,7 +258,7 @@ export function CastTab() {
                     <p className="text-white text-[13px] font-bold">{cast.media.name}</p>
                     <div className="flex items-end justify-center gap-1 mt-3 h-6" dir="ltr">
                       {[0, 1, 2, 3, 4].map((i) => (
-                        <span key={i} className="w-1.5 bg-teal-400 rounded-full animate-pulse" style={{ height: cast.playing ? `${30 + ((Date.now() / 300 + i * 7) % 70)}%` : "20%", animationDelay: `${i * 120}ms` }} />
+                        <span key={i} className="w-1.5 bg-teal-400 rounded-full animate-pulse" style={{ height: cast.playing ? `${30 + ((eqNow / 300 + i * 7) % 70)}%` : "20%", animationDelay: `${i * 120}ms` }} />
                       ))}
                     </div>
                   </div>

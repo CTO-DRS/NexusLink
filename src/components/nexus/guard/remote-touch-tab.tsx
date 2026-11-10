@@ -2,7 +2,7 @@
 // NexusLink — FA-7: التحكم باللمس والإدخال من الكمبيوتر (بديل AirMirror)
 // سطح مقياس الدقة: إحداثيات الويب → بكسل شاشة الهاتف الحقيقية (عقد §4.8)
 // + شريط نص (حقن ACTION_SET_TEXT) + أزرار النظام + مشغل تطبيقات (dev:app open)
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
   Bell, Check, ChevronDown, Delete, Eraser, ExternalLink, Hand, Home, Keyboard,
@@ -68,7 +68,8 @@ export function RemoteTouchTab() {
   }, [screen.w, screen.h])
 
   // ---------- تحويل الإحداثيات ----------
-  const toScreen = (clientX: number, clientY: number) => {
+  // Q2 (تكليف 53): useCallback بهوية مستقرة مرتبطة بأبعاد الشاشة — تُضاف لتبعيات effect العجلة بلا اهتزاز
+  const toScreen = useCallback((clientX: number, clientY: number) => {
     const el = surfaceRef.current
     if (!el) return { x: 0, y: 0 }
     const rect = el.getBoundingClientRect()
@@ -76,7 +77,7 @@ export function RemoteTouchTab() {
       x: Math.round(((clientX - rect.left) / rect.width) * screen.w),
       y: Math.round(((clientY - rect.top) / rect.height) * screen.h),
     }
-  }
+  }, [screen.w, screen.h])
 
   // ---------- إيماءات السطح ----------
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -145,7 +146,7 @@ export function RemoteTouchTab() {
     }
     el.addEventListener("wheel", onWheel, { passive: false })
     return () => el.removeEventListener("wheel", onWheel)
-  }, [sessionActive, scrollSens, screen.h])
+  }, [sessionActive, scrollSens, screen.h, toScreen])
 
   // ---------- الجلسة ----------
   const startSession = () => {

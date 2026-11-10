@@ -1,6 +1,6 @@
 "use client"
 // النسخ الاحتياطي والاستعادة الشاملة — الإعدادات والأجهزة الموثوقة والملفات والأزواج
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
   DatabaseBackup, Download, Upload, ShieldCheck, Save, RotateCcw,
@@ -27,14 +27,15 @@ export function BackupTab() {
   const [preview, setPreview] = useState<{ data: Record<string, unknown>; info: RestorePreview } | null>(null)
   const [busy, setBusy] = useState(false)
 
-  async function refresh() {
+  // Q2 (تكليف 53): useCallback بهوية مستقرة (مُحدّث المتجر فعل مستقر) — التبعيات سليمة بلا إعادة جلب زائدة
+  const refresh = useCallback(async () => {
     const j = await fetch("/api/prod/backup").then((r) => r.json()).catch(() => null)
     if (j?.snapshots) setSnapshots(j.snapshots)
-  }
+  }, [setSnapshots])
 
   useEffect(() => {
-    void refresh()
-  }, [])
+    void Promise.resolve().then(() => refresh())
+  }, [refresh])
 
   async function snapshot() {
     setBusy(true)
