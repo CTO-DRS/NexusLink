@@ -20,11 +20,12 @@ import { useClientOS } from "@/hooks/use-client-os"
 import {
   assetUrl,
   formatMB,
+  isSignedAsset,
   LATEST_RELEASE_PAGE,
   PLATFORMS,
   RELEASE_BASE,
   RELEASES_PAGE,
-  SIGNED_ASSETS,
+  resolveAssetName,
 } from "@/lib/download-site-data"
 
 const OS_ICONS = { windows: Monitor, macos: Laptop, linux: HardDrive, android: Smartphone } as const
@@ -76,7 +77,9 @@ export function DownloadsSection() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {group.assets.map((asset) => {
-                    const meta = info.assets[asset.name]
+                    // تكليف 50: الاسم يُحسم من نسخة الإصدار الحية ({{v}}) — الأسماء المغروسة القديمة كانت تُفشل كل مطابقات الأصول عند تغيّر الإصدار
+                    const name = resolveAssetName(asset.name, info.version)
+                    const meta = info.assets[name]
                     const bytes = meta?.bytes ?? 0
                     return (
                       <div
@@ -85,7 +88,7 @@ export function DownloadsSection() {
                       >
                         <div className="min-w-0">
                           <p dir="ltr" className="truncate text-left font-mono text-xs font-medium sm:text-sm">
-                            {asset.name}
+                            {name}
                           </p>
                           <p className="mt-0.5 text-xs text-muted-foreground">
                             {t(asset.descKey)}
@@ -93,7 +96,7 @@ export function DownloadsSection() {
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
-                          {SIGNED_ASSETS.has(asset.name) && (
+                          {isSignedAsset(name, info.version) && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -102,10 +105,10 @@ export function DownloadsSection() {
                               title={t("التوقيع الرقمي")}
                             >
                               <a
-                                href={`${RELEASE_BASE}/${asset.name}.sig`}
+                                href={`${RELEASE_BASE}/${name}.sig`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                aria-label={`${t("التوقيع الرقمي")} ${asset.name}`}
+                                aria-label={`${t("التوقيع الرقمي")} ${name}`}
                               >
                                 <FileSignature className="size-4" aria-hidden="true" />
                               </a>
@@ -113,10 +116,10 @@ export function DownloadsSection() {
                           )}
                           <Button size="sm" className="min-h-11 gap-1.5" asChild>
                             <a
-                              href={assetUrl(asset.name)}
+                              href={assetUrl(name)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              aria-label={`${t("تنزيل")} ${asset.name}`}
+                              aria-label={`${t("تنزيل")} ${name}`}
                             >
                               <Download className="size-4" aria-hidden="true" />
                               {t("تنزيل")}

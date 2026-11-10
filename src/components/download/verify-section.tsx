@@ -5,13 +5,17 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useI18n } from "@/lib/i18n"
-import { RELEASE_BASE, RELEASES_PAGE } from "@/lib/download-site-data"
+import { useReleaseInfo } from "@/hooks/use-release-info"
+import { RELEASE_BASE, RELEASES_PAGE, resolveAssetName } from "@/lib/download-site-data"
 
-const SHA_WIN = 'Get-FileHash .\\NexusLink_1.1.0_x64-setup.exe -Algorithm SHA256'
-const SHA_UNIX = 'shasum -a 256 NexusLink_1.1.0_amd64.AppImage'
+// تكليف 50 (FA-21): أوامر التحقق بقوالب {{v}} — كانت مغروسة 1.1.0 فكان المستخدم يقارن
+// بصمة ملف لم يعد موجودًا في الإصدار الحي.
+const SHA_WIN_TPL = 'Get-FileHash .\\NexusLink_{{v}}_x64-setup.exe -Algorithm SHA256'
+const SHA_UNIX_TPL = 'shasum -a 256 NexusLink_{{v}}_amd64.AppImage'
 
 export function VerifySection() {
   const { t } = useI18n()
+  const { info } = useReleaseInfo()
 
   return (
     <section id="updates" aria-labelledby="updates-title" className="scroll-mt-24 bg-accent/40">
@@ -52,7 +56,7 @@ export function VerifySection() {
                     dir="ltr"
                     className="overflow-x-auto rounded-lg bg-muted p-3 text-left font-mono text-xs leading-relaxed"
                   >
-                    {SHA_WIN}
+                    {resolveAssetName(SHA_WIN_TPL, info.version)}
                   </pre>
                 </TabsContent>
                 <TabsContent value="unix" className="mt-3">
@@ -60,7 +64,7 @@ export function VerifySection() {
                     dir="ltr"
                     className="overflow-x-auto rounded-lg bg-muted p-3 text-left font-mono text-xs leading-relaxed"
                   >
-                    {SHA_UNIX}
+                    {resolveAssetName(SHA_UNIX_TPL, info.version)}
                   </pre>
                 </TabsContent>
               </Tabs>

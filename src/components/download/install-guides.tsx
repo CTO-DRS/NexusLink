@@ -5,20 +5,24 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useI18n } from "@/lib/i18n"
+import { useReleaseInfo } from "@/hooks/use-release-info"
+import { resolveAssetName } from "@/lib/download-site-data"
 
 interface Step {
   key: string
   code?: string
 }
 
+// تكليف 50 (FA-21): أسماء الأصول بأدلة التثبيت قوالب {{v}} تُحسم من نسخة الإصدار الحية —
+// كانت مغروسة 1.1.0 فكانت كل خطوات التثبيت وأوامرها تشير لملفات لم تعد موجودة في الإصدار الحي.
 const WINDOWS_INSTALLER: Step[] = [
-  { key: "نزّل NexusLink_1.1.0_x64-setup.exe وشغّله" },
+  { key: "نزّل NexusLink_{{v}}_x64-setup.exe وشغّله" },
   { key: "إن ظهر SmartScreen اختر «مزيد من المعلومات» ثم «تشغيل على أي حال»" },
   { key: "أكمل المعالج ثم افتح NexusLink من قائمة ابدأ" },
 ]
 
 const WINDOWS_PORTABLE: Step[] = [
-  { key: "فك ضغط NexusLink_1.1.0_x64-portable.zip في مجلد من اختيارك وشغّل NexusLink.exe" },
+  { key: "فك ضغط NexusLink_{{v}}_x64-portable.zip في مجلد من اختيارك وشغّل NexusLink.exe" },
 ]
 
 const MACOS_STEPS: Step[] = [
@@ -28,13 +32,13 @@ const MACOS_STEPS: Step[] = [
 ]
 
 const LINUX_STEPS: Step[] = [
-  { key: "أعطِ صلاحية التنفيذ ثم شغّل الملف مباشرة", code: "chmod +x NexusLink_1.1.0_amd64.AppImage\n./NexusLink_1.1.0_amd64.AppImage" },
-  { key: "ثبّت حزمة deb بالأمر", code: "sudo dpkg -i NexusLink_1.1.0_amd64.deb" },
+  { key: "أعطِ صلاحية التنفيذ ثم شغّل الملف مباشرة", code: "chmod +x NexusLink_{{v}}_amd64.AppImage\n./NexusLink_{{v}}_amd64.AppImage" },
+  { key: "ثبّت حزمة deb بالأمر", code: "sudo dpkg -i NexusLink_{{v}}_amd64.deb" },
   { key: "قد تحتاج لتثبيت libwebkit2gtk-4.1 وlibayatana-appindicator3" },
 ]
 
 const ANDROID_STEPS: Step[] = [
-  { key: "نزّل NexusLink-1.1.0-release.apk على هاتفك وافتحه" },
+  { key: "نزّل NexusLink-{{v}}-release.apk على هاتفك وافتحه" },
   { key: "فعّل «السماح من هذا المصدر» عند طلب النظام" },
   { key: "على أندرويد 13+ إن ظهرت رسالة الإعدادات المحظورة اتبع خطوات مركز رفع القيود أدناه" },
 ]
@@ -72,6 +76,10 @@ function Steps({ steps }: { steps: Step[] }) {
 
 export function InstallGuides() {
   const { t } = useI18n()
+  const { info } = useReleaseInfo()
+  // تكليف 50: كل خطوة تُحسم من نسخة الإصدار الحية (المفتاح نص معروض مباشرة لا مفتاح ترجمة)
+  const resolve = (steps: Step[]): Step[] =>
+    steps.map((s) => ({ key: resolveAssetName(s.key, info.version), code: s.code ? resolveAssetName(s.code, info.version) : undefined }))
 
   return (
     <section id="install" aria-labelledby="install-title" className="scroll-mt-24">
@@ -109,7 +117,7 @@ export function InstallGuides() {
                 <CardTitle className="text-base">{t("Windows — المثبّت")}</CardTitle>
               </CardHeader>
               <CardContent>
-                <Steps steps={WINDOWS_INSTALLER} />
+                <Steps steps={resolve(WINDOWS_INSTALLER)} />
               </CardContent>
             </Card>
             <Card className="rounded-2xl">
@@ -117,7 +125,7 @@ export function InstallGuides() {
                 <CardTitle className="text-base">{t("Windows — نسخة محمولة")}</CardTitle>
               </CardHeader>
               <CardContent>
-                <Steps steps={WINDOWS_PORTABLE} />
+                <Steps steps={resolve(WINDOWS_PORTABLE)} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -128,7 +136,7 @@ export function InstallGuides() {
                 <CardTitle className="text-base">{t("macOS — Apple Silicon")}</CardTitle>
               </CardHeader>
               <CardContent>
-                <Steps steps={MACOS_STEPS} />
+                <Steps steps={resolve(MACOS_STEPS)} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -139,7 +147,7 @@ export function InstallGuides() {
                 <CardTitle className="text-base">{t("Linux — AppImage أو deb")}</CardTitle>
               </CardHeader>
               <CardContent>
-                <Steps steps={LINUX_STEPS} />
+                <Steps steps={resolve(LINUX_STEPS)} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -150,7 +158,7 @@ export function InstallGuides() {
                 <CardTitle className="text-base">{t("Android — APK")}</CardTitle>
               </CardHeader>
               <CardContent>
-                <Steps steps={ANDROID_STEPS} />
+                <Steps steps={resolve(ANDROID_STEPS)} />
               </CardContent>
             </Card>
 

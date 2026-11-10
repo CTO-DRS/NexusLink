@@ -116,6 +116,7 @@ interface TransferJob {
 
 ### 3.5 أخرى
 - `GET /api/tools/ping` · `GET /api/tools/speedtest` (pool 4MB) · `GET /api/tools/diag` · `GET /api/version`
+- `GET /api/releases/latest` — وكيل الإصدارات الحية من نفس الأصل (تكليف 50 — FA-21): وسم/نسخة/تاريخ الإصدار الأحدث + أحجام أصوله وعدد تنزيلاتها — بيانات تسويقية عمومية للقراءة فقط بمستوى كشف مساوٍ لـ/api/version (صفر بيانات مستخدم) · الوجهة العلوية ثابتة حرفيًا في الخادم (صفر دخل مستدعي ⇒ صفر SSRF بنيويًا) · بلا مفاتيح API · كاش ذاكرة ‏10 دقائق للنجاح و‏60 ثانية للفشل · فشل المنبع → اللقطة المضمّنة بصدق `live=false` · ترويسة `x-release-cache: hit|miss|fallback` · المتصفح يجلب نفس الأصل فتمره connect-src 'self' بلا أي استثناء CSP (كان الطلب المباشر لapi.github.com مصدودًا بضمانة على كل تحميل صفحة)
 - `POST /api/security/wipe` · `GET /api/security/audit` · `GET /api/security/pcap` · `GET /api/security/recv`
 - `GET /api/prod/state|pairs|photos|profiles|network|clipboard|handoff|backup` + POST نظيراتها
 - `GET|POST /api/{guard,media,remote,prod,security}/boot` — إقلاع الجسور idempotent داخل عملية Next (هاتف يستطيع استدعاءها لضمان عمل الجسور)

@@ -1,9 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { STATIC_RELEASE, releaseVersion, type ReleaseInfo, type ReleaseAssetInfo } from "@/lib/download-site-data"
+import { STATIC_RELEASE, type ReleaseInfo, type ReleaseAssetInfo } from "@/lib/download-site-data"
 
-const GITHUB_LATEST_API = "https://api.github.com/repos/CTO-DRS/NexusLink/releases/latest"
 const TIMEOUT_MS = 9000
 
 interface UseReleaseInfoResult {
@@ -12,7 +11,11 @@ interface UseReleaseInfoResult {
 }
 
 /**
- * Live release info from the public GitHub API (no token, client-side).
+ * تكليف 50 (FA-21): بيانات الإصدار الحية عبر **الوكيل من نفس الأصل** حصرًا
+ * (/api/releases/latest) — الطلب المباشر لapi.github.com من المتصفح كان مصدودًا
+ * CSP (FA-18: connect-src 'self' صافية) بضمانة على كل تحميل — فشل صامت أبقى
+ * اللقطة القديمة شهرًا. الوكيل يجعل الطلب نفس الأصل فتمره connect-src بلا أي
+ * استثناء، والوجهة العلوية ثابتة في الخادم (صفر SSRF) والرمز لا يوجد أصلًا.
  * Falls back silently to the embedded offline snapshot so the page
  * never shows broken data — `live` tells which source is active.
  */
@@ -24,31 +27,33 @@ export function useReleaseInfo(): UseReleaseInfoResult {
     const ac = new AbortController()
     const timer = setTimeout(() => ac.abort(), TIMEOUT_MS)
 
-    fetch(GITHUB_LATEST_API, {
+    fetch("/api/releases/latest", {
       signal: ac.signal,
-      headers: { Accept: "application/vnd.github+json" },
+      headers: { Accept: "application/json" },
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d: {
-        tag_name?: string
-        published_at?: string
-        assets?: { name: string; size: number; download_count: number }[]
+        ok?: boolean
+        tag?: string
+        version?: string
+        publishedAt?: string
+        assets?: Record<string, ReleaseAssetInfo>
+        live?: boolean
       }) => {
-        const assets: Record<string, ReleaseAssetInfo> = {}
-        for (const a of d.assets ?? []) {
-          assets[a.name] = { name: a.name, bytes: a.size, downloads: a.download_count }
+        if (!d?.ok || !d.tag || !d.assets || Object.keys(d.assets).length === 0) {
+          // رد غير مكتمل → اللقطة كما هي (سلوك الفشل الصامت المحفوظ حرفيًا)
+          return
         }
-        const tag = d.tag_name ?? STATIC_RELEASE.tag
         setInfo({
-          tag,
-          version: releaseVersion(tag),
-          publishedAt: d.published_at ?? STATIC_RELEASE.publishedAt,
-          assets: Object.keys(assets).length ? assets : STATIC_RELEASE.assets,
-          live: true,
+          tag: d.tag,
+          version: d.version ?? STATIC_RELEASE.version,
+          publishedAt: d.publishedAt ?? STATIC_RELEASE.publishedAt,
+          assets: d.assets,
+          live: d.live === true,
         })
       })
       .catch(() => {
-        /* offline / rate-limited → keep snapshot */
+        /* offline / aborted → keep snapshot */
       })
       .finally(() => {
         clearTimeout(timer)

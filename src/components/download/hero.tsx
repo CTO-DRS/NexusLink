@@ -28,7 +28,7 @@ export function Hero() {
   const { info, loading } = useReleaseInfo()
   const os = useClientOS()
 
-  const primary = useMemo(() => primaryAssetFor(os), [os])
+  const primary = useMemo(() => primaryAssetFor(os, info.version), [os, info.version])
   const primaryAsset = primary ? info.assets[primary] : undefined
 
   const published = useMemo(() => {
