@@ -1,6 +1,6 @@
 "use client"
 // الحافظة الموحدة — نسخ في أي جهاز ← لصق في الآخر (تلقائي/يدوي)
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
   ClipboardCheck, Monitor, Smartphone, Tablet, Tv, Copy, Trash2, FileDown,
@@ -68,6 +68,8 @@ export function ClipboardTab() {
   // §59 — حلقة الأقفال: عدد الأقفال (الموحد + الأجهزة) وأسماء الأجهزة المقفولة
   const [rest, setRest] = useState<{ active: boolean; keys?: number; devices?: string[]; migrated?: number; dropped?: number } | null>(null)
   const [restBusy, setRestBusy] = useState<"" | "seal" | "rotate" | `dev:${string}`>("")
+  // Q2 (تكليف 53): لقطة now حالة تُضبط مع كل دورة تحميل — لا Date.now أثناء الرندر
+  const [now, setNow] = useState<number | null>(null)
 
   useEffect(() => {
     void loadClipMax().then((v) => { if (v) setClipMaxLocal(v) })
@@ -88,19 +90,21 @@ export function ClipboardTab() {
   }, [query])
 
   /** §50 — إعادة تحميل القائمة بعد إجراء خزنة — §58: مع حالة القفل */
-  async function reloadClips() {
+  // Q2 (تكليف 53): useCallback بهوية مستقرة (مُحدّثات فعل مستقرة) + لقطة now مع كل دورة
+  const reloadClips = useCallback(async () => {
     try {
       const r = await fetch("/api/prod/clipboard", { cache: "no-store" })
       const j = await r.json()
       if (Array.isArray(j.items)) setClips(j.items)
       if (j.atRest && typeof j.atRest.active === "boolean") setRest(j.atRest)
+      setNow(Date.now())
     } catch { /* بلا هلع */ }
-  }
+  }, [setClips, setRest])
 
   // §58 — حالة القفل الساكن حية منذ التركيب
   useEffect(() => {
     void Promise.resolve().then(() => reloadClips())
-  }, [])
+  }, [reloadClips])
 
   /** §58 — ختم السجل كاملًا: كل النص العاري فوق القاعدة يُختم الآن */
   async function sealAllNow() {
@@ -412,7 +416,7 @@ export function ClipboardTab() {
                         {c.received && <Badge className="rounded-full text-[8.5px] bg-emerald-500 hover:bg-emerald-500">استُلم</Badge>}
                         {c.pinned && <Badge variant="secondary" className="rounded-full text-[8.5px] gap-0.5"><Pin className="w-2.5 h-2.5" /> مثبّت</Badge>}
                         {c.sensitive && <Badge className="rounded-full text-[8.5px] bg-amber-500 hover:bg-amber-500 gap-0.5"><ShieldAlert className="w-2.5 h-2.5" /> حساس</Badge>}
-                        {!c.pinned && typeof c.expiresAt === "number" && c.expiresAt - Date.now() < 86_400_000 && (
+                        {!c.pinned && typeof c.expiresAt === "number" && c.expiresAt - (now ?? 0) < 86_400_000 && (
                           <Badge variant="secondary" className="rounded-full text-[8.5px] gap-0.5"><TimerReset className="w-2.5 h-2.5" /> ينتهي قريبًا</Badge>
                         )}
                       </div>

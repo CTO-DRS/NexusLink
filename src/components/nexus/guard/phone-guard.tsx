@@ -450,6 +450,11 @@ export function GuardPhoneTab({ guard }: { guard: PhoneGuardCore }) {
 
 // ==== طبقات ملء الشاشة (قتل §48 / رن / فقدان / مسح) ====
 export function GuardOverlays({ guard }: { guard: PhoneGuardCore }) {
+  // Q2 (تكليف 53): لقطة now حالة عند أول التزام — بديل الوقيعة Date.now في ترويسة شاشة القتل
+  const [now, setNow] = useState<number | null>(null)
+  useEffect(() => {
+    void Promise.resolve().then(() => setNow(Date.now()))
+  }, [])
   // §48 — شاشة القتل أولًا وقبل كل شيء: لا رنين يعلوها ولا فقدان يطمسها ولا
   // مسح يُنافسها — الجهاز مات، والقتل أحادي الاتجاه بلا زر ولا عودة.
   if (guard.killed?.active) {
@@ -467,7 +472,7 @@ export function GuardOverlays({ guard }: { guard: PhoneGuardCore }) {
           <Fingerprint className="w-3.5 h-3.5" />
           {guard.killed.fingerprint || "server-order"}
         </div>
-        <div className="text-white/25 text-[10px] mt-8" dir="ltr">{new Date(guard.killed.at || Date.now()).toISOString()}</div>
+        <div className="text-white/25 text-[10px] mt-8" dir="ltr">{new Date(guard.killed.at || (now ?? 0)).toISOString()}</div>
         <div className="text-white/20 text-[9px] mt-10 text-center px-8">
           محاكاة التوأم الوِب — على الهاتف الحقيقي الشاشة نفسها تُطبَّق بوكيل Flutter بلا مسار خروج
         </div>

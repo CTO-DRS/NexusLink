@@ -6733,6 +6733,21 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
       cfgQ.includes("تكليف 52") && cfgQ.includes("بوابة رجوع دائمة"), "doc↔config")
   }
 
+  // ================= Q2 — بوابة الجودة الدائمة الثانية: exhaustive-deps و purity بلا رجوع (تكليف 53) =================
+  // العقد: القاعدتان = "error" حصرًا في eslint.config.mjs — المواقع المعلقة القديمة (12+9 منذ تكليف 44، قيست حيًا
+  // 11+11 قبل الإغلاق) أعيدت هيكلتها موقعًا موقعًا في Q2؛ أي انقلاب صامت لـoff يفشل بأول جولة.
+  {
+    const cfgQ2 = (await import("node:fs")).default.readFileSync(new URL("../eslint.config.mjs", import.meta.url), "utf8")
+    for (const rule of ["react-hooks/exhaustive-deps", "react-hooks/purity"]) {
+      const re = new RegExp(`"${rule}":\\s*"([a-z-]+)"`)
+      const m = cfgQ2.match(re)
+      check(`Q2/src: ${rule} بوابة دائمة = error (لا انقلاب صامت)`,
+        !!m && m[1] === "error", m ? `value=${m[1]}` : "rule-missing")
+    }
+    check("Q2/src: تعليق الإعداد يوثق إعادة الهيكلة الموقعية وموجة Q2 (تكليف 53) — العقد مقروء من نفس الملف",
+      cfgQ2.includes("تكليف 53") && cfgQ2.includes("موقعًا موقعًا"), "doc↔config")
+  }
+
 } catch (e) {
   check("E2E فشل بخطأ غير متوقع", false, e.message)
 } finally {

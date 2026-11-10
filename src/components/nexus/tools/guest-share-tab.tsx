@@ -42,12 +42,15 @@ export function GuestShareTab() {
   const [qr, setQr] = useState("")
   const [pathsText, setPathsText] = useState("")
   const [busy, setBusy] = useState(false)
+  // Q2 (تكليف 53): لقطة now حالة تُضبط مع كل دورة حالة الضيف — لا Date.now أثناء الرندر
+  const [now, setNow] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     try {
       const r = await fetch("/api/guest/share", { cache: "no-store" })
       const j = await r.json()
       setSt(j)
+      setNow(Date.now())
     } catch { /* الشبكة سقطت — تبقى الحالة الأخيرة */ }
   }, [])
 
@@ -100,7 +103,7 @@ export function GuestShareTab() {
     if (j) toast.success(t("حُفظ في تنزيلات الكمبيوتر"), { description: name })
   }
 
-  const remaining = st?.expiresAt ? Math.max(0, st.expiresAt - Date.now()) : 0
+  const remaining = st?.expiresAt ? Math.max(0, st.expiresAt - (now ?? 0)) : 0
   const remainText = remaining > 0
     ? `${Math.floor(remaining / 60_000)}:${String(Math.floor((remaining % 60_000) / 1000)).padStart(2, "0")}`
     : ""

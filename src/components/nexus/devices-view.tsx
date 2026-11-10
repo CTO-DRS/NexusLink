@@ -51,6 +51,11 @@ const modeLabel = (m: string) => (m === "wifi" ? "واي فاي" : m === "hotspo
 function DeviceCard({ d }: { d: NexusDevice }) {
   const { setActiveDeviceId, setView } = useNexus()
   const online = d.state === "connected"
+  // Q2 (تكليف 53): لقطة now حالة تُضبط عند أول التزام حصرًا — لا Date.now أثناء الرندر
+  const [now, setNow] = useState<number | null>(null)
+  useEffect(() => {
+    void Promise.resolve().then(() => setNow(Date.now()))
+  }, [])
   const usedPct = Math.round((d.storageUsed / d.storageTotal) * 100)
 
   const post = async (body: Record<string, unknown>) => {
@@ -99,7 +104,7 @@ function DeviceCard({ d }: { d: NexusDevice }) {
 
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <ShieldCheck className="w-3.5 h-3.5 text-teal-500" />
-          موثوق · مقترن منذ {Math.round((Date.now() - d.pairedAt) / 864e5)} يوماً · نبض Nexus Protocol نشط
+          موثوق · مقترن منذ {Math.max(0, Math.round(((now ?? 0) - d.pairedAt) / 864e5))} يوماً · نبض Nexus Protocol نشط
         </div>
 
         <Separator />

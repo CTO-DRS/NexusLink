@@ -285,17 +285,18 @@ function ApkPreview({ path, name }: { path: string; name: string }) {
     hasManifest: boolean
     files: { name: string; size: string }[]
   } | null>(null)
-  const s = useNexus()
+  // Q2 (تكليف 53): محدّد فردي للجهاز النشط بدل كائن المتجر الكامل — الجلب يعيد الإطلاق عند تغيّر الجهاز فعلًا
+  const deviceId = useNexus((st) => st.activeDeviceId)
 
   useEffect(() => {
     fetch("/api/apk", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deviceId: s.activeDeviceId, path }),
+      body: JSON.stringify({ deviceId, path }),
     })
       .then((r) => r.json())
       .then((j) => setInfo(j.ok ? j : null))
       .catch(() => setInfo(null))
-  }, [path])
+  }, [path, deviceId])
 
   return (
     <div className="w-full max-w-lg p-6 text-white">

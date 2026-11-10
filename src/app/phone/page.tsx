@@ -80,6 +80,13 @@ export default function PhonePage() {
     } else void capture()
   }
 
+  // Q2 (تكليف 53): آخر-مرجع — الاشتراك بجسر الوسائط مرة واحدة، والمصراع الأحدث يُقرأ عبر مرجع
+  // يُحدّث بعد كل التزام (كتابة المرجع في جسم الeffect لا أثناء الرندر) فلا إعادة اشتراك عند تغيّر camOn.
+  const shutterRef = useRef<(timer: number) => void>(() => {})
+  useEffect(() => {
+    shutterRef.current = remoteShutter
+  })
+
   // ==== الاتصال بالجسر + استقبال مصراع عن بُعد ====
   useEffect(() => {
     fetch("/api/media/boot").catch(() => { /* ignore */ })
@@ -92,7 +99,7 @@ export default function PhonePage() {
     socket.on("disconnect", () => { setOnline(false); setStatus("انقطع الاتصال — إعادة المحاولة…") })
 
     // مصراع عن بُعد من الكمبيوتر
-    socket.on("cam:shutter", (d: { timer: number }) => remoteShutter(d?.timer ?? 0))
+    socket.on("cam:shutter", (d: { timer: number }) => shutterRef.current(d?.timer ?? 0))
     socket.on("cam:captured", (d: { name?: string }) => {
       setStatus(`التقطت للتو: ${d?.name ?? "صورة"} — حُفظت في المعرض`)
     })
