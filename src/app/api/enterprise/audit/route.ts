@@ -5,6 +5,7 @@ import {
   readAuditFiltered,
   isAuditKind,
   resolveAuditPath,
+  rotateAuditEpoch,
   AUDIT_CONTRACT,
 } from "@/lib/enterprise-audit"
 import { guardPcOnly } from "@/lib/nexus/http-guard"
@@ -31,6 +32,13 @@ export const dynamic = "force-dynamic"
 // أسئلتها عبر النقطة المحرسة نفسها لا بقراءة الملف على الجهاز — وبروفيل القائمة
 // (limit) يُطبق على المطابقات (آخر N مطابقة بالترتيب الزمني + matched/truncated).
 // بلا بارامترات: الاستجابة بحرفها كما كانت (صفر حقل جديد — العقد القديم سليم).
+// FA-26 (تكليف 57): المخرج المعلن في تحذير التجميد نفسه — POST = تدوير الحقبة:
+// سلسلة مكسورة تُختم إعادة تسمية حصرًا (الدليل محفوظ حرفًا) والسلسلة الجديدة تبدأ
+// بسجل audit.epoch.rotate واحد بأبعاد الاستمرارية — الإغلاق موثق لا إعادة صامتة.
+// فوق المكسور حصرًا (السلسلة الصحيحة ترفض audit-epoch-valid — ضمانة عدم المحو:
+// دليل سليم لا يُدار عبر النقطة) — والسبب بالشكل الصارم قبل أي قراءة/كتابة.
+// الحرس أول الدالة بنوع audit.denied وفعل audit-epoch-rotate (نمط عائلة إدارة
+// التدقيق الثلاثة حرفًا) — ورفض LAN له يوثق في السلسلة نفسها (مخفف 3 ثوانٍ).
 
 export async function GET(request: Request) {
   if (!guardPcOnly(request, "evidence.denied", "audit-view", "loopback")) {
@@ -96,5 +104,62 @@ export async function GET(request: Request) {
     matched: q.total,
     truncated: q.truncated,
     events: q.items,
+  })
+}
+
+// FA-26 (تكليف 57) — تدوير الحقبة: ختم الدليل المكسور وإعادة إطلاق موثقة لا صامتة
+export async function POST(request: Request) {
+  if (!guardPcOnly(request, "audit.denied", "audit-epoch-rotate")) {
+    return NextResponse.json(
+      { ok: false, error: "audit-loopback-only", detail: "via-gateway-non-loopback" },
+      { status: 403 },
+    )
+  }
+
+  // الشكل الصارم للسبب قبل أي قراءة/كتابة: حرف أول أبجدية/رقم، 2..120 محرفًا
+  // (حروف صغيرة وأرقام ومسافة ونقطة وشرطة وشرطة سفلية — ملاحظة مدقق مقروءة)
+  let body: { reason?: unknown } = {}
+  try {
+    body = (await request.json()) as { reason?: unknown }
+  } catch {}
+  const reason = typeof body.reason === "string" ? body.reason : ""
+  if (reason.length === 0) {
+    return NextResponse.json(
+      { ok: false, error: "missing-epoch-reason", detail: "reason-required" },
+      { status: 400 },
+    )
+  }
+  if (!/^[a-z0-9][a-z0-9 ._-]{1,119}$/.test(reason)) {
+    return NextResponse.json(
+      { ok: false, error: "bad-epoch-reason", detail: "malformed-reason" },
+      { status: 400 },
+    )
+  }
+
+  const res = await rotateAuditEpoch(reason)
+  if (!res.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: res.error,
+        detail:
+          res.error === "audit-epoch-valid"
+            ? "chain-valid-no-rotation"
+            : res.error === "audit-epoch-missing"
+              ? "chain-missing-no-rotation"
+              : "rotation-io-failed",
+      },
+      { status: res.error === "audit-epoch-io" ? 500 : 400 },
+    )
+  }
+  return NextResponse.json({
+    ok: true,
+    rotated: true,
+    contract: AUDIT_CONTRACT,
+    epoch: res.epoch,
+    sealedFile: res.sealedFile,
+    brokenAt: res.brokenAt,
+    prevCount: res.prevCount,
+    prevHead: res.prevHead,
   })
 }

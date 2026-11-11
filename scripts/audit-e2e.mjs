@@ -14,7 +14,12 @@
  * في السلسلة نفسها (FA-24 — evidence.denied) · limit · الاسترجاع الانتقائي
  * (?type=/?action= بقائمة مولّدة حصرًا والغريب 400 — FA-25 تكليف 56) مع
  * matched/truncated وبروفيل limit على المطابقات — والمسار بلا بارامترات
- * بحرفيه بلا حقل جديد (العقد القديم سليم).
+ * بحرفيه بلا حقل جديد (العقد القديم سليم) — وتدوير الحقبة (FA-26 تكليف 57):
+ * العبث الملحق يكسر السلسلة · شكل السبب الصارم قبل أي قراءة · الختم إعادة
+ * تسمية حصرًا وأول سجل بالحقبة الجديدة audit.epoch.rotate بأبعاد الاستمرارية
+ * (epoch/sealedFile/brokenAt/prevCount/prevHead/reason) · ضمانة عدم المحو
+ * (السلسلة الصحيحة ترفض audit-epoch-valid) · استمرارية الرفضات في الحقبة
+ * الجديدة · رياضيات مستقلة · دورة ثانية بترقيم حقب مولّد من المجلد.
  * التنظيف الذاتي في النهاية يجعل الجولة الثانية المتتالية مطابقة للأولى.
  * الاستخدام: node scripts/audit-e2e.mjs [--app http://127.0.0.1:3000]
  */
@@ -80,7 +85,7 @@ function recHash(r) {
     .update(JSON.stringify({ i: r.i, t: r.t, k: r.k, ok: r.ok, actor: r.actor, d: r.d, prev: r.prev }))
     .digest("hex").slice(0, 16)
 }
-const KINDS = new Set(["pair.enable", "pair.rotate", "pair.disable", "pair.admin.denied", "policy.observed", "policy.changed", "evidence.denied"])
+const KINDS = new Set(["pair.enable", "pair.rotate", "pair.disable", "pair.admin.denied", "policy.observed", "policy.changed", "evidence.denied", "audit.epoch.rotate"])
 function auditLines() {
   try {
     return fs.readFileSync(AUDIT_FILE, "utf8").split("\n").filter((l) => l.trim().length > 0)
@@ -314,6 +319,90 @@ try {
     r.status === 200 && !("filter" in j) && !("matched" in j) && !("truncated" in j)
     && j.count === 5 && j.events?.length === 1 && j.valid === true,
     `status=${r.status} count=${j.count}`)
+
+  // ---------- FA-26 (تكليف 57) — تدوير الحقبة: المخرج المعلن في تحذير التجميد نفسه ----------
+  // القسم الأخير حصرًا: العبث هنا يكسر السلسلة فيُحجب العرض — فكل عقود العدّ
+  // أعلاه (S1..S21) تبقى بحرفها بلا تحديث سطر. السيناريو المدقق: عبث ملحق
+  // → عرض يعلن الكسر → شكل السبب الصارم قبل أي قراءة → ختم إعادة تسمية
+  // + أول سجل بأبعاد الاستمرارية → ضمانة عدم المحو → استمرارية الرفضات
+  // → رياضيات مستقلة → دورة ثانية بترقيم حقب مولّد من المجلد.
+  const forged = JSON.stringify({ i: 6, t: new Date().toISOString(), k: "policy.observed", ok: true, actor: "local", d: { forged: "fa26-drill" }, prev: "forged-prev" }) + "\n"
+  fs.appendFileSync(AUDIT_FILE, forged)
+  // لقطة ما قبل الختم: الأسطر الستة ورأس السلسلة الصالحة الأخير (سجل 5) — لأثبات الحفظ الحرفي
+  const preSealLines = auditLines()
+  const recAt5Head = JSON.parse(preSealLines[4]).h
+  r = await request(`${APP}/api/enterprise/audit`)
+  j = JSON.parse(r.body)
+  ok("S22 عبث ملحق بالسطر 6: valid:false · brokenAt=6 · الأحداث تُحجب (سلسلة مكسورة بلا أثر عرض)",
+    r.status === 200 && j.valid === false && j.brokenAt === 6 && j.events?.length === 0, `brokenAt=${j.brokenAt}`)
+
+  // S23 — الشكل الصارم للسبب قبل أي قراءة/كتابة (لا حالة تتغير على الغريب)
+  r = await post(`${APP}/api/enterprise/audit`, {})
+  ok("S23a بلا سبب → 400 missing-epoch-reason (قبل أي قراءة)", r.status === 400 && r.body.includes("missing-epoch-reason"), `status=${r.status}`)
+  r = await post(`${APP}/api/enterprise/audit`, { reason: "BAD REASON!" })
+  ok("S23b سبب مشوه → 400 bad-epoch-reason (الشكل الصارم 2..120)", r.status === 400 && r.body.includes("bad-epoch-reason"), `status=${r.status}`)
+  ok("S23c الغريب لم يغير حالة السلسلة المكسورة (الرفض قبل أي فعل)", auditLines().length === 6, `lines=${auditLines().length}`)
+
+  // S24 — التدوير: ختم إعادة تسمية حصرًا + أول سجل بأبعاد الاستمرارية
+  const REASON1 = "soc2 drill sealed broken chain after tamper"
+  r = await post(`${APP}/api/enterprise/audit`, { reason: REASON1 })
+  j = JSON.parse(r.body)
+  ok("S24a تدوير فوق المكسور → 200 rotated:true epoch:1 sealedFile=audit.jsonl.epoch-1-sealed brokenAt=6 prevCount=5",
+    r.status === 200 && j.ok === true && j.rotated === true && j.epoch === 1 && j.sealedFile === "audit.jsonl.epoch-1-sealed"
+    && j.brokenAt === 6 && j.prevCount === 5, `status=${r.status}`)
+  const newLines = auditLines()
+  const rec1 = JSON.parse(newLines[0])
+  ok("S24b السلسلة الجديدة: سطر واحد i=1 بلا سابق k=audit.epoch.rotate ok=true actor=local بأبعاد الاستمرارية كاملة",
+    newLines.length === 1 && rec1.i === 1 && rec1.prev === "" && rec1.k === "audit.epoch.rotate" && rec1.ok === true
+    && rec1.actor === "local" && rec1.d.epoch === 1 && rec1.d.sealedFile === "audit.jsonl.epoch-1-sealed"
+    && rec1.d.brokenAt === 6 && rec1.d.prevCount === 5 && rec1.d.prevHead === recAt5Head && rec1.d.reason === REASON1,
+    `lines=${newLines.length}`)
+  const sealedPath = path.join(path.dirname(AUDIT_FILE), "audit.jsonl.epoch-1-sealed")
+  const sealedLines = fs.readFileSync(sealedPath, "utf8").split("\n").filter((l) => l.trim().length > 0)
+  ok("S24c الدليل المختوم محفوظ حرفًا: 6 أسطر (5 صالحة + الملحق) — صفر فقد ولا حذف",
+    sealedLines.length === 6 && sealedLines[4] === preSealLines[4] && sealedLines[5] === preSealLines[5], `sealed=${sealedLines.length}`)
+  r = await request(`${APP}/api/enterprise/audit`)
+  j = JSON.parse(r.body)
+  ok("S24d العرض بعد التدوير: valid:true · count=1 · head.i=1 (التجميد رُفع والسلسلة حية)",
+    r.status === 200 && j.valid === true && j.count === 1 && j.head?.i === 1, `count=${j.count}`)
+
+  // S25 — ضمانة عدم المحو: السلسلة الصحيحة ترفض التدوير (دليل سليم لا يُدار عبر النقطة)
+  r = await post(`${APP}/api/enterprise/audit`, { reason: REASON1 })
+  ok("S25 فوق سلسلة صحيحة → 400 audit-epoch-valid (لا محو دليل سليم عبر النقطة)",
+    r.status === 400 && r.body.includes("audit-epoch-valid"), `status=${r.status}`)
+
+  // S26 — استمرارية الرفضات: رفض LAN لقراءة الدليل يوثق في الحقبة الجديدة (خارج نافذة المخفف)
+  await sleep(3300)
+  r = await request(`http://${LAN}:8197/api/enterprise/audit`, { headers: { "x-pair-token": liveToken } })
+  await sleep(150)
+  ok("S26 رفض LAN بعد التدوير: evidence.denied ثانٍ بالحقبة الجديدة (i=2) — السلسلة تعدّ 2 والاستمرارية حية",
+    r.status === 403 && auditLines().length === 2 && recAt(2).k === "evidence.denied" && recAt(2).i === 2
+    && recAt(2).actor === "remote" && recAt(2).d.reason === "loopback" && recAt(2).d.action === "audit-view",
+    `status=${r.status}`)
+
+  // S27 — رياضيات مستقلة على الحقبة الجديدة (إعادة بناء بصمات السكربت نفسه)
+  const math3 = verifyMath(auditLines())
+  ok("S27 رياضيات مستقلة: الحقبة الجديدة سطران i=1..2 متصلان وبصماتها تُعاد",
+    math3.valid && math3.count === 2, math3.valid ? "prev/h/مجموعة مغلقة ✓" : math3.why)
+
+  // S28 — دورة ثانية: العبث مجددًا وتدوير بترقيم حقب مولّد من المجلد (حتمي بلا حالة)
+  fs.appendFileSync(AUDIT_FILE, forged.replace('"i":6', '"i":3').replace("forged-prev", "forged-prev-2"))
+  await sleep(150)
+  const REASON2 = "second epoch drill numbered from dir scan"
+  r = await post(`${APP}/api/enterprise/audit`, { reason: REASON2 })
+  j = JSON.parse(r.body)
+  ok("S28a دورة ثانية فوق المكسور مجددًا → 200 epoch:2 (الترقيم مولّد من المجلد حصرًا)",
+    r.status === 200 && j.ok === true && j.epoch === 2 && j.sealedFile === "audit.jsonl.epoch-2-sealed" && j.prevCount === 2, `status=${r.status}`)
+  const sealedDir = path.dirname(AUDIT_FILE)
+  const sealedFiles = fs.readdirSync(sealedDir).filter((f) => /^audit\.jsonl\.epoch-\d+-sealed$/.test(f)).sort()
+  const rec2 = JSON.parse(auditLines()[0])
+  ok("S28b ملفان مختومان على القرص (epoch-1 وepoch-2) وسجل الحقبة الثانية بأبعادها (brokenAt=3 prevCount=2)",
+    sealedFiles.join(",") === "audit.jsonl.epoch-1-sealed,audit.jsonl.epoch-2-sealed"
+    && rec2.d.epoch === 2 && rec2.d.brokenAt === 3 && rec2.d.prevCount === 2 && rec2.d.reason === REASON2,
+    `sealed=${sealedFiles.length}`)
+  const math4 = verifyMath(auditLines())
+  ok("S28c الحقبة الثانية حية وصالحة: count=1 valid:true ورياضيات مستقلة",
+    math4.valid && math4.count === 1, math4.valid ? "الحقبة الثانية سليمة ✓" : math4.why)
 } catch (e) {
   fail++
   console.error("❌ استثناء في الجولة:", e)
@@ -324,6 +413,13 @@ try {
   await post(`${APP}/api/remote-access`, { action: "disable" })
 } catch {}
 try { fs.rmSync(AUDIT_FILE, { force: true }) } catch {}
+try {
+  // FA-26: الملفات المختومة تُزال أيضًا — الجولة الثانية تبدأ بلا حقب سابقة
+  const dir = path.dirname(AUDIT_FILE)
+  for (const f of fs.readdirSync(dir)) {
+    if (/^audit\.jsonl\.epoch-\d+-sealed$/.test(f)) fs.rmSync(path.join(dir, f), { force: true })
+  }
+} catch {}
 try { fs.rmSync(POLICY_FILE, { force: true }) } catch {}
 if (gwApp) { try { gwApp.kill("SIGTERM") } catch {} }
 

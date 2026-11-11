@@ -106,6 +106,25 @@ function writePairFile() {
   fs.writeFileSync(PAIR, JSON.stringify({ token: TOKEN, fingerprint: "e2efingerprint0000", createdAt: new Date().toISOString() }, null, 2))
 }
 
+// بوابات دفاعية: المنافذ 8193/8194 يجب أن تكون حرة — بوابة قديمة باقية (إنهاء
+// بلا تنظيف من جولة سابقة) تجعل الفحوص تضرب البوابة المتبقية بملفاتها القديمة
+// (نتائج زائفة حمراء وخضراء معًا) — نفشل فوريًا بدل نتائج غير حقيقية.
+{
+  const net = await import("node:net")
+  const portFree = (port) => new Promise((res) => {
+    const srv = net.createServer()
+    srv.once("error", () => res(false))
+    srv.once("listening", () => srv.close(() => res(true)))
+    srv.listen(port, "127.0.0.1")
+  })
+  const busy = []
+  for (const port of [GW_PORT, 8194]) if (!(await portFree(port))) busy.push(port)
+  if (busy.length > 0) {
+    console.error(`❌ بوابات مشغولة قبل البدء (${busy.join(",")}) — بوابات متبقية من جولة سابقة بلا تنظيف. شغّل التنظيف أولًا (pkill -9 -f mini-services/gateway)`)
+    process.exit(2)
+  }
+}
+
 const gw = spawn(process.execPath, [path.join(process.cwd(), "mini-services", "gateway", "index.cjs")], {
   env: {
     ...process.env,
@@ -134,9 +153,13 @@ const GW = `http://127.0.0.1:${GW_PORT}`
 const UP = `http://127.0.0.1:${UP_PORT}`
 
 try {
-  await new Promise((r) => upstream.listen(UP_PORT, r))
-  await new Promise((r) => bridgeMocks[0].listen(3003, r))
-  await new Promise((r) => bridgeMocks[1].listen(3005, r))
+  const listenClean = (srv, port, name) => new Promise((res, rej) => {
+    srv.once("error", (e) => rej(new Error(`${name} منفذ ${port} مشغول (${e.code}) — نظف الجسور المتبقية قبل الجولة`)))
+    srv.listen(port, () => res())
+  })
+  await listenClean(upstream, UP_PORT, "upstream")
+  await listenClean(bridgeMocks[0], 3003, "جسر mock الأول")
+  await listenClean(bridgeMocks[1], 3005, "جسر mock الثاني")
   const ready = await waitGateway()
   ok("A0 البوابة وupstream جاهزان", ready, gwLog.slice(-200) || `gw:${GW_PORT} up:${UP_PORT}`)
 
@@ -296,6 +319,6 @@ if (APP) {
 
 upstream.close()
 for (const b of bridgeMocks) { try { b.close() } catch {} }
-try { gw.kill("SIGTERM") } catch {}
+try { gw.kill("SIGKILL") } catch {}
 console.log(`\n=== enterprise-e2e: ${pass} ناجح · ${fail} فاشل (LAN=${LAN} · tmp=${tmp}) ===`)
 process.exit(fail === 0 ? 0 : 1)
