@@ -11,6 +11,7 @@ import {
   POLICY_CONTRACT,
 } from "@/lib/enterprise-policy"
 import { auditSummary, observePolicy, AUDIT_CONTRACT } from "@/lib/enterprise-audit"
+import { isLocalRequest } from "@/lib/nexus/http-guard"
 import { store } from "@/lib/nexus/devices"
 import { listPairMetrics } from "@/lib/nexus/pair-metrics"
 import { pairStats, PAIR_TARGET_MS } from "@/lib/pair-math"
@@ -25,9 +26,10 @@ export const dynamic = "force-dynamic"
 //     §29/§30 + سجل §39 (بيانات وصفية حصرًا — حرس F6: أعداد وأزمنة وبصمات).
 //   PDF — إنجليزي للمُدقّقين (قلم Helvetica قياسي — الحد 47.و.4) مولَّد
 //     بصفر اعتماد (report-pdf.ts — PDF 1.4 + xref يدوي).
-// حرس loopback (نمط §38 حرفيًا): التقرير بيد الجهاز حصرًا — واصله عبر
-// البوابة من خارج الجهاز (ترويسة x-gw-client-ip) مرفوض ولو برمز صحيح —
-// لا رفع لسحابة ولا بريد ولا قناة (لوعد الجهاز هو الحدود).
+// حرس loopback (FA-23 — موحّد فوق isLocalRequest المشتركة، نمط §38): التقرير
+// بيد الجهاز حصرًا — واصله عبر البوابة من خارج الجهاز (ترويسة x-gw-client-ip)
+// مرفوض ولو برمز صحيح — لا رفع لسحابة ولا بريد ولا قناة (وعد الجهاز هو الحدود).
+// الرفض صامت بعقده المفحوص (نفس موقف audit/compliance).
 // تعمل النقطة بلا إعادة تشغيل: قراءة السياسة بمتغير تعديل-الوقت في كل نداء.
 
 const PAIR_FILE =
@@ -46,9 +48,8 @@ function readPairFile(): { token: string; fingerprint: string; createdAt: string
   }
 }
 
-function isLoopbackIp(ip: string): boolean {
-  return ip === "::1" || ip === "::ffff:127.0.0.1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)
-}
+// FA-23 (تكليف 54): الحرس موحّد فوق isLocalRequest المشتركة (حرس http-guard
+// الواحد) — الرفض صامت بعقده المفحوص (نفس موقف audit/compliance).
 
 /** الإصدار الموحد من package.json (توصيفي — غيابه لا يفشل التقرير) */
 function appVersion(): string | null {
@@ -70,8 +71,7 @@ function ago(ts: number): string {
 }
 
 export async function GET(request: Request) {
-  const fwd = request.headers.get("x-gw-client-ip")
-  if (fwd && !isLoopbackIp(fwd)) {
+  if (!isLocalRequest(request)) {
     return NextResponse.json(
       { ok: false, error: "report-loopback-only", detail: "via-gateway-non-loopback" },
       { status: 403 },

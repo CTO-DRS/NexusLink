@@ -30,14 +30,20 @@ const rejLast = new Map<string, number>()
 /**
  * بوابة FA-14 — تعيد true إذا مُدِر الطلب محليًا. خلاف ذلك تُوثق رفضًا
  * (بمخفف 3 ثوانٍ) وتعيد false — المستدعي يجيب 403 { ok:false, error:"pc-only" }.
+ *
+ * FA-23 (تكليف 54): البارامتر الرابع `reason` يوحّد تحت هذا الحرس حراس loopback
+ * اليدوية القديمة (نمط §37/§48/§49/§51) دون مسّ عقودها المفحوصة — المسارات
+ * الإدارية القديمة تمرر "loopback" ليظل meta.reason كما علقته بواباتها الحية
+ * (audit-e2e S7 مثلاً يثبت reason:"loopback" على pair.admin.denied)، والافتراضي
+ * "pc-only" لجسور FA-14/16/22 كما هي.
  */
-export function guardPcOnly(req: Request, auditKind: AuditKind, action: string): boolean {
+export function guardPcOnly(req: Request, auditKind: AuditKind, action: string, reason: "pc-only" | "loopback" = "pc-only"): boolean {
   if (isLocalRequest(req)) return true
   const key = `${auditKind}:${action}`
   const now = Date.now()
   if (now - (rejLast.get(key) || 0) > 3000) {
     rejLast.set(key, now)
-    void appendAudit(auditKind, false, "remote", { reason: "pc-only", action: action.slice(0, 32) })
+    void appendAudit(auditKind, false, "remote", { reason, action: action.slice(0, 32) })
   }
   return false
 }

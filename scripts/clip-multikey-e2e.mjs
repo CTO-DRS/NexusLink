@@ -324,9 +324,9 @@ if (!APP || !DB_PATH) {
     revPC.j?.item?.content?.includes(NEEDLE_PC)
     && (r.j?.items ?? []).some((x) => x.id === idPH && x.content === TEXT_PH))
 
-  // ب11 — تدوير جهاز مفرد من خارج الجهاز → 403 (حرس loopback نفسه)
+  // ب11 — تدوير جهاز مفرد من خارج الجهاز → 403 (حرس loopback نفسه — FA-22 وحّدته تحت guardPcOnly فصار رد pc-only التعاقدي)
   r = await postJson("/api/prod/clipboard/vault", { action: "rotate-key", deviceId: DEV_PC }, { "x-gw-client-ip": "10.0.0.9" })
-  ok("ب11 تدوير مفرد من خارج الجهاز → 403", r.status === 403 && r.j?.error === "clip-admin-loopback-only")
+  ok("ب11 تدوير مفرد من خارج الجهاز → 403", r.status === 403 && r.j?.error === "pc-only")
 
   // ب12 — deviceId الشارد → invalid-device (مسار الحماية من الحقن)
   r = await postJson("/api/prod/clipboard/vault", { action: "rotate-key", deviceId: "بالعربية/slash" })

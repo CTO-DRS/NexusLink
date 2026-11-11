@@ -6571,8 +6571,9 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     check("GW/src: remote-access — ثلاثة أفعال بأخطاء 409 الصادقة وunknown-action 400",
       routeP.includes('"enable"') && routeP.includes('"rotate"') && routeP.includes('"disable"')
       && routeP.includes('"already-enabled"') && routeP.includes('"not-enabled"') && routeP.includes('"unknown-action"'), "actions")
-    check("GW/src: حرس loopback للإدارة — x-gw-client-ip من خارج الجهاز يُرفض 403 ولو برمز صحيح",
-      routeP.includes("x-gw-client-ip") && routeP.includes("pair-admin-loopback-only") && routeP.includes("isLoopbackIp"), "admin guard")
+    check("GW/src: حرس loopback للإدارة — guardPcOnly المنظومي (FA-23): من خارج الجهاز يُرفض 403 ولو برمز صحيح",
+      routeP.includes("guardPcOnly") && routeP.includes("pair.admin.denied") && routeP.includes("pair-admin-loopback-only")
+      && !routeP.includes("function isLoopbackIp"), "admin guard")
     check("GW/src: الرمز الخام لا يعود في GET — يُسلّم مرة واحدة في enable/rotate حصرًا",
       /export async function GET[\s\S]*?fingerprint[\s\S]*?return NextResponse\.json/.test(routeP)
       && routeP.includes("urlQuery") && routeP.includes("الرمز الخام عمدًا غائب"), "no raw in GET")

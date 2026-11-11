@@ -14,7 +14,7 @@ import { NextResponse } from "next/server"
 import {
   listSecureBackups, createSecureBackup, verifySecureBackup, restoreSecureBackup,
   deleteSecureBackup, pruneSecureBackups, enableSchedule, disableSchedule,
-  rotateLocalKey, scheduleTick, guardLocal,
+  rotateLocalKey, scheduleTick,
 } from "@/lib/nexus/backup-secure-server"
 import { guardPcOnly } from "@/lib/nexus/http-guard"
 
@@ -30,8 +30,8 @@ export async function POST(req: Request) {
   const action = String(body.action ?? "")
 
   // FA-14 (تكليف 41): إنشاء/تحقق/استعادة/حذف/تقليم أفعال مدمرة أو محاولة
-  // فك على النسخ المشفرة — loopback حصرًا (عقيدة FA-13 على HTTP). الجدولة
-  // أدناه كانت محمية بحرس loopback نمط §37 أصلًا (guardLocal).
+  // فك على النسخ المشفرة — loopback حصرًا (عقيدة FA-13 على HTTP). والجدولة
+  // أدناه توحّدت هي الأخرى (FA-23) تحت الحرس المنظومي نفسه بدل guardLocal.
   if (action !== "schedule-tick" && !guardPcOnly(req, "backup.denied", action)) {
     return NextResponse.json(
       { ok: false, error: "backup-admin-loopback-only", detail: "via-gateway-non-loopback" },
@@ -71,7 +71,7 @@ export async function POST(req: Request) {
 
   // الجدولة — إدارة محلية حصرًا (نمط §37/§51/§53)
   if (action === "schedule-enable" || action === "schedule-disable" || action === "schedule-rotate") {
-    if (!guardLocal(req, action)) {
+    if (!guardPcOnly(req, "backup.denied", action, "loopback")) {
       return NextResponse.json(
         { ok: false, error: "backup-admin-loopback-only", detail: "via-gateway-non-loopback" },
         { status: 403 },

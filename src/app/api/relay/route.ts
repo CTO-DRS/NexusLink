@@ -3,6 +3,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { readEnterprisePolicy, oemPrivacyActive, resolveEffectivePosture, type PostureSource } from "@/lib/enterprise-policy"
 import { appendAudit, observePolicy } from "@/lib/enterprise-audit"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 import { normalizeRelayUrl, validateSecret, MAX_VISITORS_PER_ROOM, MAX_BODY_BYTES, MAX_FRAME_CHARS, RELAY_PROTOCOL_VERSION } from "@/lib/nexus/relay-core"
 import { ensureRelayTunnel, relayTunnelStatus, writeRelayConfig, disableRelayConfig } from "@/lib/nexus/relay-tunnel"
 
@@ -13,8 +14,9 @@ export const dynamic = "force-dynamic"
 // GET  → حالة حية فقط: { enabled, state, url(معتّمة), roomId, fingerprint,
 //        stats, policy, oemPrivacy, pairEnabled } — السر لا يعود أبدًا.
 // POST { action: "enable", url, secret } | { action: "disable" }
-//        حرس loopback للإدارة (نمط §37): واصل عبر البوابة من خارج الجهاز لا
-//        يُدير النفق ولو برمز صحيح — الإدارة بيد الجهاز حصرًا.
+//        حرس loopback للإدارة (FA-23 — الحرس المنظومي نفسه guardPcOnly، نمط §37):
+//        واصل عبر البوابة من خارج الجهاز لا يُدير النفق ولو برمز صحيح —
+//        الإدارة بيد الجهاز حصرًا.
 //        قفل السياسة §38/§40: force-off يرفض التفعيل · المولود خاصًا يرفضه.
 // صفر تغيير مخطط: مصدر الحقيقة ملف خارج المخطط (.zstate/relay.json أو
 // NEXUSLINK_RELAY_FILE) بمتغير تعديل-وقت — حذفه/تعطيله = قطع فوري بلا إعادة تشغيل.
@@ -23,10 +25,6 @@ export const dynamic = "force-dynamic"
 
 const PAIR_FILE =
   process.env.NEXUSLINK_PAIR_FILE || path.join(process.cwd(), ".zstate", "pair-token.json")
-
-function isLoopbackIp(ip: string): boolean {
-  return ip === "::1" || ip === "::ffff:127.0.0.1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)
-}
 
 function pairEnabled(): boolean {
   try {
@@ -65,10 +63,9 @@ export async function POST(request: Request) {
   try { body = await request.json() } catch { /* بلا جسم */ }
   const action = String(body.action ?? "")
 
-  // حرس loopback للإدارة (نمط §37 حرفيًا): البوابة تستبدل x-gw-client-ip دائمًا
-  const fwd = request.headers.get("x-gw-client-ip")
-  if (fwd && !isLoopbackIp(fwd)) {
-    await appendAudit("relay.admin.denied", false, "remote", { action: action.slice(0, 24), reason: "loopback" })
+  // حرس loopback للإدارة (FA-23 — توحيد تحت guardPcOnly، عقيدة §37 حرفيًا):
+  // البوابة تستبدل x-gw-client-ip دائمًا — الواصل عبر الشبكة يُرفض ولو برمز صحيح.
+  if (!guardPcOnly(request, "relay.admin.denied", action, "loopback")) {
     return NextResponse.json(
       { ok: false, error: "relay-admin-loopback-only", detail: "via-gateway-non-loopback" },
       { status: 403 },

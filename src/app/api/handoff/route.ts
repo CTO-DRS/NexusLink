@@ -12,16 +12,12 @@
 //    يد محلية حصرًا، والمفتاح لا يُعرض أبدًا.
 // كل فعل يُدوَّن §39 بأطوال وبصمات حصرًا — المحتوى لا يدخل الدليل (F6).
 import { NextResponse } from "next/server"
-import { appendAudit } from "@/lib/enterprise-audit"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 import {
   listHandoff, pushHandoff, actHandoff, clearHandoff, rotateRestKey,
 } from "@/lib/nexus/handoff-server"
 
 export const dynamic = "force-dynamic"
-
-function isLoopbackIp(ip: string): boolean {
-  return ip === "::1" || ip === "::ffff:127.0.0.1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)
-}
 
 export async function GET() {
   return NextResponse.json(await listHandoff())
@@ -56,10 +52,8 @@ export async function POST(req: Request) {
   }
 
   if (action === "clear") {
-    // حرس loopback للإدارة (نمط §37/§51): التفريغ بيد الجهاز حصرًا
-    const fwd = req.headers.get("x-gw-client-ip")
-    if (fwd && !isLoopbackIp(fwd)) {
-      await appendAudit("handoff.denied", false, "remote", { reason: "loopback", action: "clear" })
+    // حرس loopback للإدارة (FA-23 — توحيد تحت guardPcOnly، نمط §37/§51): التفريغ بيد الجهاز حصرًا
+    if (!guardPcOnly(req, "handoff.denied", "clear", "loopback")) {
       return NextResponse.json(
         { ok: false, error: "handoff-admin-loopback-only", detail: "via-gateway-non-loopback" },
         { status: 403 },
@@ -69,10 +63,8 @@ export async function POST(req: Request) {
   }
 
   if (action === "rotate-key") {
-    // حرس loopback للإدارة (نمط §37/§51) — تدوير القفل بيد الجهاز حصرًا
-    const fwd = req.headers.get("x-gw-client-ip")
-    if (fwd && !isLoopbackIp(fwd)) {
-      await appendAudit("handoff.denied", false, "remote", { reason: "loopback", action: "rotate-key" })
+    // حرس loopback للإدارة (FA-23 — توحيد تحت guardPcOnly، نمط §37/§51) — تدوير القفل بيد الجهاز حصرًا
+    if (!guardPcOnly(req, "handoff.denied", "rotate-key", "loopback")) {
       return NextResponse.json(
         { ok: false, error: "handoff-admin-loopback-only", detail: "via-gateway-non-loopback" },
         { status: 403 },

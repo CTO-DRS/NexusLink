@@ -20,9 +20,8 @@ import { buildScanPdf } from "./scan-pdf"
 const SCANS_ROOT = process.env.NEXUSLINK_SCANS_DIR || path.join(process.cwd(), ".zstate", "scans")
 const DEFAULT_TARGET = "/Documents"
 
-function isLoopbackIp(ip: string): boolean {
-  return ip === "::1" || ip === "::ffff:127.0.0.1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)
-}
+// FA-23 (تكليف 54): نسخة isLoopbackIp المحلية كانت ميتة (بلا مستدعي) —
+// المصدر الوحيد للفعل هو حرس http-guard الموحد.
 
 const pageLimiter = createRateLimiter({ max: 60, windowMs: 60_000 })
 // §62 — معاينة المعالجة الحية: معدل أوفر من الرفع (قراءة + اشتقاق اختياري)

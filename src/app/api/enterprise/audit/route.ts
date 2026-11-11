@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { verifyAuditChain, readAuditTail, resolveAuditPath, AUDIT_CONTRACT } from "@/lib/enterprise-audit"
+import { isLocalRequest } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -13,13 +14,13 @@ export const dynamic = "force-dynamic"
 // لا إلحاق من هذه النقطة إطلاقًا (القراءة قراءة).
 // ?limit=N (1..500، الافتراضي 100) — آخر N حدث بالترتيب الزمني.
 
-function isLoopbackIp(ip: string): boolean {
-  return ip === "::1" || ip === "::ffff:127.0.0.1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)
-}
+// FA-23 (تكليف 54): الحرس موحّد فوق isLocalRequest المشتركة (حرس http-guard
+// الواحد) — والرفض يبقى صامتًا بعقده المفحوص حرفيًا: audit-e2e يثبت السلسلة
+// بالعدّ الدقيق (S16/S17 count=3) فتدقيق رفض القراءة سيزيح التسلسل — باب
+// لاحق اختياري يبدأ بتحديث عقود العدّ في تلك الجولة أولًا.
 
 export async function GET(request: Request) {
-  const fwd = request.headers.get("x-gw-client-ip")
-  if (fwd && !isLoopbackIp(fwd)) {
+  if (!isLocalRequest(request)) {
     return NextResponse.json(
       { ok: false, error: "audit-loopback-only", detail: "via-gateway-non-loopback" },
       { status: 403 },

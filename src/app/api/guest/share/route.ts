@@ -17,6 +17,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { DATA_ROOT, resolveSafe } from "@/lib/nexus/fs-server"
 import { appendAudit } from "@/lib/enterprise-audit"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 import {
   validateGuestConfig, guestFingerprint, isGuestActive,
   sanitizeGuestName, GUEST_MAX_TOTAL_BYTES, type GuestState,
@@ -27,10 +28,6 @@ export const dynamic = "force-dynamic"
 const GUEST_FILE =
   process.env.NEXUSLINK_GUEST_FILE || path.join(process.cwd(), ".zstate", "guest-share.json")
 const INBOX_DIR = path.join(DATA_ROOT, "guest-inbox")
-
-function isLoopbackIp(ip: string): boolean {
-  return ip === "::1" || ip === "::ffff:127.0.0.1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)
-}
 
 function readGuestState(): GuestState | null {
   try {
@@ -102,10 +99,8 @@ export async function POST(req: Request) {
   try { body = await req.json() } catch { /* بلا جسم */ }
   const action = String(body.action ?? "")
 
-  // حرس loopback للإدارة (نمط §37): الإدارة بيد الجهاز حصرًا
-  const fwd = req.headers.get("x-gw-client-ip")
-  if (fwd && !isLoopbackIp(fwd)) {
-    await appendAudit("guest.admin.denied", false, "remote", { action: action.slice(0, 24), reason: "loopback" })
+  // حرس loopback للإدارة (FA-23 — توحيد تحت guardPcOnly، نمط §37): الإدارة بيد الجهاز حصرًا
+  if (!guardPcOnly(req, "guest.admin.denied", action, "loopback")) {
     return NextResponse.json(
       { ok: false, error: "guest-admin-loopback-only", detail: "via-gateway-non-loopback" },
       { status: 403 },

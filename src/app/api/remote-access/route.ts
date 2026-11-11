@@ -4,6 +4,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { readEnterprisePolicy, oemPrivacyActive, resolveEffectivePosture, rotationDue, type PostureSource } from "@/lib/enterprise-policy"
 import { appendAudit, observePolicy } from "@/lib/enterprise-audit"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -12,19 +13,16 @@ export const dynamic = "force-dynamic"
 // GET  → حالة فقط: { enabled, fingerprint, createdAt } — الرمز الخام لا يعود
 //        أبدًا في GET (يُعرض مرة واحدة عند التمكين/التدوير حصرًا).
 // POST { action: "enable" | "rotate" | "disable" } — إدارة الاقتران.
-//        حرس loopback للإدارة: واصل عبر البوابة من خارج الجهاز (ترويسة
-//        x-gw-client-ip التي تستبدلها البوابة دائمًا) لا يُدير الاقتران ولو
-//        حمل رمزًا صحيحًا — الإدارة بيد الجهاز حصرًا (الجهاز هي الحدود).
+//        حرس loopback للإدارة (FA-23 — الحرس المنظومي guardPcOnly، نمط §37):
+//        واصل عبر البوابة من خارج الجهاز (ترويسة x-gw-client-ip التي تستبدلها
+//        البوابة دائمًا) لا يُدير الاقتران ولو حمل رمزًا صحيحًا — الإدارة بيد
+//        الجهاز حصرًا (الجهاز هي الحدود).
 // صفر تغيير مخطط وصفر db: مصدر الحقيقة الواحد ملف JSON خارج المخطط
 // (.zstate/pair-token.json أو NEXUSLINK_PAIR_FILE) تقرؤه البوابة بمتغير
 // تعديل-الوقت — حذف الملف = تعطيل فوري لحظي بلا إعادة تشغيل.
 
 const PAIR_FILE =
   process.env.NEXUSLINK_PAIR_FILE || path.join(process.cwd(), ".zstate", "pair-token.json")
-
-function isLoopbackIp(ip: string): boolean {
-  return ip === "::1" || ip === "::ffff:127.0.0.1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)
-}
 
 function readPairFile(): { token: string; fingerprint: string; createdAt: string } | null {
   try {
@@ -117,14 +115,12 @@ export async function POST(request: Request) {
   try { body = await request.json() } catch { /* بلا جسم */ }
   const action = String(body.action ?? "")
 
-  // حرس loopback للإدارة: البوابة تستبدل x-gw-client-ip دائمًا بعنوان العميل
-  // الحقيقي — إن وصلت الترويسة من خارج loopback فالواصل عبر الشبكة (حتى
-  // برمز صحيح) ولا يُدير الاقتران. المتصل المباشر بواجهة الجهاز (بلا ترويسة)
-  // أو عبر البوابة من loopback يُسمح له.
-  const fwd = request.headers.get("x-gw-client-ip")
-  if (fwd && !isLoopbackIp(fwd)) {
+  // حرس loopback للإدارة (FA-23 — توحيد تحت guardPcOnly، نمط §37): البوابة
+  // تستبدل x-gw-client-ip دائمًا بعنوان العميل الحقيقي — إن وصلت الترويسة من
+  // خارج loopback فالواصل عبر الشبكة (حتى برمز صحيح) ولا يُدير الاقتران.
+  // المتصل المباشر بواجهة الجهاز (بلا ترويسة) أو عبر البوابة من loopback يُسمح له.
+  if (!guardPcOnly(request, "pair.admin.denied", action, "loopback")) {
     // §39 — محاولة إدارة من خارج الجهاز: دليل أمني (وسم خارجي — بلا عناوين خام F6)
-    await appendAudit("pair.admin.denied", false, "remote", { action: action.slice(0, 24), reason: "loopback" })
     return NextResponse.json(
       { ok: false, error: "pair-admin-loopback-only", detail: "via-gateway-non-loopback" },
       { status: 403 },

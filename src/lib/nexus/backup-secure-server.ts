@@ -21,10 +21,6 @@ const SCHEDULE_FILE =
   process.env.NEXUSLINK_BACKUP_SCHEDULE_FILE || path.join(process.cwd(), ".zstate", "backup-secure.json")
 const KEY_SETTING = "backup-secure.local-key"
 
-function isLoopbackIp(ip: string): boolean {
-  return ip === "::1" || ip === "::ffff:127.0.0.1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)
-}
-
 // ---------- حالة الجدولة (ملف صفر-مخطط — الفساد = غير مفعّل بصدق) ----------
 
 export interface ScheduleState {
@@ -246,12 +242,6 @@ export async function scheduleTick(nowMs = Date.now()): Promise<{ ran: boolean; 
   return { ran: true, file: r.file }
 }
 
-/** حرس الإدارة المحلي للمسارات الحساسة (نمط §37/§51) */
-export function guardLocal(req: Request, action: string): boolean {
-  const fwd = req.headers.get("x-gw-client-ip")
-  if (fwd && !isLoopbackIp(fwd)) {
-    void appendAudit("backup.denied", false, "remote", { reason: "loopback", action: action.slice(0, 24) })
-    return false
-  }
-  return true
-}
+// FA-23 (تكليف 54): guardLocal القديم (نسخة يدوية من حرس loopback) حُذف —
+// الجدولة صارت تحت guardPcOnly المنظومي نفسه في المسار (نمط FA-14/16/22)،
+// وبنفس meta.reason "loopback" التي كانت تكتبها فبقي العقد المفحوص كما هو.

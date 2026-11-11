@@ -4,6 +4,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { readEnterprisePolicy, policyPaths, POLICY_CONTRACT, oemPrivacyActive, resolveEffectivePosture, rotationDue } from "@/lib/enterprise-policy"
 import { observePolicy, auditSummary, AUDIT_CONTRACT } from "@/lib/enterprise-audit"
+import { isLocalRequest } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -34,9 +35,9 @@ function readPairFile(): { token: string; fingerprint: string; createdAt: string
   }
 }
 
-function isLoopbackIp(ip: string): boolean {
-  return ip === "::1" || ip === "::ffff:127.0.0.1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)
-}
+// FA-23 (تكليف 54): الحرس موحّد فوق isLocalRequest المشتركة — الرفض صامت
+// بعقده المفحوص (نفس موقف /api/enterprise/audit: جولات الامتثال تثبت 403
+// بحساسيتها ولا تزيد سطرًا على السلسلة).
 
 /** الإصدار الموحد من package.json (توصيفي — غيابه لا يفشل التقرير) */
 function appVersion(): string | null {
@@ -49,8 +50,7 @@ function appVersion(): string | null {
 }
 
 export async function GET(request: Request) {
-  const fwd = request.headers.get("x-gw-client-ip")
-  if (fwd && !isLoopbackIp(fwd)) {
+  if (!isLocalRequest(request)) {
     return NextResponse.json(
       { ok: false, error: "compliance-loopback-only", detail: "via-gateway-non-loopback" },
       { status: 403 },

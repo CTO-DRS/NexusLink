@@ -8,21 +8,18 @@
 //        + تدوير رمز §37 فورًا + إطلاق dev:kill على الوكيل المتصل + §39.
 //   unkill (وأي فعل آخر) — مرفوض 400 صريحًا: «no-unkill-ever». لا API عودة
 //        في أي مكان — هذا حد بنيوي لا إهمال (الحد 48.و.3).
-// حرس loopback (نمط §37 حرفيًا): واصل عبر البوابة من خارج الجهاز يُرفض
-// حتى لو حمل كل أسرار الدنيا — الإدارة بيد الجهاز، والـPIN يمنع الطلقة
-// العرضية لا المدير (الحد 48.و.5).
+// حرس loopback (FA-23 — الحرس المنظومي guardPcOnly، نمط §37): واصل عبر البوابة
+// من خارج الجهاز يُرفض حتى لو حمل كل أسرار الدنيا — الإدارة بيد الجهاز،
+// والـPIN يمنع الطلقة العرضية لا المدير (الحد 48.و.5).
 import { NextResponse } from "next/server"
 import { appendAudit } from "@/lib/enterprise-audit"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 import { guardEmit, emitKillToDevice } from "@/lib/nexus/guard-bridge"
 import {
   armEmergency, killDevice, readEmergencyState, KILL_WORD,
 } from "@/lib/nexus/emergency"
 
 export const dynamic = "force-dynamic"
-
-function isLoopbackIp(ip: string): boolean {
-  return ip === "::1" || ip === "::ffff:127.0.0.1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)
-}
 
 export async function GET() {
   const st = readEmergencyState()
@@ -43,11 +40,10 @@ export async function POST(request: Request) {
   try { body = (await request.json()) as Record<string, unknown> } catch { /* بلا جسم */ }
   const action = String(body.action ?? "")
 
-  // حرس loopback للإدارة (نمط §37): البوابة تستبدل x-gw-client-ip بعنوان
-  // العميل الحقيقي — وجودها من غير loopback يعني واصلًا عبر الشبكة.
-  const fwd = request.headers.get("x-gw-client-ip")
-  if (fwd && !isLoopbackIp(fwd)) {
-    await appendAudit("emergency.kill.denied", false, "remote", { action: action.slice(0, 24), reason: "loopback" })
+  // حرس loopback للإدارة (FA-23 — توحيد تحت guardPcOnly، نمط §37): البوابة
+  // تستبدل x-gw-client-ip بعنوان العميل الحقيقي — وجودها من غير loopback
+  // يعني واصلًا عبر الشبكة.
+  if (!guardPcOnly(request, "emergency.kill.denied", action, "loopback")) {
     return NextResponse.json(
       { ok: false, error: "emergency-admin-loopback-only", detail: "via-gateway-non-loopback" },
       { status: 403 },
