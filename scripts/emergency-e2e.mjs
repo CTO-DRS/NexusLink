@@ -79,7 +79,7 @@ ok("أ20 dev:kill خارج قائمة CMDS (لا حقن بالمقبس)", bridge
 const unkillBlock = routeSrc.slice(0, routeSrc.indexOf('if (action === "arm")'))
 const afterArm = routeSrc.slice(routeSrc.indexOf('if (action === "arm")'))
 ok("أ21 لا مسار unkill ناجح في المسار (رفض 400 حصرًا)", unkillBlock.includes('action === "unkill"') && unkillBlock.includes("no-unkill-ever") && !afterArm.includes("unkill"))
-ok("أ22 حرس loopback حاضر في المسار (نمط §37)", routeSrc.includes("x-gw-client-ip") && routeSrc.includes("isLoopbackIp"))
+ok("أ22 حرس loopback حاضر في المسار (FA-23 — الحرس المنظومي guardPcOnly، لا نسخة يدوية)", routeSrc.includes("guardPcOnly") && routeSrc.includes("emergency.kill.denied") && !routeSrc.includes("function isLoopbackIp"))
 ok("أ23 الكتابة ذرّية 0600 في طبقة الخادم", srvSrc.includes("renameSync") && srvSrc.includes("0o600"))
 const phoneSrc = fs.readFileSync(path.join(process.cwd(), "src/components/nexus/guard/phone-guard.tsx"), "utf8")
 ok("أ24 التوأم يستقبل dev:kill ويعطّل كل الأوامر بعده", phoneSrc.includes('socket.on("dev:kill"') && (phoneSrc.match(/if \(killedRef\.current\) return/g) || []).length >= 8)

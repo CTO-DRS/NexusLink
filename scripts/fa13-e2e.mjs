@@ -1,4 +1,4 @@
-// FA-13/14/15/16 — تحقق E2E حي: بوابة أوامر الكمبيوتر على الجسور وعلى HTTP وعلى جسر comms والطبقة الثانية (تكليف 40/41/42/43)
+// FA-13/14/15/16/22/23 — تحقق E2E حي: بوابة أوامر الكمبيوتر على الجسور وعلى HTTP وعلى جسر comms والطبقتان الثانية والثالثة وتوحيد الحراس (تكليف 40/41/42/43/51/54)
 // عميل محلي (loopback) يمر · عميل "شبكي" (عنوان LAN للجهاز نفسه) يُرفض local-only/pc-only
 // ملاحظة: المنفذ 8207 افتراضيًا — بيئات الاستضافة تعترض منافذ الويب (80/81/443)
 // شفافيًا فلا يصل العميل للبوابة أصلًا؛ سطح المكتب الحقيقي يستخدم 81 (FA13_GW_PORT للتجاوز).
@@ -321,6 +321,76 @@ if (!LAN) { console.log('FAIL بلا عنوان LAN — لا يمكن محاكا
   check('FA22/APK/lan: فحص APK (exec unzip) من عميل شبكي → 403 قبل أي تنفيذ', LAN403(akLan), `status=${akLan.status}`)
 }
 
+// ==== 10) FA-23 عبر HTTP (تكليف 54) — توحيد الحراس الحلقوية اليدوية تحت الحرس المنظومي ====
+// الحراس اليدوية القديمة (نمط §37/§38/§48/§49/§51) كانت نسخًا متكررة من الفعل نفسه
+// (isLoopbackIp + فحص ترويسة يدوي) خارج بوابة FA-14/16/22. التوحيد: الفعل واحد
+// في http-guard (guardPcOnly ببارامتر reason يصون meta القديمة + isLocalRequest
+// للقراءات الصامتة) — والعقود المفحوصة كلها محفوظة حرفيًا: نفس 403 بنفس سلسلة
+// الخطأ لكل مسار ونفس meta.reason "loopback" (audit-e2e S7 يثبتها).
+{
+  // 10.أ فحوص مصدر — لا نسخة للحرس خارج http-guard والمسارات الستة تحت الحرس الواحد
+  const fs2 = await import('node:fs')
+  const routeSrc = (f) => fs2.readFileSync(new URL(`../src/app/api/${f}/route.ts`, import.meta.url), 'utf8')
+  const adminRoutes = ['relay', 'security/emergency', 'remote-access', 'guest/share', 'handoff', 'backup-secure']
+  const readRoutes = ['enterprise/audit', 'enterprise/compliance', 'enterprise/report']
+  const legacyRoutes = [...adminRoutes, ...readRoutes]
+  const legacyDefFiles = legacyRoutes.map((f) => [f, routeSrc(f)])
+    .concat([
+      ['backup-secure-server', fs2.readFileSync(new URL('../src/lib/nexus/backup-secure-server.ts', import.meta.url), 'utf8')],
+      ['scan-server', fs2.readFileSync(new URL('../src/lib/nexus/scan-server.ts', import.meta.url), 'utf8')],
+    ])
+  const defCount = legacyDefFiles.filter(([, s]) => /function isLoopbackIp/.test(s)).length
+  check('FA23/src: صفر تعريف isLoopbackIp خارج http-guard (9 مسارات + مكتبتان — النسخ كلها حذفت)', defCount === 0, `defs=${defCount}`)
+  const adminGuarded = adminRoutes.filter((f) => routeSrc(f).includes('guardPcOnly(')).length
+  check('FA23/src: المسارات الإدارية الستة تحت guardPcOnly المنظومي حصرًا', adminGuarded === 6, `guarded=${adminGuarded}/6`)
+  const readsUnified = readRoutes.filter((f) => routeSrc(f).includes('isLocalRequest(')).length
+  check('FA23/src: قراءات الأدلة الثلاث فوق isLocalRequest المشتركة (رفضها الصامت بعقدها)', readsUnified === 3, `reads=${readsUnified}/3`)
+  const guardSrc = fs2.readFileSync(new URL('../src/lib/nexus/http-guard.ts', import.meta.url), 'utf8')
+  check('FA23/src: الحرس المنظومي يقبل reason ("pc-only"|"loopback") فيصون meta القديمة',
+    guardSrc.includes('reason: "pc-only" | "loopback" = "pc-only"'), 'http-guard')
+  const stringsKept = adminRoutes.every((f, i) => routeSrc(f).includes(
+    ['relay-admin-loopback-only', 'emergency-admin-loopback-only', 'pair-admin-loopback-only',
+      'guest-admin-loopback-only', 'handoff-admin-loopback-only', 'backup-admin-loopback-only'][i]))
+  check('FA23/src: سلاسل أخطاء 403 التعاقدية الست كما هي (عقود البوابات القديمة محفوظة)', stringsKept, 'legacy 403 strings')
+  // 10.ب رفض حي عبر البوابة من LAN — كل مسار بسلسلة خطئه المعلنة (10 بوابات موحدة)
+  const LANerr = (r, err) => r.status === 403 && r.json?.error === err && r.json?.detail === 'via-gateway-non-loopback'
+  const rlLan = await reqJson(LAN, GW.port, '/api/relay', 'POST', { action: 'enable', url: 'https://evil.example', secret: 's' })
+  check('FA23/RELAY/lan: إدارة المرحّل من عميل شبكي → 403 relay-admin-loopback-only (عقد §49 كما هو)', LANerr(rlLan, 'relay-admin-loopback-only'), `status=${rlLan.status}`)
+  const emLan = await reqJson(LAN, GW.port, '/api/security/emergency', 'POST', { action: 'arm', pin: '0000' })
+  check('FA23/EMERGENCY/lan: تسليح الطوارئ من عميل شبكي → 403 emergency-admin-loopback-only (عقد §48 كما هو)', LANerr(emLan, 'emergency-admin-loopback-only'), `status=${emLan.status}`)
+  const raLan = await reqJson(LAN, GW.port, '/api/remote-access', 'POST', { action: 'enable' })
+  check('FA23/REMOTE-ACCESS/lan: إدارة الاقتران من عميل شبكي برمز مزعوم → 403 pair-admin-loopback-only (عقد §37 كما هو)', LANerr(raLan, 'pair-admin-loopback-only'), `status=${raLan.status}`)
+  const gsLan = await reqJson(LAN, GW.port, '/api/guest/share', 'POST', { action: 'enable', mode: 'send' })
+  check('FA23/GUEST/lan: إدارة المشاركة الضيوفية من عميل شبكي → 403 guest-admin-loopback-only (عقد §51 كما هو)', LANerr(gsLan, 'guest-admin-loopback-only'), `status=${gsLan.status}`)
+  const hdLan = await reqJson(LAN, GW.port, '/api/handoff', 'POST', { action: 'clear' })
+  check('FA23/HANDOFF/lan: تفريغ التسليم من عميل شبكي → 403 handoff-admin-loopback-only', LANerr(hdLan, 'handoff-admin-loopback-only'), `status=${hdLan.status}`)
+  const hkLan = await reqJson(LAN, GW.port, '/api/handoff', 'POST', { action: 'rotate-key' })
+  check('FA23/HANDOFF/lan: تدوير قفل التسليم من عميل شبكي → 403 handoff-admin-loopback-only', LANerr(hkLan, 'handoff-admin-loopback-only'), `status=${hkLan.status}`)
+  const bsLan = await reqJson(LAN, GW.port, '/api/backup-secure', 'POST', { action: 'schedule-enable', hours: 24 })
+  check('FA23/BACKUP-SEC/lan: جدولة الدرع الاحتياطي من عميل شبكي → 403 backup-admin-loopback-only (حرس FA-14 والفرع الموحد FA-23)', LANerr(bsLan, 'backup-admin-loopback-only'), `status=${bsLan.status}`)
+  const auLan = await reqJson(LAN, GW.port, '/api/enterprise/audit', 'GET')
+  check('FA23/ENTERPRISE-AUDIT/lan: عرض سلسلة التدقيق من عميل شبكي → 403 audit-loopback-only (عقد §39 كما هو)', LANerr(auLan, 'audit-loopback-only'), `status=${auLan.status}`)
+  const coLan = await reqJson(LAN, GW.port, '/api/enterprise/compliance', 'GET')
+  check('FA23/COMPLIANCE/lan: تقرير الامتثال من عميل شبكي → 403 compliance-loopback-only (عقد §38 كما هو)', LANerr(coLan, 'compliance-loopback-only'), `status=${coLan.status}`)
+  const rpLan = await reqJson(LAN, GW.port, '/api/enterprise/report', 'GET')
+  check('FA23/REPORT/lan: مولد تقارير التدقيق من عميل شبكي → 403 report-loopback-only (عقد §47 كما هو)', LANerr(rpLan, 'report-loopback-only'), `status=${rpLan.status}`)
+  // 10.ج أثباتات loopback — الحرس يمرر المحلي للمنطق التعاقدي حرفيًا (سلوك ما قبل التوحيد بلا انحراف)
+  const rlLoc = await reqJson(REST.host, REST.port, '/api/relay', 'POST', { action: 'no-such-fa23' })
+  check('FA23/RELAY/loopback: الإدارة محليًا تعبر الحرس لمنطق §49 (400 unknown-action بتوثيقه)', rlLoc.status === 400 && rlLoc.json?.error === 'unknown-action', `status=${rlLoc.status}`)
+  const emLoc = await reqJson(REST.host, REST.port, '/api/security/emergency', 'POST', { action: 'unkill' })
+  check('FA23/EMERGENCY/loopback: المحلي يعبر الحرس للحد البنيوي (400 no-unkill-ever — لا عودة أبدًا)', emLoc.status === 400 && emLoc.json?.error === 'no-unkill-ever', `status=${emLoc.status}`)
+  const raLoc = await reqJson(REST.host, REST.port, '/api/remote-access', 'POST', { action: 'rotate' })
+  check('FA23/REMOTE-ACCESS/loopback: المحلي يعبر الحرس لعقد الإدارة (409 not-enabled — الاقتران معطل بيئيًا)', raLoc.status === 409 && raLoc.json?.error === 'not-enabled', `status=${raLoc.status}`)
+  const gsLoc = await reqJson(REST.host, REST.port, '/api/guest/share', 'POST', { action: 'enable', mode: 'fa23-bogus' })
+  check('FA23/GUEST/loopback: المحلي يعبر الحرس للتحقق التعاقدي (400 وضع غير صالح — بلا كتابة)', gsLoc.status === 400, `status=${gsLoc.status} err=${String(gsLoc.json?.error ?? '')?.slice(0, 30)}`)
+  const hdLoc = await reqJson(REST.host, REST.port, '/api/handoff', 'POST', { action: 'clear' })
+  check('FA23/HANDOFF/loopback: التفريغ محليًا كما كان (200 ok)', hdLoc.status === 200 && hdLoc.json?.ok === true, `status=${hdLoc.status}`)
+  const bsLoc = await reqJson(REST.host, REST.port, '/api/backup-secure', 'POST', { action: 'schedule-disable' })
+  check('FA23/BACKUP-SEC/loopback: إيقاف الجدولة محليًا كما كان (200 ok — بذور نظيفة)', bsLoc.status === 200 && bsLoc.json?.ok === true, `status=${bsLoc.status}`)
+  const auLoc = await reqJson(REST.host, REST.port, '/api/enterprise/audit', 'GET')
+  check('FA23/ENTERPRISE-AUDIT/loopback: العرض محليًا يفتح السلسلة الحية (200 valid:true — رفضات LAN أعلاه موثقة فيها)', auLoc.status === 200 && auLoc.json?.ok === true && auLoc.json?.valid === true, `status=${auLoc.status} count=${auLoc.json?.count}`)
+}
+
 const fails = results.filter((r) => !r.ok).length
-console.log(`\n=== FA-13+14+15+16+22 E2E: ${results.length - fails}/${results.length} PASS ===`)
+console.log(`\n=== FA-13+14+15+16+22+23 E2E: ${results.length - fails}/${results.length} PASS ===`)
 process.exit(fails ? 1 : 0)

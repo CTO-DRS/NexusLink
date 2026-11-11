@@ -219,9 +219,9 @@ if (!APP || !DB_PATH) {
   ok("ب16 القراءة بعد التدوير شفافة كاملة", (r.j?.items ?? []).some((x) => x.id === idPlain && x.content === PLAIN_TEXT) && (r.j?.items ?? []).some((x) => x.id === "e58-legacy-1" && x.content === LEGACY_TEXT) && r.j?.atRest?.active === true)
   ok("ب17 استجابة التدوير بلا مادة مفاتيح إطلاقًا", !/"?key"?\s*:/.test(JSON.stringify(r.j ?? {})) && !/"?key"?\s*:/.test(JSON.stringify((await postJson("/api/prod/clipboard/vault", { action: "rotate-key" })).j ?? {})))
 
-  // ب18 — التدوير من خارج الجهاز → 403 (حرس loopback)
+  // ب18 — التدوير من خارج الجهاز → 403 (حرس loopback — FA-22 وحّدته تحت guardPcOnly فصار رد pc-only التعاقدي)
   r = await postJson("/api/prod/clipboard/vault", { action: "rotate-key" }, { "x-gw-client-ip": "10.0.0.9" })
-  ok("ب18 تدوير من خارج الجهاز → 403", r.status === 403 && r.j?.error === "clip-admin-loopback-only")
+  ok("ب18 تدوير من خارج الجهاز → 403", r.status === 403 && r.j?.error === "pc-only")
 
   // ب19–ب21 — الجسر الحي (سوكِت الجسر): الدفع مغلف في القاعدة وسجل العمليات معه
   const { io: sockClient } = await import("socket.io-client")
