@@ -1,4 +1,4 @@
-// FA-13/14/15/16/22/23/24 — تحقق E2E حي: بوابة أوامر الكمبيوتر على الجسور وعلى HTTP وعلى جسر comms والطبقات الثلاث وتوحيد الحراس ونهاية الرفض الصامت لقراءة الأدلة (تكليف 40/41/42/43/51/54/55)
+// FA-13/14/15/16/22/23/24/25/26 — تحقق E2E حي: بوابة أوامر الكمبيوتر على الجسور وعلى HTTP وعلى جسر comms والطبقات الثلاث وتوحيد الحراس ونهاية الرفض الصامت لقراءة الأدلة والاسترجاع الانتقائي وتدوير حقبة سلسلة الأدلة (تكليف 40/41/42/43/51/54/55/56/57)
 // عميل محلي (loopback) يمر · عميل "شبكي" (عنوان LAN للجهاز نفسه) يُرفض local-only/pc-only
 // ملاحظة: المنفذ 8207 افتراضيًا — بيئات الاستضافة تعترض منافذ الويب (80/81/443)
 // شفافيًا فلا يصل العميل للبوابة أصلًا؛ سطح المكتب الحقيقي يستخدم 81 (FA13_GW_PORT للتجاوز).
@@ -472,6 +472,27 @@ if (!LAN) { console.log('FAIL بلا عنوان LAN — لا يمكن محاكا
     routeSrc.includes('readAuditTail(limit)') && routeSrc.includes('!filtering'), 'enterprise/audit')
 }
 
+// ==== 13) FA-26 عبر المصدر (تكليف 57) — تدوير حقبة سلسلة الأدلة: المخرج المعلن في تحذير التجميد نفسه ====
+// تحذير المكتبة الموثق («manual epoch rotation required») كان بلا أي مخرج تعاقدي:
+// سلسلة مكسورة = سجل متجمد للأبد، والمخرج الوحيد حذف الملف خارج النظام — فقدان
+// الدليل كله وصفر أثر لفعل الاسترجاع نفسه (إعادة صامتة). الإغلاق: ختم إعادة
+// تسمية حصرًا فوق المكسور حصرًا (ضمانة عدم المحو) + أول سجل بأبعاد الاستمرارية
+// عبر طابور الكاتب الواحد نفسه — والتحقق الحي الكامل في audit-e2e S22..S28.
+{
+  const fs2 = await import('node:fs')
+  const libSrc = fs2.readFileSync(new URL('../src/lib/enterprise-audit.ts', import.meta.url), 'utf8')
+  const routeSrc = fs2.readFileSync(new URL('../src/app/api/enterprise/audit/route.ts', import.meta.url), 'utf8')
+  check('FA26/src: نوع audit.epoch.rotate في AuditType ومجموعة KINDS والوظيفة في المكتبة الواحدة (الغريب يرفض وقت الكتابة)',
+    libSrc.includes('| "audit.epoch.rotate"') && libSrc.includes('"audit.epoch.rotate",') && libSrc.includes('export function rotateAuditEpoch'), 'enterprise-audit')
+  check('FA26/src: المسار POST يحرس أول الدالة بنوع audit.denied وفعل audit-epoch-rotate (نمط عائلة إدارة التدقيق حرفًا)',
+    routeSrc.includes('guardPcOnly(request, "audit.denied", "audit-epoch-rotate")') && routeSrc.includes('audit-loopback-only'), 'enterprise/audit')
+  check('FA26/src: ضمانة عدم المحو والشكل الصارم في المصدر (audit-epoch-valid بالسلسلة الصحيحة · missing/bad-epoch-reason قبل أي قراءة · الختم renameSync لا حذف)',
+    libSrc.includes('"audit-epoch-valid"') && libSrc.includes('renameSync') && !libSrc.includes('unlinkSync')
+    && routeSrc.includes('missing-epoch-reason') && routeSrc.includes('bad-epoch-reason') && routeSrc.includes('audit-epoch-valid'), 'anti-erasure + strict reason')
+  check('FA26/src: التسلسل عبر طابور الكاتب الواحد نفسه والترقيم مولّد من المجلد بلا حالة (SEALED_RE على ملفات epoch-N-sealed)',
+    /const next = writeQueue\.then/.test(libSrc) && libSrc.includes('SEALED_RE'), 'writeQueue serialization')
+}
+
 const fails = results.filter((r) => !r.ok).length
-console.log(`\n=== FA-13+14+15+16+22+23+24+25 E2E: ${results.length - fails}/${results.length} PASS ===`)
+console.log(`\n=== FA-13+14+15+16+22+23+24+25+26 E2E: ${results.length - fails}/${results.length} PASS ===`)
 process.exit(fails ? 1 : 0)

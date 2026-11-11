@@ -113,6 +113,9 @@ export type AuditKind =
   | "sec.denied"
   // FA-24 (تكليف 55) — نهاية الرفض الصامت: كل رفض LAN لقراءة أدلة §38/§39/§47 يوثق في سلسلة §39 نفسها
   | "evidence.denied"
+  // FA-26 (تكليف 57) — تدوير الحقبة: أول سجل في السلسلة الجديدة بعد ختم سلسلة مكسورة —
+  // الاستمرارية موثقة لا إعادة صامتة (brokenAt/prevCount/prevHead/sealedFile/reason)
+  | "audit.epoch.rotate"
 
 const KINDS: ReadonlySet<string> = new Set<string>([
   "pair.enable",
@@ -186,6 +189,8 @@ const KINDS: ReadonlySet<string> = new Set<string>([
   // FA-22 (تكليف 51) — الموجة الثالثة
   "sec.denied",
   "evidence.denied",
+  // FA-26 (تكليف 57) — تدوير الحقبة
+  "audit.epoch.rotate",
 ])
 
 export interface AuditRecord {
@@ -381,6 +386,98 @@ export function readAuditTail(limit: number): AuditRecord[] {
   } catch {
     return []
   }
+}
+
+// ---------- FA-26 (تكليف 57) — تدوير الحقبة: ختم الدليل المكسور وإعادة إطلاق موثقة ----------
+
+export type AuditEpochRotateResult =
+  | {
+      ok: true
+      epoch: number
+      sealedFile: string
+      brokenAt: number
+      prevCount: number
+      prevHead: string | null
+    }
+  | { ok: false; error: "audit-epoch-missing" | "audit-epoch-valid" | "audit-epoch-io" }
+
+const SEALED_RE = /^audit\.jsonl\.epoch-(\d+)-sealed$/
+
+/**
+ * FA-26 (تكليف 57) — المخرج المعلن في تحذير التجميد نفسه («manual epoch rotation
+ * required»): سلسلة مكسورة = سجل متجمد حتى الآن بلا أي مخرج تعاقدي — المخرج الوحيد
+ * كان حذف الملف خارج النظام فيفقد الدليل كله ويترك صفر أثر لفعل الاسترجاع نفسه
+ * (إعادة صامتة — عكس ما صُممت السلسلة أصلًا لإثباته). التدوير هنا:
+ * فوق سلسلة مكسورة موثقة حصرًا (السلسلة الصحيحة ترفض — ضمانة عدم المحو: دليل
+ * سليم لا يُدار عبر النقطة)، الختم إعادة تسمية حصرًا (الدليل محفوظ حرفًا لا يُحذف)،
+ * والسلسلة الجديدة تبدأ بسجل audit.epoch.rotate واحد يحمل أبعاد الاستمرارية
+ * (epoch/sealedFile/brokenAt/prevCount/prevHead/reason) فيتبعها المدقق إلى
+ * الملف المختوم. التسلسل عبر طابور الكاتب الواحد نفسه — لا سباق مع الإلحاق،
+ * ولا إلحاق فوق ملف بعد ختمه. lastObs يُصفَّر فالحقبة الجديدة تعيد توثيق
+ * السياسة عند أول قراءة إدارية (رصد أولي من جديد — استمرارية تغيير التغيير).
+ */
+export function rotateAuditEpoch(reason: string): Promise<AuditEpochRotateResult> {
+  const next = writeQueue.then(async (): Promise<AuditEpochRotateResult> => {
+    try {
+      const file = resolveAuditPath()
+      const v = verifyAuditChain()
+      if (!v.exists) return { ok: false, error: "audit-epoch-missing" }
+      // ضمانة عدم المحو: الدليل السليم لا يُدار عبر النقطة — التدوير فوق المكسور حصرًا
+      if (v.valid) return { ok: false, error: "audit-epoch-valid" }
+      const dir = path.dirname(file)
+      const sealedNums = fs
+        .readdirSync(dir)
+        .map((f) => SEALED_RE.exec(f)?.[1])
+        .filter((n): n is string => n !== undefined)
+        .map((n) => Number.parseInt(n, 10))
+      const epoch = (sealedNums.length > 0 ? Math.max(...sealedNums) : 0) + 1
+      const sealedFile = `audit.jsonl.epoch-${epoch}-sealed`
+      fs.renameSync(file, path.join(dir, sealedFile))
+      // أول سجل في الحقبة الجديدة: الاستمرارية موثقة لا إعادة صامتة
+      const rec: Omit<AuditRecord, "h"> = {
+        i: 1,
+        t: new Date().toISOString(),
+        k: "audit.epoch.rotate",
+        ok: true,
+        actor: "local",
+        d: {
+          epoch,
+          sealedFile,
+          brokenAt: v.brokenAt ?? 0,
+          prevCount: v.count,
+          prevHead: v.head?.h ?? null,
+          reason,
+        },
+        prev: "",
+      }
+      const full: AuditRecord = { ...rec, h: hashRecord(rec) }
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
+      const line = JSON.stringify(full) + "\n"
+      const fd = fs.openSync(file, "a", 0o600)
+      try {
+        fs.writeSync(fd, line)
+        fs.fsyncSync(fd)
+      } finally {
+        fs.closeSync(fd)
+      }
+      // الحقبة الجديدة: الرصد الأولي للسياسة يعاد عند أول قراءة إدارية
+      lastObs = null
+      console.warn(`[audit:${AUDIT_CONTRACT}] epoch ${epoch} rotated — broken chain sealed as ${sealedFile} (brokenAt=${v.brokenAt} prevCount=${v.count})`)
+      return {
+        ok: true,
+        epoch,
+        sealedFile,
+        brokenAt: v.brokenAt ?? 0,
+        prevCount: v.count,
+        prevHead: v.head?.h ?? null,
+      }
+    } catch (e) {
+      console.warn(`[audit:${AUDIT_CONTRACT}] epoch rotation failed:`, e instanceof Error ? e.message : e)
+      return { ok: false, error: "audit-epoch-io" }
+    }
+  })
+  writeQueue = next.then(() => undefined, () => undefined)
+  return next
 }
 
 /** ملخص السجل لتقرير الامتثال (حقول توصيفية حصرًا — §38.د متوافق) */
