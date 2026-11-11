@@ -111,6 +111,8 @@ export type AuditKind =
   | "apk.denied"
   // FA-22 (تكليف 51) — الموجة الثالثة: مسارات ما بعد FA-16 (wipe جرد المسح الآمن · recv كتابة المستلامات)
   | "sec.denied"
+  // FA-24 (تكليف 55) — نهاية الرفض الصامت: كل رفض LAN لقراءة أدلة §38/§39/§47 يوثق في سلسلة §39 نفسها
+  | "evidence.denied"
 
 const KINDS: ReadonlySet<string> = new Set<string>([
   "pair.enable",
@@ -183,6 +185,7 @@ const KINDS: ReadonlySet<string> = new Set<string>([
   "apk.denied",
   // FA-22 (تكليف 51) — الموجة الثالثة
   "sec.denied",
+  "evidence.denied",
 ])
 
 export interface AuditRecord {

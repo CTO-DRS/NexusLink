@@ -10,7 +10,8 @@
  * نواتج الإدارة (نجاح/تعارض/قفل سياسة/حرس loopback بوسم خارجي) · رصد
  * انتقالات السياسة (رصد أولي/تغير بحفظ from→to) · حرس F6 (لا رمز خام) ·
  * كشف العبث (تعديل رجعي يكسر السلسلة ويُعلن) · تجميد الإلحاق فوق دليل
- * مكسور · الدورة الجديدة بحذف الملف · حرس loopback على نقطة العرض · limit.
+ * مكسور · الدورة الجديدة بحذف الملف · حرس loopback على نقطة العرض موثق الرفض
+ * في السلسلة نفسها (FA-24 — evidence.denied) · limit.
  * التنظيف الذاتي في النهاية يجعل الجولة الثانية المتتالية مطابقة للأولى.
  * الاستخدام: node scripts/audit-e2e.mjs [--app http://127.0.0.1:3000]
  */
@@ -76,7 +77,7 @@ function recHash(r) {
     .update(JSON.stringify({ i: r.i, t: r.t, k: r.k, ok: r.ok, actor: r.actor, d: r.d, prev: r.prev }))
     .digest("hex").slice(0, 16)
 }
-const KINDS = new Set(["pair.enable", "pair.rotate", "pair.disable", "pair.admin.denied", "policy.observed", "policy.changed"])
+const KINDS = new Set(["pair.enable", "pair.rotate", "pair.disable", "pair.admin.denied", "policy.observed", "policy.changed", "evidence.denied"])
 function auditLines() {
   try {
     return fs.readFileSync(AUDIT_FILE, "utf8").split("\n").filter((l) => l.trim().length > 0)
@@ -243,19 +244,27 @@ try {
 
   // ---------- S15 — حرس loopback على نقطة العرض نفسها (حتى برمز صحيح) ----------
   // الرمز الحي لحظة الفحص حصرًا — التدويرات السابقة جعلت الرموز القديمة بلا قيمة (سلوك §37 الصحيح)
+  // FA-24 (تكليف 55): نهاية الرفض الصامت — الرفض نفسه يُوثق في السلسلة (evidence.denied actor=remote)
+  // فالسلسلة تعدّ 4 الآن (عقود العدّ S16/S17 حُدّثت في هذه الجولة أولًا كما أعلنت حدود FA-23 حرفيًا)
   const liveToken = JSON.parse(fs.readFileSync(PAIR_FILE, "utf8")).token
   r = await request(`http://${LAN}:8197/api/enterprise/audit`, { headers: { "x-pair-token": liveToken } })
-  ok("S15 العرض عبر البوابة من الخارج → 403 audit-loopback-only", r.status === 403 && r.body.includes("audit-loopback-only"), `status=${r.status}`)
+  await sleep(150)
+  ok("S15 العرض عبر البوابة من الخارج → 403 audit-loopback-only + توثيق الرفض في السلسلة نفسها",
+    r.status === 403 && r.body.includes("audit-loopback-only")
+    && recAt(4).k === "evidence.denied" && recAt(4).ok === false && recAt(4).actor === "remote"
+    && recAt(4).d.reason === "loopback" && recAt(4).d.action === "audit-view",
+    `status=${r.status}`)
 
   // ---------- S16 — limit: نافذة آخر الأحداث لا تغير العدّ الكلي ----------
+  // FA-24: العدّ 4 (ثلاثة إدارية + توثيق رفض قراءة الدليل من S15)
   r = await request(`${APP}/api/enterprise/audit?limit=1`)
   j = JSON.parse(r.body)
-  ok("S16 limit=1: حدث واحد معروض والعدّ الكلي 3", r.status === 200 && j.events?.length === 1 && j.count === 3)
+  ok("S16 limit=1: حدث واحد معروض والعدّ الكلي 4 (رفض القراءة موثق فعلًا)", r.status === 200 && j.events?.length === 1 && j.count === 4)
 
   // ---------- S17 — رياضيات السلسلة كاملة على ملف الدورة الحية (تحقق مستقل) ----------
   const math2 = verifyMath(auditLines())
-  ok("S17 رياضيات مستقلة: 3 أسطر i=1..3 متصلة وبصماتها تُعاد",
-    math2.valid && math2.count === 3, math2.valid ? "prev/h/مجموعة مغلقة ✓" : math2.why)
+  ok("S17 رياضيات مستقلة: 4 أسطر i=1..4 متصلة وبصماتها تُعاد",
+    math2.valid && math2.count === 4, math2.valid ? "prev/h/مجموعة مغلقة ✓" : math2.why)
 } catch (e) {
   fail++
   console.error("❌ استثناء في الجولة:", e)
