@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { verifyAuditChain, readAuditTail, resolveAuditPath, AUDIT_CONTRACT } from "@/lib/enterprise-audit"
-import { isLocalRequest } from "@/lib/nexus/http-guard"
+import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -14,13 +14,14 @@ export const dynamic = "force-dynamic"
 // لا إلحاق من هذه النقطة إطلاقًا (القراءة قراءة).
 // ?limit=N (1..500، الافتراضي 100) — آخر N حدث بالترتيب الزمني.
 
-// FA-23 (تكليف 54): الحرس موحّد فوق isLocalRequest المشتركة (حرس http-guard
-// الواحد) — والرفض يبقى صامتًا بعقده المفحوص حرفيًا: audit-e2e يثبت السلسلة
-// بالعدّ الدقيق (S16/S17 count=3) فتدقيق رفض القراءة سيزيح التسلسل — باب
-// لاحق اختياري يبدأ بتحديث عقود العدّ في تلك الجولة أولًا.
+// FA-23 (تكليف 54): الحرس موحّد فوق حرس http-guard الواحد.
+// FA-24 (تكليف 55): نهاية الرفض الصامت المعلن في FA-23 — كل رفض LAN لقراءة الدليل
+// يُوثق في سلسلة §39 نفسها (evidence.denied actor=remote reason=loopback بمخفف 3
+// ثوانٍ) — متجرّب الأدلة لا يترك أثرًا. الاستجابة بحرفها: نفس 403 بنفس السلسلة
+// (عقود audit-e2e S15 المحدثة بالعدّ + fa13 FA-23 + enterprise B7 كلها محفوظة).
 
 export async function GET(request: Request) {
-  if (!isLocalRequest(request)) {
+  if (!guardPcOnly(request, "evidence.denied", "audit-view", "loopback")) {
     return NextResponse.json(
       { ok: false, error: "audit-loopback-only", detail: "via-gateway-non-loopback" },
       { status: 403 },

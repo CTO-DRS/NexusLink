@@ -1,4 +1,4 @@
-// FA-13/14/15/16/22/23 — تحقق E2E حي: بوابة أوامر الكمبيوتر على الجسور وعلى HTTP وعلى جسر comms والطبقتان الثانية والثالثة وتوحيد الحراس (تكليف 40/41/42/43/51/54)
+// FA-13/14/15/16/22/23/24 — تحقق E2E حي: بوابة أوامر الكمبيوتر على الجسور وعلى HTTP وعلى جسر comms والطبقات الثلاث وتوحيد الحراس ونهاية الرفض الصامت لقراءة الأدلة (تكليف 40/41/42/43/51/54/55)
 // عميل محلي (loopback) يمر · عميل "شبكي" (عنوان LAN للجهاز نفسه) يُرفض local-only/pc-only
 // ملاحظة: المنفذ 8207 افتراضيًا — بيئات الاستضافة تعترض منافذ الويب (80/81/443)
 // شفافيًا فلا يصل العميل للبوابة أصلًا؛ سطح المكتب الحقيقي يستخدم 81 (FA13_GW_PORT للتجاوز).
@@ -324,8 +324,8 @@ if (!LAN) { console.log('FAIL بلا عنوان LAN — لا يمكن محاكا
 // ==== 10) FA-23 عبر HTTP (تكليف 54) — توحيد الحراس الحلقوية اليدوية تحت الحرس المنظومي ====
 // الحراس اليدوية القديمة (نمط §37/§38/§48/§49/§51) كانت نسخًا متكررة من الفعل نفسه
 // (isLoopbackIp + فحص ترويسة يدوي) خارج بوابة FA-14/16/22. التوحيد: الفعل واحد
-// في http-guard (guardPcOnly ببارامتر reason يصون meta القديمة + isLocalRequest
-// للقراءات الصامتة) — والعقود المفحوصة كلها محفوظة حرفيًا: نفس 403 بنفس سلسلة
+// في http-guard (guardPcOnly ببارامتر reason يصون meta القديمة — وبموجة FA-24
+// انتقلت قراءات الأدلة الثلاث أيضًا فنهاية الرفض الصامت) — والعقود المفحوصة كلها محفوظة حرفيًا: نفس 403 بنفس سلسلة
 // الخطأ لكل مسار ونفس meta.reason "loopback" (audit-e2e S7 يثبتها).
 {
   // 10.أ فحوص مصدر — لا نسخة للحرس خارج http-guard والمسارات الستة تحت الحرس الواحد
@@ -343,8 +343,9 @@ if (!LAN) { console.log('FAIL بلا عنوان LAN — لا يمكن محاكا
   check('FA23/src: صفر تعريف isLoopbackIp خارج http-guard (9 مسارات + مكتبتان — النسخ كلها حذفت)', defCount === 0, `defs=${defCount}`)
   const adminGuarded = adminRoutes.filter((f) => routeSrc(f).includes('guardPcOnly(')).length
   check('FA23/src: المسارات الإدارية الستة تحت guardPcOnly المنظومي حصرًا', adminGuarded === 6, `guarded=${adminGuarded}/6`)
-  const readsUnified = readRoutes.filter((f) => routeSrc(f).includes('isLocalRequest(')).length
-  check('FA23/src: قراءات الأدلة الثلاث فوق isLocalRequest المشتركة (رفضها الصامت بعقدها)', readsUnified === 3, `reads=${readsUnified}/3`)
+  // FA-24 (تكليف 55): القراءات الثلاث انتقلت أيضًا تحت guardPcOnly (نهاية الرفض الصامت) — التسعة كلها تحت الحرس الواحد
+  const legacyGuarded = legacyRoutes.filter((f) => routeSrc(f).includes('guardPcOnly(')).length
+  check('FA23/src: المسارات التسعة (6 إدارية + 3 قراءات أدلة بموجة FA-24) تحت guardPcOnly المنظومي حصرًا', legacyGuarded === 9, `guarded=${legacyGuarded}/9`)
   const guardSrc = fs2.readFileSync(new URL('../src/lib/nexus/http-guard.ts', import.meta.url), 'utf8')
   check('FA23/src: الحرس المنظومي يقبل reason ("pc-only"|"loopback") فيصون meta القديمة',
     guardSrc.includes('reason: "pc-only" | "loopback" = "pc-only"'), 'http-guard')
@@ -391,6 +392,66 @@ if (!LAN) { console.log('FAIL بلا عنوان LAN — لا يمكن محاكا
   check('FA23/ENTERPRISE-AUDIT/loopback: العرض محليًا يفتح السلسلة الحية (200 valid:true — رفضات LAN أعلاه موثقة فيها)', auLoc.status === 200 && auLoc.json?.ok === true && auLoc.json?.valid === true, `status=${auLoc.status} count=${auLoc.json?.count}`)
 }
 
+// ==== 11) FA-24 عبر HTTP (تكليف 55) — نهاية الرفض الصامت لقراءة الأدلة: كل رفض LAN لقراءة §38/§39/§47 يوثق في سلسلة §39 نفسها ====
+// الباب المعلن حرفيًا في حدود FA-23 («تدقيق رفض القراءة باب لاحق يبدأ بتحديث عقود العدّ
+// في تلك الجولة أولًا») — عُدّ audit-e2e S16/S17 حُدّثا (3→4) وS15 يثبت السجل نفسه،
+// وهنا العقد الدائم: صفر isLocalRequest في المسارات + النوع الجديد + رفض حي موثق
+// + المخفف 3 ثوانٍ + شكل السجل + أثبات loopback.
+{
+  // 11.أ فحوص مصدر — صفر استخدام للحرس الصامت في كل مسارات API والنوع في المكتبة الواحدة
+  const fs2 = await import('node:fs')
+  const path2 = await import('node:path')
+  const routeSrc = (f) => fs2.readFileSync(new URL(`../src/app/api/${f}/route.ts`, import.meta.url), 'utf8')
+  const auditSrc = fs2.readFileSync(new URL('../src/lib/enterprise-audit.ts', import.meta.url), 'utf8')
+  let apiRoutes = 0
+  let silentUses = 0
+  const walk = (d) => {
+    for (const e of fs2.readdirSync(d, { withFileTypes: true })) {
+      const p = path2.join(d, e.name)
+      if (e.isDirectory()) walk(p)
+      else if (e.name === 'route.ts') { apiRoutes++; if (/[^\w.]isLocalRequest\(/.test(fs2.readFileSync(p, 'utf8'))) silentUses++ }
+    }
+  }
+  walk(path2.join(process.cwd(), 'src', 'app', 'api'))
+  check('FA24/src: صفر استخدام isLocalRequest في كل مسارات API (الرفض الصامت انتهى — الحرس الواحد guardPcOnly)', apiRoutes > 40 && silentUses === 0, `routes=${apiRoutes} silent=${silentUses}`)
+  check('FA24/src: نوع evidence.denied في AuditType ومجموعة KINDS (المكتبة الواحدة — الغريب يرفض وقت الكتابة)', auditSrc.includes('| "evidence.denied"') && auditSrc.includes('"evidence.denied",'), 'enterprise-audit')
+  const reads = [
+    ['enterprise/audit', 'audit-view', 'audit-loopback-only'],
+    ['enterprise/compliance', 'compliance-view', 'compliance-loopback-only'],
+    ['enterprise/report', 'report-view', 'report-loopback-only'],
+  ]
+  const okReads = reads.filter(([f, act, err]) => routeSrc(f).includes(`"evidence.denied", "${act}", "loopback"`) && routeSrc(f).includes(err)).length
+  check('FA24/src: القراءات الثلاث فوق guardPcOnly بنوع evidence.denied وreason=loopback وسلاسل 403 التعاقدية كما هي', okReads === 3, `reads=${okReads}/3`)
+  // 11.ب رفض حي يوثق في السلسلة نفسها + المخفف 3 ثوانٍ (رفضان متتاليان بسجل واحد)
+  // تصفير مخفف الحرس أولًا (3 ثوانٍ لكل kind:action في عملية الخادم الواحدة — درس الجسور FA-13)
+  await new Promise((r) => setTimeout(r, 3300))
+  const evidence = async () => {
+    const r = await reqJson(REST.host, REST.port, '/api/enterprise/audit?limit=500', 'GET')
+    const byAction = {}
+    for (const e of (r.json?.events ?? [])) if (e.k === 'evidence.denied') byAction[e.d?.action] = (byAction[e.d?.action] ?? 0) + 1
+    return byAction
+  }
+  const before = await evidence()
+  for (const p of ['/api/enterprise/audit', '/api/enterprise/compliance', '/api/enterprise/report']) {
+    await reqJson(LAN, GW.port, p, 'GET')
+    await reqJson(LAN, GW.port, p, 'GET')
+  }
+  await new Promise((r) => setTimeout(r, 200))
+  const after = await evidence()
+  const deltas = ['audit-view', 'compliance-view', 'report-view'].map((act) => (after[act] ?? 0) - (before[act] ?? 0))
+  check('FA24/lan: كل رفض LAN لقراءة الأدلة يوثق في سلسلة §39 نفسها — رفضان متتاليان بسجل واحد لكل نقطة (المخفف يوثق أول رفض حصرًا)', deltas.every((d) => d === 1), `deltas=${deltas.join(',')}`)
+  const evAll = (await reqJson(REST.host, REST.port, '/api/enterprise/audit?limit=500', 'GET')).json?.events?.filter((e) => e.k === 'evidence.denied') ?? []
+  const shaped = evAll.every((e) => e.ok === false && e.actor === 'remote' && e.d?.reason === 'loopback' && ['audit-view', 'compliance-view', 'report-view'].includes(e.d?.action))
+  check('FA24/shape: سجلات evidence.denied بأبعادها التعاقدية حصرًا (ok=false actor=remote reason=loopback أفعال الأدلة الثلاثة)', evAll.length >= 3 && shaped, `n=${evAll.length}`)
+  // 11.ج أثبات loopback — المحلي يقرأ الدليل بلا أي سجل رفض له (الحرس يمرر المحلي للمنطق التعاقدي)
+  const coLoc = await reqJson(REST.host, REST.port, '/api/enterprise/compliance', 'GET')
+  const rpLoc = await reqJson(REST.host, REST.port, '/api/enterprise/report', 'GET')
+  check('FA24/loopback: الامتثال والتقرير محليًا كما كانا (200 — الحرس يمرر المحلي ورفضاته للسلسلة حصرًا)', coLoc.status === 200 && coLoc.json?.ok === true && rpLoc.status === 200 && rpLoc.json?.ok === true, `co=${coLoc.status} rp=${rpLoc.status}`)
+  const locRead = await reqJson(REST.host, REST.port, '/api/enterprise/audit?limit=500', 'GET')
+  const allRemote = (locRead.json?.events ?? []).filter((e) => e.k === 'evidence.denied').every((e) => e.actor === 'remote')
+  check('FA24/loopback: العرض محليًا يفتح السلسلة الحية (valid:true) وسجلات الرفض actor=remote حصرًا (المحلي لا يرفض أصلًا)', locRead.status === 200 && locRead.json?.valid === true && allRemote, `count=${locRead.json?.count}`)
+}
+
 const fails = results.filter((r) => !r.ok).length
-console.log(`\n=== FA-13+14+15+16+22+23 E2E: ${results.length - fails}/${results.length} PASS ===`)
+console.log(`\n=== FA-13+14+15+16+22+23+24 E2E: ${results.length - fails}/${results.length} PASS ===`)
 process.exit(fails ? 1 : 0)

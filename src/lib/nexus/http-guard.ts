@@ -36,6 +36,11 @@ const rejLast = new Map<string, number>()
  * الإدارية القديمة تمرر "loopback" ليظل meta.reason كما علقته بواباتها الحية
  * (audit-e2e S7 مثلاً يثبت reason:"loopback" على pair.admin.denied)، والافتراضي
  * "pc-only" لجسور FA-14/16/22 كما هي.
+ *
+ * FA-24 (تكليف 55): نهاية الرفض الصامت — قراءات الأدلة الثلاث (§38 امتثال ·
+ * §39 عرض تدقيقي · §47 تقرير) تنتقل فوق هذا الحرس أيضًا بنوع evidence.denied
+ * وreason="loopback": كل محاولة قراءة الدليل من خارج الجهاز تصبح حدثًا في
+ * سلسلة الأدلة نفسها (بمخفف 3 ثوانٍ) — والاستجابة 403 بحرفها بلا تغيير.
  */
 export function guardPcOnly(req: Request, auditKind: AuditKind, action: string, reason: "pc-only" | "loopback" = "pc-only"): boolean {
   if (isLocalRequest(req)) return true
