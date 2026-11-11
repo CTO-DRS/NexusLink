@@ -388,3 +388,47 @@ export function auditSummary(): { file: string; count: number; valid: boolean; b
   const v = verifyAuditChain()
   return { file: resolveAuditPath(), count: v.count, valid: v.valid, brokenAt: v.brokenAt }
 }
+
+/** FA-25 (تكليف 56) — عضو القائمة الواحد: النوع الغريب يرفض وقت الاستعلام لا وقت الإلحاق */
+export function isAuditKind(k: unknown): k is AuditKind {
+  return typeof k === "string" && KINDS.has(k)
+}
+
+export interface AuditFiltered {
+  items: AuditRecord[]
+  total: number
+  truncated: boolean
+}
+
+/**
+ * FA-25 (تكليف 56) — الاسترجاع الانتقائي: مدقق SOC 2 يسأل السلسلة أسئلتها عبر
+ * نقطة العرض المحرسة نفسها لا بقراءة الملف على الجهاز — تصفية السلسلة كاملة
+ * بنوع و/أو فعل قبل نافذة العرض (آخر limit مطابقة بالترتيب الزمني — الأقدم أولًا).
+ * القراءة قراءة حصرًا — صفر إلحاق، ومتجرّب الشكل لا يرى سوى السجلات المطابقة.
+ */
+export function readAuditFiltered(opts: { type?: string; action?: string; limit?: number }): AuditFiltered {
+  const limit = Math.min(Math.max(opts.limit ?? 200, 1), 500)
+  let raw: string
+  try {
+    raw = fs.readFileSync(resolveAuditPath(), "utf8")
+  } catch {
+    return { items: [], total: 0, truncated: false }
+  }
+  const lines = raw.split("\n").filter((l) => l.trim().length > 0)
+  const matched: AuditRecord[] = []
+  for (const line of lines) {
+    let r: AuditRecord | null
+    try {
+      r = JSON.parse(line) as AuditRecord
+    } catch {
+      r = null
+    }
+    if (!r) continue
+    if (opts.type && r.k !== opts.type) continue
+    if (opts.action && r.d?.action !== opts.action) continue
+    matched.push(r)
+  }
+  const total = matched.length
+  const items = total > limit ? matched.slice(total - limit) : matched
+  return { items, total, truncated: total > limit }
+}
