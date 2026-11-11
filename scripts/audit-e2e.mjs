@@ -11,7 +11,10 @@
  * انتقالات السياسة (رصد أولي/تغير بحفظ from→to) · حرس F6 (لا رمز خام) ·
  * كشف العبث (تعديل رجعي يكسر السلسلة ويُعلن) · تجميد الإلحاق فوق دليل
  * مكسور · الدورة الجديدة بحذف الملف · حرس loopback على نقطة العرض موثق الرفض
- * في السلسلة نفسها (FA-24 — evidence.denied) · limit.
+ * في السلسلة نفسها (FA-24 — evidence.denied) · limit · الاسترجاع الانتقائي
+ * (?type=/?action= بقائمة مولّدة حصرًا والغريب 400 — FA-25 تكليف 56) مع
+ * matched/truncated وبروفيل limit على المطابقات — والمسار بلا بارامترات
+ * بحرفيه بلا حقل جديد (العقد القديم سليم).
  * التنظيف الذاتي في النهاية يجعل الجولة الثانية المتتالية مطابقة للأولى.
  * الاستخدام: node scripts/audit-e2e.mjs [--app http://127.0.0.1:3000]
  */
@@ -265,6 +268,52 @@ try {
   const math2 = verifyMath(auditLines())
   ok("S17 رياضيات مستقلة: 4 أسطر i=1..4 متصلة وبصماتها تُعاد",
     math2.valid && math2.count === 4, math2.valid ? "prev/h/مجموعة مغلقة ✓" : math2.why)
+
+  // ---------- FA-25 (تكليف 56) — الاسترجاع الانتقائي: مدقق SOC 2 يسأل السلسلة أسئلتها عبر النقطة المحرسة نفسها ----------
+  // ثاني دليل رفض لقراءة الأدلة (خارج نافذة المخفف 3 ثوانٍ — درس الجسور) فتصبح
+  // السلسلة 5 ويمكن للتصفية أن تُقصّ فعلًا (matched>limit → truncated حية)
+  await new Promise((r) => setTimeout(r, 3300))
+  r = await request(`http://${LAN}:8197/api/enterprise/audit`, { headers: { "x-pair-token": liveToken } })
+  await sleep(150)
+  r = await request(`${APP}/api/enterprise/audit`)
+  j = JSON.parse(r.body)
+  ok("S18a الرفض الثاني (خارج نافذة المخفف): سجل ثانٍ evidence.denied actor=remote — السلسلة تعدّ 5",
+    r.status === 200 && j.count === 5 && recAt(5).k === "evidence.denied" && recAt(5).ok === false
+    && recAt(5).actor === "remote" && recAt(5).d.reason === "loopback" && recAt(5).d.action === "audit-view",
+    `status=${r.status} count=${j.count}`)
+
+  // S18b — تصفية بالنوع + بروفايل limit على المطابقات (قصّ حي truncated:true)
+  r = await request(`${APP}/api/enterprise/audit?type=evidence.denied&limit=1`)
+  j = JSON.parse(r.body)
+  ok("S18b type=evidence.denied&limit=1: matched=2 · truncated=true · آخر مطابقة حصرا (i=5) وسلسلة كاملة صالحة",
+    r.status === 200 && j.valid === true && j.count === 5 && j.filter?.type === "evidence.denied"
+    && j.matched === 2 && j.truncated === true && j.events?.length === 1 && j.events[0]?.i === 5
+    && j.events[0]?.k === "evidence.denied",
+    `matched=${j.matched} truncated=${j.truncated}`)
+
+  // S18c — التركيب AND (type+action) والترتيب الزمني بالأقدم أولًا
+  r = await request(`${APP}/api/enterprise/audit?type=evidence.denied&action=audit-view`)
+  j = JSON.parse(r.body)
+  ok("S18c type+action AND: matched=2 · truncated=false · كل المطابقات بالفعل والنوع نفسه بالترتيب الزمني",
+    r.status === 200 && j.filter?.type === "evidence.denied" && j.filter?.action === "audit-view"
+    && j.matched === 2 && j.truncated === false && j.events?.length === 2
+    && j.events.every((e) => e.k === "evidence.denied" && e.d?.action === "audit-view")
+    && j.events[0]?.i === 4 && j.events[1]?.i === 5,
+    `matched=${j.matched}`)
+
+  // S19/S20 — الغريب عن القائمة المولّدة يرفض 400 بلا أي قراءة (نوع غير مولّد / فعل مشوه)
+  r = await request(`${APP}/api/enterprise/audit?type=evil.type`)
+  ok("S19 نوع غير مولّد → 400 bad-audit-type (قائمة الأنواع المولّدة حصرا)", r.status === 400 && r.body.includes("bad-audit-type"), `status=${r.status}`)
+  r = await request(`${APP}/api/enterprise/audit?action=BAD`)
+  ok("S20 فعل مشوه → 400 bad-audit-action (الشكل الصارم 1..64 محرفًا)", r.status === 400 && r.body.includes("bad-audit-action"), `status=${r.status}`)
+
+  // S21 — المسار بلا بارامترات بحرفه: صفر حقل جديد (العقد القديم سليم — التوافق الرجعي كامل)
+  r = await request(`${APP}/api/enterprise/audit?limit=1`)
+  j = JSON.parse(r.body)
+  ok("S21 بلا بارامترات: العقد القديم بحرفه — بلا filter/matched/truncated وtail يعمل كما كان",
+    r.status === 200 && !("filter" in j) && !("matched" in j) && !("truncated" in j)
+    && j.count === 5 && j.events?.length === 1 && j.valid === true,
+    `status=${r.status} count=${j.count}`)
 } catch (e) {
   fail++
   console.error("❌ استثناء في الجولة:", e)

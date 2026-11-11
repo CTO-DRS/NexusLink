@@ -452,6 +452,26 @@ if (!LAN) { console.log('FAIL بلا عنوان LAN — لا يمكن محاكا
   check('FA24/loopback: العرض محليًا يفتح السلسلة الحية (valid:true) وسجلات الرفض actor=remote حصرًا (المحلي لا يرفض أصلًا)', locRead.status === 200 && locRead.json?.valid === true && allRemote, `count=${locRead.json?.count}`)
 }
 
+// ==== 12) FA-25 عبر المصدر (تكليف 56) — الاسترجاع الانتقائي: مدقق SOC 2 يسأل سلسلة §39 أسئلتها عبر النقطة المحرسة نفسها ====
+// الامتداد البنيوي المعلن لحدود FA-24: بعد أن صارت الرفضات أدلةً بقائمة مولّدة
+// جديدة، كانت نقطة العرض الوحيدة تعرف «آخر N حدث» حصرًا — فلا سؤال «كل رفضات
+// الأدلة؟» إلا بقراءة الملف على الجهاز مباشرة — تخطٍّ لحرس القراءة المصمم
+// حصرًا ليكون الأدلة عبر HTTP. الإغلاق: قائمة الأنواع المولّدة حصرا (الغريب
+// 400 بلا أي قراءة) + شكل الفعل الصارم + بروفايل limit على المطابقات
+// (matched/truncated) — والمسار بلا بارامترات بحرفه بلا حقل جديد.
+{
+  const fs2 = await import('node:fs')
+  const libSrc = fs2.readFileSync(new URL('../src/lib/enterprise-audit.ts', import.meta.url), 'utf8')
+  const routeSrc = fs2.readFileSync(new URL('../src/app/api/enterprise/audit/route.ts', import.meta.url), 'utf8')
+  check('FA25/src: الاسترجاع الانتقائي في المكتبة الواحدة (readAuditFiltered + isAuditKind عضو القائمة)',
+    libSrc.includes('export function readAuditFiltered') && libSrc.includes('export function isAuditKind'), 'enterprise-audit')
+  check('FA25/src: النقطة تفرض القائمة المولّدة حصرا والغريب 400 بلا أي قراءة (bad-audit-type/bad-audit-action) والحرس ما يزال أول الدالة',
+    routeSrc.includes('isAuditKind(rawType)') && routeSrc.includes('bad-audit-type') && routeSrc.includes('bad-audit-action')
+    && routeSrc.includes('readAuditFiltered') && /guardPcOnly\(request, "evidence\.denied", "audit-view", "loopback"\)/.test(routeSrc), 'enterprise/audit')
+  check('FA25/src: التوافق الرجعي حرفًا — المسار بلا بارامترات يعود بtail كما كان وبلا حقول جديدة',
+    routeSrc.includes('readAuditTail(limit)') && routeSrc.includes('!filtering'), 'enterprise/audit')
+}
+
 const fails = results.filter((r) => !r.ok).length
-console.log(`\n=== FA-13+14+15+16+22+23+24 E2E: ${results.length - fails}/${results.length} PASS ===`)
+console.log(`\n=== FA-13+14+15+16+22+23+24+25 E2E: ${results.length - fails}/${results.length} PASS ===`)
 process.exit(fails ? 1 : 0)
