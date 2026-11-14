@@ -27,8 +27,34 @@ rm -f "$RES/server/.env" "$RES/server/.env.production"
 
 # FA-harden (G-26): قاعدة seed (SQLite) — تُزرع إلى مجلد إعدادات التطبيق عند أول
 # إقلاع وتُحدَّث نسختها عند إعادة الحزم (prisma db push قبل البناء).
+# FA-harden (seed-clean): لا نشحن بيانات التطوير/الاختبار للمستخدمين — المخطط فقط
+# (db/custom.db في المستودع تبقى كما هي لاختبارات E2E).
 mkdir -p "$RES/server/db"
-cp db/custom.db "$RES/server/db/custom.db"
+bun scripts/make-clean-seed.mjs db/custom.db "$RES/server/db/custom.db"
+
+# FA-harden (prisma-hashed-external): Turbopack يحل @prisma/client باسم مُجزّأ
+# (@prisma/client-<hash>) من .next/node_modules — وهي روابط رمزية تسقط عند حزم
+# Tauri (deb/AppImage/MSI) ⇒ كل مسارات قاعدة البيانات 500 «Cannot find module».
+# نحوّل الروابط لنسخ حقيقية، وننشئ أي اسم مُجزّأ مذكور في الـchunks وغير موجود.
+NM_HASHED="$RES/server/.next/node_modules"
+if [ -d "$NM_HASHED" ]; then
+  tmp_nm="$(mktemp -d)"
+  cp -rL "$NM_HASHED/." "$tmp_nm/" 2>/dev/null || true
+  rm -rf "$NM_HASHED" && mkdir -p "$NM_HASHED" && cp -r "$tmp_nm/." "$NM_HASHED/"
+  rm -rf "$tmp_nm"
+fi
+for hashed in $(grep -rhoE "@prisma/client-[0-9a-f]{16}" "$RES/server/.next/server" 2>/dev/null | sort -u); do
+  dest="$NM_HASHED/$hashed"
+  if [ ! -f "$dest/package.json" ]; then
+    mkdir -p "$(dirname "$dest")"
+    rm -rf "$dest"
+    cp -rL "$RES/server/node_modules/@prisma/client" "$dest"
+    echo "   prisma hashed external → $hashed"
+  fi
+done
+
+# FA-harden (no-sourcemaps): خرائط المصدر تكشف كود النواة المغلقة وتضخم الحزمة
+find "$RES/server" -type f -name "*.map" -delete 2>/dev/null || true
 
 # الجولة 3 (G-28): متغيرات musl في node_modules غير مستعملة على أي منصة مستهدفة
 # (glibc لينكس / ويندوز / ماك) — وlinuxdeploy يفشل صامتًا على ELF musl
