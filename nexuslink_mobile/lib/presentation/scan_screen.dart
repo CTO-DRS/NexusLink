@@ -23,7 +23,7 @@ class ScanScreen extends ConsumerStatefulWidget {
 class _ScanScreenState extends ConsumerState<ScanScreen> {
   ScanSession? _session;
   bool _busy = false;
-  bool _starting = false;
+  final bool _starting = false;
   String? _error; // رمز سبب حرفي من السيرفر
   final _titleCtrl = TextEditingController();
 
