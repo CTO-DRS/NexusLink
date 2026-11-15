@@ -44,7 +44,7 @@ export function SiteHeader({ variant = "download" }: { variant?: "home" | "downl
           className="flex min-h-11 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="NexusLink"
         >
-          <Image src="/logo.svg" alt="" width={30} height={30} className="dark:invert" />
+          <Image src="/logo.svg" alt="" width={30} height={30} />
           <span className="text-lg font-bold tracking-tight">NexusLink</span>
           <span className="hidden rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary sm:inline-block">
             {isHome ? t("الموقع الرسمي") : t("التحميلات")}
