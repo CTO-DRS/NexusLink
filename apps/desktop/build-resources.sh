@@ -14,7 +14,21 @@ echo "== [1/4] Next standalone → $RES/server =="
 test -f .next/standalone/server.js || { echo "الخطأ: شغّل 'bun run build' أولًا"; exit 1; }
 rm -rf "$RES/server"
 mkdir -p "$RES/server"
-cp -r .next/standalone/. "$RES/server/"
+# FA-harden (win-symlinks): .next/node_modules في standalone روابط رمزية بأسماء مُجزّأة
+# (‏@prisma/client-<hash> · sharp-<hash>) — Git Bash على ويندوز يفشل في نسخها
+# («cannot create symbolic link»). ننسخ كل شيء عداها، ثم نبنيها نسخًا حقيقية أدناه.
+SA=.next/standalone
+for e in "$SA"/* "$SA"/.[!.]*; do
+  [ -e "$e" ] || continue
+  [ "$(basename "$e")" = ".next" ] && continue
+  cp -r "$e" "$RES/server/"
+done
+mkdir -p "$RES/server/.next"
+for e in "$SA/.next"/* "$SA/.next"/.[!.]*; do
+  [ -e "$e" ] || continue
+  [ "$(basename "$e")" = "node_modules" ] && continue
+  cp -r "$e" "$RES/server/.next/"
+done
 # احتياط: static/public قد تكون داخل standalone (سكربت البناء ينسخهما) — نضمن الوجود
 [ -d "$RES/server/.next/static" ] || { echo "نسخ .next/static يدويًا…"; cp -r .next/static "$RES/server/.next/static"; }
 [ -d "$RES/server/public" ] || { echo "نسخ public يدويًا…"; cp -r public "$RES/server/public"; }
@@ -37,11 +51,21 @@ bun scripts/make-clean-seed.mjs db/custom.db "$RES/server/db/custom.db"
 # Tauri (deb/AppImage/MSI) ⇒ كل مسارات قاعدة البيانات 500 «Cannot find module».
 # نحوّل الروابط لنسخ حقيقية، وننشئ أي اسم مُجزّأ مذكور في الـchunks وغير موجود.
 NM_HASHED="$RES/server/.next/node_modules"
-if [ -d "$NM_HASHED" ]; then
-  tmp_nm="$(mktemp -d)"
-  cp -rL "$NM_HASHED/." "$tmp_nm/" 2>/dev/null || true
-  rm -rf "$NM_HASHED" && mkdir -p "$NM_HASHED" && cp -r "$tmp_nm/." "$NM_HASHED/"
-  rm -rf "$tmp_nm"
+mkdir -p "$NM_HASHED"
+# كل اسم مُجزّأ في standalone/.next/node_modules (مع النطاقات @scope/) ← نسخة حقيقية من الحزمة الأصل
+if [ -d "$SA/.next/node_modules" ]; then
+  for link in $(cd "$SA/.next/node_modules" && ls -d @*/* [!@]* 2>/dev/null); do
+    base="${link%-*}"
+    dest="$NM_HASHED/$link"
+    src="$RES/server/node_modules/$base"
+    [ -d "$src" ] || src="node_modules/$base"
+    if [ -d "$src" ]; then
+      mkdir -p "$(dirname "$dest")"; rm -rf "$dest"; cp -rL "$src" "$dest"
+      echo "   hashed external → $link"
+    else
+      echo "   تحذير: لا مصدر لـ $link ($base)"
+    fi
+  done
 fi
 for hashed in $(grep -rhoE "@prisma/client-[0-9a-f]{16}" "$RES/server/.next/server" 2>/dev/null | sort -u); do
   dest="$NM_HASHED/$hashed"
