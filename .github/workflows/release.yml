@@ -82,6 +82,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
 
+      # الخدمات المصغّرة حزم مستقلة (tsconfig الجذري يشملها بـ**/*.ts — next build يفحص أنواعها)
+      - name: Install comms-service deps
+        shell: bash
+        run: cd mini-services/comms-service && bun install --frozen-lockfile
+
       # bash على المنصات الثلاث (الدرس: لا تعتمد على shell الافتراضي لكل نظام)
       - name: Generate Prisma client
         shell: bash
