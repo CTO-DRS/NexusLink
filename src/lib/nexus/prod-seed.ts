@@ -1,5 +1,6 @@
 // NexusLink — بذور طبقة الإنتاجية (idempotent)
 import { db } from "@/lib/db"
+import { isDemoMode } from "./demo-mode"
 
 const SEED_VERSION = 1
 
@@ -25,9 +26,13 @@ export async function ensureProdSeed() {
     }
   }
 
+  // G2: ما يلي بيانات عرض وهمية (أجهزة مزروعة) — تُزرع فقط مع NEXUSLINK_DEMO=1.
+  // بدونه: ملفات تعريف الشبكات المدمجة أعلاه فقط (إعدادات افتراضية لا بيانات وهمية).
+  const demo = isDemoMode()
+
   // زوج مزامنة افتراضي: مستندات الهاتف ↔ مجلد Sync على الكمبيوتر
   const pairs = await db.syncPair.count()
-  if (pairs === 0) {
+  if (demo && pairs === 0) {
     await db.syncPair.create({
       data: {
         deviceA: "galaxy-s24", folderA: "/Documents",
@@ -39,7 +44,7 @@ export async function ensureProdSeed() {
 
   // عناصر مفتوحة على الهاتف (أكمل من حيث توقفت)
   const hands = await db.handoffItem.count()
-  if (hands === 0) {
+  if (demo && hands === 0) {
     await db.handoffItem.createMany({
       data: [
         {

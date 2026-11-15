@@ -260,6 +260,16 @@ export function DevicesView() {
         </div>
       </div>
 
+      {/* G2: حالة فارغة صادقة — بلا بيانات عرض (NEXUSLINK_DEMO) تبدأ القائمة فارغة */}
+      {devices.length === 0 && (
+        <Card>
+          <CardContent className="py-10 text-center space-y-1.5">
+            <div className="font-semibold">لا أجهزة مقترنة بعد</div>
+            <p className="text-sm text-muted-foreground">امسح رمز QR من تطبيق NexusLink على هاتفك لإضافة أول جهاز</p>
+          </CardContent>
+        </Card>
+      )}
+
       <section>
         <h2 className="text-sm font-semibold text-muted-foreground mb-3">متصل الآن ({online.length})</h2>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

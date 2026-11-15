@@ -32,7 +32,7 @@ for i in $(seq 1 15); do
 done
 
 echo "── إقلاع next dev ──"
-setsid node node_modules/.bin/next dev -p 3000 >> dev.log 2>&1 < /dev/null &
+setsid env NEXUSLINK_DEMO=1 node node_modules/.bin/next dev -p 3000 >> dev.log 2>&1 < /dev/null &
 READY=""
 for i in $(seq 1 60); do
   code=$(curl -s -o /dev/null -w "%{http_code}" -m 3 "http://127.0.0.1:3000/api/tools/ping" 2>/dev/null)

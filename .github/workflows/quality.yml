@@ -50,6 +50,10 @@ jobs:
       - name: Lint (eslint)
         run: bun run lint
 
+      # G8 — عدد فحوص E2E المعلن واحد في README وصفحة الإصدار (المصدر: سجل الأساس في worklog.md)
+      - name: E2E count consistency (README + release page)
+        run: node scripts/e2e-count.mjs --check
+
       - name: Types (tsc — الأساس صفر منذ تكليف 29)
         run: bunx tsc --noEmit
 

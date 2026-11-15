@@ -1,5 +1,6 @@
 // NexusLink — طبقة الاتصالات: طبقة بيانات الخادم (Prisma) + محرك قواعد الفلترة
 import { db } from "@/lib/db"
+import { isDemoMode } from "./demo-mode"
 import type {
   MirroredNotification, NotifFilter, SmsConversation, SmsMessage,
   CommsContact, CallLogEntry, NotifStatus,
@@ -96,6 +97,8 @@ let seeded = false
 
 export async function ensureSeed() {
   if (seeded) return
+  // G2: جهات الاتصال/الرسائل/المكالمات/الإشعارات الوهمية للعرض التوضيحي فقط
+  if (!isDemoMode()) { seeded = true; return }
   const [notifs, contacts, convos, calls] = await Promise.all([
     db.nexusNotification.count(),
     db.nexusContact.count(),

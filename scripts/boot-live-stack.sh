@@ -11,7 +11,7 @@ pkill -f "next dev" 2>/dev/null
 sleep 1
 
 # [1] Next standalone على 3000 (نفس متغيرات E2E)
-setsid nohup env PORT=3000 HOSTNAME=127.0.0.1 NODE_ENV=production \
+setsid nohup env PORT=3000 HOSTNAME=127.0.0.1 NODE_ENV=production NEXUSLINK_DEMO=1 \
   NEXUS_WOL_BROADCAST=127.0.0.1 NEXUS_WOL_PORT=9009 \
   node .next/standalone/server.js > .zscripts/live-next.log 2>&1 < /dev/null &
 echo "next standalone booting..."
