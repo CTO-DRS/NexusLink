@@ -1,0 +1,96 @@
+# وكيل أندرويد — بناء تحقق على كل طلب دمج (G3 + G4)
+#
+# قبل هذا الملف كان APK يُبنى فقط في release.yml (وسوم v* / dispatch) ⇒ أي كسر
+# في nexuslink_mobile لا يُكتشف إلا ساعة الإصدار. هنا يُترجم الوكيل فعليًا قبل الدمج:
+#   · flutter analyze (بوابة صفر مشاكل)
+#   · APK مقسّم لكل معمارية (G4: arm64-v8a / armeabi-v7a / x86_64) + AAB لمتجر Play
+#   · حارس «صفر سحابة» (G3): يفشل إن ظهر com.google.mlkit / com.google.firebase /
+#     com.google.android.gms في شجرة الاعتماديات أو داخل الحزم المبنية.
+# بلا أسرار: التوقيع هنا توقيع التطوير (key.properties غائب) — الإصدار الموقّع في release.yml.
+
+name: Android — Analyze + Build + Zero-cloud
+
+on:
+  pull_request:
+    paths:
+      - "nexuslink_mobile/**"
+      - ".github/workflows/android.yml"
+      - ".github/workflows/release.yml"
+      - "scripts/android-zero-cloud-check.py"
+  push:
+    branches: [main]
+    paths:
+      - "nexuslink_mobile/**"
+      - ".github/workflows/android.yml"
+      - "scripts/android-zero-cloud-check.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: nexuslink_mobile
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with: { distribution: temurin, java-version: "17" }
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.24.5
+          cache: true
+      - run: flutter pub get
+      # نفس رقعة release.yml حرفيًا (flutter_webrtc 1.x يتطلب compileSdk 36 وواجهة محرك أحدث)
+      - name: Patch flutter_webrtc for engine 3.24 (same patch as release.yml)
+        run: |
+          PKG=$(ls -d "$HOME/.pub-cache/hosted/pub.dev/flutter_webrtc-"*)
+          sed -i 's/compileSdkVersion 36/compileSdkVersion 34/' "$PKG/android/build.gradle"
+          sed -i -e 's/public void onSurfaceAvailable()/public void onSurfaceCreated()/' -e 's/public void onSurfaceCleanup()/public void onSurfaceDestroyed()/' "$PKG/android/src/main/java/com/cloudwebrtc/webrtc/SurfaceTextureRenderer.java"
+      - name: Analyze (zero-issue gate)
+        run: flutter analyze
+      - name: Build split per-ABI APKs (G4)
+        run: flutter build apk --release --split-per-abi
+      - name: Build App Bundle (Play)
+        run: flutter build appbundle --release
+      - name: Dependency tree (release runtime classpath)
+        working-directory: nexuslink_mobile/android
+        run: ./gradlew -q :app:dependencies --configuration releaseRuntimeClasspath > "$RUNNER_TEMP/android-deps.txt"
+      - name: G3 zero-cloud guard (deps + built APKs/AAB)
+        run: |
+          python3 ../scripts/android-zero-cloud-check.py \
+            --deps "$RUNNER_TEMP/android-deps.txt" \
+            build/app/outputs/flutter-apk/app-*-release.apk \
+            build/app/outputs/bundle/release/app-release.aab
+      - name: Sizes (G4)
+        run: |
+          {
+            echo "### Android sizes (G4)"
+            echo "| file | bytes | MB |"
+            echo "|---|---:|---:|"
+            for f in build/app/outputs/flutter-apk/app-*-release.apk build/app/outputs/bundle/release/app-release.aab; do
+              b=$(stat -c %s "$f")
+              echo "| $(basename "$f") | $b | $(awk "BEGIN{printf \"%.1f\", $b/1048576}") |"
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          A64=$(stat -c %s build/app/outputs/flutter-apk/app-arm64-v8a-release.apk)
+          echo "arm64-v8a APK: $A64 bytes"
+          if [ "$A64" -gt $((60*1048576)) ]; then
+            echo "::warning::arm64-v8a APK > 60MB (G4 target ≈ 40–50MB)"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-pr-build
+          path: |
+            nexuslink_mobile/build/app/outputs/flutter-apk/app-*-release.apk
+            nexuslink_mobile/build/app/outputs/bundle/release/app-release.aab
+          retention-days: 7
+          if-no-files-found: error

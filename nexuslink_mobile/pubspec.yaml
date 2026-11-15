@@ -17,7 +17,8 @@ dependencies:
   socket_io_client: ^2.0.3+1   # قنوات socket.io التفاعلية (نفس بروتوكول السيرفر v4)
   http: ^1.2.2                  # REST (/api/*)
   bonsoir: ^5.1.0               # اكتشاف mDNS: _nexuslink._tcp
-  mobile_scanner: ^5.2.3        # مسح QR الاقتران
+  # G3: مسح QR الاقتران أصلي عبر ZXing (android/app/build.gradle) — mobile_scanner
+  # أُزيل لأنه يجرّ Google ML Kit + Firebase إلى APK (ادعاء «صفر سحابة»).
 
   # ---- التخزين المحلي (المعتمد: drift/SQLite) ----
   drift: ^2.20.3

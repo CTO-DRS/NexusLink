@@ -27,7 +27,7 @@
 | Windows | NSIS `x64-setup.exe` · MSI · **Portable ZIP** | job `desktop` (matrix) | minisign (updater) · Authenticode اختياري |
 | macOS | DMG + `.app.tar.gz` (updater) | job `desktop` | Developer ID + Notarization (يتطلب حساب) |
 | Linux | AppImage · deb | job `desktop` | minisign (updater) |
-| Android | APK موقّع · AAB | job `android` | keystore من الـ secrets |
+| Android | APK موقّع لكل معمارية (`NexusLink-<v>-arm64-v8a/armeabi-v7a/x86_64-release.apk`) · `NexusLink-<v>-release.aab` | job `android` (+ تحقق PR: `android.yml`) | keystore من الـ secrets |
 | iOS | IPA (بلا توقيع) | job `ios` | يتطلب حساب Apple Developer |
 
 ---
