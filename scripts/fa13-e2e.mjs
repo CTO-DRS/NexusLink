@@ -5,6 +5,7 @@
 // الاستخدام: node scripts/fa13-e2e.mjs   (المكدس عامر: next standalone + بوابة)
 import { request } from 'node:http'
 import os from 'node:os'
+import { readFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { io } from 'socket.io-client'
 
@@ -18,12 +19,20 @@ function check(name, ok, detail = '') {
 function lanIp() {
   return Object.values(os.networkInterfaces()).flat().find((i) => i && !i.internal && i.family === 'IPv4')?.address || ''
 }
+// G1 — البوابة تطلب رمز الاقتران من كل واصل غير loopback: العميل «الشبكي» هنا
+// يحمل الرمز الصحيح كي تصل طلباته إلى حراس pc-only/local-only المفحوصين (الحرس
+// خلف الباب لا الباب نفسه — الباب مفحوص في scripts/g1-gateway-e2e.mjs)
+const PAIR_TOKEN = (() => {
+  try { return JSON.parse(readFileSync(process.env.NEXUSLINK_PAIR_FILE || '.zstate/pair-token.json', 'utf8')).token || '' } catch { return '' }
+})()
 function reqJson(host, port, path, method, body) {
   return new Promise((res, rej) => {
     const data = body === undefined ? null : Buffer.from(JSON.stringify(body))
-    const r = request({ host, port, path, method, headers: data ? {
-      'content-type': 'application/json', 'content-length': data.length,
-    } : {} }, (resp) => {
+    const viaGwLan = host !== '127.0.0.1' && port === GW.port && PAIR_TOKEN
+    const r = request({ host, port, path, method, headers: {
+      ...(data ? { 'content-type': 'application/json', 'content-length': data.length } : {}),
+      ...(viaGwLan ? { 'x-pair-token': PAIR_TOKEN } : {}),
+    } }, (resp) => {
       let raw = ''
       resp.on('data', (c) => { raw += c })
       resp.on('end', () => {
@@ -132,7 +141,7 @@ if (!LAN) { console.log('FAIL بلا عنوان LAN — لا يمكن محاكا
   const done = await pd
   check('GW/loopback: sec:trust-decision عبر البوابة يصل المعالج', !!done, '')
   loc.disconnect()
-  const spoof = await connect(`http://${LAN}:${GW.port}/?XTransformPort=3009`, { extraHeaders: { 'x-gw-client-ip': '127.0.0.1' } })
+  const spoof = await connect(`http://${LAN}:${GW.port}/?XTransformPort=3009`, { extraHeaders: { 'x-gw-client-ip': '127.0.0.1', ...(PAIR_TOKEN ? { 'x-pair-token': PAIR_TOKEN } : {}) } })
   const ps = waitEvent(spoof, 'sec:rejected')
   spoof.emit('sec:trust-decision', { decision: 'trust', deviceId: 'evil-spoof', name: 'Evil' })
   const rej = await ps
@@ -200,7 +209,7 @@ if (!LAN) { console.log('FAIL بلا عنوان LAN — لا يمكن محاكا
   await pd2
   loc.disconnect()
   // عبر البوابة من LAN برمز مزوّر → البوابة تستبدل الترويسة → الجسر يرفض
-  const spoof = await connect(`http://${LAN}:${GW.port}/?XTransformPort=3003`, { extraHeaders: { 'x-gw-client-ip': '127.0.0.1' } })
+  const spoof = await connect(`http://${LAN}:${GW.port}/?XTransformPort=3003`, { extraHeaders: { 'x-gw-client-ip': '127.0.0.1', ...(PAIR_TOKEN ? { 'x-pair-token': PAIR_TOKEN } : {}) } })
   const ps = waitEvent(spoof, 'phone:rejected')
   spoof.emit('phone:simulate', { kind: 'gmail' })
   const rej3 = await ps

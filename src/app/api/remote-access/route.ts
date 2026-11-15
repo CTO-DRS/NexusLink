@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server"
-import crypto from "node:crypto"
 import fs from "node:fs"
-import path from "node:path"
 import { readEnterprisePolicy, oemPrivacyActive, resolveEffectivePosture, rotationDue, type PostureSource } from "@/lib/enterprise-policy"
 import { appendAudit, observePolicy } from "@/lib/enterprise-audit"
 import { guardPcOnly } from "@/lib/nexus/http-guard"
+import { PAIR_FILE, readPairFile, writePairFile, newPairToken as newToken, pairDisabled, setPairDisabled } from "@/lib/nexus/pair-token"
 
 export const dynamic = "force-dynamic"
 
@@ -19,42 +18,10 @@ export const dynamic = "force-dynamic"
 //        الجهاز حصرًا (الجهاز هي الحدود).
 // صفر تغيير مخطط وصفر db: مصدر الحقيقة الواحد ملف JSON خارج المخطط
 // (.zstate/pair-token.json أو NEXUSLINK_PAIR_FILE) تقرؤه البوابة بمتغير
-// تعديل-الوقت — حذف الملف = تعطيل فوري لحظي بلا إعادة تشغيل.
+// تعديل-الوقت — G1: غياب الملف = الخارج مغلق (فشل-مغلق)، لا مفتوح.
 
-const PAIR_FILE =
-  process.env.NEXUSLINK_PAIR_FILE || path.join(process.cwd(), ".zstate", "pair-token.json")
-
-function readPairFile(): { token: string; fingerprint: string; createdAt: string } | null {
-  try {
-    const j = JSON.parse(fs.readFileSync(PAIR_FILE, "utf8"))
-    if (j && typeof j.token === "string" && j.token.length >= 16) {
-      return { token: j.token, fingerprint: String(j.fingerprint ?? ""), createdAt: String(j.createdAt ?? "") }
-    }
-    return null
-  } catch {
-    return null
-  }
-}
-
-function fingerprintOf(token: string): string {
-  return crypto.createHash("sha256").update(token).digest("hex").slice(0, 16)
-}
-
-function writePairFile(token: string): { fingerprint: string; createdAt: string } {
-  const fingerprint = fingerprintOf(token)
-  const createdAt = new Date().toISOString()
-  fs.mkdirSync(path.dirname(PAIR_FILE), { recursive: true, mode: 0o700 })
-  const tmp = `${PAIR_FILE}.tmp`
-  fs.writeFileSync(tmp, JSON.stringify({ token, fingerprint, createdAt }, null, 2), { mode: 0o600 })
-  fs.renameSync(tmp, PAIR_FILE)
-  try { fs.chmodSync(PAIR_FILE, 0o600) } catch { /* أنظمة بلا أذونات بوزيكس */ }
-  return { fingerprint, createdAt }
-}
-
-/** الرمز الجديد: 32 بايت عشوائية base64url — 43 محرفًا بلا غموض طباعي */
-function newToken(): string {
-  return crypto.randomBytes(32).toString("base64url")
-}
+// G1 — مصدر الحقيقة المشترك مع QR الاقتران والبوابة (src/lib/nexus/pair-token.ts):
+// الرمز إلزامي افتراضيًا ويُولَّد عند أول تشغيل؛ «disable» يغلق الخارج كليًا.
 
 // §47 — رصد انتقال التقادم (نمط observePolicy §39): «استحق التدوير» يُوثق مرة
 // عند الانتقال لا عند كل قراءة (لا إغراق السجل) — إعادة تشغيل الخادم قد
@@ -96,10 +63,14 @@ export async function GET() {
   // §47 — إجبار تدوير رمز الوصول: عمر الرمز مقابل أجلة السياسة (توصيفي —
   // إعلان صاخب لا قطع ذاتي: الحد 47.و.2 — الاستمرارية فوق الصرامة الصامتة)
   const rotation = rotationInfoOf(p, pol.state === "managed" ? pol.accessCodeRotationDays : null)
-  if (!p) return NextResponse.json({ ok: true, enabled: false, policy, oemPrivacy, rotation })
+  // G1 — الرمز إلزامي دائمًا لغير loopback؛ disabled = الخارج مغلق كليًا (علامة صريحة)
+  const required = true
+  if (!p) return NextResponse.json({ ok: true, enabled: false, required, disabled: pairDisabled(), policy, oemPrivacy, rotation })
   return NextResponse.json({
     ok: true,
     enabled: true,
+    required,
+    disabled: false,
     fingerprint: p.fingerprint,
     createdAt: p.createdAt,
     policy,
@@ -159,6 +130,8 @@ export async function POST(request: Request) {
   if (action === "disable") {
     const last = readPairFile()
     try { fs.rmSync(PAIR_FILE, { force: true }) } catch { /* غائب أصلًا */ }
+    // G1 — علامة صريحة: لا توليد تلقائي عند الإقلاع والبوابة ترفض الخارج 403
+    try { setPairDisabled(true) } catch { /* القرص للقراءة فقط — الخارج مغلق على أي حال (فشل-مغلق) */ }
     // §39 — دليل التعطيل: بصمة الرمز الأخير (لا رمزه)
     await appendAudit("pair.disable", true, "local", { fp: last?.fingerprint ?? null })
     return NextResponse.json({ ok: true, enabled: false })
@@ -169,6 +142,7 @@ export async function POST(request: Request) {
       await appendAudit("pair.admin.denied", false, "local", { action, reason: "conflict" })
       return NextResponse.json({ ok: false, error: "already-enabled", hint: "rotate" }, { status: 409 })
     }
+    setPairDisabled(false)
     const token = newToken()
     const { fingerprint, createdAt } = writePairFile(token)
     await appendAudit("pair.enable", true, "local", { fp: fingerprint })

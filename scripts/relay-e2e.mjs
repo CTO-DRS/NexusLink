@@ -250,6 +250,8 @@ relay.stderr.on("data", (d) => { if (String(d).includes("REFUSING")) console.err
 
 // ── البوابة الحقيقية (نمط tls-e2e) ────────────────────────────────────
 const PAIR_FILE = path.join(TMP, "pair-token.json")
+// G1 — الرمز إلزامي افتراضيًا: نزرع رمزًا معروفًا قبل الإقلاع (وإلا ولّدت البوابة رمزًا عشوائيًا)
+fs.writeFileSync(PAIR_FILE, JSON.stringify({ token: "PAIR-TOKEN-E2E-0123456789", fingerprint: "fp", createdAt: new Date().toISOString() }))
 const gw = spawn("node", [GW_SCRIPT], {
   env: {
     ...process.env,
@@ -318,9 +320,9 @@ async function reqThrough(c, { method = "GET", path: p = "/probe", headers = {},
   ok("ب7 جولة كاملة: زائر→مرحّل→نفق→بوابة→upstream", f?.t === "res" && f.status === 200 && body.includes('"upstream":true'))
   ok("ب7-ب upstream رأى ترويسة الشدة (=الغرفة) ورمز الزائر مرّا", seen?.headers["x-nexuslink-relay"] === ROOM && seen?.headers["x-pair-token"] === "PAIR-TOKEN-E2E-0123456789")
   ok("ب7-ج content-length لا تعود للزائر (النفق يفك الضغط ويحسم الطول)", f?.t === "res" && !("content-length" in (f.headers ?? {})))
-  // ب26 — §37 OFF = مفتوح تاريخيًا حتى عبر النفق (سلوك §37 حرفيًا)
+  // G1 — الرمز إلزامي افتراضيًا: عبر النفق (=خارجي) بلا رمز → 401 (لم يعد «OFF = مفتوح»)
   const { f: fNoTok } = await reqThrough(v.c)
-  ok("ب8 §37 معطل: الطلب بلا رمز يمر (السلوك التاريخي حرفيًا)", fNoTok?.t === "res" && fNoTok.status === 200)
+  ok("ب8 G1 آمن افتراضيًا: الطلب بلا رمز عبر النفق → 401", fNoTok?.t === "res" && fNoTok.status === 401)
 
   // تفعيل رمز §37 → البوابة تحسم عبر النفق (ترويسة الشدة)
   fs.writeFileSync(PAIR_FILE, JSON.stringify({ token: "PAIR-TOKEN-E2E-0123456789", fingerprint: "fp", createdAt: new Date().toISOString() }))
@@ -396,11 +398,11 @@ async function reqThrough(c, { method = "GET", path: p = "/probe", headers = {},
   const closed = await vBig.c.waitClose(5000)
   ok("ب25 إطار فوق السقف: المرحّل يقطع الاتصال", closed)
 
-  // حذف ملف الرمز: §37 يعود مفتوحًا (حذف الملف = تعطيل فوري — نمط §37)
+  // G1 — حذف ملف الرمز: فشل-مغلق فوري عبر النفق (لم يعد يفتح الباب)
   fs.rmSync(PAIR_FILE, { force: true })
   await sleep(300)
   const { f: fOpen } = await reqThrough(v2.c)
-  ok("ب26 حذف ملف الرمز: التعطيل فوري عبر النفق (نمط §37)", fOpen?.t === "res" && fOpen.status === 200)
+  ok("ب26 G1 حذف ملف الرمز: فشل-مغلق فوري عبر النفق (401 لا 200)", fOpen?.t === "res" && fOpen.status === 401)
 
   // مهلة المصادقة: اتصال بلا نية يُقطع (آخر اختبارات المرحّل الأول — 5 ثوانٍ)
   const vSilent = await WsClient.connect(RELAY_PORT)

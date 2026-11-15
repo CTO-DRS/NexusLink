@@ -232,7 +232,7 @@ class SignalingController extends Notifier<AgentSignaling?> {
     if (_sig == null || _endpoint?.key != endpoint.key) {
       _endpoint = endpoint;
       _sig = AgentSignaling();
-      _sig!.connect(host: endpoint.host, port: endpoint.port, mode: endpoint.mode.name);
+      _sig!.connect(host: endpoint.host, port: endpoint.port, mode: endpoint.mode.name, pairToken: endpoint.pairToken);
       _wire(_sig!);
     }
     return _sig!;
@@ -242,7 +242,7 @@ class SignalingController extends Notifier<AgentSignaling?> {
     _endpoint = endpoint;
     _sig ??= AgentSignaling();
     if (!(_sig?.isConnected ?? false)) {
-      _sig!.connect(host: endpoint.host, port: endpoint.port, mode: endpoint.mode.name);
+      _sig!.connect(host: endpoint.host, port: endpoint.port, mode: endpoint.mode.name, pairToken: endpoint.pairToken);
     }
     _wire(_sig!);
     state = _sig;

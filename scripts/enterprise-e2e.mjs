@@ -167,9 +167,10 @@ try {
   let h = JSON.parse((await request(`${GW}/__gw/health`)).body)
   ok("A1 health يعلن policyManaged:false بلا ملف سياسة", h.policyManaged === false && h.policyRemoteAccess === null)
   let r = await requestViaLan(`${GW}/`)
-  ok("A2 غير المُدار: الواصل الخارجي يعبر حرفيًا كما كان (pair OFF)", r.status === 200 && r.body === "up-ok", `status=${r.status}`)
+  // G1 — آمن افتراضيًا: أول إقلاع يولّد رمزًا (لم يعد «OFF = مفتوح») فالخارج بلا رمز مرفوض
+  ok("A2 غير المُدار (G1 آمن افتراضيًا): رمز أول إقلاع مولّد والخارج بلا رمز → 401", r.status === 401 && r.body.includes("pair-token-required") && h.pair === true && h.pairRequired === true, `status=${r.status}`)
 
-  // ---------- pair OFF → ON: الرمز شرط للخارج ----------
+  // ---------- رمز معروف (يستبدل رمز أول إقلاع): الرمز شرط للخارج ----------
   writePairFile()
   r = await requestViaLan(`${GW}/`)
   ok("A3 رمز مفعّل: الخارج بلا رمز → 401", r.status === 401 && r.body.includes("pair-token-required"), `status=${r.status}`)

@@ -36,13 +36,17 @@ class AgentSignaling implements TxSignaling {
 
   bool get isConnected => _guard?.connected ?? false;
 
+  String? _pairToken;
+
   /// أنشئ القناتين لنقطة نهاية سيرفر.
   void connect({
     required String host,
     required int port,
     required String mode, // gateway | direct
+    String? pairToken, // G1 — رمز البوابة الإلزامي (gateway حصرًا)
   }) {
     disconnect();
+    _pairToken = pairToken;
 
     _guard = _open(
       host: host, port: port, mode: mode, bridgePort: NexusPorts.guard,
@@ -69,7 +73,8 @@ class AgentSignaling implements TxSignaling {
         .setTimeout(Timeouts.socketConnect.inMilliseconds);
     if (mode == 'gateway') {
       // نفس نمط عميل الويب: Caddy يوجّه ?XTransformPort إلى منفذ الجسر
-      builder.setQuery({'XTransformPort': '$bridgePort'});
+      final tok = _pairToken;
+      builder.setQuery({'XTransformPort': '$bridgePort', if (tok != null && tok.isNotEmpty) 'pair': tok});
     }
     final socket = sio.io(url, builder.build());
 

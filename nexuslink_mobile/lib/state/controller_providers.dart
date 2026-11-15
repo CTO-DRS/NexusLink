@@ -88,7 +88,7 @@ class ControllerController extends Notifier<RcUiState> {
         }
       }
     });
-    final ok = svc.connect(host: endpoint.host, port: endpoint.port, mode: endpoint.mode.name);
+    final ok = svc.connect(host: endpoint.host, port: endpoint.port, mode: endpoint.mode.name, pairToken: endpoint.pairToken);
     ref.read(activityLogProvider.notifier).add(
           ok
               ? 'قناة التحكم 3004 جاهزة — هاتفك الآن جهاز تحكم للكمبيوتر'

@@ -14,33 +14,51 @@ class ServerEndpoint {
   final int port; // منفذ الوصول: البوابة (81) أو REST المباشر (3000)
   final AccessMode mode;
 
-  const ServerEndpoint({required this.host, required this.port, required this.mode});
+  /// G1 — رمز اقتران البوابة الإلزامي (من QR: payload.pair). البوابة ترفض
+  /// أي واصل من الشبكة بلا رمز (401) — يُرسل ببارامتر ?pair= الذي تجرّده
+  /// البوابة قبل التحويل (لا يصل لسجلات الخدمات الداخلية).
+  final String? pairToken;
+
+  const ServerEndpoint({required this.host, required this.port, required this.mode, this.pairToken});
 
   String get key => '$host:$port';
 
+  bool get hasPairToken => pairToken != null && pairToken!.isNotEmpty;
+
+  ServerEndpoint withPairToken(String? token) =>
+      ServerEndpoint(host: host, port: port, mode: mode, pairToken: token);
+
+  /// استعلام الرمز للبوابة حصرًا (المباشر لا يمر بالبوابة).
+  Map<String, String> get pairQuery =>
+      mode == AccessMode.gateway && hasPairToken ? {'pair': pairToken!} : const {};
+
   /// أساس REST: http://host:port/api
-  Uri api(String path, [Map<String, String>? query]) => Uri(
-        scheme: 'http',
-        host: host,
-        port: port,
-        path: 'api/$path',
-        queryParameters: query,
-      );
+  Uri api(String path, [Map<String, String>? query]) {
+    final q = <String, String>{...?query, ...pairQuery};
+    return Uri(
+      scheme: 'http',
+      host: host,
+      port: port,
+      path: 'api/$path',
+      queryParameters: q.isEmpty ? null : q,
+    );
+  }
 
   /// عنوان socket.io لجسر معين (مثل NexusPorts.guard).
   /// gateway → نفس المنفذ مع XTransformPort (كما يفعل عميل الويب عبر Caddy).
   /// direct  → المنفذ مباشرة (socket.io server path "/" يقبل أي مسار).
   SocketTarget socketTarget(int bridgePort) => AccessMode.gateway == mode
-      ? SocketTarget(url: 'http://$host:$port', query: {'XTransformPort': '$bridgePort'})
+      ? SocketTarget(url: 'http://$host:$port', query: {'XTransformPort': '$bridgePort', ...pairQuery})
       : SocketTarget(url: 'http://$host:$bridgePort', query: const {});
 
   factory ServerEndpoint.fromJson(Map<String, dynamic> j) => ServerEndpoint(
         host: j['host'] as String,
         port: j['port'] as int,
         mode: (j['mode'] ?? 'gateway') == 'direct' ? AccessMode.direct : AccessMode.gateway,
+        pairToken: j['pairToken'] as String?,
       );
 
-  Map<String, dynamic> toJson() => {'host': host, 'port': port, 'mode': mode.name};
+  Map<String, dynamic> toJson() => {'host': host, 'port': port, 'mode': mode.name, if (hasPairToken) 'pairToken': pairToken};
 
   @override
   String toString() => key;
@@ -54,15 +72,17 @@ class SocketTarget {
 }
 
 /// حمولة QR كما يولّدها السيرفر: GET /api/devices/qr
-/// {v, proto, host, port, secret, ts, name, ports{...}}
+/// {v, proto, host, port, secret, ts, name, ports{...}, pair?, lan}
+/// G1: `pair` = رمز البوابة الإلزامي (غائب = الوصول من الشبكة مغلق على الكمبيوتر).
 class QrPayload {
   final String host;
   final int port;
   final String secret;
   final String name;
   final int ts;
+  final String? pairToken;
 
-  const QrPayload({required this.host, required this.port, required this.secret, required this.name, required this.ts});
+  const QrPayload({required this.host, required this.port, required this.secret, required this.name, required this.ts, this.pairToken});
 
   static QrPayload? tryParse(String raw) {
     final j = _tryJson(raw);
@@ -78,6 +98,7 @@ class QrPayload {
       secret: secret,
       name: (j['name'] as String?) ?? 'NexusLink PC',
       ts: (j['ts'] as num?)?.toInt() ?? 0,
+      pairToken: j['pair'] is String && (j['pair'] as String).isNotEmpty ? j['pair'] as String : null,
     );
   }
 
