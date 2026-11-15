@@ -3,13 +3,13 @@ import { readEnterprisePolicy, isValidSemver, semverGte } from "@/lib/enterprise
 
 // /api/version — الإصدار + سجل الإصدارات الحقيقي (عقد §16 بند 2 + §23).
 // ============================================================
-// الإصدار موحّد 3.1.0 عبر كل المنصات (tauri.conf.json/Cargo.toml/pubspec/package.json
+// الإصدار موحّد 3.1.1 عبر كل المنصات (tauri.conf.json/Cargo.toml/pubspec/package.json
 // — أول minor بعد ختم M4: عقود ما بعد الوسم §41–§49 من TLS الذاتي إلى المرحّل
 // الذاتي فوق 3.0.0 — إيقاع minor المعتمد في ROADMAP).
 // سجل الإصدارات = GitHub Releases للمستودع العام (كاش 10 دقائق) — بلا
 // مفاتيح API — مُتحداً مع التاريخ المحلي (البعيد يفوز عند التعارض) وفشل الجلب
 // (أوفلاين/معدل) يعيد قائمة من الإصدار المحلي وحده.
-const CURRENT = "3.1.0"
+const CURRENT = "3.1.1"
 const RELEASES_API = "https://api.github.com/repos/CTO-DRS/NexusLink/releases?per_page=12"
 
 type HistoryEntry = { version: string; tag: string; date: string; items: string[] }
@@ -21,6 +21,19 @@ function localHistory(): HistoryEntry[] {
   return [
     {
       version: CURRENT,
+      tag: "v3.1.1",
+      date: "2026-11-15",
+      items: [
+        "حزم نظيفة: قاعدة البيانات الأولية تُشحن فارغة (بلا أي بيانات تجريبية) ويفشل البناء إن بقي صف واحد",
+        "إصلاح deb/AppImage: عميل Prisma المجزّأ يُنسخ فعليًا فتعمل مسارات قاعدة البيانات بدل 500",
+        "حذف 73 ملف source map من الحزم",
+        "أندرويد: إيقاف النسخ الاحتياطي التلقائي (allowBackup=false) وتقليص APK إلى ثلاث معماريات",
+        "هوية بصرية: شعار NexusLink بدل أيقونة القالب الموروثة",
+        "CI: تحديث bun.lock (v3) لإصلاح فحص الجودة",
+      ],
+    },
+    {
+      version: "3.1.0",
       tag: "v3.1.0",
       date: "2026-10-29",
       items: [
