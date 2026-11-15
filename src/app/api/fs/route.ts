@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { listDir, runOps, searchFs, dirStats, OpsPayload } from "@/lib/nexus/fs-server"
 import { guardPcOnly } from "@/lib/nexus/http-guard"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 export const dynamic = "force-dynamic"
 
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ entries, path: vpath })
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "خطأ في القراءة" },
+      { error: publicErrorMessage(e, "خطأ في القراءة") },
       { status: 400 }
     )
   }
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(r)
   } catch (e) {
     return NextResponse.json(
-      { ok: false, message: e instanceof Error ? e.message : "فشلت العملية" },
+      { ok: false, message: publicErrorMessage(e, "فشلت العملية") },
       { status: 500 }
     )
   }

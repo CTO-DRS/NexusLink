@@ -34,6 +34,7 @@ import {
   type UploadSession,
 } from "@/lib/nexus/upload-sessions"
 import type { TransferJob } from "@/lib/nexus/types"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 export const dynamic = "force-dynamic"
 
@@ -148,7 +149,7 @@ export async function PUT(req: NextRequest) {
       await fs.appendFile(s.partialAbs, buf)
     } catch (e) {
       return NextResponse.json(
-        { ok: false, error: e instanceof Error ? e.message : "فشل كتابة الجزئي" },
+        { ok: false, error: publicErrorMessage(e, "فشل كتابة الجزئي") },
         { status: 500 },
       )
     }
@@ -176,7 +177,7 @@ export async function POST(req: NextRequest) {
       await fs.mkdir(dirAbs, { recursive: true })
     } catch (e) {
       return NextResponse.json(
-        { ok: false, error: e instanceof Error ? e.message : "مسار غير صالح" },
+        { ok: false, error: publicErrorMessage(e, "مسار غير صالح") },
         { status: 400 },
       )
     }
@@ -261,7 +262,7 @@ export async function POST(req: NextRequest) {
       await fs.mkdir(dirAbs, { recursive: true })
     } catch (e) {
       return NextResponse.json(
-        { ok: false, error: e instanceof Error ? e.message : "مسار غير صالح" },
+        { ok: false, error: publicErrorMessage(e, "مسار غير صالح") },
         { status: 400 },
       )
     }
@@ -285,7 +286,7 @@ export async function POST(req: NextRequest) {
       await fs.rename(s.partialAbs, candidate)
     } catch (e) {
       return NextResponse.json(
-        { ok: false, error: e instanceof Error ? e.message : "فشل إتمام الرفع" },
+        { ok: false, error: publicErrorMessage(e, "فشل إتمام الرفع") },
         { status: 500 },
       )
     }

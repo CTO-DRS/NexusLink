@@ -191,6 +191,9 @@ interface GuardState {
   setTargetDevice: (id: string) => void
 
   metrics: Record<string, DeviceMetrics>
+  /** G2/P0 — هل زُرعت بذور العرض التوضيحي (NEXUSLINK_DEMO=1 حصرًا) */
+  demoSeeded: boolean
+  loadDemoSeeds: () => void
   tickMetrics: () => void
   nudgeStorage: (deltaMB: number) => void
 
@@ -270,7 +273,14 @@ export const useGuard = create<GuardState>((set, get) => ({
   targetDeviceId: "galaxy-s24",
   setTargetDevice: (id) => set({ targetDeviceId: id }),
 
-  metrics: METRIC_SEED,
+  // G2/P0: بلا NEXUSLINK_DEMO لا مقاييس ولا تطبيقات ولا منبهات وهمية — تبدأ فارغة
+  // بصدق، وloadDemoSeeds() يزرعها حصرًا في وضع العرض (يستدعيه DemoModeProvider).
+  metrics: {},
+  demoSeeded: false,
+  loadDemoSeeds: () => {
+    if (get().demoSeeded) return
+    set({ demoSeeded: true, metrics: METRIC_SEED, apps: APPS_SEED, alarms: ALARMS_SEED, simMode: true })
+  },
   tickMetrics: () =>
     set((s) => {
       const next: Record<string, DeviceMetrics> = {}
@@ -299,7 +309,7 @@ export const useGuard = create<GuardState>((set, get) => ({
       return { metrics: { ...s.metrics, [s.targetDeviceId]: { ...m, storageUsedGB: Math.max(1, gb) } } }
     }),
 
-  apps: APPS_SEED,
+  apps: [],
   backup: null,
   install: null,
   startBackup: (a) => set({ backup: { pkg: a.pkg, name: a.name, progress: 0 } }),
@@ -350,7 +360,7 @@ export const useGuard = create<GuardState>((set, get) => ({
     get().setCheck("apps")
   },
 
-  alarms: ALARMS_SEED,
+  alarms: [],
   addAlarm: (a) =>
     set((s) => ({
       alarms: [...s.alarms, { ...a, id: uid() }],
@@ -390,7 +400,7 @@ export const useGuard = create<GuardState>((set, get) => ({
     rssi: null, state: "near", leftMs: null, source: null,
   },
   setProx: (p) => set((s) => ({ prox: { ...s.prox, ...p } })),
-  simMode: true,
+  simMode: false,
   setSimMode: (b) => set({ simMode: b }),
   simRssi: -52,
   setSimRssi: (n) => set({ simRssi: n }),

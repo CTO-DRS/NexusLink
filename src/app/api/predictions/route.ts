@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { buildPredictPayload } from "@/lib/nexus/predict"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 export const dynamic = "force-dynamic"
 
@@ -16,7 +17,7 @@ export async function GET() {
     return NextResponse.json(payload)
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : String(e) },
+      { ok: false, error: publicErrorMessage(e) },
       { status: 503 },
     )
   }

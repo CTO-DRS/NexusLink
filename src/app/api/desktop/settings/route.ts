@@ -16,6 +16,7 @@ import { readDesktopHardening, writeDesktopHardening } from "@/lib/nexus/desktop
 import { readEnterprisePolicy, LOCKABLE_SETTINGS } from "@/lib/enterprise-policy"
 import { appendAudit, observePolicy } from "@/lib/enterprise-audit"
 import { guardPcOnly } from "@/lib/nexus/http-guard"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 export const dynamic = "force-dynamic"
 
@@ -74,7 +75,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ ok: true, ...cfg })
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "فشل حفظ الإعدادات" },
+      { error: publicErrorMessage(e, "فشل حفظ الإعدادات") },
       { status: 500 },
     )
   }

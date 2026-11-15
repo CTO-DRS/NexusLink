@@ -9,6 +9,7 @@ import {
 } from "@/lib/nexus/publisher"
 import { readEnterprisePolicy } from "@/lib/enterprise-policy"
 import { appendAudit, observePolicy } from "@/lib/enterprise-audit"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 export const dynamic = "force-dynamic"
 
@@ -41,7 +42,7 @@ export async function GET() {
       },
     })
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 503 })
+    return NextResponse.json({ error: publicErrorMessage(e) }, { status: 503 })
   }
 }
 
@@ -124,6 +125,6 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: `إجراء غير معروف: ${action}` }, { status: 400 })
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
+    return NextResponse.json({ error: publicErrorMessage(e) }, { status: 500 })
   }
 }

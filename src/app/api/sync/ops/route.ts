@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { headSeq, opsSince, REPLAY_LIMIT } from "@/lib/nexus/oplog"
 import { readEnterprisePolicy } from "@/lib/enterprise-policy"
 import { appendAudit, observePolicy } from "@/lib/enterprise-audit"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 export const dynamic = "force-dynamic"
 
@@ -50,6 +51,6 @@ export async function GET(req: NextRequest) {
       })),
     })
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 503 })
+    return NextResponse.json({ error: publicErrorMessage(e) }, { status: 503 })
   }
 }

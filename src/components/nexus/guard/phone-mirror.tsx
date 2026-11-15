@@ -11,7 +11,8 @@ import { RssiMeter } from "./guard-bits"
 import { cn } from "@/lib/utils"
 
 export function PhoneMirror() {
-  const { qs, ringing, lost, wipe, alarms, prox, phoneOnline, targetDeviceId } = useGuard()
+  const { qs, ringing, lost, wipe, alarms, prox, phoneOnline, targetDeviceId, simMode } = useGuard()
+  const battery = useGuard((s) => s.metrics[targetDeviceId]?.battery)
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
     const iv = setInterval(() => setNow(new Date()), 1000)
@@ -39,7 +40,8 @@ export function PhoneMirror() {
         <div className="flex items-center gap-1">
           {qs.hotspot && <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />}
           <BatteryCharging className="w-3 h-3 text-emerald-400" />
-          <span>78</span>
+          {/* G2/P0: نسبة البطارية من المقاييس الحقيقية/العرض فقط — لا رقم ثابت */}
+          {battery != null && <span>{battery}</span>}
         </div>
       </div>
 
@@ -62,7 +64,7 @@ export function PhoneMirror() {
       <div className="flex items-center gap-2 px-3 pb-2.5">
         <Smartphone className={cn("w-3 h-3", phoneOnline ? "text-emerald-400" : "text-zinc-600")} />
         <span className="text-[9px] text-white/50 flex-1">
-          {phoneOnline ? "هاتفك الحقيقي يبث المنارة" : targetDeviceId === "galaxy-s24" ? "Galaxy-S24 · منارة المحاكاة" : "لا هاتف متصل"}
+          {phoneOnline ? "هاتفك الحقيقي يبث المنارة" : simMode && targetDeviceId === "galaxy-s24" ? "Galaxy-S24 · منارة المحاكاة" : "لا هاتف متصل"}
         </span>
         <RssiMeter rssi={prox.rssi} size="sm" />
       </div>

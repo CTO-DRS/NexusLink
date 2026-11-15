@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { useGuard } from "@/lib/guard-store"
+import { useDemoMode } from "@/lib/demo-client"
 import { useNexus } from "@/lib/store"
 import { cmdRing, cmdLight } from "@/lib/guard-socket"
 import { GuardCard, InfoRow, RssiMeter, ProxStateBadge } from "./guard-bits"
@@ -14,7 +15,12 @@ import { cn } from "@/lib/utils"
 export function FindTab() {
   const { ringing, strobe, setRinging, setStrobe, setCheck, prox, phoneOnline } = useGuard()
   const devices = useNexus((s) => s.devices)
-  const dev = devices.find((d) => d.id === "galaxy-s24")
+  const demo = useDemoMode()
+  const dev = devices.find((d) => d.id === "galaxy-s24") ?? devices.find((d) => d.kind === "phone")
+  // G2/P0: لا قيم تقديرية خارج وضع العرض — «—» حين لا يُعرف الرقم فعلًا
+  const battery = useGuard((s) => (dev ? s.metrics[dev.id]?.battery : undefined))
+  const phoneName = dev?.name ?? (demo ? "Galaxy-S24" : "لا هاتف مقترن")
+  const phoneLive = !!dev && dev.state === "connected"
 
   const ring = (on: boolean) => {
     setRinging(on)
@@ -87,10 +93,10 @@ export function FindTab() {
             <Smartphone className="w-8 h-8 text-primary shrink-0" />
             <div className="min-w-0">
               <div className="text-[12.5px] font-bold flex items-center gap-1.5">
-                Galaxy-S24
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 nexus-live" />
+                {phoneName}
+                <span className={cn("w-1.5 h-1.5 rounded-full", phoneLive ? "bg-emerald-500 nexus-live" : "bg-zinc-400")} />
               </div>
-              <div className="text-[10px] text-muted-foreground">متصل على شبكتك المحلية الآن — لا GPS، دقة الشبكة</div>
+              <div className="text-[10px] text-muted-foreground">{phoneLive ? "متصل على شبكتك المحلية الآن — لا GPS، دقة الشبكة" : "اقرن هاتفك ليظهر موقعه التقريبي على شبكتك"}</div>
             </div>
           </div>
           <div className="flex flex-col items-center gap-1.5">
@@ -99,12 +105,12 @@ export function FindTab() {
           </div>
         </div>
         <div>
-          <InfoRow label="شبكة Wi-Fi" value="NEXUS-HOME · 5GHz" />
-          <InfoRow label="عنوان IP" value={dev?.ip ?? "192.168.1.14"} mono />
+          <InfoRow label="شبكة Wi-Fi" value={demo ? "NEXUS-HOME · 5GHz" : "—"} />
+          <InfoRow label="عنوان IP" value={dev?.ip ?? "—"} mono />
           <InfoRow label="قوة الإشارة" value={prox.rssi != null ? `${Math.round(prox.rssi)} dBm` : "—"} mono />
-          <InfoRow label="زمن الاستجابة" value={`${dev?.rttMs ?? 11}ms`} mono />
-          <InfoRow label="البطارية" value={`${useGuard.getState().metrics["galaxy-s24"].battery}%`} />
-          <InfoRow label="آخر نبض" value="قبل ثوانٍ (نبض Nexus Protocol)" />
+          <InfoRow label="زمن الاستجابة" value={dev?.rttMs != null ? `${dev.rttMs}ms` : "—"} mono />
+          <InfoRow label="البطارية" value={battery != null ? `${battery}%` : "—"} />
+          <InfoRow label="آخر نبض" value={phoneLive ? "قبل ثوانٍ (نبض Nexus Protocol)" : "—"} />
         </div>
         <div className="rounded-xl bg-muted/60 p-2.5 text-[10.5px] text-muted-foreground flex items-start gap-1.5">
           <Wifi className="w-3.5 h-3.5 shrink-0 mt-0.5" />

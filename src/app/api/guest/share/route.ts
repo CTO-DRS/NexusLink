@@ -22,6 +22,7 @@ import {
   validateGuestConfig, guestFingerprint, isGuestActive,
   sanitizeGuestName, GUEST_MAX_TOTAL_BYTES, type GuestState,
 } from "@/lib/nexus/guest-core"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 export const dynamic = "force-dynamic"
 
@@ -172,7 +173,7 @@ export async function POST(req: Request) {
       await appendAudit("guest.inbox.save", true, "local", { name })
       return NextResponse.json({ ok: true, name: path.basename(target) })
     } catch (e) {
-      return NextResponse.json({ ok: false, error: "تعذر الحفظ: " + String(e).slice(0, 80) }, { status: 500 })
+      return NextResponse.json({ ok: false, error: "تعذر الحفظ: " + publicErrorMessage(e).slice(0, 80) }, { status: 500 })
     }
   }
 
