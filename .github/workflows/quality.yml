@@ -54,6 +54,11 @@ jobs:
       - name: E2E count consistency (README + release page)
         run: node scripts/e2e-count.mjs --check
 
+      # G1 — البوابة آمنة افتراضيًا: من عنوان LAN حقيقي للمشغّل، بلا رمز → 401 وبالرمز → 200
+      # (صفر تبعيات — البوابة الحقيقية أمام upstream وهمي، لا يحتاج بناءً)
+      - name: G1 gateway pair-token E2E (LAN 401 / token 200)
+        run: node scripts/g1-gateway-e2e.mjs
+
       - name: Types (tsc — الأساس صفر منذ تكليف 29)
         run: bunx tsc --noEmit
 

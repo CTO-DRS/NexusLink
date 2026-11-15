@@ -41,6 +41,8 @@ class AgentChannel {
         'deviceId': deviceId,
         'deviceName': deviceName,
         'serverKey': endpoint.key,
+        // G1 — رمز البوابة الإلزامي للخدمة الأصلية (سوكِتات 3006/3007/3005/3009)
+        'pairToken': endpoint.pairToken ?? '',
       });
       return ok ?? false;
     } on PlatformException catch (e) {

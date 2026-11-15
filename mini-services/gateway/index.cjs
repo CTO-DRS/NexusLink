@@ -9,11 +9,14 @@
 // صفر تبعيات — وحدات node مدمجة حصرًا (http/net/fs/crypto/path). نفس سلوك
 // header_up Host {host}: نمرّر الترويسات كما هي (Host الأصلي مع المنفذ 81 يصل للأعلى).
 //
-// §37 — رمز الوصول البعيد (إغلاق حد §36.هـ.1 — docs/protocol-contract.md):
-//  - OFF بالتصميم: بلا ملف رمز صالح فالسلوك حرفيًا كما كان (صفر تغيير أمني).
-//  - عند التمكين (POST /api/remote-access يكتب ملف JSON): كل واصل من خارج
-//    loopback يجب أن يحمل الرمز بترويسة x-pair-token أو بارامتر ?pair= —
-//    والإعفاء حصرًا: /__gw/health وواصل loopback (الجهاز هي الحدود).
+// §37 + G1 (ROADMAP-2027 P0) — رمز الوصول البعيد **إلزامي افتراضيًا**:
+//  - كل واصل من خارج loopback يجب أن يحمل الرمز بترويسة x-pair-token أو
+//    بارامتر ?pair= — والإعفاء حصرًا: /__gw/health وواصل loopback (الجهاز هي الحدود).
+//  - أول إقلاع بلا ملف رمز يولّد رمزًا ويحفظه (0600) في NEXUSLINK_PAIR_FILE —
+//    ويحمله QR الاقتران تلقائيًا (/api/devices/qr → payload.pair).
+//  - فشل-مغلق: لا ملف رمز صالح = الخارج مرفوض 401 (لم يعد «OFF = مفتوح»).
+//  - التعطيل الصريح (POST /api/remote-access disable) يكتب علامة
+//    <PAIR_FILE>.disabled فلا يُعاد التوليد عند الإقلاع والخارج مرفوض 403.
 //  - مقارنة زمن-ثابت عبر sha256 (لا تسرّب طول) + حجب مؤقت لكل IP بعد 5 فشل.
 //  - نظافة: بارامتر pair يُجرَد من المسار قبل التحويل للأعلى (الرمز لا يصل
 //    لسجلات الخدمات الداخلية أبدًا) ولا يُطبع في أي سجل.
@@ -41,6 +44,8 @@ let BOUND_PORT = GATEWAY_PORT
 // §37 — مصدر الحقيقة الواحد للرمز: ملف JSON خارج المخطط (صفر-مخطط، صفر-db)
 // { token, fingerprint, createdAt } — تكتبه /api/remote-access وحذفه = تعطيل.
 const PAIR_FILE = process.env.NEXUSLINK_PAIR_FILE || pathMod.join(process.cwd(), ".zstate", "pair-token.json")
+// G1 — علامة «الوصول من الشبكة معطّل عمدًا» (يكتبها disable) — تمنع التوليد التلقائي
+const PAIR_DISABLED_FILE = `${PAIR_FILE}.disabled`
 let pairCache = { mtimeMs: -1, size: -1, data: null }
 
 // §38 — السياسات المؤسسية المركزية (M4.1 النواة المحلية) — نفس نمط §37:
@@ -261,6 +266,42 @@ function loadPair() {
   }
 }
 
+function pairDisabled() {
+  try { return fs.statSync(PAIR_DISABLED_FILE).isFile() } catch { return false }
+}
+
+/** G1 — توليد الرمز عند أول إقلاع (حصريًا: link يفشل إن سبقنا مسار الويب) —
+ * لا يولّد تحت علامة التعطيل، ولا تحت إغلاق مؤسسي/OEM (الرمز بلا معنى هناك). */
+function ensurePairToken() {
+  if (loadPair()) return "present"
+  if (pairDisabled()) return "disabled"
+  if (externalClosedBy(loadPolicy())) return "closed"
+  // تعطيل التوليد التلقائي (جولات E2E تقيس دورة enable من الصفر) — فشل-مغلق:
+  // بلا رمز يبقى الخارج مرفوضًا 401، فهذا المفتاح لا يفتح شيئًا أبدًا
+  if (process.env.NEXUSLINK_PAIR_AUTOGEN === "0") return "autogen-off"
+  try {
+    const token = crypto.randomBytes(32).toString("base64url")
+    const fingerprint = crypto.createHash("sha256").update(token).digest("hex").slice(0, 16)
+    fs.mkdirSync(pathMod.dirname(PAIR_FILE), { recursive: true, mode: 0o700 })
+    const tmp = `${PAIR_FILE}.${process.pid}.tmp`
+    fs.writeFileSync(tmp, JSON.stringify({ token, fingerprint, createdAt: new Date().toISOString(), origin: "first-run" }, null, 2), { mode: 0o600 })
+    try {
+      // ملف تالف/ناقص (لا رمز صالح) يُستبدل؛ ملف صالح سبقنا إليه طرف آخر يبقى
+      if (fs.existsSync(PAIR_FILE) && !loadPair()) fs.rmSync(PAIR_FILE, { force: true })
+      fs.linkSync(tmp, PAIR_FILE)
+    } catch { /* سبقنا مسار الويب — رمزه هو الحقيقة */ }
+    try { fs.rmSync(tmp, { force: true }) } catch {}
+    try { fs.chmodSync(PAIR_FILE, 0o600) } catch { /* أنظمة بلا بوزيكس */ }
+    pairCache = { mtimeMs: -1, size: -1, data: null }
+    const p = loadPair()
+    if (p) console.log(`[gateway] pair token ready (fp=${crypto.createHash("sha256").update(p.token).digest("hex").slice(0, 16)}) — LAN clients must present it`)
+    return p ? "generated" : "failed"
+  } catch (e) {
+    console.error("[gateway] pair token generation failed — LAN access stays closed:", e instanceof Error ? e.message : e)
+    return "failed"
+  }
+}
+
 function isLoopbackIp(ip) {
   return ip === "::1" || ip === "::ffff:127.0.0.1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)
 }
@@ -321,14 +362,19 @@ function pairGateHttp(req, res, reqUrl) {
     res.end(JSON.stringify({ ok: false, gateway: true, error: closedBy === "policy" ? "remote-access-disabled-by-policy" : "remote-access-closed-oem-default" }))
     return false
   }
-  const pair = loadPair()
-  if (!pair) return true // OFF — السلوك التاريخي حرفيًا
   // §49 — عبر النفق = خارجي: الإعفاء المحلي لا يسري على طلب مرحّل
   if (isLoopbackIp(ip) && !relayed(req)) return true
+  // G1 — فشل-مغلق: بلا رمز صالح فالخارج مرفوض (لم يعد OFF = مفتوح)
+  const pair = loadPair()
+  if (!pair && pairDisabled()) {
+    res.writeHead(403, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" })
+    res.end(JSON.stringify({ ok: false, gateway: true, error: "remote-access-disabled" }))
+    return false
+  }
   let u
   try { u = new URL(reqUrl, "http://gw") } catch { u = new URL("/", "http://gw") }
   const cand = pairCandidate(req, u)
-  if (cand && tokenMatches(cand, pair.token)) { pairFails.delete(ip); return true }
+  if (pair && cand && tokenMatches(cand, pair.token)) { pairFails.delete(ip); return true }
   const lockMs = pairLockedMs(ip)
   if (lockMs > 0) {
     res.writeHead(429, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" })
@@ -352,14 +398,18 @@ function pairGateRaw(req, socket, reqUrl) {
     } catch { /* مقبس ميت */ }
     return false
   }
-  const pair = loadPair()
-  if (!pair) return true
   // §49 — عبر النفق = خارجي (نفس حسم HTTP حرفيًا)
   if (isLoopbackIp(ip) && !relayed(req)) return true
+  // G1 — فشل-مغلق (نفس حسم HTTP حرفيًا)
+  const pair = loadPair()
+  if (!pair && pairDisabled()) {
+    try { socket.end("HTTP/1.1 403 Forbidden\r\ncontent-type: application/json\r\n\r\n" + JSON.stringify({ ok: false, gateway: true, error: "remote-access-disabled" })) } catch { /* مقبس ميت */ }
+    return false
+  }
   let u
   try { u = new URL(reqUrl, "http://gw") } catch { u = new URL("/", "http://gw") }
   const cand = pairCandidate(req, u)
-  if (cand && tokenMatches(cand, pair.token)) { pairFails.delete(ip); return true }
+  if (pair && cand && tokenMatches(cand, pair.token)) { pairFails.delete(ip); return true }
   try {
     if (pairLockedMs(ip) > 0) {
       socket.end("HTTP/1.1 429 Too Many Requests\r\ncontent-type: application/json\r\n\r\n" + JSON.stringify({ ok: false, gateway: true, error: "pair-locked" }))
@@ -531,7 +581,7 @@ function handleRequest(req, res) {
     if (path === "/__gw/health") {
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store", "access-control-allow-origin": "*" })
       const pol = loadPolicy()
-      res.end(JSON.stringify({ ok: true, proto: "Nexus/1.2", role: "gateway", port: GATEWAY_PORT, rest: REST_PORT, uptimeMs: Date.now() - STARTED_AT, pair: !!loadPair(), policyManaged: !!pol, policyRemoteAccess: pol ? pol.remoteAccess : null, oemPrivacy: oemPrivacyActive(), postureSource: pol ? "policy" : oemPrivacyActive() ? "oem-default" : "user-default", tls: TLS_MODE, tlsFingerprint }))
+      res.end(JSON.stringify({ ok: true, proto: "Nexus/1.2", role: "gateway", port: GATEWAY_PORT, rest: REST_PORT, uptimeMs: Date.now() - STARTED_AT, pair: !!loadPair(), pairRequired: true, lanAccess: loadPair() ? "token" : "closed", policyManaged: !!pol, policyRemoteAccess: pol ? pol.remoteAccess : null, oemPrivacy: oemPrivacyActive(), postureSource: pol ? "policy" : oemPrivacyActive() ? "oem-default" : "user-default", tls: TLS_MODE, tlsFingerprint }))
       return
     }
     if (!pairGateHttp(req, res, req.url)) return
@@ -555,6 +605,9 @@ server.on("upgrade", (req, socket, head) => {
   proxyUpgrade(req, socket, head)
 })
 server.on("clientError", (_err, socket) => { try { socket.end("HTTP/1.1 400 Bad Request\r\n\r\n") } catch {} })
+
+// G1 — أول إقلاع: رمز الاقتران يُولَّد ويُحفظ قبل قبول أي اتصال
+ensurePairToken()
 
 server.listen(GATEWAY_PORT, () => {
   console.log(`[gateway] NexusLink gateway on :${BOUND_PORT} → rest:${REST_PORT} (+ ?XTransformPort=<port>)${TLS_MODE ? " [TLS]" : ""}`)

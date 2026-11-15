@@ -3563,7 +3563,7 @@
   "الناشر": "Herausgeber", 
   "إصدار المفتاح": "Schlüsselversion", 
   "الوصول البعيد": "Remote-Zugriff", 
-  "اقتران الوصول عبر الإنترنت — معطّل افتراضيًا؛ عند التفعيل يحتاج كل واصل من خارج الجهاز الرمز": "Online-Pairing — standardmäßig deaktiviert; bei Aktivierung benötigt jeder externe Client den Code", 
+  "رمز الاقتران إلزامي لكل واصل من خارج الجهاز ويحمله QR الاقتران تلقائيًا — التعطيل يغلق الوصول من الشبكة كليًا": "Für jeden Client außerhalb dieses Computers ist ein Kopplungstoken erforderlich; der Kopplungs-QR enthält es automatisch — Deaktivieren schließt den Netzwerkzugriff vollständig",
   "تفعيل": "Aktivieren", 
   "تدوير الرمز": "Code drehen", 
   "تعطيل": "Deaktivieren", 

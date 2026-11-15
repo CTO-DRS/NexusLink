@@ -22,6 +22,8 @@ class NexusApi {
           .get(endpoint.api('tools/ping'), headers: {'Accept': 'application/json'})
           .timeout(Timeouts.healthCheck);
       sw.stop();
+      final gwReject = pairRejection(res.statusCode, res.body);
+      if (gwReject != null) throw gwReject;
       if (res.statusCode != 200) {
         throw HealthException('HTTP ${res.statusCode}');
       }
@@ -33,7 +35,7 @@ class NexusApi {
     } on TimeoutException {
       throw HealthException('انتهت مهلة الفحص');
     } catch (e) {
-      if (e is HealthException) rethrow;
+      if (e is HealthException || e is PairTokenRequiredException) rethrow;
       throw HealthException('$e');
     }
   }
@@ -444,6 +446,34 @@ class ScanSeal {
   final String target;
 
   const ScanSeal({required this.file, required this.bytes, required this.pages, required this.target});
+}
+
+/// G1 — رفض البوابة لواصل من الشبكة: بلا رمز/برمز قديم (401 pair-token-required)،
+/// قفل التخمين (429 pair-locked)، أو وصول الشبكة معطل على الكمبيوتر (403).
+class PairTokenRequiredException implements Exception {
+  final String reason;
+  PairTokenRequiredException(this.reason);
+  @override
+  String toString() => reason == 'remote-access-disabled'
+      ? 'الوصول من الشبكة معطّل على الكمبيوتر — فعّله من الإعدادات ثم امسح رمز QR'
+      : reason == 'pair-locked'
+          ? 'محاولات كثيرة برمز خاطئ — انتظر 30 ثانية ثم امسح رمز QR'
+          : 'الكمبيوتر يطلب رمز الاقتران — امسح رمز QR الظاهر على الكمبيوتر';
+}
+
+/// يفحص رد البوابة (gateway:true) ويعيد استثناء الرمز إن كان رفضًا.
+PairTokenRequiredException? pairRejection(int status, String body) {
+  if (status != 401 && status != 403 && status != 429) return null;
+  try {
+    final j = jsonDecode(body);
+    if (j is Map && j['gateway'] == true) {
+      final err = '${j['error'] ?? ''}';
+      if (err == 'pair-token-required' || err == 'pair-locked' || err == 'remote-access-disabled') {
+        return PairTokenRequiredException(err);
+      }
+    }
+  } catch (_) {/* ليس رد البوابة */}
+  return null;
 }
 
 class HealthException implements Exception {

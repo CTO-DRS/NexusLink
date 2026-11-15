@@ -52,7 +52,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   void _connectFromQr(QrPayload qr) {
     final mode = qr.port == NexusPorts.rest ? AccessMode.direct : AccessMode.gateway;
     _connect(
-      ServerEndpoint(host: qr.host, port: qr.port, mode: mode),
+      // G1 — رمز البوابة الإلزامي يصل مع QR ويُرسل بكل طلب
+      ServerEndpoint(host: qr.host, port: qr.port, mode: mode, pairToken: qr.pairToken),
       qr.name,
       secret: qr.secret,
     );

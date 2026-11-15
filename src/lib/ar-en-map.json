@@ -3581,7 +3581,7 @@
   "الناشر": "Publisher", 
   "إصدار المفتاح": "Key version", 
   "الوصول البعيد": "Remote access", 
-  "اقتران الوصول عبر الإنترنت — معطّل افتراضيًا؛ عند التفعيل يحتاج كل واصل من خارج الجهاز الرمز": "Internet access pairing — off by default; once on, every non-device caller must carry the token", 
+  "رمز الاقتران إلزامي لكل واصل من خارج الجهاز ويحمله QR الاقتران تلقائيًا — التعطيل يغلق الوصول من الشبكة كليًا": "A pairing token is required for every client outside this computer and is carried automatically by the pairing QR — disabling closes network access entirely",
   "تفعيل": "Enable", 
   "تدوير الرمز": "Rotate token", 
   "تعطيل": "Disable", 

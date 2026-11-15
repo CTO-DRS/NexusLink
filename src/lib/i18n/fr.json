@@ -3579,7 +3579,7 @@
   "الناشر": "L'éditeur", 
   "إصدار المفتاح": "Version de la clé", 
   "الوصول البعيد": "Accès distant", 
-  "اقتران الوصول عبر الإنترنت — معطّل افتراضيًا؛ عند التفعيل يحتاج كل واصل من خارج الجهاز الرمز": "Appariement par accès Internet — désactivé par défaut ; lors de l'activation, chaque client externe a besoin du code", 
+  "رمز الاقتران إلزامي لكل واصل من خارج الجهاز ويحمله QR الاقتران تلقائيًا — التعطيل يغلق الوصول من الشبكة كليًا": "Un jeton d’appairage est obligatoire pour tout client extérieur à cet ordinateur et le QR d’appairage le transporte automatiquement — la désactivation ferme entièrement l’accès réseau",
   "تفعيل": "Activer", 
   "تدوير الرمز": "Tourner le code", 
   "تعطيل": "Désactiver", 

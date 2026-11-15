@@ -41,6 +41,7 @@ class KeepAliveWorker(
                 putExtra("deviceId", p.getString(AgentServicePrefs.KEY_DEVICE_ID, "") ?: "")
                 putExtra("deviceName", p.getString(AgentServicePrefs.KEY_DEVICE_NAME, "Nexus Android") ?: "Nexus Android")
                 putExtra("serverKey", p.getString(AgentServicePrefs.KEY_SERVER_KEY, "") ?: "")
+                putExtra("pairToken", p.getString(AgentServicePrefs.KEY_PAIR_TOKEN, "") ?: "")
                 putExtra("fromKeepAlive", true)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
