@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { useMedia, type MediaTab } from "@/lib/media-store"
+import { useDemoMode } from "@/lib/demo-client"
 import { WebcamTab } from "./webcam-tab"
 import { SecurityTab } from "./security-tab"
 import { BabyTab } from "./baby-tab"
@@ -51,6 +52,7 @@ function AlertIcon({ kind }: { kind: string }) {
 export function MediaView() {
   const { tab, setTab, bridgeOnline, phoneOnline, latency, checks, alerts, logs } = useMedia()
   const sensors = useMedia((s) => s.sensors)
+  const demo = useDemoMode()
   const [qrOpen, setQrOpen] = useState(false)
   const [qrUrl, setQrUrl] = useState("")
   const [qrData, setQrData] = useState("")
@@ -102,6 +104,13 @@ export function MediaView() {
           <QrCode className="w-3.5 h-3.5" /> هاتف حقيقي
         </Button>
       </div>
+
+      {/* G2/P0: بلا NEXUSLINK_DEMO لا مصادر محاكاة — إعلان صادق بدل أرقام وهمية */}
+      {!demo && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-[11.5px] text-muted-foreground" data-testid="media-real-only">
+          الوسائط تعمل بعتاد حقيقي فقط: كاميرا وميكروفون هذا الكمبيوتر أو هاتف مقترن عبر <span className="font-mono dir-ltr">/phone</span> — لا بث محاكى ولا أرقام تقديرية.
+        </div>
+      )}
 
       {/* شريط التبويبات */}
       <div className="flex gap-1.5 overflow-x-auto rounded-2xl border bg-card/80 backdrop-blur p-1.5" role="tablist" aria-label="ميزات الوسائط">

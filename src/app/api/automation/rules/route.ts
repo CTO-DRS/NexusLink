@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { io } from "socket.io-client"
 import { loadPersistedFires } from "@/lib/nexus/automation-persist"
 import { ensureAutomationBridge, automationBridgeStatus } from "@/lib/nexus/automation-bridge"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 export const dynamic = "force-dynamic"
 
@@ -75,7 +76,7 @@ export async function GET() {
       bootedAt: state.bootedAt ?? null,
     })
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 503 })
+    return NextResponse.json({ error: publicErrorMessage(e) }, { status: 503 })
   }
 }
 
@@ -147,6 +148,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `إجراء غير معروف: ${action}` }, { status: 400 })
   } catch (e) {
     // رفض الجسر (تعقيم/قواعد §26.ي/§33.ج) يعود 400 مسببًا — نفس سبب الواجهة
-    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 })
+    return NextResponse.json({ error: publicErrorMessage(e) }, { status: 400 })
   }
 }

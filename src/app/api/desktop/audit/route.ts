@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { writeNativeAudit } from "@/lib/nexus/desktop-hardening"
 import { guardPcOnly } from "@/lib/nexus/http-guard"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 export const dynamic = "force-dynamic"
 
@@ -87,7 +88,7 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ ok: true, deleted: res.count })
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "فشل المسح" },
+      { error: publicErrorMessage(e, "فشل المسح") },
       { status: 500 },
     )
   }

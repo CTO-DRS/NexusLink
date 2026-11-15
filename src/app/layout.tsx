@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { QueryProviders } from "@/components/nexus/query-providers";
+import { DemoModeProvider } from "@/components/nexus/demo-mode-provider";
+import { isDemoMode } from "@/lib/nexus/demo-mode";
 
 export const metadata: Metadata = {
   title: "NexusLink — منصة إدارة الأجهزة الموحدة",
@@ -25,6 +27,8 @@ export default async function RootLayout({
   // قراءة headers() تجعل التخطيط ديناميكيًا — التكلفة مللي ثوانٍ محليًا مقابل
   // قفل XSS كامل (موثقة بصدق في §FA-18).
   const nonce = (await headers()).get("x-nonce") ?? undefined;
+  // G2/P0: علم العرض التوضيحي يُقرأ وقت الطلب على الخادم ويُمرَّر خاصيةً (قيمة منطقية فقط)
+  const demo = isDemoMode();
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
@@ -41,7 +45,9 @@ try{var fs=localStorage.getItem('nexus-font-scale');if(fs)document.documentEleme
         {/* FA-18: مزوّد الاستعلامات على الشجرة كلها — كان غيابه يُسقط SSR لواجهة
             التطبيق (/?desktop=1 و /?app=1) بخطأ No QueryClient set (كشف حي) */}
         <QueryProviders>
-          {children}
+          <DemoModeProvider demo={demo}>
+            {children}
+          </DemoModeProvider>
         </QueryProviders>
         <Toaster />
       </body>

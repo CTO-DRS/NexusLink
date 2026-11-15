@@ -3,6 +3,7 @@ import { resolveSafe } from "@/lib/nexus/fs-server"
 import { guardPcOnly } from "@/lib/nexus/http-guard"
 import { execFile } from "child_process"
 import { promisify } from "util"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 const exec = promisify(execFile)
 export const dynamic = "force-dynamic"
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "تعذر قراءة الحزمة" },
+      { ok: false, error: publicErrorMessage(e, "تعذر قراءة الحزمة") },
       { status: 400 }
     )
   }

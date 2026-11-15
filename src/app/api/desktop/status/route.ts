@@ -24,6 +24,7 @@ import { serNotification } from "@/lib/nexus/comms-server"
 import { readShortcuts, readDesktopClip, readDesktopSecurity, readDesktopSync, readDesktopMedia } from "@/lib/nexus/desktop-shortcuts"
 import { readDesktopHardening } from "@/lib/nexus/desktop-hardening"
 import { agentMedia } from "@/lib/nexus/guard-bridge"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 export const dynamic = "force-dynamic"
 
@@ -129,7 +130,7 @@ export async function GET() {
     })
   } catch (e) {
     return Response.json(
-      { ok: false, error: e instanceof Error ? e.message : "status failed" },
+      { ok: false, error: publicErrorMessage(e, "status failed") },
       { status: 500 },
     )
   }

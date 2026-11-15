@@ -93,6 +93,9 @@ export function ControlTab() {
           </div>
         )}
         <div className="divide-y divide-border/50">
+          {alarms.length === 0 && (
+            <p className="text-center text-[11.5px] text-muted-foreground py-6" data-testid="guard-alarms-empty">لا منبهات بعد — أضف منبهًا جديدًا ليُرسل إلى هاتفك</p>
+          )}
           {alarms.map((a) => (
             <div key={a.id} className="flex items-center gap-3 py-2.5">
               <Switch checked={a.enabled} onCheckedChange={() => toggleAlarm(a)} aria-label={`تفعيل منبه ${a.label}`} />

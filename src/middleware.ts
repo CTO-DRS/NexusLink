@@ -77,44 +77,70 @@ function cspFor(nonce: string): string {
   ].join("; ")
 }
 
-function isHtmlDoc(req: NextRequest): boolean {
-  if (req.method !== "GET" && req.method !== "HEAD") return false
-  const accept = req.headers.get("accept") ?? ""
-  return accept.includes("text/html")
+/**
+ * G7 — سياسة مسارات API (JSON/ملفات): لا مستند يُعرض، فلا مصدر يُحمَّل إطلاقًا.
+ * تمنع تفسير استجابة API كصفحة (XSS عبر نوع محتوى مخادع) ومنع تأطيرها.
+ */
+export const API_CSP = [
+  "default-src 'none'",
+  "frame-ancestors 'self'",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join("; ")
+
+function isApiPath(pathname: string): boolean {
+  return pathname === "/api" || pathname.startsWith("/api/")
 }
 
-export function middleware(req: NextRequest) {
-  // FA-18 — مستند HTML: nonce جديد لكل طلب + CSP على الاستجابة، وترويسة
-  // CSP/x-nonce تُمرر مع الطلب كي يطبّع Next سكربتاته بنفس الـnonce.
-  if (isHtmlDoc(req)) {
-    const nonce = crypto.randomUUID()
-    const csp = cspFor(nonce)
-    const requestHeaders = new Headers(req.headers)
-    requestHeaders.set("x-nonce", nonce)
-    requestHeaders.set("content-security-policy", csp)
-    const res = NextResponse.next({ request: { headers: requestHeaders } })
-    res.headers.set("content-security-policy", csp)
-    return res
-  }
-
-  // حرس الأصل — مسارات API حصرًا (GET/HEAD/OPTIONS تمر دائمًا)
-  if (SAFE_METHODS.has(req.method)) return NextResponse.next()
+function originBlocked(req: NextRequest): boolean {
+  if (SAFE_METHODS.has(req.method)) return false // GET/HEAD/OPTIONS تمر دائمًا
   const origin = req.headers.get("origin")
-  if (!origin) return NextResponse.next() // curl · الوكيل · سطح المكتب — بلا متصفح
-  if (originAllowed(origin)) return NextResponse.next()
+  if (!origin) return false // curl · الوكيل · سطح المكتب — بلا متصفح
+  if (originAllowed(origin)) return false
   // وميض توحيد: Origin على نفس المضيف المطلَق يمر وإن لم يصنفه المنطق (أسماء جديدة)
   try {
     const host = req.headers.get("host")
-    if (host && new URL(origin).host === host) return NextResponse.next()
+    if (host && new URL(origin).host === host) return false
   } catch { /* أصل فاسد → الرفض */ }
-  return NextResponse.json(
-    { ok: false, error: "cross-origin-blocked" },
-    { status: 403 },
-  )
+  return true
+}
+
+export function middleware(req: NextRequest) {
+  const api = isApiPath(req.nextUrl.pathname)
+
+  // حرس الأصل (38) — الطرق غير الآمنة من أصل إنترنت عام تُرفض قبل أي معالج
+  if (originBlocked(req)) {
+    const res = NextResponse.json(
+      { ok: false, error: "cross-origin-blocked" },
+      { status: 403 },
+    )
+    res.headers.set("content-security-policy", api ? API_CSP : cspFor(crypto.randomUUID()))
+    return res
+  }
+
+  // G7 — مسارات API: CSP صارمة بلا مصادر (والترويسات الثابتة من next.config)
+  if (api) {
+    const res = NextResponse.next()
+    res.headers.set("content-security-policy", API_CSP)
+    return res
+  }
+
+  // FA-18 + G7 — كل ما سوى API (مستندات HTML · حمولات RSC · صفحة 404 · ملفات public):
+  // nonce جديد لكل طلب + CSP على الاستجابة، وترويسة CSP/x-nonce تُمرر مع الطلب
+  // كي يطبّع Next سكربتاته بنفس الـnonce. (كان مقصورًا على Accept: text/html —
+  // فطلب بلا Accept يعيد مستند HTML بلا CSP؛ الآن لا ثغرة في التصنيف.)
+  const nonce = crypto.randomUUID()
+  const csp = cspFor(nonce)
+  const requestHeaders = new Headers(req.headers)
+  requestHeaders.set("x-nonce", nonce)
+  requestHeaders.set("content-security-policy", csp)
+  const res = NextResponse.next({ request: { headers: requestHeaders } })
+  res.headers.set("content-security-policy", csp)
+  return res
 }
 
 export const config = {
-  // كل المسارات ما عدا الأصول الساكنة المتجاهلة — فرع HTML يفرّق المستندات
-  // وفرع الأصل يحمي API حصرًا (الأصول بلا منطق ولا CSP).
+  // كل المسارات ما عدا الأصول الساكنة — تلك تأخذ CSP ثابتة صارمة من next.config
+  // (STATIC_CSP) فلا مسار بلا CSP (G7).
   matcher: ["/((?!_next/static|_next/image|fonts/|favicon.ico|logo.svg|robots.txt|seo/).*)"],
 }

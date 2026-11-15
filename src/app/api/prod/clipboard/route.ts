@@ -24,6 +24,7 @@ import {
 } from "@/lib/nexus/clip-at-rest-server"
 import { ringKeyCount } from "@/lib/nexus/clip-multikey"
 import { guardPcOnly } from "@/lib/nexus/http-guard"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 export const dynamic = "force-dynamic"
 
@@ -160,6 +161,6 @@ export async function PUT(req: Request) {
     const openedItem = { ...updated, content: oc.ok ? oc.content : "" }
     return Response.json({ ok: true, name: path.basename(target), bytes: st.size, item: openedItem })
   } catch (e) {
-    return Response.json({ ok: false, error: "تعذر نسخ الملف: " + String(e) }, { status: 500 })
+    return Response.json({ ok: false, error: "تعذر نسخ الملف: " + publicErrorMessage(e) }, { status: 500 })
   }
 }
