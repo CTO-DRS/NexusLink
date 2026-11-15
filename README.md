@@ -78,7 +78,7 @@ reserved; a declared open set (SDK · CLI · pairing math · oplog · docs) unde
    | Windows | `NexusLink_3.1.1_x64-setup.exe` | NSIS — يثبّت WebView2 تلقائيًا إن غاب؛ بديل MSI أو ZIP محمول |
    | macOS | `NexusLink_3.1.1_aarch64.dmg` | اسحب التطبيق إلى Applications؛ غير موقّع: زر يمين ← Open أول مرة |
    | Linux | `NexusLink_3.1.1_amd64.deb` أو `*.AppImage` | AppImage: `chmod +x` ثم شغّل — بلا تثبيت |
-   | Android | `NexusLink-3.1.1-release.apk` | الوكيل — «تثبيت من مصدر غير معروف» مرة واحدة |
+   | Android 8+ | `NexusLink-<الإصدار>-arm64-v8a-release.apk` | الوكيل — «تثبيت من مصدر غير معروف» مرة واحدة · أجهزة 32-بت: `-armeabi-v7a-release.apk` · حتى v3.1.1: APK شامل واحد `NexusLink-3.1.1-release.apk` |
 
 2. **المركز يعمل فور الإقلاع بلا أي إعداد**: الواجهة + الخادم المضمّن (:3000)
    + جسور الإشعارات/الوسائط/التحكم (:3003/:3004/:3005/:3006/:3007/:3009)
@@ -183,17 +183,24 @@ keytool -genkeypair -v -keystore android/app/nexuslink-release.jks \
 # keyAlias=nexuslink
 # keyPassword=...
 
-flutter build apk --release            # APK موقّع
-flutter build appbundle --release      # حزمة Play
+flutter build apk --release --split-per-abi   # APK موقّع لكل معمارية (G4)
+flutter build appbundle --release             # حزمة Play
 ```
 
-الناتج: `build/app/outputs/flutter-apk/app-release.apk` — تحقّق التوقيع:
+الناتج: `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` (+ `app-armeabi-v7a-release.apk`
+و`app-x86_64-release.apk`) — لا APK شامل بعد الآن (كان ~120MB). الحد الأدنى Android 8.0 (`minSdk 26`).
+تحقّق التوقيع:
 
 ```bash
-$ANDROID_HOME/build-tools/34.0.0/apksigner verify --print-certs app-release.apk
+$ANDROID_HOME/build-tools/34.0.0/apksigner verify --print-certs app-arm64-v8a-release.apk
 ```
 
-CI يبني تلقائيًا في `.github/workflows/release.yml` (وظيفة android) — التوقيع من
+**صفر سحابة (G3)**: الوكيل لا يحمل Google ML Kit ولا Firebase ولا Play Services — مسح QR
+الاقتران محلي عبر ZXing. الفحص الآلي `scripts/android-zero-cloud-check.py` يعمل في
+`.github/workflows/android.yml` (كل طلب دمج يمس `nexuslink_mobile/`) وفي `release.yml`،
+ويفشل إن ظهر `com.google.mlkit` / `com.google.firebase` / `com.google.android.gms`.
+
+CI يبني تلقائيًا في `.github/workflows/release.yml` (وظيفة android — أصول `NexusLink-<v>-<abi>-release.apk` + `NexusLink-<v>-release.aab`)، ويبني تحققًا على كل طلب دمج في `.github/workflows/android.yml` — التوقيع من
 `secrets.ANDROID_KEYSTORE_BASE64` + `ANDROID_KEYSTORE_PASSWORD` + `ANDROID_KEY_ALIAS` + `ANDROID_KEY_PASSWORD`.
 
 ### متطلبات أندرويد الحساسة

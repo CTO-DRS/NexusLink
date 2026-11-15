@@ -349,7 +349,7 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
     if (forgetRow && cur?.endpoint != null) {
       final row = await db.byKey(cur!.endpoint!.key);
       if (row != null) await db.forget(row.id);
-      await PairTokenStore.forget(cur!.endpoint!.key);
+      await PairTokenStore.forget(cur.endpoint!.key);
       ref.invalidate(trustedServersProvider);
     } else {
       await db.clearLastUsed();
