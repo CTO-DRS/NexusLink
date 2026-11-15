@@ -23,7 +23,7 @@ pkill -f "next-server" 2>/dev/null
 kill_port 3004 || { echo "❌ المنفذ 3004 لم يتحرر من الخدمة القديمة"; ss -tlnp | grep 3004; exit 1; }
 sleep 1
 
-setsid node node_modules/.bin/next dev -p 3000 >> dev.log 2>&1 < /dev/null &
+setsid env NEXUSLINK_DEMO=1 node node_modules/.bin/next dev -p 3000 >> dev.log 2>&1 < /dev/null &
 SRV=$!
 
 READY=""

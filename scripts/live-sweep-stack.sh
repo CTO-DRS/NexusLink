@@ -12,7 +12,7 @@ pkill -f "next dev" 2>/dev/null
 sleep 1
 
 echo "== [1] next standalone :3000 =="
-env PORT=3000 HOSTNAME=127.0.0.1 NODE_ENV=production \
+env PORT=3000 HOSTNAME=127.0.0.1 NODE_ENV=production NEXUSLINK_DEMO=1 \
   NEXUS_WOL_BROADCAST=127.0.0.1 NEXUS_WOL_PORT=9009 \
   node .next/standalone/server.js > .zscripts/live-next.log 2>&1 < /dev/null &
 NEXT_BG=$!

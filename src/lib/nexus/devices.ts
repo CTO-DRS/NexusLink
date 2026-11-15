@@ -1,6 +1,7 @@
 // NexusLink — device registry with simulated live state + heartbeat.
 import type { NexusDevice, DeviceKind } from "./types"
 import crypto from "crypto"
+import { isDemoMode } from "./demo-mode"
 
 /** نافذة صلاحية سر الاقتران (G-1): آخر رمز QR مُصدَر يقبل الاقتران لعشر دقائق فقط،
  *  وكل استدعاء جديد لـ /api/devices/qr يُدوّر السر (آخر رمز مُصدَر هو الصالح). */
@@ -64,7 +65,9 @@ const SEED_VERSION = 4
 
 function seed(): Store {
   return {
-    devices: [
+    // G2: الأجهزة الوهمية للعرض التوضيحي فقط (NEXUSLINK_DEMO=1) — بدونه قائمة فارغة
+    // تمتلئ بالاقتران الحقيقي حصرًا (الحزمة المكتبية والإنتاج)
+    devices: !isDemoMode() ? [] : [
       {
         id: "pc-office", name: "PC-OFFICE", kind: "desktop", state: "connected",
         mode: "wifi", ip: "192.168.1.2", battery: 100, storageTotal: 512 * 1024 ** 3,
