@@ -85,6 +85,12 @@
     <content_attribute id="money-gambling">none</content_attribute>
   </content_rating>
   <releases>
+    <release version="3.1.1" date="2026-11-15">
+      <description>
+        <p>Clean packaging patch: ships an empty seed database, fixes the Prisma client in deb/AppImage builds, removes source maps, disables Android auto-backup, slims the APK, and replaces the leftover template logo.</p>
+        <p xml:lang="ar">‏إصدار تصحيحي للحزم: قاعدة أولية فارغة، وإصلاح عميل Prisma في deb/AppImage، وحذف خرائط المصدر، وإيقاف النسخ الاحتياطي التلقائي في أندرويد، وتصغير APK، واستبدال شعار القالب.</p>
+      </description>
+    </release>
     <release version="3.1.0" date="2026-10-29">
       <description>
         <p>Post-seal minor: self-hosted relay (internet access with zero cloud middlemen), smart emergency mode, fleet policy v2 with compliance reports, short-code remote assist, self-owned TLS, complete languages, dormant signing chain, honest license dual-licensing.</p>
