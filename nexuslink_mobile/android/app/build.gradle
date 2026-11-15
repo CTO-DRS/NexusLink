@@ -37,13 +37,20 @@ android {
 
     defaultConfig {
         applicationId = "com.nexuslink.mobile"
-        minSdk = 24
+        // G4: Android 8.0 (API 26) حدًّا أدنى — يطابق README «Android 8+». لا اعتمادية
+        // تحتاج أقل (الحد الأدنى رقم أرضية للتطبيق؛ الاعتماديات تعلن حدودًا ≤ 24 فتعمل فوقه).
+        minSdk = 26
         targetSdk = 34
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName
-        // حجم الـAPK: لا نشحن مكتبات armeabi/mips/mips64/x86 (32-بت قديمة) القادمة من الإضافات
-        ndk {
-            abiFilters "arm64-v8a", "armeabi-v7a", "x86_64"
+        // حجم الـAPK: لا نشحن مكتبات armeabi/mips/mips64/x86 (32-بت قديمة) القادمة من الإضافات.
+        // G4: مع `flutter build apk --split-per-abi` تضبط إضافة Flutter ‏splits.abi بنفسها،
+        // وAGP يرفض ndk.abiFilters مع splits.abi معًا ("Conflicting configuration") ⇒
+        // المرشح يُطبَّق فقط على البناء غير المقسّم (AAB / APK شامل).
+        if (!project.hasProperty("split-per-abi")) {
+            ndk {
+                abiFilters "arm64-v8a", "armeabi-v7a", "x86_64"
+            }
         }
     }
 
@@ -83,4 +90,9 @@ dependencies {
     // FA-10: libsodium عبر lazysodium — X25519 + AES-256-GCM للقناة المشفرة 3009
     implementation "com.goterl:lazysodium-android:5.1.0@aar"
     implementation "net.java.dev.jna:jna:5.2.0@aar"
+    // G3: مسح QR محلي بلا سحابة — ZXing (Apache-2.0)، فك ترميز على الجهاز كليًا.
+    // يحل محل mobile_scanner الذي يجرّ com.google.mlkit + com.google.firebase + GMS.
+    implementation "com.journeyapps:zxing-android-embedded:4.3.0"   // يجرّ com.google.zxing:core (Java خالصة)
+    // registerForActivityResult(ScanContract()) في MainActivity
+    implementation "androidx.activity:activity-ktx:1.7.2"
 }

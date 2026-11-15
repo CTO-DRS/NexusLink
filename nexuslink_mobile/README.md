@@ -21,7 +21,7 @@ flutter pub get
 dart run build_runner build --delete-conflicting-outputs
 
 flutter run            # على جهاز/محاكي على نفس شبكة الكمبيوتر
-flutter build apk      # إصدار
+flutter build apk --split-per-abi   # إصدار (APK لكل معمارية — Android 8+ / minSdk 26)
 ```
 
 ## 2) اختبار النجاح (خطوة بخطوة)
@@ -30,7 +30,7 @@ flutter build apk      # إصدار
 2. افتح تطبيق NexusLink على الهاتف → تبويب **الاتصال**.
 3. اختر طريقة واحدة من الثلاث:
    - **اكتشاف تلقائي mDNS**: سيظهر السيرفر `NEXUS-PC` تلقائيًا (خدمة `_nexuslink._tcp` عبر bonsoir).
-   - **مسح QR**: افتح شاشة الأجهزة في الويب ← «عرض QR» ← امسحه (mobile_scanner) — الحمولة
+   - **مسح QR**: افتح شاشة الأجهزة في الويب ← «عرض QR» ← امسحه (ماسح ZXing أصلي على الجهاز — بلا ML Kit/Firebase) — الحمولة
      تحتوي العنوان الحقيقي + السر + خريطة المنافذ.
    - **إدخال يدوي**: IP الكمبيوتر والمنفذ (81 عبر البوابة أو 3000 مباشرة).
 4. يفحص التطبيق الصحة أولًا (`GET /api/tools/ping` + قياس RTT)، ثم يسجّل الجهاز

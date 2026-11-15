@@ -1,9 +1,9 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../core/protocol.dart';
+import '../data/qr_scanner.dart';
 import '../domain/models.dart';
 import '../state/control_providers.dart';
 import '../state/providers.dart';
@@ -66,9 +66,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   }
 
   Future<void> _scanQr() async {
-    final raw = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const _QrScannerPage()),
-    );
+    // G3: ماسح ZXing أصلي على الجهاز (بلا ML Kit/Firebase) — انظر QrScanner
+    final raw = await QrScanner.scan(prompt: 'connect.qrHint'.tr());
     if (raw == null || !mounted) return;
     final qr = QrPayload.tryParse(raw);
     if (qr == null) {
@@ -416,88 +415,6 @@ class _SectionCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// صفحة مسح QR (mobile_scanner)
-// ---------------------------------------------------------------------------
-
-class _QrScannerPage extends StatefulWidget {
-  const _QrScannerPage();
-
-  @override
-  State<_QrScannerPage> createState() => _QrScannerPageState();
-}
-
-class _QrScannerPageState extends State<_QrScannerPage> {
-  final MobileScannerController _controller = MobileScannerController(
-    formats: const [BarcodeFormat.qrCode],
-    detectionSpeed: DetectionSpeed.noDuplicates,
-  );
-  bool _done = false;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onDetect(BarcodeCapture capture) {
-    if (_done) return;
-    for (final b in capture.barcodes) {
-      final value = b.rawValue;
-      if (value == null) continue;
-      final qr = QrPayload.tryParse(value);
-      if (qr != null) {
-        _done = true;
-        Navigator.of(context).pop(value);
-        return;
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('connect.qr'.tr())),
-      body: Stack(children: [
-        MobileScanner(
-          controller: _controller,
-          onDetect: _onDetect,
-          errorBuilder: (context, error, _) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(error.errorCode.name, textAlign: TextAlign.center),
-            ),
-          ),
-        ),
-        // إطار توجيه
-        Center(
-          child: Container(
-            width: 240, height: 240,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.white70, width: 2),
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        ),
-        Positioned(
-          left: 24, right: 24, bottom: 36,
-          child: Card(
-            color: Colors.black54,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                'connect.qrHint'.tr(),
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-              ),
-            ),
-          ),
-        ),
-      ]),
     );
   }
 }

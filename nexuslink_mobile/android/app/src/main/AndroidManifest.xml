@@ -74,6 +74,12 @@
             </intent-filter>
         </activity>
 
+        <!-- G3: ماسح QR المحلي (ZXing) — يتبع اتجاه الجهاز بدل الأفقي المفروض افتراضيًا -->
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:screenOrientation="fullSensor"
+            tools:replace="screenOrientation" />
+
         <!-- وكيل الجهاز: يملك اتصال socket.io الدائم وإعادة الاتصال التلقائي -->
         <service
             android:name=".AgentForegroundService"

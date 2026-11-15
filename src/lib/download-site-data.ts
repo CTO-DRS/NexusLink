@@ -68,7 +68,37 @@ export function releaseVersion(tag: string): string {
  * الاسم الناتج يطابق أصل الإصدار على GitHub حرفيًا (مُثبت حيًا على v3.1.0).
  */
 export function resolveAssetName(template: string, version: string): string {
-  return template.replace(/\{\{v\}\}/g, version)
+  let t = template
+  if (hasSplitAndroidAssets(version)) {
+    for (const [legacy, split] of SPLIT_ANDROID_RENAMES) t = t.split(legacy).join(split)
+  }
+  return t.replace(/\{\{v\}\}/g, version)
+}
+
+/**
+ * G4 — APK مقسّم لكل معمارية: الإصدارات حتى 3.1.1 (شاملها) تشحن APK شاملًا واحدًا
+ * (`NexusLink-<v>-release.apk` ~120MB) و`app-release.aab`؛ وما بعدها يشحن
+ * `NexusLink-<v>-<abi>-release.apk` (arm64-v8a / armeabi-v7a / x86_64) و`NexusLink-<v>-release.aab`
+ * (release.yml وظيفة android). القوالب أدناه تبقى بالاسم المنطقي القديم فتُحسم للاسم
+ * الصحيح حسب النسخة الحية — فلا ينكسر رابط تنزيل الإصدار المنشور حاليًا ولا التالي.
+ * التنزيل الأساسي للهاتف = arm64-v8a (كل هاتف Android 8+ حديث)؛ البقية في صفحة الإصدارات.
+ */
+export const LAST_UNIVERSAL_APK_VERSION = "3.1.1"
+
+const SPLIT_ANDROID_RENAMES: [string, string][] = [
+  ["NexusLink-{{v}}-release.apk", "NexusLink-{{v}}-arm64-v8a-release.apk"],
+  ["app-release.aab", "NexusLink-{{v}}-release.aab"],
+]
+
+/** هل يشحن هذا الإصدار أصول أندرويد المقسّمة (نسخة > 3.1.1)؟ */
+export function hasSplitAndroidAssets(version: string): boolean {
+  const p = (s: string) => s.split(/[.-]/).slice(0, 3).map((x) => parseInt(x, 10))
+  const [a1, a2, a3] = p(version)
+  const [b1, b2, b3] = p(LAST_UNIVERSAL_APK_VERSION)
+  if ([a1, a2, a3].some((n) => Number.isNaN(n))) return true
+  if (a1 !== b1) return a1 > b1
+  if (a2 !== b2) return a2 > b2
+  return a3 > b3
 }
 
 export function assetUrl(name: string): string {
@@ -114,6 +144,7 @@ export function primaryAssetFor(os: OsKind, version: string): string | null {
     case "linux":
       return resolveAssetName("NexusLink_{{v}}_amd64.AppImage", version)
     case "android":
+      // G4: يُحسم إلى NexusLink-<v>-arm64-v8a-release.apk للإصدارات بعد 3.1.1
       return resolveAssetName("NexusLink-{{v}}-release.apk", version)
     default:
       return null
@@ -159,6 +190,6 @@ export const PLATFORMS: PlatformGroup[] = [
       { name: "NexusLink-{{v}}-release.apk", descKey: "تثبيت مباشر على هاتفك" },
       { name: "app-release.aab", descKey: "للنشر عبر Google Play أو أدوات MDM" },
     ],
-    requirementsKey: "المتطلبات: Android 7+ (يُنصح 10 وما فوق)",
+    requirementsKey: "المتطلبات: Android 8+ (يُنصح 10 وما فوق)",
   },
 ]
