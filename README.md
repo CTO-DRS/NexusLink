@@ -15,6 +15,8 @@
   <b>🎬 جولة فيديو في الواجهة (4:40) · UI walkthrough</b> — <a href="https://cto-drs.github.io/NexusLink/#video">▶ شاهدها على الموقع / Watch</a> · <a href="docs/media/NexusLink-Walkthrough.mp4">MP4</a>
 </p>
 
+> 🧭 **خارطة الطريق:** [docs/ROADMAP-2027.md](docs/ROADMAP-2027.md) — من «منتج مكتمل محليًا» إلى الأقوى والأذكى عالميًا.
+
 > **Quick facts (باهتزاز واحد):** NexusLink · v3.1.1 · مجاني للاستخدام الشخصي ·
 > Windows 10/11 · macOS 12+ · Linux x64 · Android 8+ (iOS: وسائط/ملفات/حافظة فقط — حد معلن) ·
 > ازدواجية ترخيص صادقة: نواة مملوكة + مجموعة مفتوحة MIT (انظر `LICENSE` و`docs/OPEN-COMPONENTS.md`) ·
