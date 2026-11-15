@@ -19,6 +19,7 @@ on:
       - ".github/workflows/nextjs.yml"
       - "public/NexusLink-Release-Page.html"
       - "public/seo/**"
+      - "docs/media/**"
   workflow_dispatch:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
@@ -45,6 +46,8 @@ jobs:
           mkdir -p _site
           cp public/NexusLink-Release-Page.html _site/index.html
           cp -r public/seo/. _site/
+          mkdir -p _site/media
+          cp docs/media/NexusLink-Walkthrough.mp4 docs/media/walkthrough-poster.jpg docs/media/walkthrough-preview.gif _site/media/
           echo "site: index.html $(wc -c < _site/index.html) bytes"
           echo "seo files:"; ls -A _site/
       - name: Setup Pages

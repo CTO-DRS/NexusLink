@@ -186,6 +186,10 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic","I
 a{color:var(--brand);text-decoration:none}
 h2{font-size:1.7rem;margin-bottom:.4rem}
 .sect{padding:64px 0;border-top:1px solid var(--border)}
+.video-box{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow);background:#0b1514;aspect-ratio:16/9}
+.video-box video{display:block;width:100%;height:100%;object-fit:contain;background:#0b1514}
+.video-alt{margin-top:12px;color:var(--muted);font-size:.92em}
+.video-alt a{color:var(--accent,inherit)}
 .sect-head{margin-bottom:28px}
 .sect-head p{color:var(--muted);max-width:640px}
 /* header */
@@ -289,6 +293,7 @@ footer{border-top:1px solid var(--border);padding:34px 0;margin-top:20px}
       NexusLink
     </a>
     <nav class="main" aria-label="NexusLink">
+      <a href="#video" data-i="nav_video">الفيديو</a>
       <a href="#downloads" data-i="nav_dl">التحميلات</a>
       <a href="#verify" data-i="nav_verify">التحقق</a>
       <a href="#guide" data-i="nav_guide">دليل التثبيت</a>
@@ -341,6 +346,20 @@ footer{border-top:1px solid var(--border);padding:34px 0;margin-top:20px}
         <div class="stat"><b>2108</b><span data-i="stat4">فحص E2E آلي أخضر على المشروع</span></div>
       </div>
       <p class="stats-note" data-i="stats_note">أرقام مقاسة فعليًا داخل بيئة التطوير الموثقة — قد تختلف حسب شبكتك وأجهزتك.</p>
+    </div>
+  </section>
+  <section class="sect" id="video">
+    <div class="wrap">
+      <div class="sect-head">
+        <h2 data-i="vid_title">جولة فيديو في الواجهة</h2>
+        <p data-i="vid_sub">أربع دقائق ونصف تمرّ على لوحة التحكم، الملفات، الحماية، الإشعارات والإعدادات — بترجمة عربية على الشاشة.</p>
+      </div>
+      <div class="video-box">
+        <video controls preload="none" playsinline poster="https://cto-drs.github.io/NexusLink/media/walkthrough-poster.jpg" aria-label="NexusLink walkthrough">
+          <source src="https://cto-drs.github.io/NexusLink/media/NexusLink-Walkthrough.mp4" type="video/mp4">
+        </video>
+      </div>
+      <p class="video-alt"><span data-i="vid_alt">ما اشتغل الفيديو؟ حمّله مباشرة:</span> <a href="https://github.com/CTO-DRS/NexusLink/releases/download/v3.1.1/NexusLink-Walkthrough-3.1.1.mp4">MP4 (4.9MB)</a></p>
     </div>
   </section>
   <section class="sect" id="downloads">
@@ -512,7 +531,7 @@ sha256sum -c SHA256SUMS.txt 2>/dev/null | grep OK</div>
 "use strict";
 var D={
 title:{ar:"NexusLink — صفحة النشر والتحميل",en:"NexusLink — Download & Release"},
-nav_dl:{ar:"التحميلات",en:"Downloads"},nav_verify:{ar:"التحقق",en:"Verify"},nav_guide:{ar:"دليل التثبيت",en:"Install guide"},nav_faq:{ar:"الأسئلة",en:"FAQ"},
+nav_video:{ar:"الفيديو",en:"Video"},nav_dl:{ar:"التحميلات",en:"Downloads"},nav_verify:{ar:"التحقق",en:"Verify"},nav_guide:{ar:"دليل التثبيت",en:"Install guide"},nav_faq:{ar:"الأسئلة",en:"FAQ"},
 hero_badge:{ar:"أحدث إصدار",en:"Latest release"},
 hero_h1a:{ar:"حوّل أجهزتك إلى منظومة واحدة",en:"Turn your devices into one system"},
 hero_h1b:{ar:"… بلا سحابة",en:"… with no cloud"},
@@ -522,6 +541,9 @@ hero_cta2:{ar:"تصفح كل التحميلات",en:"Browse all downloads"},
 chip1:{ar:"تشفير من الطرف إلى الطرف",en:"End-to-end encrypted"},chip2:{ar:"لا سحابة — شبكتك المحلية فقط",en:"No cloud — your LAN only"},chip3:{ar:"مجاني للاستخدام الشخصي",en:"Free for personal use"},
 stat1:{ar:"زمن استجابة التحكم P95 (مقاس)",en:"Control latency P95 (measured)"},stat2:{ar:"سرعة نقل مقاسة عبر الجسور",en:"Transfer speed measured via bridges"},stat3:{ar:"ذاكرة واجهة سطح المكتب",en:"Desktop UI memory footprint"},stat4:{ar:"فحص E2E آلي أخضر على المشروع",en:"Automated green E2E checks"},
 stats_note:{ar:"أرقام مقاسة فعليًا داخل بيئة التطوير الموثقة — قد تختلف حسب شبكتك وأجهزتك.",en:"Measured in the documented dev environment — may vary with your network and devices."},
+vid_title:{ar:"جولة فيديو في الواجهة",en:"UI walkthrough video"},
+vid_sub:{ar:"أربع دقائق ونصف تمرّ على لوحة التحكم، الملفات، الحماية، الإشعارات والإعدادات — بترجمة عربية على الشاشة.",en:"Four and a half minutes through the dashboard, files, protection, notifications and settings — with on-screen Arabic captions."},
+vid_alt:{ar:"ما اشتغل الفيديو؟ حمّله مباشرة:",en:"Video not playing? Download it directly:"},
 dl_title:{ar:"تحميلات كل المنصات",en:"Downloads for every platform"},
 dl_sub:{ar:"روابط دائمة تشير دائمًا لأحدث إصدار — الأحجام حقيقية من أصول الإصدار المنشور. الملفات الخمسة الموقعة تحمل علامة ✓ (minisign/Ed25519 عبر Tauri updater).",en:"Permanent links that always point to the latest release — sizes are real, straight from published release assets. The five signed assets carry a ✓ mark (minisign/Ed25519 via Tauri updater)."},
 rec:{ar:"موصى به لنظامك",en:"Recommended for your system"},sig_lbl:{ar:"✓ موقّع",en:"✓ signed"},
