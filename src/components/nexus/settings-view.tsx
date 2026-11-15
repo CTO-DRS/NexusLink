@@ -1232,7 +1232,7 @@ function RemoteAccessCard() {
           <SectionTitle
             icon={Wifi}
             title={t("الوصول البعيد")}
-            desc={t("اقتران الوصول عبر الإنترنت — معطّل افتراضيًا؛ عند التفعيل يحتاج كل واصل من خارج الجهاز الرمز")}
+            desc={t("رمز الاقتران إلزامي لكل واصل من خارج الجهاز ويحمله QR الاقتران تلقائيًا — التعطيل يغلق الوصول من الشبكة كليًا")}
           />
           <Button variant="ghost" size="sm" onClick={load} aria-label={t("تحديث")}>
             <RefreshCw className="w-4 h-4" />

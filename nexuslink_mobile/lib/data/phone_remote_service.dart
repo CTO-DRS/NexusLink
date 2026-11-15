@@ -118,6 +118,7 @@ class PhoneRemoteService {
     required String host,
     required int port,
     required String mode, // gateway | direct
+    String? pairToken, // G1 — رمز البوابة الإلزامي (gateway حصرًا)
   }) {
     disconnect();
     try {
@@ -128,7 +129,7 @@ class PhoneRemoteService {
           .setReconnectionDelay(2000)
           .setReconnectionDelayMax(15000)
           .setTimeout(Timeouts.socketConnect.inMilliseconds);
-      if (mode == 'gateway') builder.setQuery({'XTransformPort': '$bridgePort'});
+      if (mode == 'gateway') builder.setQuery({'XTransformPort': '$bridgePort', if (pairToken != null && pairToken.isNotEmpty) 'pair': pairToken});
       final socket = sio.io(url, builder.build());
 
       void bind(String event, void Function(dynamic) fn) => socket.on(event, fn);

@@ -604,13 +604,20 @@ pub fn start(app: AppHandle) {
     let nexus_data = data_root(&app);
     let _ = std::fs::create_dir_all(&nexus_data);
     let ndr_str = nexus_data.to_string_lossy().to_string();
+    // G1 — رمز اقتران البوابة الإلزامي: مسار واحد قابل للكتابة في مجلد بيانات التطبيق
+    // يتشاركه Next (QR + /api/remote-access) والبوابة. قبلها كان كل طرف يحسمه من
+    // cwd الخاص به (Next = resources/server للقراءة فقط غالبًا، البوابة = cwd الأب).
+    let pair_file = nexus_data.join(".zstate").join("pair-token.json").to_string_lossy().to_string();
 
     let next_spec = ProcSpec {
         name: "next",
         script: res.join("server/server.js").to_string_lossy().to_string(),
         env: vec![
             ("PORT".into(), REST_PORT.to_string()),
-            ("HOSTNAME".into(), "0.0.0.0".into()),
+            // G1 — Next على loopback حصرًا: الشبكة تصل عبر البوابة (:81) فقط حيث رمز
+            // الاقتران إلزامي. 0.0.0.0 كان يتجاوز البوابة (و/api/devices/qr يحمل الرمز الآن).
+            ("HOSTNAME".into(), "127.0.0.1".into()),
+            ("NEXUSLINK_PAIR_FILE".into(), pair_file.clone()),
             ("NODE_ENV".into(), "production".into()),
             // G2 — الحزمة المكتبية بلا بيانات عرض وهمية أبدًا (أجهزة/جهات اتصال مزروعة):
             // قائمة الأجهزة تبدأ فارغة وتمتلئ بالاقتران الحقيقي حصرًا
@@ -629,6 +636,7 @@ pub fn start(app: AppHandle) {
             ("GATEWAY_PORT".into(), "81".into()),
             ("REST_PORT".into(), REST_PORT.to_string()),
             ("NEXUS_DATA_ROOT".into(), ndr_str.clone()),
+            ("NEXUSLINK_PAIR_FILE".into(), pair_file),
         ],
         cwd: None,
     };

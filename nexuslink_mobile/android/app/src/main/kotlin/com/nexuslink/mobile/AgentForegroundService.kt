@@ -183,6 +183,8 @@ class AgentForegroundService : Service() {
     private var host = ""
     private var port = 81
     private var mode = "gateway"
+    // G1 — رمز اقتران البوابة الإلزامي (من QR عبر Flutter، أو المحفوظ للإقلاع التلقائي)
+    private var pairToken = ""
     private var bridgePort = 3006
     private var deviceId = ""
     private var deviceName = "Nexus Android"
@@ -226,6 +228,7 @@ class AgentForegroundService : Service() {
             bridgePort = i.getIntExtra("bridgePort", bridgePort)
             deviceId = i.getStringExtra("deviceId") ?: deviceId
             deviceName = i.getStringExtra("deviceName") ?: deviceName
+            pairToken = i.getStringExtra("pairToken") ?: pairToken
         }
         currentServerKey = "$host:$port"
 
@@ -240,6 +243,7 @@ class AgentForegroundService : Service() {
                 .putString(AgentServicePrefs.KEY_DEVICE_ID, deviceId)
                 .putString(AgentServicePrefs.KEY_DEVICE_NAME, deviceName)
                 .putString(AgentServicePrefs.KEY_SERVER_KEY, currentServerKey ?: "")
+                .putString(AgentServicePrefs.KEY_PAIR_TOKEN, pairToken)
                 .apply()
         } catch (_: Exception) {
         }
@@ -263,7 +267,7 @@ class AgentForegroundService : Service() {
     private fun connectSec() {
         if (deviceId.isEmpty()) return // بلا معرّف موثوق لا قناة أمان
         if (sec == null) sec = SecChannel(this, deviceId, deviceName)
-        sec?.connect(host, port, mode, AgentBridge.SEC_PORT)
+        sec?.connect(host, port, mode, AgentBridge.SEC_PORT, pairToken)
     }
 
     /** إشعار نص مشفر وصل والواجهة ميتة (قناة 3009). */
@@ -345,7 +349,7 @@ class AgentForegroundService : Service() {
             opts.timeout = 10_000
             if (mode == "gateway") {
                 // نفس نمط عميل الويب: Caddy يوجّه ?XTransformPort إلى منفذ الجسر
-                opts.query = "XTransformPort=$bridgePort"
+                opts.query = AgentServicePrefs.gatewayQuery(bridgePort, pairToken)
             }
 
             val s = IO.socket(url, opts)
@@ -434,7 +438,7 @@ class AgentForegroundService : Service() {
             opts.reconnectionDelayMax = 15_000
             opts.timeout = 10_000
             if (mode == "gateway") {
-                opts.query = "XTransformPort=$prodPort"
+                opts.query = AgentServicePrefs.gatewayQuery(prodPort, pairToken)
             }
             val s = IO.socket(url, opts)
             prodSocket = s
@@ -538,7 +542,7 @@ class AgentForegroundService : Service() {
             opts.reconnectionDelayMax = 15_000
             opts.timeout = 10_000
             if (mode == "gateway") {
-                opts.query = "XTransformPort=$mediaPort"
+                opts.query = AgentServicePrefs.gatewayQuery(mediaPort, pairToken)
             }
             val s = IO.socket(url, opts)
             mediaSocket = s

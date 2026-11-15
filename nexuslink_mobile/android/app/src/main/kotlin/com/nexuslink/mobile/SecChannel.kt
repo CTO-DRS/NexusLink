@@ -66,7 +66,7 @@ class SecChannel(
     // الاتصال
     // ------------------------------------------------------------------
 
-    fun connect(host: String, port: Int, mode: String, secPort: Int) {
+    fun connect(host: String, port: Int, mode: String, secPort: Int, pairToken: String = "") {
         val url = if (mode == "gateway") "http://$host:$port" else "http://$host:$secPort"
         try {
             val opts = IO.Options()
@@ -75,7 +75,7 @@ class SecChannel(
             opts.reconnectionDelayMax = 15_000
             opts.timeout = 10_000
             if (mode == "gateway") {
-                opts.query = "XTransformPort=$secPort"
+                opts.query = AgentServicePrefs.gatewayQuery(secPort, pairToken)
             }
             val s = IO.socket(url, opts)
             socket = s

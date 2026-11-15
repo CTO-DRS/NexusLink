@@ -84,7 +84,7 @@ class MediaController extends Notifier<MediaUiState> {
     _sub = svc.stateStream.listen((s) {
       if (_svc == svc) state = s;
     });
-    final ok = svc.connect(host: endpoint.host, port: endpoint.port, mode: endpoint.mode.name);
+    final ok = svc.connect(host: endpoint.host, port: endpoint.port, mode: endpoint.mode.name, pairToken: endpoint.pairToken);
     ref.read(activityLogProvider.notifier).add(
           ok
               ? 'قناة الوسائط 3005 جاهزة — الكاميرا والميكروفون قابلان للبث'

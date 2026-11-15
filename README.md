@@ -21,7 +21,7 @@
 > Windows 10/11 · macOS 12+ · Linux x64 · Android 8+ (iOS: وسائط/ملفات/حافظة فقط — حد معلن) ·
 > ازدواجية ترخيص صادقة: نواة مملوكة + مجموعة مفتوحة MIT (انظر `LICENSE` و`docs/OPEN-COMPONENTS.md`) ·
 > لا سحابة · لا حسابات · لا تتبع · تشفير X25519 + AES-256-GCM من الطرف للطرف ·
-> 6 لغات (ar · en · fr · es · de · ru) · 2108 فحص E2E عبر 51 عقدًا موثقًا ·
+> 6 لغات (ar · en · fr · es · de · ru) · 2136 فحص E2E عبر 51 عقدًا موثقًا ·
 > بوابة جودة آلية على كل دفعة (lint + tsc صفر + بناء إنتاجي) وحرس أسرار وDependabot أسبوعي.
 
 منصة واحدة تربط هاتفك بجهاز الكمبيوتر — كل شيء محلي على شبكتك، بلا سحابة وبلا حسابات.
@@ -78,7 +78,7 @@ reserved; a declared open set (SDK · CLI · pairing math · oplog · docs) unde
    | Windows | `NexusLink_3.1.1_x64-setup.exe` | NSIS — يثبّت WebView2 تلقائيًا إن غاب؛ بديل MSI أو ZIP محمول |
    | macOS | `NexusLink_3.1.1_aarch64.dmg` | اسحب التطبيق إلى Applications؛ غير موقّع: زر يمين ← Open أول مرة |
    | Linux | `NexusLink_3.1.1_amd64.deb` أو `*.AppImage` | AppImage: `chmod +x` ثم شغّل — بلا تثبيت |
-   | Android 8+ | `NexusLink-<الإصدار>-arm64-v8a-release.apk` | الوكيل — «تثبيت من مصدر غير معروف» مرة واحدة · أجهزة 32-بت: `-armeabi-v7a-release.apk` · حتى v3.1.1: APK شامل واحد `NexusLink-3.1.1-release.apk` |
+   | Android | `NexusLink-3.1.1-release.apk` | الوكيل — «تثبيت من مصدر غير معروف» مرة واحدة |
 
 2. **المركز يعمل فور الإقلاع بلا أي إعداد**: الواجهة + الخادم المضمّن (:3000)
    + جسور الإشعارات/الوسائط/التحكم (:3003/:3004/:3005/:3006/:3007/:3009)
@@ -89,6 +89,15 @@ reserved; a declared open set (SDK · CLI · pairing math · oplog · docs) unde
    امسح QR من واجهة التطبيق على الكمبيوتر (نافذة سطح المكتب، أو من المتصفح:
    `http://localhost:3000/?app=1`) — أو إدخال يدوي: IP الكمبيوتر + منفذ 81.
    راية «متصل» تعني أن كل القنوات الأربع (3003/3005/3006/3009) حية.
+
+> **🔒 الأمان الافتراضي (G1)**: البوابة (:81) تطلب **رمز اقتران** من كل جهاز
+> على الشبكة — يُولَّد عند أول تشغيل ويُحفظ في مجلد بيانات التطبيق، و**يحمله QR
+> الاقتران تلقائيًا** فيرسله الهاتف بكل طلب. بلا رمز = `401`؛ الكمبيوتر نفسه
+> (loopback) معفى. لذا **أول اقتران يكون بمسح QR**، ثم يعمل الإدخال اليدوي
+> والاكتشاف التلقائي للخادم نفسه بالرمز المحفوظ. الهواتف المقترنة قبل هذا
+> التحديث تحتاج مسح QR مرة واحدة. تدوير الرمز أو تعطيل الوصول من الشبكة من
+> **الإعدادات ← الوصول البعيد** (التعطيل يغلق الشبكة كليًا). وخادم Next المضمّن
+> يُصغي على `127.0.0.1` فلا طريق للشبكة إلا عبر البوابة.
 
 > **ملاحظة**: الجذر `http://localhost:3000` هو **الموقع الرسمي للمنتج** (تعريف + تحميلات)
 > — واجهة التطبيق في المتصفح على `/?app=1` ونافذة سطح المكتب تفتح `/?desktop=1` تلقائيًا.
@@ -133,6 +142,8 @@ bun run dev                 # next dev على 3000 + كل الجسور داخل 
 - تفعيل قناة الأمان صراحة (idempotent): `curl -X POST http://localhost:3000/api/security/boot`
 - **البوابة 81 (نمط الإنتاج)**: `caddy run --config Caddyfile` — كل قنوات socket.io
   تعبر `:81` عبر `?XTransformPort=<port>` كما يفعل تطبيق الهاتف.
+  ⚠️ Caddy للتطوير **لا يحسم رمز الاقتران** — للنمط الآمن المطابق لسطح المكتب شغّل
+  `node mini-services/gateway/index.cjs` (الرمز إلزامي، فحصه: `node scripts/g1-gateway-e2e.mjs`).
 
 ### خريطة المنافذ
 
@@ -172,24 +183,17 @@ keytool -genkeypair -v -keystore android/app/nexuslink-release.jks \
 # keyAlias=nexuslink
 # keyPassword=...
 
-flutter build apk --release --split-per-abi   # APK موقّع لكل معمارية (G4)
-flutter build appbundle --release             # حزمة Play
+flutter build apk --release            # APK موقّع
+flutter build appbundle --release      # حزمة Play
 ```
 
-الناتج: `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` (+ `app-armeabi-v7a-release.apk`
-و`app-x86_64-release.apk`) — لا APK شامل بعد الآن (كان ~120MB). الحد الأدنى Android 8.0 (`minSdk 26`).
-تحقّق التوقيع:
+الناتج: `build/app/outputs/flutter-apk/app-release.apk` — تحقّق التوقيع:
 
 ```bash
-$ANDROID_HOME/build-tools/34.0.0/apksigner verify --print-certs app-arm64-v8a-release.apk
+$ANDROID_HOME/build-tools/34.0.0/apksigner verify --print-certs app-release.apk
 ```
 
-**صفر سحابة (G3)**: الوكيل لا يحمل Google ML Kit ولا Firebase ولا Play Services — مسح QR
-الاقتران محلي عبر ZXing. الفحص الآلي `scripts/android-zero-cloud-check.py` يعمل في
-`.github/workflows/android.yml` (كل طلب دمج يمس `nexuslink_mobile/`) وفي `release.yml`،
-ويفشل إن ظهر `com.google.mlkit` / `com.google.firebase` / `com.google.android.gms`.
-
-CI يبني تلقائيًا في `.github/workflows/release.yml` (وظيفة android — أصول `NexusLink-<v>-<abi>-release.apk` + `NexusLink-<v>-release.aab`)، ويبني تحققًا على كل طلب دمج في `.github/workflows/android.yml` — التوقيع من
+CI يبني تلقائيًا في `.github/workflows/release.yml` (وظيفة android) — التوقيع من
 `secrets.ANDROID_KEYSTORE_BASE64` + `ANDROID_KEYSTORE_PASSWORD` + `ANDROID_KEY_ALIAS` + `ANDROID_KEY_PASSWORD`.
 
 ### متطلبات أندرويد الحساسة
@@ -204,7 +208,7 @@ CI يبني تلقائيًا في `.github/workflows/release.yml` (وظيفة an
 
 1. شغّل السيرفر + البوابة: `bun run dev` ثم `caddy run --config Caddyfile`.
 2. افتح `http://<IP-الكمبيوتر>:3000` على المتصفح — تبويب **الاتصال** يعرض QR.
-3. على الهاتف: تبويب **الاتصال** ← امسح QR (أو إدخال يدوي: host + منفذ 81).
+3. على الهاتف: تبويب **الاتصال** ← امسح QR (يحمل رمز البوابة — الإدخال اليدوي host + منفذ 81 يعمل بعد أول مسح).
 4. انتظر راية «متصل» — الخدمة الخلفية تبقى حية حتى مع إغلاق التطبيق.
 
 **اختبار النجاح الشامل (FA-9/FA-10):**

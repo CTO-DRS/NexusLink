@@ -10,6 +10,7 @@ import '../data/agent_channel.dart';
 import '../data/database/nexus_db.dart';
 import '../data/device_identity.dart';
 import '../data/nexus_api.dart';
+import '../data/pair_token_store.dart';
 import '../domain/discovery_service.dart';
 import '../domain/models.dart';
 
@@ -179,9 +180,11 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
     final db = ref.read(nexusDbProvider);
     final last = await db.lastUsed();
     if (last == null) return const ConnectionStateModel();
+    final saved = ServerEndpoint(host: last.host, port: last.port, mode: last.mode == 'direct' ? AccessMode.direct : AccessMode.gateway);
     return ConnectionStateModel(
       serverName: last.name,
-      endpoint: ServerEndpoint(host: last.host, port: last.port, mode: last.mode == 'direct' ? AccessMode.direct : AccessMode.gateway),
+      // G1 — رمز البوابة المحفوظ لهذا الخادم (من آخر QR ممسوح)
+      endpoint: saved.withPairToken(await PairTokenStore.load(saved.key)),
     );
   }
 
@@ -211,6 +214,11 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
     String? qrSecret,
   }) async {
     final log = ref.read(activityLogProvider.notifier);
+    // G1 — رمز البوابة الإلزامي: من QR الحالي إن وُجد، وإلا المحفوظ لهذا الخادم
+    if (!endpoint.hasPairToken) {
+      final stored = await PairTokenStore.load(endpoint.key);
+      if (stored != null) endpoint = endpoint.withPairToken(stored);
+    }
     state = AsyncData(ConnectionStateModel(phase: ConnectPhase.checking, endpoint: endpoint, serverName: serverName));
 
     // 1) فحص الصحة عبر endpoint موجود بالسيرفر (/api/tools/ping)
@@ -219,6 +227,16 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
     try {
       rtt = await api.healthCheck();
       log.add('فحص الصحة ناجح: ${endpoint.key} — ${rtt}ms', kind: 'ok');
+    } on PairTokenRequiredException catch (e) {
+      // G1 — البوابة رفضت بلا رمز/برمز قديم: المسار الوحيد مسح QR الكمبيوتر
+      log.add('البوابة تطلب رمز الاقتران (${e.reason}) — امسح رمز QR على الكمبيوتر', kind: 'error');
+      state = AsyncData(ConnectionStateModel(
+        phase: ConnectPhase.error,
+        endpoint: endpoint,
+        serverName: serverName,
+        error: e.toString(),
+      ));
+      return;
     } catch (e) {
       log.add('فشل فحص الصحة: $e', kind: 'error');
       state = AsyncData(ConnectionStateModel(
@@ -295,6 +313,8 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
     final row = await db.byKey(endpoint.key);
     if (row != null) await db.markLastUsed(row.id);
     ref.invalidate(trustedServersProvider);
+    // G1 — حفظ رمز البوابة الذي نجح لإعادة الاتصال والإقلاع التلقائي
+    if (endpoint.hasPairToken) await PairTokenStore.save(endpoint.key, endpoint.pairToken!);
 
     // 4) بدء الخدمة الخلفية (Foreground Service + socket.io دائم + إعادة اتصال)
     state = AsyncData(ConnectionStateModel(
@@ -329,6 +349,7 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
     if (forgetRow && cur?.endpoint != null) {
       final row = await db.byKey(cur!.endpoint!.key);
       if (row != null) await db.forget(row.id);
+      await PairTokenStore.forget(cur!.endpoint!.key);
       ref.invalidate(trustedServersProvider);
     } else {
       await db.clearLastUsed();

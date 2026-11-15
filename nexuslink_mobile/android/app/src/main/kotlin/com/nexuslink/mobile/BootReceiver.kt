@@ -37,6 +37,7 @@ class BootReceiver : BroadcastReceiver() {
                 putExtra("deviceId", p.getString(AgentServicePrefs.KEY_DEVICE_ID, "") ?: "")
                 putExtra("deviceName", p.getString(AgentServicePrefs.KEY_DEVICE_NAME, "Nexus Android") ?: "Nexus Android")
                 putExtra("serverKey", p.getString(AgentServicePrefs.KEY_SERVER_KEY, "") ?: "")
+                putExtra("pairToken", p.getString(AgentServicePrefs.KEY_PAIR_TOKEN, "") ?: "")
                 putExtra("fromBoot", true)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -62,4 +63,11 @@ object AgentServicePrefs {
     const val KEY_DEVICE_ID = "deviceId"
     const val KEY_DEVICE_NAME = "deviceName"
     const val KEY_SERVER_KEY = "serverKey"
+    /** G1 — رمز اقتران البوابة الإلزامي (من QR) — يُعاد مع الإقلاع التلقائي */
+    const val KEY_PAIR_TOKEN = "pairToken"
+
+    /** G1 — استعلام socket.io عبر البوابة: منفذ الجسر + رمز الاقتران (إن وُجد). */
+    fun gatewayQuery(bridgePort: Int, pairToken: String): String =
+        if (pairToken.isEmpty()) "XTransformPort=$bridgePort"
+        else "XTransformPort=$bridgePort&pair=" + java.net.URLEncoder.encode(pairToken, "UTF-8")
 }

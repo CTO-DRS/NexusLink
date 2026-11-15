@@ -77,7 +77,7 @@ class PhoneRemoteController extends Notifier<PhoneRemoteUiState> {
     _sub = svc.stateStream.listen((s) {
       if (_svc == svc) state = s;
     });
-    final ok = svc.connect(host: endpoint.host, port: endpoint.port, mode: endpoint.mode.name);
+    final ok = svc.connect(host: endpoint.host, port: endpoint.port, mode: endpoint.mode.name, pairToken: endpoint.pairToken);
     ref.read(activityLogProvider.notifier).add(
           ok
               ? 'قناة التحكم بين الهواتف 3006 جاهزة — اختَر هاتفًا للتحكم به'

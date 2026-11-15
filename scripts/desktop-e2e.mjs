@@ -4164,7 +4164,10 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
         lanConnected && lanReg?.reason === "local-only" && lanReg?.ev === "desktop:register", `ip=${lanIp} got=${JSON.stringify(lanReg)}`)
       // تزييف ترويسة البوابة من سوكِت شبكي (عبر البوابة من عنوان الشبكة) —
       // البوابة تستبدل الترويسة بعنوان العميل الحقيقي فالرفض local-only قائم
-      const lanSock2 = io(`http://${lanIp}:${gwPort}`, { query: { XTransformPort: "3004" }, transports: ["polling"], reconnection: false, timeout: 10000, extraHeaders: { "x-gw-client-ip": "127.0.0.1" } })
+      // G1 — البوابة تطلب الرمز من كل واصل شبكي: نحمله كي نصل لحرس local-only خلف الباب
+      let lanPair = ""
+      try { lanPair = JSON.parse((await import("node:fs")).default.readFileSync(`${ROOT}.zstate/pair-token.json`, "utf8")).token || "" } catch { /* لا رمز */ }
+      const lanSock2 = io(`http://${lanIp}:${gwPort}`, { query: { XTransformPort: "3004", ...(lanPair ? { pair: lanPair } : {}) }, transports: ["polling"], reconnection: false, timeout: 10000, extraHeaders: { "x-gw-client-ip": "127.0.0.1" } })
       const lan2Connected = await waitConnect(lanSock2).then(() => true).catch(() => false)
       const lan2Reg = await new Promise((res) => {
         lanSock2.on("rc:rejected", (d) => res(d))
@@ -6565,7 +6568,10 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     check("GW/src: الحجب التجريبي — 5 فشل → قفل 30ث (429 pair-locked) والرمز الصحيح ينجح ويصفّر",
       pairFileDef.includes("PAIR_MAX_FAILS = 5") && pairFileDef.includes("PAIR_LOCK_MS = 30000")
       && pairFileDef.includes('"pair-locked"') && pairFileDef.includes('"pair-token-required"')
-      && /if \(cand && tokenMatches\(cand, pair\.token\)\) \{ pairFails\.delete/.test(pairFileDef), "lockout")
+      && /if \(pair && cand && tokenMatches\(cand, pair\.token\)\) \{ pairFails\.delete/.test(pairFileDef), "lockout")
+    check("GW/src: G1 — الرمز إلزامي: توليد أول إقلاع قبل الاستماع + فشل-مغلق بلا رمز + علامة التعطيل 403",
+      pairFileDef.includes("ensurePairToken()\n\nserver.listen") && pairFileDef.includes("PAIR_DISABLED_FILE")
+      && pairFileDef.includes('"remote-access-disabled"') && !pairFileDef.includes("if (!pair) return true"), "g1 gateway")
 
     // ---- (ب) مصدر: مسار الإدارة ----
     check("GW/src: remote-access — ثلاثة أفعال بأخطاء 409 الصادقة وunknown-action 400",
@@ -6577,8 +6583,10 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     check("GW/src: الرمز الخام لا يعود في GET — يُسلّم مرة واحدة في enable/rotate حصرًا",
       /export async function GET[\s\S]*?fingerprint[\s\S]*?return NextResponse\.json/.test(routeP)
       && routeP.includes("urlQuery") && routeP.includes("الرمز الخام عمدًا غائب"), "no raw in GET")
-    check("GW/src: نظافة الملف — 0600 وكتابة ذرية tmp+rename وحذف Disable = تعطيل لحظي",
-      routeP.includes("0o600") && routeP.includes("renameSync") && routeP.includes("rmSync") && routeP.includes("randomBytes(32)"), "file hygiene")
+    const pairLibP = fsGW.readFileSync(new URL("../src/lib/nexus/pair-token.ts", import.meta.url), "utf8")
+    check("GW/src: نظافة الملف — 0600 وكتابة ذرية tmp+rename وDisable = حذف + علامة إغلاق (G1)",
+      pairLibP.includes("0o600") && pairLibP.includes("renameSync") && routeP.includes("rmSync") && pairLibP.includes("randomBytes(32)")
+      && routeP.includes("setPairDisabled(true)"), "file hygiene")
 
     // ---- (ج) مصدر: الواجهة والعميل الوِب والتوثيق ----
     check("GW/src: بطاقة الإعدادات — حالة وبصمة وأزرار التدوير/التعطيل ورابط يُعرض مرة واحدة",
@@ -6609,15 +6617,19 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
         const LC = "http://127.0.0.1:3000"
         const j = async (u, o) => { const r = await fetch(u, o); return { status: r.status, body: await r.json().catch(() => null) } }
 
-        // 1) البداية نظيفة: OFF والملف غائب
+        // 1) G1 — آمن افتراضيًا: البوابة ولّدت الرمز عند إقلاعها (أول تشغيل) والخارج بلا رمز مرفوض
         const pre = await j(`${LC}/api/remote-access`)
-        check("GW/live: البداية OFF — الحالة disabled والملف غائب (السلوك التاريخي حرفيًا)",
-          pre.status === 200 && pre.body?.enabled === false && !fsGW.existsSync(new URL("../.zstate/pair-token.json", import.meta.url)), `enabled=${pre.body?.enabled}`)
+        check("GW/live: G1 البداية — الرمز مولّد عند أول إقلاع (enabled:true · required:true) والملف موجود",
+          pre.status === 200 && pre.body?.enabled === true && pre.body?.required === true && fsGW.existsSync(new URL("../.zstate/pair-token.json", import.meta.url)), `enabled=${pre.body?.enabled}`)
+        const preLan = await j(`${LAN}/api/version`)
+        check("GW/live: G1 — LAN بلا رمز منذ أول إقلاع → 401 (لا نافذة مفتوحة افتراضيًا)", preLan.status === 401 && preLan.body?.error === "pair-token-required", `HTTP ${preLan.status}`)
+        const enDup = await j(`${LC}/api/remote-access`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "enable" }) })
+        check("GW/live: G1 — enable فوق رمز أول الإقلاع → 409 already-enabled (صادق)", enDup.status === 409 && enDup.body?.error === "already-enabled", `HTTP ${enDup.status}`)
 
-        // 2) التمكين من loopback: رمز يُعرض مرة واحدة
-        const en = await j(`${LC}/api/remote-access`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "enable" }) })
+        // 2) التدوير من loopback: رمز يُعرض مرة واحدة (بديل «التمكين» بعد G1)
+        const en = await j(`${LC}/api/remote-access`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "rotate" }) })
         const T1 = String(en.body?.token ?? "")
-        check("GW/live: تمكين → رمز base64url من 43 محرفًا وبصمة 16 وurlQuery — ويُسلّم مرة واحدة",
+        check("GW/live: تدوير → رمز base64url من 43 محرفًا وبصمة 16 وurlQuery — ويُسلّم مرة واحدة",
           en.status === 200 && en.body?.ok === true && /^[A-Za-z0-9_-]{43}$/.test(T1)
           && /^[0-9a-f]{16}$/.test(String(en.body?.fingerprint ?? "")) && String(en.body?.urlQuery) === `?pair=${T1}`, `fp=${en.body?.fingerprint ?? "-"}`)
 
@@ -6628,10 +6640,10 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
         check("GW/live: ملف المصدر الواحد على القرص — token مطابق وبصمة وبصلاحية 0600",
           pfOk && pfMode === 0o600, `mode=${pfMode.toString(8)}`)
 
-        // 4) البوابة أعلنت التمكين لحظيًا (بلا إعادة تشغيل)
+        // 4) البوابة تعلن الرمز إلزاميًا (G1)
         const hp = await j(`http://127.0.0.1:${gwP}/__gw/health`)
-        check("GW/live: health يعلن pair:true لحظيًا — الحسم من الملف بلا إعادة تشغيل",
-          hp.status === 200 && hp.body?.pair === true, `pair=${hp.body?.pair}`)
+        check("GW/live: health يعلن pair:true وpairRequired:true — الحسم من الملف بلا إعادة تشغيل",
+          hp.status === 200 && hp.body?.pair === true && hp.body?.pairRequired === true, `pair=${hp.body?.pair}`)
 
         // 5-6) من LAN بلا رمز/برمز خاطئ → 401 مسبب
         const noT = await j(`${LAN}/api/version`)
@@ -6677,17 +6689,26 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
         check("GW/live: العميل الوِب من LAN — بلا رمز 401 وبرمزه 200 بنواة العميل",
           wcNo.status === 401 && wcOk.status === 200 && (await wcOk.text()).includes('data-client="nexus-web"'), `no=${wcNo.status} ok=${wcOk.status}`)
 
-        // 18) التعطيل: العودة للانفتاح التاريخي وبلا أثر
+        // 18) G1 — التعطيل يغلق الشبكة كليًا (لم يعد يفتحها): علامة صريحة و403
         const off = await j(`${LC}/api/remote-access`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "disable" }) })
         const afterOff = await j(`${LAN}/api/version`)
-        check("GW/live: تعطيل → enabled:false والملف محذوف وLAN يمر بلا رمز (السلوك التاريخي عاد)",
-          off.status === 200 && off.body?.enabled === false && !fsGW.existsSync(pfPath) && afterOff.status === 200, `HTTP ${afterOff.status}`)
+        const afterOffTok = await j(`${LAN}/api/version`, { headers: { "x-pair-token": T2 } })
+        check("GW/live: G1 تعطيل → enabled:false والملف محذوف وعلامة الإغلاق وLAN مرفوض 403 حتى بالرمز القديم",
+          off.status === 200 && off.body?.enabled === false && !fsGW.existsSync(pfPath) && fsGW.existsSync(`${pfPath}.disabled`)
+          && afterOff.status === 403 && afterOff.body?.error === "remote-access-disabled" && afterOffTok.status === 403, `HTTP ${afterOff.status}/${afterOffTok.status}`)
+        // 19) إعادة التفعيل تزيل العلامة وتعيد الرمز إلزاميًا
+        const reEn = await j(`${LC}/api/remote-access`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "enable" }) })
+        const T3 = String(reEn.body?.token ?? "")
+        const reLan = await j(`${LAN}/api/version`, { headers: { "x-pair-token": T3 } })
+        check("GW/live: G1 إعادة التفعيل → رمز جديد والعلامة أزيلت وLAN بالرمز → 200",
+          reEn.status === 200 && !!T3 && !fsGW.existsSync(`${pfPath}.disabled`) && reLan.status === 200, `HTTP ${reEn.status}/${reLan.status}`)
       }
     } catch (e) {
       check("GW/live: انسداد الرمز اكتمل بلا خطأ غير متوقع", false, e.message?.slice(0, 120))
     } finally {
       // GW/cleanup: بلا أثر — الملف محذوف حتى لو توقفت الفحوص مبكرًا
-      try { fsGW.rmSync(new URL("../.zstate/pair-token.json", import.meta.url).pathname, { force: true }) } catch {}
+      // G1: نُبقي ملف الرمز (حالة أول تشغيل الطبيعية) ونزيل علامة التعطيل إن بقيت
+      try { fsGW.rmSync(new URL("../.zstate/pair-token.json.disabled", import.meta.url).pathname, { force: true }) } catch {}
     }
   }
 

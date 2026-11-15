@@ -17,8 +17,6 @@ import android.provider.MediaStore
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -32,7 +30,6 @@ import java.io.File
  *     النقل:   publishDownload (نشر في Download/NexusLink + إشعار نظام)
  *     المشاركة: drainShare (قائمة المشاركة "إرسال عبر NexusLink")
  *     الصور:   queryNewPhotos (مسح DCIM/Pictures الجديدة)
- *     G3:      scanQr (ماسح QR محلي ZXing — بلا ML Kit/Firebase/GMS)
  *     فتح:     openPath / openUrl · إشعارات: cancelNotif · حالة الواجهة: setUiAlive
  *     FA-10:   pbkdf2Hash/Verify · secSnapshot · secWipe · secListFiles ·
  *              secLockNow/secUnlock · setLockConfig · setLocked · setAutoStart · setSecFeature · lostStop
@@ -95,18 +92,6 @@ class MainActivity : FlutterFragmentActivity() {
         var eventSink: EventChannel.EventSink? = null
     }
 
-    // ---------- G3: مسح QR الاقتران محليًا (ZXing — صفر سحابة) ----------
-    // zxing-android-embedded + com.google.zxing:core: فك ترميز على الجهاز كليًا،
-    // بلا Google Play Services ولا ML Kit ولا نماذج تُنزَّل. يُسجَّل المُطلِق
-    // كحقل (قبل STARTED — شرط Activity Result API).
-    private var pendingQrResult: MethodChannel.Result? = null
-    private val qrLauncher = registerForActivityResult(ScanContract()) { res ->
-        val r = pendingQrResult
-        pendingQrResult = null
-        // contents == null ⇒ إلغاء المستخدم أو رفض إذن الكاميرا
-        r?.success(res.contents)
-    }
-
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         // جدولة مراقب الصور الدوري (WorkManager — البند 6)
@@ -125,6 +110,7 @@ class MainActivity : FlutterFragmentActivity() {
                         putExtra("deviceId", call.argument<String>("deviceId") ?: "")
                         putExtra("deviceName", call.argument<String>("deviceName") ?: "Nexus Android")
                         putExtra("serverKey", call.argument<String>("serverKey") ?: "")
+                        putExtra("pairToken", call.argument<String>("pairToken") ?: "")
                     }
                     try {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -146,25 +132,6 @@ class MainActivity : FlutterFragmentActivity() {
                 "lastState" -> result.success(AgentForegroundService.currentState)
 
                 "deviceInfo" -> result.success(readDeviceInfo())
-
-                "scanQr" -> {
-                    if (pendingQrResult != null) {
-                        result.error("scan_busy", "QR scan already in progress", null)
-                    } else {
-                        pendingQrResult = result
-                        val opts = ScanOptions()
-                            .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                            .setPrompt(call.argument<String>("prompt") ?: "")
-                            .setBeepEnabled(false)
-                            .setOrientationLocked(false)
-                        try {
-                            qrLauncher.launch(opts)
-                        } catch (e: Exception) {
-                            pendingQrResult = null
-                            result.error("scan_failed", e.message, null)
-                        }
-                    }
-                }
 
                 // ---------- نقل الملفات ----------
 
