@@ -97,7 +97,8 @@ sudo mkdir -p /etc/nexuslink && sudo cp policy.json /etc/nexuslink/policy.json
 ```
 
 ### Android (Managed Google Play / Intune / المدير المدار)
-- ثبّت `app-release.aab` عبر Play المدار أو `NexusLink-3.1.0-release.apk`
+- ثبّت `NexusLink-<الإصدار>-release.aab` عبر Play المدار أو `NexusLink-<الإصدار>-arm64-v8a-release.apk`
+  (حتى v3.1.1: `app-release.aab` و`NexusLink-3.1.1-release.apk` الشامل)
   بأي MDM أندرويد (نشر صامت على الأجهزة المدارة بالكامل).
 - ملف السياسة على أندرويد: عبر MDM انسخ الملف إلى التخزين الخارجي للتطبيق
   ومرّر المسار بمتغير البيئة `NEXUSLINK_POLICY_FILE` عند تشغيل خدمة الجهاز

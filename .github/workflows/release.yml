@@ -4,7 +4,7 @@ name: Release — NexusLink (5 platforms)
 #   Windows : NSIS + MSI + Portable ZIP (بلا تثبيت)
 #   macOS   : DMG (+ أصل updater .app.tar.gz موقّع)
 #   Linux   : AppImage + deb
-#   Android : APK موقّع + AAB
+#   Android : APK موقّع مقسّم لكل معمارية (arm64-v8a/armeabi-v7a/x86_64) + AAB
 #   iOS     : IPA (بلا توقيع — يتطلب حساب Apple)
 # الإرفاق بالـ Release تلقائي على وسوم v*؛ وعند workflow_dispatch البناء
 # يُنتج artifacts فقط ما لم تُفعَّل مدخل attach_to_release صراحةً
@@ -427,29 +427,50 @@ jobs:
           echo "patched: $(grep -c 'compileSdkVersion 34' "$PKG/android/build.gradle") compileSdk, $(grep -c 'onSurfaceCreated' "$PKG/android/src/main/java/com/cloudwebrtc/webrtc/SurfaceTextureRenderer.java") callback"
       - name: Analyze (zero-issue gate)
         run: flutter analyze
-      - name: Build signed APK
-        run: flutter build apk --release
+      # G4: APK مقسّم لكل معمارية بدل APK شامل (~120MB) — arm64-v8a هو التنزيل الأساسي.
+      # لا APK شامل: كل هاتف أندرويد 8+ حديث arm64؛ armeabi-v7a للأجهزة 32-بت القديمة؛
+      # x86_64 للمحاكيات/Chromebook. الـAAB لمتجر Play (يوزّع المعمارية تلقائيًا).
+      - name: Build signed split per-ABI APKs
+        run: flutter build apk --release --split-per-abi
       - name: Build signed App Bundle
         run: flutter build appbundle --release
-      - name: Rename artifacts with tag
+      # G3: حارس «صفر سحابة» — لا يُشحن إصدار يحوي ML Kit/Firebase/GMS
+      - name: G3 zero-cloud guard (built APKs/AAB)
+        run: |
+          python3 ../scripts/android-zero-cloud-check.py \
+            build/app/outputs/flutter-apk/app-*-release.apk \
+            build/app/outputs/bundle/release/app-release.aab
+      # أسماء الأصول (G4): NexusLink-<v>-<abi>-release.apk + NexusLink-<v>-release.aab
+      # (اللاحقة release.apk محفوظة — scripts/updater-path-verify.mjs يجرد بها SHA256SUMS)
+      - name: Rename artifacts with version
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | cut -d' ' -f2 | cut -d'+' -f1)
-          cp build/app/outputs/flutter-apk/app-release.apk "NexusLink-${VERSION}-release.apk"
+          mkdir -p dist-android
+          for ABI in arm64-v8a armeabi-v7a x86_64; do
+            cp "build/app/outputs/flutter-apk/app-${ABI}-release.apk" "dist-android/NexusLink-${VERSION}-${ABI}-release.apk"
+          done
+          cp build/app/outputs/bundle/release/app-release.aab "dist-android/NexusLink-${VERSION}-release.aab"
+          ls -la dist-android/
+          { echo "### Android release assets"; for f in dist-android/*; do echo "- $(basename "$f") — $(stat -c %s "$f") bytes"; done; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: nexuslink_mobile/NexusLink-*-release.apk
+          path: nexuslink_mobile/dist-android/NexusLink-*-release.apk
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: android-aab
-          path: nexuslink_mobile/build/app/outputs/bundle/release/app-release.aab
-      - name: Attach APK to release (tag push)
+          path: nexuslink_mobile/dist-android/NexusLink-*-release.aab
+          if-no-files-found: error
+      - name: Attach APKs + AAB to release (tag push)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
           # G9: مسودة حصرًا — الرفع إلى مسودة prepare-release بالوسم
           draft: true
-          files: nexuslink_mobile/NexusLink-*-release.apk
+          files: |
+            nexuslink_mobile/dist-android/NexusLink-*-release.apk
+            nexuslink_mobile/dist-android/NexusLink-*-release.aab
 
   ios:
     needs: test
