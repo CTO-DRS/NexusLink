@@ -20,7 +20,7 @@ export function SiteFooter() {
         <div className="flex flex-col items-center justify-between gap-8 md:flex-row md:items-start">
           <div className="max-w-sm space-y-3 text-center md:text-start">
             <div className="flex items-center justify-center gap-2.5 md:justify-start">
-              <Image src="/logo.svg" alt="" width={26} height={26} className="dark:invert" />
+              <Image src="/logo.svg" alt="" width={26} height={26} />
               <span className="text-base font-bold">NexusLink</span>
             </div>
             <p className="text-sm leading-relaxed text-muted-foreground">
