@@ -54,7 +54,7 @@ async function fetchUpstream(): Promise<ReleasePayload> {
   const r = await fetch(UPSTREAM, {
     signal: AbortSignal.timeout(TIMEOUT_MS),
     cache: "no-store",
-    headers: { "User-Agent": "NexusLink-Server/3.1.0", Accept: "application/vnd.github+json" },
+    headers: { "User-Agent": "NexusLink-Server/3.1.1", Accept: "application/vnd.github+json" },
   })
   if (!r.ok) throw new Error(`HTTP ${r.status}`)
   const d = (await r.json()) as {
