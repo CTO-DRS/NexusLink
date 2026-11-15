@@ -9,6 +9,7 @@ import type {
   MediaLogEntry, MicSourceState, ScreenTarget, SlideshowState, VideoCallState,
 } from "./media-types"
 import {
+  NO_REAL_CAMERA, NO_REAL_MIC,
   acquireCamera, acquireMic, blobToDataUrl, cameraActive, captureFromDevice,
   createLoopback, getReceiver, mediaBeep, mediaUid, registerReceiver, releaseCamera,
   releaseMic, retargetSyntheticFacing, setTorch, torchSupported,
@@ -267,8 +268,8 @@ export const useMedia = create<MediaState>((set, get) => ({
         cams: { ...s.cams, [id]: { ...s.cams[id], active: true, real: src.real, label: src.label, torchSupported: torchOk } },
       }))
       get().log(`كاميرا ${id === "galaxy-s24" ? "Galaxy-S24" : id === "redmi-note13" ? "Redmi-Note13" : "PC"} تعمل الآن — ${src.real ? "عتاد حقيقي" : "بث محاكى"}`, "ok")
-    } catch {
-      get().log("تعذر تشغيل الكاميرا", "warn")
+    } catch (e) {
+      get().log(e instanceof Error && e.message === NO_REAL_CAMERA ? NO_REAL_CAMERA : "تعذر تشغيل الكاميرا", "warn")
     }
   },
 
@@ -448,6 +449,10 @@ export const useMedia = create<MediaState>((set, get) => ({
       setRig("security", { loopback: lb })
       set({ secStream: lb.stream })
       get().log(`بث المراقبة يعبر WebRTC (${lb.mode === "webrtc" ? "قناة مشفرة" : "قناة مباشرة"})`, "info")
+    } else {
+      // G2/P0: لا مصدر حقيقي (وخارج وضع العرض لا مشهد محاكى) — لا «مراقبة فعّالة» زائفة
+      set((s) => ({ sec: { ...s.sec, enabled: false, armedSince: null } }))
+      return
     }
     get().log(`وضع المراقبة فعّال: مصدر ${st.sec.source} → شاشة ${st.sec.viewer === "tv" ? "Nexus-TV" : "الكمبيوتر"} (كشف حركة بدون AI)`, "ok")
   },
@@ -492,7 +497,14 @@ export const useMedia = create<MediaState>((set, get) => ({
     const st = get()
     if (st.baby.enabled) return
     set({ baby: { ...st.baby, enabled: true, listeningSince: Date.now(), level: 0, peak: 0 } })
-    const src = await acquireMic(st.baby.sender, "baby")
+    let src: Awaited<ReturnType<typeof acquireMic>>
+    try {
+      src = await acquireMic(st.baby.sender, "baby")
+    } catch (e) {
+      set((s) => ({ baby: { ...s.baby, enabled: false, listeningSince: null } }))
+      get().log(e instanceof Error && e.message === NO_REAL_MIC ? NO_REAL_MIC : "تعذر فتح الميكروفون", "warn")
+      return
+    }
     set((s) => ({ mics: { ...s.mics, [st.baby.sender]: { active: true, real: src.real, label: src.label } } }))
     const lb = await createLoopback(src.stream)
     setRig("baby", { loopback: lb })
@@ -539,7 +551,13 @@ export const useMedia = create<MediaState>((set, get) => ({
   startMic: async () => {
     const st = get()
     if (st.mics["galaxy-s24"].active) return
-    const src = await acquireMic("galaxy-s24", "voice")
+    let src: Awaited<ReturnType<typeof acquireMic>>
+    try {
+      src = await acquireMic("galaxy-s24", "voice")
+    } catch (e) {
+      get().log(e instanceof Error && e.message === NO_REAL_MIC ? NO_REAL_MIC : "تعذر فتح الميكروفون", "warn")
+      return
+    }
     set((s) => ({
       mics: { ...s.mics, "galaxy-s24": { active: true, real: src.real, label: src.label } },
       mic: { ...s.mic, startedAt: Date.now(), level: 0, peak: 0 },

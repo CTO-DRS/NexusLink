@@ -7,6 +7,7 @@ import { execFile } from "child_process"
 import { promisify } from "util"
 import { DEVICE_ROOTS } from "@/lib/nexus/fs-server"
 import { guardPcOnly } from "@/lib/nexus/http-guard"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 const exec = promisify(execFile)
 export const dynamic = "force-dynamic"
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "فشل إنشاء النسخة الاحتياطية" },
+      { ok: false, error: publicErrorMessage(e, "فشل إنشاء النسخة الاحتياطية") },
       { status: 500 }
     )
   }

@@ -59,3 +59,8 @@ jobs:
 
       - name: Production build (next build)
         run: bun run build
+
+      # G7 — ترويسات الأمان على كل المسارات (HTML · API · 404 · أصول ساكنة) وصفحات خطأ
+      # عامة بلا مسارات داخلية: يشغّل الخادم المبني (standalone) ويفحص عينة مسارات
+      - name: Security headers check (G7)
+        run: node scripts/check-security-headers.mjs

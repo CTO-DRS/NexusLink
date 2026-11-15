@@ -2,7 +2,7 @@
 // NexusLink — لوحة الجهاز: بطارية · تخزين · ذاكرة · معالج · معلومات النظام
 import { useEffect, useMemo } from "react"
 import { Area, AreaChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from "recharts"
-import { BatteryCharging, Cpu, HardDrive, Info, MemoryStick, MonitorSmartphone, Zap } from "lucide-react"
+import { BatteryCharging, Cpu, Gauge, HardDrive, Info, MemoryStick, MonitorSmartphone, Zap } from "lucide-react"
 import { useGuard, fmtUptime, SYSTEM_INFO } from "@/lib/guard-store"
 import { useNexus, fmtSize } from "@/lib/store"
 import { GuardCard, InfoRow, RatioRing } from "./guard-bits"
@@ -31,12 +31,14 @@ export function DashboardTab() {
   const dev = devices.find((d) => d.id === targetDeviceId)
 
   // إثبات لوحة الجهاز في اختبار النجاح
+  const m = metrics[targetDeviceId] as (typeof metrics)[string] | undefined
+  const hasMetrics = !!m
+
   useEffect(() => {
+    if (!hasMetrics) return
     const t = setTimeout(() => setCheck("dashboard"), 600)
     return () => clearTimeout(t)
-  }, [setCheck, tickMetrics])
-
-  const m = metrics[targetDeviceId]
+  }, [setCheck, tickMetrics, hasMetrics])
   const appsGB = useMemo(() => apps.reduce((acc, a) => acc + a.sizeMB, 0) / 1024, [apps])
 
   const storageData = useMemo(() => {
@@ -62,7 +64,41 @@ export function DashboardTab() {
     [m?.cpuHist]
   )
 
-  if (!m || !dev) return null
+  // G2/P0: بلا NEXUSLINK_DEMO لا أرقام تقديرية — حالة فارغة صادقة حتى يرسل جهاز حقيقي مؤشراته
+  if (!m || !dev) {
+    return (
+      <div className="space-y-4">
+        {devices.length > 0 && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="اختيار جهاز اللوحة">
+            {devices.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => setTargetDevice(d.id)}
+                role="tab"
+                aria-selected={d.id === targetDeviceId}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11.5px] font-semibold whitespace-nowrap border transition-all",
+                  d.id === targetDeviceId ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground hover:bg-accent"
+                )}
+              >
+                <MonitorSmartphone className="w-3.5 h-3.5" />
+                {d.name}
+              </button>
+            ))}
+          </div>
+        )}
+        <GuardCard title="مؤشرات الجهاز" icon={Gauge}>
+          <div className="py-8 text-center space-y-2" data-testid="guard-dashboard-empty">
+            <Gauge className="w-8 h-8 mx-auto text-muted-foreground/50" />
+            <p className="text-[13px] font-bold">لا توجد مؤشرات حية لهذا الجهاز بعد</p>
+            <p className="text-[11.5px] text-muted-foreground leading-relaxed max-w-md mx-auto">
+              تظهر البطارية والتخزين والذاكرة والمعالج هنا عندما يرسلها جهاز مقترن حقيقي — لا نعرض أرقامًا تقديرية.
+            </p>
+          </div>
+        </GuardCard>
+      </div>
+    )
+  }
   const isPhone = dev.kind === "phone" || dev.kind === "tablet"
   const storagePct = (m.storageUsedGB / m.storageTotalGB) * 100
   const ramPct = (m.ramUsedGB / m.ramTotalGB) * 100

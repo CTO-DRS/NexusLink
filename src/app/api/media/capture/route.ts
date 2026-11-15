@@ -7,6 +7,7 @@ import path from "path"
 import { DEVICE_ROOTS } from "@/lib/nexus/fs-server"
 import { mediaBroadcast } from "@/lib/nexus/media-bridge"
 import { guardPcOnly } from "@/lib/nexus/http-guard"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 export const dynamic = "force-dynamic"
 
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ ok: true, name, path: vpath, device, bytes: buf.length })
   } catch (e) {
     return Response.json(
-      { ok: false, error: e instanceof Error ? e.message : "فشل الحفظ" },
+      { ok: false, error: publicErrorMessage(e, "فشل الحفظ") },
       { status: 500 }
     )
   }

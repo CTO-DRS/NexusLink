@@ -5,6 +5,7 @@ import { promises as fs } from "fs"
 import path from "path"
 import { nexusStorageRoot } from "@/lib/nexus/data-root"
 import { guardPcOnly } from "@/lib/nexus/http-guard"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 export const dynamic = "force-dynamic"
 
@@ -25,6 +26,6 @@ export async function POST(req: NextRequest) {
     await fs.writeFile(dest, buf)
     return Response.json({ ok: true, saved: path.basename(dest), size: buf.length, sha256: sha256 ?? null })
   } catch (e) {
-    return Response.json({ ok: false, error: String(e instanceof Error ? e.message : e) }, { status: 500 })
+    return Response.json({ ok: false, error: publicErrorMessage(e) }, { status: 500 })
   }
 }

@@ -8,6 +8,11 @@
 // عبر canvas.captureStream / MediaStreamDestination كي تعمل كل الميزات.
 
 import type { Facing } from "./media-types"
+import { isClientDemo } from "./demo-client"
+
+/** G2/P0 — رسالة صادقة حين لا عتاد حقيقي وخارج وضع العرض (لا بث محاكى بأرقامه) */
+export const NO_REAL_CAMERA = "لا توجد كاميرا حقيقية متاحة — البث المحاكى متاح في وضع العرض التوضيحي فقط"
+export const NO_REAL_MIC = "لا يوجد ميكروفون حقيقي متاح — البث المحاكى متاح في وضع العرض التوضيحي فقط"
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
 
@@ -263,6 +268,8 @@ export async function acquireCamera(
     stream = null
   }
   if (!stream) {
+    // G2/P0: المشهد المحاكى (وأرقامه: 640×360 · 24fps · حركة دورية) حصرًا في NEXUSLINK_DEMO=1
+    if (!isClientDemo()) throw new Error(NO_REAL_CAMERA)
     const synth = new SyntheticCamera(facing)
     try {
       stream = synth.getStream()
@@ -580,6 +587,8 @@ export async function acquireMic(
     stream = null
   }
   if (!stream) {
+    // G2/P0: ميكروفون/غرفة طفل محاكاة (بكاء دوري) حصرًا في NEXUSLINK_DEMO=1
+    if (!isClientDemo()) throw new Error(NO_REAL_MIC)
     const synth = flavor === "baby" ? createSyntheticBabyRoom() : createSyntheticVoice()
     stream = synth.stream
     sources.set(key, { stream, real: false, label, users: 1, synthAudio: synth })

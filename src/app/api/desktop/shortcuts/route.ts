@@ -24,6 +24,7 @@ import {
   writeDesktopMedia,
 } from "@/lib/nexus/desktop-shortcuts"
 import { guardPcOnly } from "@/lib/nexus/http-guard"
+import { publicErrorMessage } from "@/lib/nexus/safe-error"
 
 export const dynamic = "force-dynamic"
 
@@ -100,7 +101,7 @@ export async function PUT(req: NextRequest) {
     )
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "فشل التخزين" },
+      { error: publicErrorMessage(e, "فشل التخزين") },
       { status: 500 }
     )
   }
@@ -111,7 +112,7 @@ export async function PUT(req: NextRequest) {
       clip = await writeDesktopClip(clipIn as Record<string, never>)
     } catch (e) {
       return NextResponse.json(
-        { error: e instanceof Error ? e.message : "فشل حفظ إعدادات الحافظة" },
+        { error: publicErrorMessage(e, "فشل حفظ إعدادات الحافظة") },
         { status: 500 }
       )
     }
@@ -123,7 +124,7 @@ export async function PUT(req: NextRequest) {
       security = await writeDesktopSecurity(secIn as Record<string, never>)
     } catch (e) {
       return NextResponse.json(
-        { error: e instanceof Error ? e.message : "فشل حفظ إعدادات الأمان" },
+        { error: publicErrorMessage(e, "فشل حفظ إعدادات الأمان") },
         { status: 500 }
       )
     }
@@ -135,7 +136,7 @@ export async function PUT(req: NextRequest) {
       sync = await writeDesktopSync(syncIn as { pairs?: never[] })
     } catch (e) {
       return NextResponse.json(
-        { error: e instanceof Error ? e.message : "فشل حفظ أزواج المزامنة" },
+        { error: publicErrorMessage(e, "فشل حفظ أزواج المزامنة") },
         { status: 500 }
       )
     }
@@ -147,7 +148,7 @@ export async function PUT(req: NextRequest) {
       media = await writeDesktopMedia(mediaIn as Record<string, never>)
     } catch (e) {
       return NextResponse.json(
-        { error: e instanceof Error ? e.message : "فشل حفظ حالة الوسائط" },
+        { error: publicErrorMessage(e, "فشل حفظ حالة الوسائط") },
         { status: 500 }
       )
     }

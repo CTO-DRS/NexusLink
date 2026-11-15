@@ -46,7 +46,7 @@ const CHECKS: { key: string; label: string; star?: boolean }[] = [
 ]
 
 export function GuardView() {
-  const { tab, setTab, bridgeOnline, phoneOnline, checks, celebrated, setCelebrated, ringing, lost } = useGuard()
+  const { tab, setTab, bridgeOnline, phoneOnline, simMode, checks, celebrated, setCelebrated, ringing, lost } = useGuard()
   const [qrOpen, setQrOpen] = useState(false)
   const [qrUrl, setQrUrl] = useState("")
 
@@ -82,7 +82,7 @@ export function GuardView() {
                 جسر الحماية {bridgeOnline ? "متصل" : "منقطع"}
               </span>
               <span className="text-muted-foreground/40">·</span>
-              <span>{phoneOnline ? "هاتفك الحقيقي يبث منارة القرب" : "منارة المحاكاة تعمل"}</span>
+              <span>{phoneOnline ? "هاتفك الحقيقي يبث منارة القرب" : simMode ? "منارة المحاكاة تعمل" : "لا هاتف متصل"}</span>
             </div>
           </div>
         </div>

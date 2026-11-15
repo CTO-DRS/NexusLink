@@ -1,6 +1,7 @@
 "use client"
 // NexusLink — خطاف جهة الكمبيوتر لطبقة الحماية (المرحلة 8)
 // منارة قرب محاكاة + استقبال حالة القرب + القفل/الفتح التلقائي + مقاييس حية
+import { isClientDemo } from "@/lib/demo-client"
 import { useEffect } from "react"
 import { useGuard, type ProxInfo } from "@/lib/guard-store"
 import { getGuardSocket, guardSettings, proxSim, devState } from "@/lib/guard-socket"
@@ -34,7 +35,8 @@ export function useGuardBridge() {
         const pin = localStorage.getItem(LS_PIN)
         if (pin) st().setPin(pin)
         const simRaw = localStorage.getItem(LS_SIM)
-        if (simRaw) st().setSimMode(simRaw === "1")
+        // G2/P0: منارة المحاكاة لا تُستعاد تلقائيًا خارج وضع العرض — تشغيلها يدوي صريح
+        if (simRaw && isClientDemo()) st().setSimMode(simRaw === "1")
         const proxRaw = localStorage.getItem(LS_PROX)
         const p = proxRaw ? (JSON.parse(proxRaw) as Record<string, unknown>) : null
         if (p) {

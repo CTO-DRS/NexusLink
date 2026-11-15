@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useDemoMode } from "@/lib/demo-client"
 import { useGuard, type AppEntry } from "@/lib/guard-store"
 import { cmdApp } from "@/lib/guard-socket"
 import { GuardCard } from "./guard-bits"
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils"
 type SortBy = "name" | "size" | "date"
 
 export function AppsTab() {
+  const demo = useDemoMode()
   const { apps, backup, install, startBackup, tickBackup, finishBackup, cancelBackup, startInstall, tickInstall, finishInstall, uninstallApp } = useGuard()
   const [query, setQuery] = useState("")
   const [sortBy, setSortBy] = useState<SortBy>("size")
@@ -103,7 +105,7 @@ export function AppsTab() {
     cmdApp("install", name, name)
   }
 
-  const demoInstalls: { name: string; sizeMB: number }[] = [
+  const demoInstalls: { name: string; sizeMB: number }[] = !demo ? [] : [
     { name: "دواء تذكير Pro", sizeMB: 18 },
     { name: "مصحف إلكتروني", sizeMB: 42 },
     { name: "عداء الصحة", sizeMB: 27 },
@@ -150,7 +152,13 @@ export function AppsTab() {
               onAskDelete={() => setConfirmPkg(a)}
             />
           ))}
-          {shown.length === 0 && <p className="text-center text-[11.5px] text-muted-foreground py-8">لا نتائج للبحث</p>}
+          {shown.length === 0 && apps.length > 0 && <p className="text-center text-[11.5px] text-muted-foreground py-8">لا نتائج للبحث</p>}
+          {apps.length === 0 && (
+            <div className="text-center py-8 space-y-1" data-testid="guard-apps-empty">
+              <p className="text-[12.5px] font-bold">لا توجد قائمة تطبيقات من هاتف مقترن بعد</p>
+              <p className="text-[11px] text-muted-foreground">تظهر التطبيقات هنا عندما يرسلها هاتفك الحقيقي — لا نعرض قائمة نموذجية.</p>
+            </div>
+          )}
         </div>
       </GuardCard>
 
