@@ -612,6 +612,9 @@ pub fn start(app: AppHandle) {
             ("PORT".into(), REST_PORT.to_string()),
             ("HOSTNAME".into(), "0.0.0.0".into()),
             ("NODE_ENV".into(), "production".into()),
+            // G2 — الحزمة المكتبية بلا بيانات عرض وهمية أبدًا (أجهزة/جهات اتصال مزروعة):
+            // قائمة الأجهزة تبدأ فارغة وتمتلئ بالاقتران الحقيقي حصرًا
+            ("NEXUSLINK_DEMO".into(), "0".into()),
             // FA-harden (G-26) — قاعدة SQLite قابلة للكتابة لكل جهاز (عقد §16)
             ("DATABASE_URL".into(), db_url),
             // G-30 — جذر بيانات قابل للكتابة (nexus-storage/desktop-ui.json)

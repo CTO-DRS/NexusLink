@@ -152,7 +152,7 @@ async function main() {
   try {
     console.log("== [1] next standalone :3000 ==")
     spawnProc("next", process.execPath, [path.join(ROOT, ".next/standalone/server.js")],
-      { PORT: "3000", HOSTNAME: "127.0.0.1", NODE_ENV: "production", NEXUS_WOL_BROADCAST: "127.0.0.1", NEXUS_WOL_PORT: "9009" },
+      { PORT: "3000", HOSTNAME: "127.0.0.1", NODE_ENV: "production", NEXUSLINK_DEMO: "1", NEXUS_WOL_BROADCAST: "127.0.0.1", NEXUS_WOL_PORT: "9009" },
       (l) => { if (/exited|Error|EADDRINUSE/.test(l)) console.log(" ", l) })
     await waitHttp("next /api/health", "http://127.0.0.1:3000/api/health", 90000)
 

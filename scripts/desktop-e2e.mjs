@@ -95,7 +95,7 @@ try {
   // ============ 1) Next standalone (PORT=3000) ============
   console.log("== [1] next standalone on :3000 ==")
   nextProc = spawnProc("next", process.execPath, [`${ROOT}.next/standalone/server.js`],
-    { PORT: "3000", HOSTNAME: "127.0.0.1", NODE_ENV: "production", NEXUS_WOL_BROADCAST: "127.0.0.1", NEXUS_WOL_PORT: "9009",
+    { PORT: "3000", HOSTNAME: "127.0.0.1", NODE_ENV: "production", NEXUSLINK_DEMO: "1", NEXUS_WOL_BROADCAST: "127.0.0.1", NEXUS_WOL_PORT: "9009",
       // §37: standalone يعمل chdir(__dirname) (سطر 202 أدناه) — نثبت مسار الرمز المطلق
       // لكل الأطراف (المسار + البوابة + المقيّس) بمتغير النشر الموثق §37.هـ.4
       NEXUSLINK_PAIR_FILE: `${ROOT}.zstate/pair-token.json` },
@@ -5530,7 +5530,7 @@ check("§23: العقد §23 موثق (توحيد الإصدار + ملاحظا�
     if (nextProc) { try { nextProc.kill("SIGKILL") } catch {} }
     await killPorts([3000]); await sleep(1000)
     nextProc = spawnProc("next", process.execPath, [`${ROOT}.next/standalone/server.js`],
-      { PORT: "3000", HOSTNAME: "127.0.0.1", NODE_ENV: "production", NEXUS_WOL_BROADCAST: "127.0.0.1", NEXUS_WOL_PORT: "9009",
+      { PORT: "3000", HOSTNAME: "127.0.0.1", NODE_ENV: "production", NEXUSLINK_DEMO: "1", NEXUS_WOL_BROADCAST: "127.0.0.1", NEXUS_WOL_PORT: "9009",
         NEXUSLINK_PAIR_FILE: `${ROOT}.zstate/pair-token.json` }, // §37: نفس مسار الرمز المطلق بعد الإقلاع الثاني
       (l) => { if (/error|Error/i.test(l)) console.log("   " + l.slice(0, 160)) })
     await waitHttp("next restart /api/health", "http://127.0.0.1:3000/api/health", 90000)

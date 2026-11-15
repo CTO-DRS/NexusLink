@@ -10,7 +10,7 @@ cp -r public /tmp/nx-standalone-m14/public 2>/dev/null || true
 cp -r db /tmp/nx-standalone-m14/db 2>/dev/null || true
 
 cd /tmp/nx-standalone-m14
-PORT=$PORT HOSTNAME=127.0.0.1 node server.js > /tmp/m14-server.log 2>&1 &
+PORT=$PORT HOSTNAME=127.0.0.1 NEXUSLINK_DEMO=1 node server.js > /tmp/m14-server.log 2>&1 &
 SRV=$!
 for i in $(seq 1 40); do
   sleep 0.5

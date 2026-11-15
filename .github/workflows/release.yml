@@ -9,6 +9,13 @@ name: Release — NexusLink (5 platforms)
 # الإرفاق بالـ Release تلقائي على وسوم v*؛ وعند workflow_dispatch البناء
 # يُنتج artifacts فقط ما لم تُفعَّل مدخل attach_to_release صراحةً
 # (حماية: لا تُستبدل أصول إصدار منشور موقّع بالخطأ — نمط v1.0.0/v1.1.0).
+#
+# G9 — أمان الإصدار: كل خطوة تُنشئ/ترفع إلى Release تعمل على مسودة (draft) حصرًا.
+#   · وظيفة prepare-release تُنشئ مسودة الوسم مرة واحدة قبل أي رفع (لا سباق
+#     إنشاء بين وظائف المنصات — المسودات لا تحجز الوسم فقد تتكرر).
+#   · softprops بـ draft: true لا يُنهي (finalize) الإصدار أبدًا ⇒ فشل منصة واحدة
+#     لا يترك إصدارًا عامًا ناقصًا.
+#   · النشر خطوة يدوية للمالك بعد مراجعة المسودة (Releases → Edit → Publish).
 
 on:
   push:
@@ -46,8 +53,42 @@ jobs:
         shell: bash
         run: bun test || echo "no tests yet"
 
-  desktop:
+  # G9 — مسودة الإصدار تُنشأ مرة واحدة قبل وظائف المنصات (وسوم v* حصرًا).
+  # إصدار منشور مسبقًا بنفس الوسم = فشل صريح (لا نلمس إصدارًا عامًا).
+  prepare-release:
     needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure draft release exists for tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # /releases/tags/<tag> لا يُعيد المسودات — القائمة الكاملة تشملها (صلاحية كتابة)
+          FOUND=$(gh api "repos/$REPO/releases?per_page=100" --paginate \
+            --jq ".[] | select(.tag_name == \"$TAG\") | \"\(.id) \(.draft)\"")
+          FOUND="${FOUND%%$'\n'*}"   # الأول فقط (بلا head — SIGPIPE مع pipefail)
+          if [ -z "$FOUND" ]; then
+            gh api -X POST "repos/$REPO/releases" \
+              -f tag_name="$TAG" -f name="NexusLink $TAG" \
+              -f body="مسودة — تُستكمل الأصول آليًا ثم ينشرها المالك يدويًا." \
+              -F draft=true -F prerelease=false --jq '"created draft release id=\(.id)"'
+          else
+            read -r RID RDRAFT <<< "$FOUND"
+            if [ "$RDRAFT" != "true" ]; then
+              echo "::error::الإصدار $TAG منشور مسبقًا (id=$RID) — لا رفع إلى إصدار عام. احذفه أو استخدم وسمًا جديدًا."
+              exit 1
+            fi
+            echo "reusing existing draft release id=$RID for $TAG"
+          fi
+
+  desktop:
+    needs: [test, prepare-release]
+    # prepare-release يُتخطّى على workflow_dispatch — تخطيه لا يحجب البناء
+    if: ${{ !cancelled() && needs.test.result == 'success' && (needs.prepare-release.result == 'success' || needs.prepare-release.result == 'skipped') }}
     strategy:
       fail-fast: false
       matrix:
@@ -317,6 +358,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
+          # G9: مسودة حصرًا — لا finalize/نشر من وظيفة منصة (يُعثر على مسودة prepare-release بالوسم)
+          draft: true
           files: |
             apps/desktop/src-tauri/target/release/bundle/**/*.AppImage
             apps/desktop/src-tauri/target/release/bundle/**/*.deb
@@ -335,6 +378,8 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.release_tag }}
+          # G9: إن غاب الإصدار يُنشأ مسودة؛ وإن وُجد تبقى حالته كما هي (لا نشر ضمني)
+          draft: true
           files: |
             apps/desktop/src-tauri/target/release/bundle/**/*.AppImage
             apps/desktop/src-tauri/target/release/bundle/**/*.deb
@@ -346,7 +391,8 @@ jobs:
             apps/desktop/src-tauri/target/portable/*.zip
 
   android:
-    needs: test
+    needs: [test, prepare-release]
+    if: ${{ !cancelled() && needs.test.result == 'success' && (needs.prepare-release.result == 'success' || needs.prepare-release.result == 'skipped') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -401,6 +447,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
+          # G9: مسودة حصرًا — الرفع إلى مسودة prepare-release بالوسم
+          draft: true
           files: nexuslink_mobile/NexusLink-*-release.apk
 
   ios:
@@ -503,6 +551,22 @@ jobs:
         run: cd dist && sha256sum * > SHA256SUMS.txt
       - name: Attach static release page
         run: cp public/NexusLink-Release-Page.html dist/
+      # G9 — الإصدار مسودة: /releases/tags/<tag> لا يُعيدها ⇒ البحث في القائمة الكاملة.
+      # يتأكد أن الإصدار ما زال مسودة قبل رفع latest.json/SHA256SUMS (النشر يدوي للمالك).
+      - name: Locate draft release by tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          FOUND=$(gh api "repos/$REPO/releases?per_page=100" --paginate \
+            --jq ".[] | select(.tag_name == \"$TAG\") | \"\(.id) \(.draft)\"")
+          FOUND="${FOUND%%$'\n'*}"   # الأول فقط (بلا head — SIGPIPE مع pipefail)
+          [ -n "$FOUND" ] || { echo "::error::لا مسودة إصدار للوسم $TAG (prepare-release؟)"; exit 1; }
+          read -r RID RDRAFT <<< "$FOUND"
+          [ "$RDRAFT" = "true" ] || { echo "::error::الإصدار $TAG لم يعد مسودة (id=$RID) — نُشر قبل اكتمال الأصول؟"; exit 1; }
+          echo "draft release id=$RID → سيُستكمل بـ latest.json + SHA256SUMS (يبقى مسودة)"
       - uses: softprops/action-gh-release@v3
         with:
           draft: true
