@@ -29,7 +29,6 @@ dependencies:
 
   # ---- التعريب والمظهر ----
   easy_localization: ^3.0.7
-  google_fonts: ^6.2.1          # IBM Plex Sans Arabic — نفس خط نسخة الويب
   intl: any
 
   # ---- الأذونات (طلب وقت الاستخدام) ----
@@ -55,3 +54,14 @@ flutter:
   uses-material-design: true
   assets:
     - assets/translations/
+  # P0/G3: IBM Plex Sans Arabic مضمَّن (OFL — assets/fonts/ibm-plex-sans-arabic/OFL.txt) بدل google_fonts
+  fonts:
+    - family: IBMPlexSansArabic
+      fonts:
+        - asset: assets/fonts/ibm-plex-sans-arabic/IBMPlexSansArabic-Regular.ttf
+        - asset: assets/fonts/ibm-plex-sans-arabic/IBMPlexSansArabic-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/ibm-plex-sans-arabic/IBMPlexSansArabic-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/ibm-plex-sans-arabic/IBMPlexSansArabic-Bold.ttf
+          weight: 700
