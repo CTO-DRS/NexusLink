@@ -613,14 +613,17 @@ function healAssets(j){
   try{
     var byKey={},v=String(j.tag_name).replace(/^v/,"");
     (j.assets||[]).forEach(function(a){byKey[a.name.replace(/\d+\.\d+\.\d+/,"X")]=a;});
+    // G4: بعد 3.1.1 صار APK مقسّمًا لكل معمارية واسم AAB تغيّر — نطابق الاسم القديم مع الجديد
+    var SPLIT={"NexusLink-X-release.apk":"NexusLink-X-arm64-v8a-release.apk","app-release.aab":"NexusLink-X-release.aab"};
+    function pick(k){return byKey[k]||(SPLIT[k]&&byKey[SPLIT[k]]);}
     document.querySelectorAll(".asset").forEach(function(row){
       var nm=row.querySelector(".nm"),dl=row.querySelector("a.dl"),sz=row.querySelector(".sz");
       if(!nm||!dl)return;
-      var a=byKey[nm.textContent.replace(/\d+\.\d+\.\d+/,"X")];if(!a)return;
+      var a=pick(nm.textContent.replace(/\d+\.\d+\.\d+/,"X"));if(!a)return;
       nm.textContent=a.name;dl.href=a.browser_download_url;
       if(sz)sz.textContent=(a.size/1048576).toFixed(1)+"MB";
     });
-    Object.keys(CTA_FILES).forEach(function(k){CTA_FILES[k]=CTA_FILES[k].replace(/\d+\.\d+\.\d+/,v);});
+    Object.keys(CTA_FILES).forEach(function(k){var a=pick(CTA_FILES[k].replace(/\d+\.\d+\.\d+/,"X"));CTA_FILES[k]=a?a.name:CTA_FILES[k].replace(/\d+\.\d+\.\d+/,v);});
     cta();
   }catch(e){}
 }
