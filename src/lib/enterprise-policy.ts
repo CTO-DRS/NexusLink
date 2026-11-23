@@ -238,17 +238,29 @@ export function readEnterprisePolicy(): EnterprisePolicy {
     cache = null
     return { ...UNMANAGED }
   }
+  // one descriptor for stat and read: no window for the file to change between them (TOCTOU)
+  let fd: number
   let st: fs.Stats
   try {
-    st = fs.statSync(p)
+    fd = fs.openSync(/*turbopackIgnore: true*/ p, "r")
   } catch {
     cache = null
     return { ...UNMANAGED }
   }
-  if (cache && cache.mtimeMs === st.mtimeMs && cache.size === st.size) return cache.policy
+  try {
+    st = fs.fstatSync(fd)
+  } catch {
+    try { fs.closeSync(fd) } catch { /* already closed */ }
+    cache = null
+    return { ...UNMANAGED }
+  }
+  if (cache && cache.mtimeMs === st.mtimeMs && cache.size === st.size) {
+    try { fs.closeSync(fd) } catch { /* already closed */ }
+    return cache.policy
+  }
   let policy: EnterprisePolicy
   try {
-    const raw = fs.readFileSync(p, "utf8")
+    const raw = fs.readFileSync(fd, "utf8")
     const hash = crypto.createHash("sha256").update(raw).digest("hex").slice(0, 16)
     const j: unknown = JSON.parse(raw)
     const v = validate(j)
@@ -281,6 +293,7 @@ export function readEnterprisePolicy(): EnterprisePolicy {
       minimumVersion: null,
     }
   }
+  try { fs.closeSync(fd) } catch { /* already closed */ }
   cache = { mtimeMs: st.mtimeMs, size: st.size, policy }
   return policy
 }

@@ -69,12 +69,15 @@ export interface RelayTunnelStatus {
 // ── قراءة الملف بمتغير تعديل-وقت (نمط pairCache في البوابة) ──────────
 let fileCache: { mtimeMs: number; size: number; data: RelayConfig | null } = { mtimeMs: -1, size: -1, data: null }
 function readRelayFile(): RelayConfig | null {
+  // one descriptor for stat and read: no window for the file to change between them (TOCTOU)
+  let fd: number | null = null
   try {
-    const st = fs.statSync(RELAY_FILE)
+    fd = fs.openSync(/*turbopackIgnore: true*/ RELAY_FILE, "r")
+    const st = fs.fstatSync(fd)
     if (st.mtimeMs !== fileCache.mtimeMs || st.size !== fileCache.size) {
       let parsed: RelayConfig | null = null
       try {
-        const j = JSON.parse(fs.readFileSync(RELAY_FILE, "utf8"))
+        const j = JSON.parse(fs.readFileSync(fd, "utf8"))
         if (j && typeof j === "object" && typeof j.url === "string" && typeof j.secret === "string") {
           parsed = {
             enabled: j.enabled === true,
@@ -91,6 +94,8 @@ function readRelayFile(): RelayConfig | null {
   } catch {
     fileCache = { mtimeMs: -1, size: -1, data: null }
     return null
+  } finally {
+    if (fd !== null) try { fs.closeSync(fd) } catch { /* already closed */ }
   }
 }
 

@@ -28,7 +28,7 @@ const PAIR_FILE =
 
 function pairEnabled(): boolean {
   try {
-    const j = JSON.parse(fs.readFileSync(PAIR_FILE, "utf8"))
+    const j = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ PAIR_FILE, "utf8"))
     return !!(j && typeof j.token === "string" && j.token.length >= 16)
   } catch {
     return false

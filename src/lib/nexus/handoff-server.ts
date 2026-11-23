@@ -79,7 +79,7 @@ function maskFor(payload: string, sensitive: unknown): string {
  *  والنص العاري القديم يبقى مقروءًا (ترحيل عند أول كتابة). */
 async function readItems(key: string | null): Promise<{ items: HandoffItem[]; dropped: number }> {
   try {
-    const j = JSON.parse(fs.readFileSync(HANDOFF_FILE, "utf8")) as { items?: unknown }
+    const j = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ HANDOFF_FILE, "utf8")) as { items?: unknown }
     if (!j || !Array.isArray(j.items)) return { items: [], dropped: 0 }
     const out: HandoffItem[] = []
     let dropped = 0

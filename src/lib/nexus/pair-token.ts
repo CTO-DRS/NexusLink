@@ -33,7 +33,7 @@ export function newPairToken(): string {
 
 export function readPairFile(): PairRecord | null {
   try {
-    const j = JSON.parse(fs.readFileSync(PAIR_FILE, "utf8"))
+    const j = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ PAIR_FILE, "utf8"))
     if (j && typeof j.token === "string" && j.token.length >= 16) {
       return { token: j.token, fingerprint: String(j.fingerprint ?? ""), createdAt: String(j.createdAt ?? "") }
     }
@@ -85,7 +85,7 @@ export function ensurePairToken(): PairRecord | null {
     const tmp = `${PAIR_FILE}.${process.pid}.${crypto.randomBytes(4).toString("hex")}.tmp`
     fs.writeFileSync(tmp, JSON.stringify({ token, fingerprint, createdAt: new Date().toISOString(), origin: "first-run" }, null, 2), { mode: 0o600 })
     try {
-      if (fs.existsSync(PAIR_FILE) && !readPairFile()) fs.rmSync(PAIR_FILE, { force: true })
+      if (fs.existsSync(/*turbopackIgnore: true*/ PAIR_FILE) && !readPairFile()) fs.rmSync(PAIR_FILE, { force: true })
       fs.linkSync(tmp, PAIR_FILE)
     } catch { /* سبقتنا البوابة — رمزها هو الحقيقة */ }
     try { fs.rmSync(tmp, { force: true }) } catch { /* لا شيء */ }
