@@ -62,6 +62,9 @@ jobs:
       - name: Bridges bind loopback only (P0)
         run: node scripts/bridge-bind-check.mjs
 
+      - name: P1 discovery beacon E2E (pcId + whitelisted UDP beacon)
+        run: node scripts/discovery-beacon-e2e.mjs
+
       - name: Types (tsc — الأساس صفر منذ تكليف 29)
         run: bunx tsc --noEmit
 
