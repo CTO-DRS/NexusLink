@@ -14,6 +14,9 @@
 //  9. the v2 record is deleted after completion
 // 10. v1 still works (init without proto → v:1, offset upload, complete)
 // 11. abort deletes the partial file and the record
+// 12. phone-client mirror (transfer_engine.dart _runUploadV2): derives uploadId from taskId
+//     exactly like the Dart code, 4MB pieces, 4 workers, interruption + resume, one hash
+//     retry, root over every digest; plus a static check that Dart and route.ts agree.
 import { spawn } from "node:child_process"
 import { createHash, randomBytes } from "node:crypto"
 import fs from "node:fs"
@@ -167,6 +170,64 @@ async function main() {
   const existedBefore = partial && fs.existsSync(partial) && fs.existsSync(`${partial}.v2.json`)
   await post({ op: "abort", uploadId: ia.json.uploadId })
   check("abort deletes the partial file and the record", existedBefore && !fs.existsSync(partial) && !fs.existsSync(`${partial}.v2.json`))
+
+  // 12 — phone-client mirror (guards the old bug: the phone sent taskId as uploadId → 404)
+  const phoneId = (tid) => `up_${sha(Buffer.from(`nexus-upload:${tid}`)).slice(0, 16)}`
+  const dart = fs.readFileSync(path.join(ROOT, "nexuslink_mobile/lib/data/transfer_api.dart"), "utf8")
+  const route = fs.readFileSync(path.join(ROOT, "src/app/api/fs/upload/route.ts"), "utf8")
+  check("Dart and route.ts derive uploadId the same way",
+    dart.includes("utf8.encode('nexus-upload:$taskId')") && /\.substring\(0, 16\)/.test(dart) &&
+    route.includes("`nexus-upload:${taskId}`") && route.includes("h.slice(0, 16)"))
+  const engine = fs.readFileSync(path.join(ROOT, "nexuslink_mobile/lib/data/transfer_engine.dart"), "utf8")
+  check("engine never passes raw taskId as uploadId",
+    !/_api\.upload(Chunk|Piece|Complete|Pause|Resume|Abort)\(t\.id/.test(engine))
+
+  const PP = 4 * 1024 * 1024
+  const pSize = 3 * PP + 777 // 4 pieces, the last one partial
+  const pData = randomBytes(pSize)
+  const pTask = `phone-${Date.now()}`
+  const pid = phoneId(pTask)
+  const pInit = () => post({ op: "init", proto: 2, pieceSize: PP, chunkSize: 2 * 1024 * 1024, deviceId: dev,
+    path: "/Downloads", name: `${pTask}.bin`, size: pSize, taskId: pTask })
+  let pi = await pInit()
+  check("phone: init v2 with the derived uploadId", pi.status === 200 && pi.json.v === 2 && pi.json.uploadId === pid,
+    JSON.stringify(pi.json))
+  const slice = (i) => pData.subarray(i * PP, Math.min((i + 1) * PP, pSize))
+  // first run interrupted after pieces 0 and 2
+  for (const i of [0, 2]) await putPiece(pid, i, slice(i))
+  pi = await pInit() // app restarted: same taskId → same session
+  const pHave = new Set(pi.json.have || [])
+  check("phone: resume sees pieces 0 and 2", pHave.size === 2 && pHave.has(0) && pHave.has(2), JSON.stringify(pi.json.have))
+  // second run: 4 workers over missing pieces, piece 1 corrupted once then retried
+  const n = pi.json.pieces
+  const workers = Math.max(1, Math.min(4, pi.json.maxInflight))
+  const digs = new Array(n)
+  let next = 0, corrupted = false, retried = 0, putErr = null
+  await Promise.all(Array.from({ length: workers }, async () => {
+    while (next < n && !putErr) {
+      const i = next++
+      const b = slice(i)
+      digs[i] = createHash("sha256").update(b).digest()
+      if (pHave.has(i)) continue
+      let r = await putPiece(pid, i, b, i === 1 && !corrupted ? (corrupted = true, sha(Buffer.from("bad"))) : sha(b))
+      if (r.status === 422 && r.json.code === "hash_mismatch") { retried++; r = await putPiece(pid, i, b) }
+      if (r.status !== 200) putErr = r
+    }
+  }))
+  check("phone: missing pieces sent in parallel, hash retry once", !putErr && retried === 1, JSON.stringify(putErr))
+  const pDone = await post({ op: "complete", uploadId: pid, root: sha(Buffer.concat(digs)) })
+  check("phone: complete with root", pDone.status === 200 && pDone.json.job?.status === "done", JSON.stringify(pDone.json))
+  const pDest = pDone.json.job?.destPath
+  const pAbs = pDest && (path.isAbsolute(pDest) ? pDest : path.join(serverCwd, pDest))
+  let pGot = null
+  try { pGot = fs.readFileSync(pAbs) } catch { /* unreadable */ }
+  check("phone: stored file matches", pGot !== null && sha(pGot) === sha(pData))
+  // pause/abort with the derived id (the engine's other calls)
+  const aTask = `phone-ab-${Date.now()}`
+  await post({ op: "init", proto: 2, pieceSize: PP, deviceId: dev, path: "/Downloads", name: `${aTask}.bin`, size: PP * 2, taskId: aTask })
+  const pz = await post({ op: "pause", uploadId: phoneId(aTask) })
+  const ab = await post({ op: "abort", uploadId: phoneId(aTask) })
+  check("phone: pause/abort accept the derived id", pz.status === 200 && ab.status === 200, `${pz.status}/${ab.status}`)
 
   console.log(`\n${pass}/${pass + failN} passed`)
 }
