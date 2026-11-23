@@ -66,6 +66,8 @@ class AgentForegroundService : Service() {
         private const val BEACON_MS = 5_000L
         private const val STATE_MS = 30_000L
         private const val WATCHDOG_MS = 15_000L
+        private const val RELOCATE_AFTER_MS = 20_000L
+        private const val RELOCATE_EVERY_MS = 30_000L
 
         /** FA-10: إيقاع الخمول — شاشة مطفأة وواجهة ميتة → نبض خفيف (بطارية < 3%/يوم). */
         private const val BEACON_IDLE_MS = 60_000L
@@ -185,6 +187,11 @@ class AgentForegroundService : Service() {
     private var mode = "gateway"
     // G1 — رمز اقتران البوابة الإلزامي (من QR عبر Flutter، أو المحفوظ للإقلاع التلقائي)
     private var pairToken = ""
+    // P1 — stable PC identity (§44): lets the agent find the PC again after its IP changes
+    private var pcId = ""
+    private var offlineSince = 0L
+    private var lastLocateAt = 0L
+    @Volatile private var locating = false
     private var bridgePort = 3006
     private var deviceId = ""
     private var deviceName = "Nexus Android"
@@ -229,6 +236,13 @@ class AgentForegroundService : Service() {
             deviceId = i.getStringExtra("deviceId") ?: deviceId
             deviceName = i.getStringExtra("deviceName") ?: deviceName
             pairToken = i.getStringExtra("pairToken") ?: pairToken
+            i.getStringExtra("pcId")?.takeIf { it.isNotEmpty() }?.let { pcId = it }
+        }
+        if (pcId.isEmpty()) {
+            pcId = try {
+                getSharedPreferences(AgentServicePrefs.PREFS, Context.MODE_PRIVATE)
+                    .getString(AgentServicePrefs.KEY_PC_ID, "") ?: ""
+            } catch (_: Exception) { "" }
         }
         currentServerKey = "$host:$port"
 
@@ -244,6 +258,7 @@ class AgentForegroundService : Service() {
                 .putString(AgentServicePrefs.KEY_DEVICE_NAME, deviceName)
                 .putString(AgentServicePrefs.KEY_SERVER_KEY, currentServerKey ?: "")
                 .putString(AgentServicePrefs.KEY_PAIR_TOKEN, pairToken)
+                .putString(AgentServicePrefs.KEY_PC_ID, pcId)
                 .apply()
         } catch (_: Exception) {
         }
@@ -1241,6 +1256,11 @@ class AgentForegroundService : Service() {
                         android.util.Log.w(TAG, "watchdog: reconnecting…")
                         s.connect()
                         setState("reconnecting")
+                        val now = System.currentTimeMillis()
+                        if (offlineSince == 0L) offlineSince = now
+                        maybeRelocate(now)
+                    } else if (s != null) {
+                        offlineSince = 0L
                     }
                     val p = prodSocket
                     if (p != null && !p.connected()) p.connect()
@@ -1254,6 +1274,61 @@ class AgentForegroundService : Service() {
             }
         }
         main.postDelayed(watchdogRun!!, WATCHDOG_MS)
+    }
+
+    /**
+     * P1: after the main channel has been offline for [RELOCATE_AFTER_MS], look for
+     * the PC by pcId on the LAN (BeaconLocator, background thread). Only in gateway
+     * mode (the beacon announces the gateway port). If the address changed, move every
+     * channel to it, keeping the same pair token (it never comes from the beacon).
+     */
+    private fun maybeRelocate(now: Long) {
+        if (mode != "gateway" || pcId.isEmpty() || locating) return
+        if (now - offlineSince < RELOCATE_AFTER_MS || now - lastLocateAt < RELOCATE_EVERY_MS) return
+        locating = true
+        lastLocateAt = now
+        val wanted = pcId
+        Thread({
+            val hit = try { BeaconLocator.find(wanted) } catch (_: Exception) { null }
+            main.post {
+                locating = false
+                if (hit != null && wanted == pcId && socket?.connected() != true &&
+                    (hit.host != host || hit.port != port)) {
+                    relocateTo(hit.host, hit.port)
+                }
+            }
+        }, "nexus-relocate").start()
+    }
+
+    private fun relocateTo(newHost: String, newPort: Int) {
+        android.util.Log.i(TAG, "relocate: $host:$port → $newHost:$newPort (pcId)")
+        try {
+            socket?.off(); socket?.disconnect()
+            prodSocket?.off(); prodSocket?.disconnect()
+            mediaSocket?.off(); mediaSocket?.disconnect()
+            sec?.shutdown()
+        } catch (_: Exception) {
+        }
+        socket = null
+        prodSocket = null
+        mediaSocket = null
+        sec = null
+        host = newHost
+        port = newPort
+        offlineSince = 0L
+        // the boot/keep-alive restart uses the new address too; serverKey (the pairing identity) is unchanged
+        try {
+            getSharedPreferences(AgentServicePrefs.PREFS, Context.MODE_PRIVATE).edit()
+                .putString(AgentServicePrefs.KEY_HOST, host)
+                .putInt(AgentServicePrefs.KEY_PORT, port)
+                .apply()
+        } catch (_: Exception) {
+        }
+        setState("connecting")
+        connect()
+        connectProd()
+        connectMedia()
+        connectSec()
     }
 
     // ------------------------------------------------------------------
