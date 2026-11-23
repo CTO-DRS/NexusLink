@@ -25,3 +25,26 @@ class PairTokenStore {
     await p.remove(_k(serverKey));
   }
 }
+
+/// P1 — هوية الكمبيوتر الثابتة (pcId) لكل خادم (مفتاح host:port).
+/// تُحفظ بعد اقتران ناجح من /__gw/health، وتُستعمل لإيجاد الكمبيوتر عبر المنارة
+/// إذا تغيّر عنوانه (docs/protocol-contract.md §44).
+class PcIdStore {
+  static String _k(String serverKey) => 'nexus.pcId.$serverKey';
+
+  static Future<String?> load(String serverKey) async {
+    final p = await SharedPreferences.getInstance();
+    final v = p.getString(_k(serverKey));
+    return (v == null || v.isEmpty) ? null : v;
+  }
+
+  static Future<void> save(String serverKey, String pcId) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_k(serverKey), pcId);
+  }
+
+  static Future<void> forget(String serverKey) async {
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_k(serverKey));
+  }
+}

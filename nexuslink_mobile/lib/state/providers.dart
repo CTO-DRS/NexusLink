@@ -11,6 +11,7 @@ import '../data/database/nexus_db.dart';
 import '../data/device_identity.dart';
 import '../data/nexus_api.dart';
 import '../data/pair_token_store.dart';
+import '../domain/beacon_listener.dart';
 import '../domain/discovery_service.dart';
 import '../domain/models.dart';
 
@@ -72,11 +73,13 @@ final deviceIdentityProvider = FutureProvider<DeviceIdentity>((ref) async {
 class DiscoveryController extends Notifier<List<DiscoveredServer>> {
   final DiscoveryService _service = DiscoveryService();
   Timer? _announce;
+  StreamSubscription<BeaconHit>? _beaconSub;
 
   @override
   List<DiscoveredServer> build() {
     ref.onDispose(() {
       _announce?.cancel();
+      _beaconSub?.cancel();
       _service.stop();
     });
     return _service.found;
@@ -91,6 +94,18 @@ class DiscoveryController extends Notifier<List<DiscoveredServer>> {
           );
     });
     await _service.start();
+    // P1 — منارة UDP بجوار mDNS: تعمل حيث يُحجب mDNS (نقاط اتصال، شبكات ضيوف)
+    final beacon = ref.read(beaconListenerProvider);
+    _beaconSub ??= beacon.hits.listen((h) {
+      _service.ingest(DiscoveredServer(
+        name: h.name,
+        host: h.host,
+        port: h.port,
+        txt: {'pcId': h.pcId, 'via': 'beacon'},
+      ));
+    });
+    await beacon.start();
+    await beacon.probe();
     // إعادة إعلان القائمة دوريًا (بعد اكتمال الاكتشاف)
     _announce?.cancel();
     _announce = Timer.periodic(const Duration(seconds: 3), (_) {
@@ -98,6 +113,13 @@ class DiscoveryController extends Notifier<List<DiscoveredServer>> {
     });
   }
 }
+
+/// P1 — مستمع منارة الاكتشاف (مشترك بين الاكتشاف وإعادة الاتصال التلقائية).
+final beaconListenerProvider = Provider<BeaconListener>((ref) {
+  final b = BeaconListener();
+  ref.onDispose(b.stop);
+  return b;
+});
 
 final discoveryProvider = NotifierProvider<DiscoveryController, List<DiscoveredServer>>(
   DiscoveryController.new,
@@ -212,6 +234,7 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
     required ServerEndpoint endpoint,
     required String serverName,
     String? qrSecret,
+    bool allowRelocate = true,
   }) async {
     final log = ref.read(activityLogProvider.notifier);
     // G1 — رمز البوابة الإلزامي: من QR الحالي إن وُجد، وإلا المحفوظ لهذا الخادم
@@ -238,6 +261,14 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
       ));
       return;
     } catch (e) {
+      // P1 — العنوان المحفوظ لا يرد: ربما تغيّر IP الكمبيوتر. نبحث عنه بالمنارة بهويته pcId
+      if (allowRelocate) {
+        final moved = await _relocate(endpoint);
+        if (moved != null) {
+          log.add('الكمبيوتر انتقل إلى ${moved.key} — إعادة الاتصال تلقائيًا', kind: 'ok');
+          return connect(endpoint: moved, serverName: serverName, qrSecret: qrSecret, allowRelocate: false);
+        }
+      }
       log.add('فشل فحص الصحة: $e', kind: 'error');
       state = AsyncData(ConnectionStateModel(
         phase: ConnectPhase.error,
@@ -315,6 +346,9 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
     ref.invalidate(trustedServersProvider);
     // G1 — حفظ رمز البوابة الذي نجح لإعادة الاتصال والإقلاع التلقائي
     if (endpoint.hasPairToken) await PairTokenStore.save(endpoint.key, endpoint.pairToken!);
+    // P1 — حفظ هوية الكمبيوتر الثابتة لإيجاده لاحقًا إذا تغيّر عنوانه
+    final pcId = await api.gatewayPcId();
+    if (pcId != null) await PcIdStore.save(endpoint.key, pcId);
 
     // 4) بدء الخدمة الخلفية (Foreground Service + socket.io دائم + إعادة اتصال)
     state = AsyncData(ConnectionStateModel(
@@ -350,6 +384,7 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
       final row = await db.byKey(cur!.endpoint!.key);
       if (row != null) await db.forget(row.id);
       await PairTokenStore.forget(cur.endpoint!.key);
+      await PcIdStore.forget(cur.endpoint!.key);
       ref.invalidate(trustedServersProvider);
     } else {
       await db.clearLastUsed();
@@ -357,6 +392,20 @@ class ConnectionController extends AsyncNotifier<ConnectionStateModel> {
     ref.read(agentStateProvider.notifier).state = AgentLinkState.stopped;
     log.add('تم قطع الاتصال${forgetRow ? ' ونسيان الخادم' : ''}', kind: 'warn');
     state = const AsyncData(ConnectionStateModel());
+  }
+
+  /// P1 — إيجاد الكمبيوتر بهويته الثابتة بعد تغيّر عنوانه. ينقل الرمز المحفوظ
+  /// إلى العنوان الجديد (الرمز لا يأتي من المنارة أبدًا — البوابة تتحقق منه).
+  Future<ServerEndpoint?> _relocate(ServerEndpoint ep) async {
+    if (ep.mode != AccessMode.gateway) return null;
+    final pcId = await PcIdStore.load(ep.key);
+    if (pcId == null) return null;
+    final hit = await ref.read(beaconListenerProvider).find(pcId);
+    if (hit == null || hit.key == ep.key) return null;
+    final moved = ServerEndpoint(host: hit.host, port: hit.port, mode: AccessMode.gateway, pairToken: ep.pairToken);
+    if (ep.hasPairToken) await PairTokenStore.save(moved.key, ep.pairToken!);
+    await PcIdStore.save(moved.key, pcId);
+    return moved;
   }
 
   /// التبديل إلى خادم موثوق محفوظ.
