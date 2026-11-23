@@ -356,7 +356,7 @@ export function ensureMediaBridge() {
       // المنفذ مشغول (خدمة قائمة) — تجاهل
     })
 
-    httpServer.listen(PORT, () => {
+    httpServer.listen(PORT, process.env.BRIDGE_HOST || "127.0.0.1", () => {
       console.log(`[nexus] Media & Camera Bridge on port ${PORT}`)
     })
   } catch {

@@ -307,7 +307,7 @@ export function ensureProdBridge() {
       }).catch(() => {})
     }, 5_000)
 
-    httpServer.listen(PORT, () => {
+    httpServer.listen(PORT, process.env.BRIDGE_HOST || "127.0.0.1", () => {
       log(io2, "جسر الإنتاجية يعمل — الحافظة الموحدة والتسليم والمزامنة جاهزة", "ok")
       console.log(`[nexus] Productivity Bridge on port ${PORT}`)
     })

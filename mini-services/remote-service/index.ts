@@ -749,7 +749,7 @@ io.on('connection', (socket) => {
   })
 })
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, process.env.BRIDGE_HOST || "127.0.0.1", () => {
   console.log(`NexusLink Remote Control Bridge on port ${PORT}`)
   rcLog(`جسر التحكم عن بُعد يعمل — الكمبيوتر ${desktop.name} (${POWER_AR[desktop.power]})`, 'ok')
 })
