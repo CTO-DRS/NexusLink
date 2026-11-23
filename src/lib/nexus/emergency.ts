@@ -45,7 +45,7 @@ const EMPTY: EmergencyState = { pinSha256: null, rules: null, armedAt: null, kil
 /** قراءة ديناميكية — كل نداء من القرص (لا كاش: الحسم لحظي كملف §37). */
 export function readEmergencyState(): EmergencyState {
   try {
-    const j = JSON.parse(fs.readFileSync(EMERGENCY_FILE, "utf8")) as Partial<EmergencyState>
+    const j = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ EMERGENCY_FILE, "utf8")) as Partial<EmergencyState>
     if (!j || typeof j !== "object") return { ...EMPTY }
     const kills = Array.isArray(j.kills)
       ? j.kills.filter(
@@ -188,7 +188,7 @@ export async function killDevice(pin: unknown, confirm: unknown, deviceId: unkno
 function rotatePairTokenNow(): { from: string; to: string } | null {
   let from: string | null = null
   try {
-    const j = JSON.parse(fs.readFileSync(PAIR_FILE, "utf8"))
+    const j = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ PAIR_FILE, "utf8"))
     if (j && typeof j.token === "string" && j.token.length >= 16) from = crypto.createHash("sha256").update(j.token).digest("hex").slice(0, 16)
   } catch { /* لا رمز مُمكَّن — لا تدوير */ }
   if (!from) return null

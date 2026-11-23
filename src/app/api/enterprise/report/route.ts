@@ -41,7 +41,7 @@ const PAIR_FILE =
 /** مطابق حرفيًا لقراءة §38 في /api/remote-access — نمط النسختين المتطابقتين */
 function readPairFile(): { token: string; fingerprint: string; createdAt: string } | null {
   try {
-    const j = JSON.parse(fs.readFileSync(PAIR_FILE, "utf8"))
+    const j = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ PAIR_FILE, "utf8"))
     if (j && typeof j.token === "string" && j.token.length >= 16) {
       return { token: j.token, fingerprint: String(j.fingerprint ?? ""), createdAt: String(j.createdAt ?? "") }
     }

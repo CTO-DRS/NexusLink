@@ -151,7 +151,7 @@ export async function PUT(req: Request) {
       } catch { break }
     }
     await fs.copyFile(src, target)
-    const st = await fs.stat(target)
+    const st = await fs.stat(/*turbopackIgnore: true*/ target)
     const updated = await db.prodClip.update({ where: { id }, data: { received: true } })
     prodEmit("clip:received", { id, name: path.basename(target), bytes: st.size, at: Date.now() })
     // §58: العائد شفاف — محتوى مقروء لا مغلف (نمط القراءة الموحد)

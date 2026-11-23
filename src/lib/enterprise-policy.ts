@@ -240,7 +240,7 @@ export function readEnterprisePolicy(): EnterprisePolicy {
   }
   let st: fs.Stats
   try {
-    st = fs.statSync(p)
+    st = fs.statSync(/*turbopackIgnore: true*/ p)
   } catch {
     cache = null
     return { ...UNMANAGED }
@@ -248,7 +248,7 @@ export function readEnterprisePolicy(): EnterprisePolicy {
   if (cache && cache.mtimeMs === st.mtimeMs && cache.size === st.size) return cache.policy
   let policy: EnterprisePolicy
   try {
-    const raw = fs.readFileSync(p, "utf8")
+    const raw = fs.readFileSync(/*turbopackIgnore: true*/ p, "utf8")
     const hash = crypto.createHash("sha256").update(raw).digest("hex").slice(0, 16)
     const j: unknown = JSON.parse(raw)
     const v = validate(j)

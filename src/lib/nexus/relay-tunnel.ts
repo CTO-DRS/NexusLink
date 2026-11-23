@@ -70,11 +70,11 @@ export interface RelayTunnelStatus {
 let fileCache: { mtimeMs: number; size: number; data: RelayConfig | null } = { mtimeMs: -1, size: -1, data: null }
 function readRelayFile(): RelayConfig | null {
   try {
-    const st = fs.statSync(RELAY_FILE)
+    const st = fs.statSync(/*turbopackIgnore: true*/ RELAY_FILE)
     if (st.mtimeMs !== fileCache.mtimeMs || st.size !== fileCache.size) {
       let parsed: RelayConfig | null = null
       try {
-        const j = JSON.parse(fs.readFileSync(RELAY_FILE, "utf8"))
+        const j = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ RELAY_FILE, "utf8"))
         if (j && typeof j === "object" && typeof j.url === "string" && typeof j.secret === "string") {
           parsed = {
             enabled: j.enabled === true,

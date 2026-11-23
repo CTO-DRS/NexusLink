@@ -105,7 +105,7 @@ function originBlocked(req: NextRequest): boolean {
   return true
 }
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const api = isApiPath(req.nextUrl.pathname)
 
   // حرس الأصل (38) — الطرق غير الآمنة من أصل إنترنت عام تُرفض قبل أي معالج

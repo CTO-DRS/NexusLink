@@ -17,7 +17,7 @@ export const FOCUS_FILE =
 
 export function readFocusState(): FocusState | null {
   try {
-    return normalizeFocusState(JSON.parse(fs.readFileSync(FOCUS_FILE, "utf8")))
+    return normalizeFocusState(JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ FOCUS_FILE, "utf8")))
   } catch {
     return null
   }

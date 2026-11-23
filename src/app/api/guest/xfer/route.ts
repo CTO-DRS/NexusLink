@@ -33,7 +33,7 @@ const fails = createFailGuard({ after: GUEST_FAIL_LOCK_AFTER, lockMs: GUEST_FAIL
 
 function readGuestState(): GuestState | null {
   try {
-    const j = JSON.parse(fs.readFileSync(GUEST_FILE, "utf8"))
+    const j = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ GUEST_FILE, "utf8"))
     if (j && typeof j.token === "string" && (j.mode === "send" || j.mode === "drop")) {
       return {
         token: j.token, fingerprint: String(j.fingerprint ?? ""), mode: j.mode,
