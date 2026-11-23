@@ -126,6 +126,7 @@ class MainActivity : FlutterFragmentActivity() {
                         putExtra("deviceName", call.argument<String>("deviceName") ?: "Nexus Android")
                         putExtra("serverKey", call.argument<String>("serverKey") ?: "")
                         putExtra("pairToken", call.argument<String>("pairToken") ?: "")
+                        putExtra("pcId", call.argument<String>("pcId") ?: "")
                     }
                     try {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

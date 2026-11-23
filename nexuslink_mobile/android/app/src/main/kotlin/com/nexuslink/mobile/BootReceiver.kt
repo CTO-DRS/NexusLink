@@ -65,6 +65,7 @@ object AgentServicePrefs {
     const val KEY_SERVER_KEY = "serverKey"
     /** G1 — رمز اقتران البوابة الإلزامي (من QR) — يُعاد مع الإقلاع التلقائي */
     const val KEY_PAIR_TOKEN = "pairToken"
+    const val KEY_PC_ID = "pcId" // P1 — stable PC identity (§44) for relocation
 
     /** G1 — استعلام socket.io عبر البوابة: منفذ الجسر + رمز الاقتران (إن وُجد). */
     fun gatewayQuery(bridgePort: Int, pairToken: String): String =
