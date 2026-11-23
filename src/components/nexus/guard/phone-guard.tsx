@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch"
 import { getGuardSocket, proxBeacon, devState, devAcked, devSyncRequest } from "@/lib/guard-socket"
 import { RssiMeter, ProxStateBadge } from "./guard-bits"
 import { cn } from "@/lib/utils"
+import { useDemoMode } from "@/lib/demo-client"
 
 // نفس بذور الكمبيوتر كي تتبادل الحالتان
 const QS0 = { wifi: true, bluetooth: true, flashlight: false, dnd: false, rotate: false, data: true, hotspot: false, saver: false, brightness: 72, volMedia: 60, volRing: 80 }
@@ -334,6 +335,8 @@ function alarmTime(a: { hour: number; minute: number }) {
 
 // ==== تبويب الحماية داخل صفحة الهاتف ====
 export function GuardPhoneTab({ guard }: { guard: PhoneGuardCore }) {
+  // P0: أزرار محاكاة التصعيد للعرض التوضيحي فقط
+  const demo = useDemoMode()
   return (
     <div className="space-y-3">
       {/* §48 — بطاقة الطوارئ الذكي (محاكاة معلنة للتوأم — التنفيذ الحقيقي في Flutter) */}
@@ -350,6 +353,7 @@ export function GuardPhoneTab({ guard }: { guard: PhoneGuardCore }) {
               </div>
             </div>
           </div>
+          {demo && (
           <div className="grid grid-cols-2 gap-2">
             <Button variant="outline" size="sm" className="rounded-xl h-9 text-[10.5px] border-white/20 bg-white/5" onClick={guard.simUnlockFail}>
               محاولة فتح فاشلة ({guard.unlockFails}/{guard.arm.rules.unlockFailLimit})
@@ -358,14 +362,17 @@ export function GuardPhoneTab({ guard }: { guard: PhoneGuardCore }) {
               <Cpu className="w-3.5 h-3.5 me-1" />{guard.simChangedSim ? "الشريحة تغيّرت" : "محاكاة تغيير شريحة"}
             </Button>
           </div>
+          )}
           {(guard.unlockFails >= guard.arm.rules.unlockFailLimit || (guard.simChangedSim && guard.arm.rules.simChangeAction === "kill")) && (
             <div className="rounded-2xl bg-red-600/90 text-white text-[11px] font-bold text-center py-2.5 px-3 leading-relaxed">
               ⟁ التصعيد الذاتي: على الهاتف الحقيقي أُغلق الآن نهائيًا بلا شبكة — التوأم يعلن ولا يقتل (حكمة التنفيذ على جهاز المالك)
             </div>
           )}
+          {demo && (
           <Button variant="ghost" size="sm" className="w-full h-7 text-[9.5px] text-white/40" onClick={guard.resetSims}>
             تصفير عدادات المحاكاة
           </Button>
+          )}
         </div>
       )}
 

@@ -11,6 +11,7 @@ import { useGuard } from "@/lib/guard-store"
 import { guardSettings, proxManualLock, proxManualUnlock } from "@/lib/guard-socket"
 import { GuardCard, InfoRow, RssiMeter, ProxStateBadge, LogList } from "./guard-bits"
 import { cn } from "@/lib/utils"
+import { useDemoMode } from "@/lib/demo-client"
 
 function rssiMeters(rssi: number | null) {
   if (rssi == null) return null
@@ -21,6 +22,8 @@ function rssiMeters(rssi: number | null) {
 }
 
 export function ProximityTab() {
+  // P0: أدوات محاكاة المنارة للعرض التوضيحي فقط — في الإنتاج الاختبار بالهاتف الحقيقي
+  const demo = useDemoMode()
   const { prox, setProx, simMode, setSimMode, simRssi, setSimRssi, pcLocked, logs, phoneOnline } = useGuard()
 
   const patch = (p: Parameters<typeof setProx>[0]) => {
@@ -130,6 +133,7 @@ export function ProximityTab() {
         <p className="text-[11.5px] text-muted-foreground leading-relaxed">
           للتجربة الفورية على هذا الكمبيوتر حرّك شريط القوة — أو <b>الحقيقي</b>: افتح <span className="font-mono dir-ltr">/phone</span> على هاتفك وامشِ به بعيداً، ستتوقف منارته فيقفل الكمبيوتر تلقائياً.
         </p>
+        {demo && (
         <div className="rounded-2xl border bg-card p-3.5 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -163,6 +167,7 @@ export function ProximityTab() {
             </div>
           </div>
         </div>
+        )}
 
         {/* قفل/فتح يدوي */}
         <div className="grid grid-cols-2 gap-2">
