@@ -20,6 +20,7 @@ import { useClientOS } from "@/hooks/use-client-os"
 import {
   assetUrl,
   formatMB,
+  hasSplitAndroidAssets,
   isSignedAsset,
   LATEST_RELEASE_PAGE,
   PLATFORMS,
@@ -76,7 +77,7 @@ export function DownloadsSection() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {group.assets.map((asset) => {
+                  {group.assets.filter((a) => !a.splitOnly || hasSplitAndroidAssets(info.version)).map((asset) => {
                     // تكليف 50: الاسم يُحسم من نسخة الإصدار الحية ({{v}}) — الأسماء المغروسة القديمة كانت تُفشل كل مطابقات الأصول عند تغيّر الإصدار
                     const name = resolveAssetName(asset.name, info.version)
                     const meta = info.assets[name]

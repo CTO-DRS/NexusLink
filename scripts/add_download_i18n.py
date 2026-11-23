@@ -37,7 +37,7 @@ NEW_KEYS = {
     "المتطلبات: Windows 10/11 (64-bit)": "Requirements: Windows 10/11 (64-bit)",
     "المتطلبات: macOS 12+ (Apple Silicon)": "Requirements: macOS 12+ (Apple Silicon)",
     "المتطلبات: Ubuntu 20.04+ / Debian 11+ (64-bit)": "Requirements: Ubuntu 20.04+ / Debian 11+ (64-bit)",
-    "المتطلبات: Android 7+ (يُنصح 10 وما فوق)": "Requirements: Android 7+ (10+ recommended)",
+    "المتطلبات: Android 8+ (يُنصح 10 وما فوق)": "Requirements: Android 8+ (10+ recommended)",
     "مُوصى به لنظامك": "Recommended for your system",
     "المثبّت الرسمي": "Official installer",
     "حزمة MSI للمؤسسات": "MSI package for enterprises",

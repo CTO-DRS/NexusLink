@@ -726,7 +726,7 @@
   "= مزامنة الصور + الإشعارات + الحافظة + المجلدات،\n        و": "= Synchronisation des photos + notifications + presse-papiers + dossiers,\n        et", 
   "AES-256-GCM بعدّاد تسلسلي وبيانات مصادقة إضافية لكل رسالة — التقاط الحزم بـWireshark لا يُظهر محتوى مقروءًا، وهو معيار قبول معلن في المشروع.": "AES-256-GCM avec compteur de séquence et données d'authentification supplémentaires par message — capturer des paquets avec Wireshark ne montre pas de contenu lisible, c'est un critère d'acceptation déclaré du projet.", 
   "AES-256-GCM كأي نقل — الأمان لا ينقص": "AES-256-GCM comme n'importe quel transfert — la sécurité n'est pas compromise", 
-  "Android 7+ (يُنصح 10 وما فوق) — APK موقّع بالكامل الوظائف": "Android 7+ (recommandé 10 et plus) — APK signé avec toutes les fonctions", 
+  "Android 8+ (يُنصح 10 وما فوق) — APK موقّع بالكامل الوظائف": "Android 8+ (recommandé 10 et plus) — APK signé avec toutes les fonctions", 
   "AndroidManifest سليم": "AndroidManifest sain", 
   "Authenticode (اختياري)": "Authenticode (optionnel)", 
   "DAY_NAMES[d])\n    .join(\"، \")\n}\n\n/** المنبه القادم (بالثواني من الآن) */\nexport function nextAlarmIn(a: AlarmEntry): number | null {\n  if (!a.enabled) return null\n  const now = new Date()\n  for (let add = 0; add": "DAY_NAMES[d])\n    .join(\", \")\n}\n\n/** Prochaine alarme (en secondes à partir de maintenant) */\nexport function nextAlarmIn(a: AlarmEntry): number | null {\n  if (!a.enabled) return null\n  const now = new Date()\n  for (let add = 0; add", 
@@ -1603,7 +1603,7 @@
   "المتاحة": "Disponible", 
   "المتصفح": "Navigateur", 
   "المتصفح منع النسخ — انسخ يدوياً": "Navigateur empêche la copie — copiez manuellement", 
-  "المتطلبات: Android 7+ (يُنصح 10 وما فوق)": "Exigences : Android 7+ (recommandé 10 et plus)", 
+  "المتطلبات: Android 8+ (يُنصح 10 وما فوق)": "Exigences : Android 8+ (recommandé 10 et plus)", 
   "المتطلبات: Ubuntu 20.04+ / Debian 11+ (64-bit)": "Exigences : Ubuntu 20.04+ / Debian 11+ (64-bit)", 
   "المتطلبات: Windows 10/11 (64-bit)": "Exigences : Windows 10/11 (64-bit)", 
   "المتطلبات: macOS 12+ (Apple Silicon)": "Exigences : macOS 12+ (Apple Silicon)", 
@@ -3878,5 +3878,6 @@
   "— لا بث محاكى ولا أرقام تقديرية.": "— aucun flux simulé ni chiffre estimé.", 
   "لا توجد كاميرا حقيقية متاحة — البث المحاكى متاح في وضع العرض التوضيحي فقط": "Aucune caméra réelle disponible — les flux simulés ne sont disponibles qu'en mode démo", 
   "لا يوجد ميكروفون حقيقي متاح — البث المحاكى متاح في وضع العرض التوضيحي فقط": "Aucun micro réel disponible — les flux simulés ne sont disponibles qu'en mode démo", 
-  "تعذر فتح الميكروفون": "Impossible d'ouvrir le micro"
+  "تعذر فتح الميكروفون": "Impossible d'ouvrir le micro", 
+  "للهواتف القديمة (32-bit)": "Pour les anciens téléphones 32 bits"
 }
