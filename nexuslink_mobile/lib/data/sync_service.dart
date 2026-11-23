@@ -97,6 +97,7 @@ class PhoneSyncService {
         // جلسة رفع مستقرة: taskId = المسار + الحجم (استئناف تلقائي بعد أي انقطاع)
         final taskId = 'sync_${_deviceId}_${rel.hashCode.toUnsigned(31)}_$name';
         final init = await _api.uploadInit(
+          proto: 1, // v1 offsets (§8.2): this path sends sequentially
           deviceId: _deviceId,
           name: name,
           size: st.size,
