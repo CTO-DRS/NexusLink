@@ -48,12 +48,22 @@ interface LiveStats {
   dup: number
   pings: number
 }
+// IP الهاتف من قناة socket.io الموثوقة (بعد توكن الإقران). الحلقة المحلية لا تُثبَّت
+// (اختبارات وأدوات على الجهاز نفسه)؛ أي عنوان آخر يقيّد التدفق بذلك الهاتف وحده.
+function pinnableIp(ip: string): string | null {
+  const v = String(ip || "").replace(/^::ffff:/, "")
+  if (!v || v === "127.0.0.1" || v === "::1") return null
+  return v
+}
+
 interface LiveFlow {
   key: Buffer
   socketId: string
   deviceId: string | null
   name: string
   bound: string | null
+  /** عنوان IP للهاتف كما رآه الجسر في rc:live-hello؛ حزم UDP من غيره تُرفض */
+  ip: string | null
   lastSeq: number | null
   stats: LiveStats
 }
@@ -133,6 +143,10 @@ function ensureLiveUdp() {
       return
     }
     const addr = `${rinfo.address}:${rinfo.port}`
+    if (flow.ip && rinfo.address.replace(/^::ffff:/, "") !== flow.ip) {
+      liveGlobal.droppedAddr++
+      return
+    }
     if (flow.bound && flow.bound !== addr) {
       liveGlobal.droppedAddr++
       return
@@ -515,6 +529,7 @@ export function ensureRemoteBridge() {
           deviceId: trust.deviceId,
           name: trust.name,
           bound: null,
+          ip: pinnableIp(realClientIp(socket.handshake)),
           lastSeq: null,
           stats: { received: 0, forwarded: 0, lost: 0, reorder: 0, dup: 0, pings: 0 },
         })
