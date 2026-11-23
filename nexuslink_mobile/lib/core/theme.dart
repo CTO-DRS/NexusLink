@@ -73,12 +73,12 @@ class NexusTheme {
     );
     return base.copyWith(
       textTheme: _textTheme(cs),
-      appBarTheme: AppBarTheme(
+      appBarTheme: const AppBarTheme(
         backgroundColor: NexusColors.lightBackground,
         foregroundColor: NexusColors.lightForeground,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: const TextStyle(
+        titleTextStyle: TextStyle(
           fontFamily: kFontFamily,
           fontSize: 18, fontWeight: FontWeight.w700, color: NexusColors.lightForeground,
         ),
@@ -165,12 +165,12 @@ class NexusTheme {
     );
     return base.copyWith(
       textTheme: _textTheme(cs),
-      appBarTheme: AppBarTheme(
+      appBarTheme: const AppBarTheme(
         backgroundColor: NexusColors.darkBackground,
         foregroundColor: NexusColors.darkForeground,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: const TextStyle(
+        titleTextStyle: TextStyle(
           fontFamily: kFontFamily,
           fontSize: 18, fontWeight: FontWeight.w700, color: NexusColors.darkForeground,
         ),
