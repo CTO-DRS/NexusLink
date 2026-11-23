@@ -12,6 +12,17 @@ import '../data/transfer_api.dart';
 import '../data/native_bridge.dart';
 import '../data/echo_registry.dart';
 
+/// SHA-256 خارج الـ isolate الرئيسي للقطع الكبيرة، كي لا تتجمّد الواجهة أثناء
+/// رفع ملف كبير. القطع الصغيرة تُحسب مباشرة لأن كلفة نقلها لـ isolate أكبر من الحساب.
+const int _offMainHashThreshold = 256 * 1024;
+
+String _sha256HexTop(List<int> bytes) => NexusTransferApi.sha256Hex(bytes);
+
+Future<String> hashPieceOffMain(List<int> bytes) async {
+  if (bytes.length < _offMainHashThreshold) return NexusTransferApi.sha256Hex(bytes);
+  return compute(_sha256HexTop, bytes);
+}
+
 /// إشارات النقل عبر قناة 3006 الدائمة (تنفّذها طبقة الإشارة — تُحقن هنا).
 abstract class TxSignaling {
   void send(String event, Map<String, dynamic> data);
@@ -696,7 +707,7 @@ class TransferEngine extends ChangeNotifier {
             failure = TxException('وصل نهاية الملف مبكرًا (الحجم تغيّر؟)');
             return;
           }
-          final hex = NexusTransferApi.sha256Hex(bytes);
+          final hex = await hashPieceOffMain(bytes);
           digests[i] = hex;
           if (have.contains(i)) continue;
           int received;
@@ -750,7 +761,7 @@ class TransferEngine extends ChangeNotifier {
         concat.add(int.parse(d.substring(k, k + 2), radix: 16));
       }
     }
-    await _completeUpload(t, root: NexusTransferApi.sha256Hex(concat));
+    await _completeUpload(t, root: await hashPieceOffMain(concat));
   }
 
   Future<void> _completeUpload(TransferTask t, {String? root}) async {
