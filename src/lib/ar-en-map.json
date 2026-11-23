@@ -726,7 +726,7 @@
   "= مزامنة الصور + الإشعارات + الحافظة + المجلدات،\n        و": "= Sync Images + Notifications + Clipboard + Folders,\n        and", 
   "AES-256-GCM بعدّاد تسلسلي وبيانات مصادقة إضافية لكل رسالة — التقاط الحزم بـWireshark لا يُظهر محتوى مقروءًا، وهو معيار قبول معلن في المشروع.": "AES-256-GCM with a per-message sequence counter and additional authenticated data — packet captures in Wireshark reveal no readable content, a publicly stated acceptance criterion of the project.", 
   "AES-256-GCM كأي نقل — الأمان لا ينقص": "AES-256-GCM like any transfer — security doesn't drop", 
-  "Android 7+ (يُنصح 10 وما فوق) — APK موقّع بالكامل الوظائف": "Android 7+ (10+ recommended) — signed APK with the full feature set", 
+  "Android 8+ (يُنصح 10 وما فوق) — APK موقّع بالكامل الوظائف": "Android 8+ (10+ recommended) — signed APK with the full feature set", 
   "Android — APK": "Android — APK", 
   "AndroidManifest سليم": "AndroidManifest clean", 
   "Authenticode (اختياري)": "Authenticode (optional)", 
@@ -1665,7 +1665,7 @@
   "المتاحة": "Available", 
   "المتصفح": "Browser", 
   "المتصفح منع النسخ — انسخ يدوياً": "Browser blocks copy — copy manually", 
-  "المتطلبات: Android 7+ (يُنصح 10 وما فوق)": "Requirements: Android 7+ (10+ recommended)", 
+  "المتطلبات: Android 8+ (يُنصح 10 وما فوق)": "Requirements: Android 8+ (10+ recommended)", 
   "المتطلبات: Ubuntu 20.04+ / Debian 11+ (64-bit)": "Requirements: Ubuntu 20.04+ / Debian 11+ (64-bit)", 
   "المتطلبات: Windows 10/11 (64-bit)": "Requirements: Windows 10/11 (64-bit)", 
   "المتطلبات: macOS 12+ (Apple Silicon)": "Requirements: macOS 12+ (Apple Silicon)", 
@@ -3878,5 +3878,6 @@
   "— لا بث محاكى ولا أرقام تقديرية.": "— no simulated streams and no estimated numbers.", 
   "لا توجد كاميرا حقيقية متاحة — البث المحاكى متاح في وضع العرض التوضيحي فقط": "No real camera available — simulated streams are only available in demo mode", 
   "لا يوجد ميكروفون حقيقي متاح — البث المحاكى متاح في وضع العرض التوضيحي فقط": "No real microphone available — simulated streams are only available in demo mode", 
-  "تعذر فتح الميكروفون": "Couldn't open the microphone"
+  "تعذر فتح الميكروفون": "Couldn't open the microphone", 
+  "للهواتف القديمة (32-bit)": "For older 32-bit phones"
 }

@@ -17,7 +17,7 @@ const PLATFORMS = [
   { icon: Monitor, name: "Windows", descKey: "Windows 10/11 (64-bit) — مثبّت وMSI ونسخة محمولة" },
   { icon: Apple, name: "macOS", descKey: "macOS 12+ على Apple Silicon — صورة قرص موقعة" },
   { icon: Triangle, name: "Linux", descKey: "Ubuntu 20.04+ / Debian 11+ — AppImage وdeb" },
-  { icon: Smartphone, name: "Android", descKey: "Android 7+ (يُنصح 10 وما فوق) — APK موقّع بالكامل الوظائف" },
+  { icon: Smartphone, name: "Android", descKey: "Android 8+ (يُنصح 10 وما فوق) — APK موقّع بالكامل الوظائف" },
 ]
 
 export function PlatformsStrip() {

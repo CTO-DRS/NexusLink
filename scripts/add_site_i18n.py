@@ -85,8 +85,8 @@ NEW_KEYS = {
         "macOS 12+ on Apple Silicon — signed disk image",
     "Ubuntu 20.04+ / Debian 11+ — AppImage وdeb":
         "Ubuntu 20.04+ / Debian 11+ — AppImage and deb",
-    "Android 7+ (يُنصح 10 وما فوق) — APK موقّع بالكامل الوظائف":
-        "Android 7+ (10+ recommended) — signed APK with the full feature set",
+    "Android 8+ (يُنصح 10 وما فوق) — APK موقّع بالكامل الوظائف":
+        "Android 8+ (10+ recommended) — signed APK with the full feature set",
     "حد صادق: يوجد بناء iOS في خط الإصدار، لكن قيود Apple تمنع مرآة SMS والمكالمات والتحكم الكامل — الأندرويد هو التجربة الكاملة.":
         "Honest limit: an iOS build exists in the release pipeline, but Apple's restrictions block SMS mirroring, calls and full remote control — Android is the complete experience.",
     # ---- home FAQ ----
