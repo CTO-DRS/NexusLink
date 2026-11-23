@@ -6,6 +6,7 @@ import path from "path"
 import { promises as fs } from "fs"
 import type { TransferJob } from "./types"
 import { jobs } from "./transfer-engine"
+import { dropV2, type V2State } from "./upload-v2"
 
 export interface UploadSession {
   id: string
@@ -20,6 +21,8 @@ export interface UploadSession {
   jobId: string
   createdAt: number
   lastWriteAt: number
+  /** P1 — protocol v2 (§8.3): parallel pieces with a hash. Absent = v1 (§8.2). */
+  v2?: V2State
 }
 
 const g = globalThis as unknown as { __nexusUploads?: Map<string, UploadSession> }
@@ -77,6 +80,7 @@ export async function abortSession(id: string, reason = "أُلغيت بواسط
   } catch {
     /* لا شيء */
   }
+  await dropV2(s.v2, s.partialAbs)
   const job = jobs().get(s.jobId)
   if (job) {
     job.status = "error"
