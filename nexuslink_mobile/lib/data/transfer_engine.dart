@@ -274,7 +274,8 @@ class TransferEngine extends ChangeNotifier {
     if (t.transferred != serverReceived) {
       t.transferred = serverReceived;
     }
-    if (serverReceived >= localSize && localSize > 0) {
+    // v2: الإتمام يحتاج الجذر — يتولاه _runUpload (يحسب digests محليًا)
+    if (init.v == 1 && serverReceived >= localSize && localSize > 0) {
       // الجزئي مكتمل لدى السيرفر — أكمل مباشرة
       await _completeUpload(t);
       return;
@@ -439,7 +440,7 @@ class TransferEngine extends ChangeNotifier {
       _signaling?.send('tx:state', {'id': t.offerId, 'state': 'paused'});
     } else {
       try {
-        await _api.uploadPause(t.id);
+        await _api.uploadPause(NexusTransferApi.uploadIdFor(t.id));
       } catch (_) {/* الحالة محلية تكفي */}
     }
     notifyListeners();
@@ -454,7 +455,7 @@ class TransferEngine extends ChangeNotifier {
       _signaling?.send('tx:accept', {'id': t.offerId});
     } else {
       try {
-        await _api.uploadResume(t.id);
+        await _api.uploadResume(NexusTransferApi.uploadIdFor(t.id));
       } catch (_) {}
     }
     _pump();
@@ -470,7 +471,7 @@ class TransferEngine extends ChangeNotifier {
     t.speedBps = 0;
     if (t.isUpload) {
       try {
-        await _api.uploadAbort(t.id);
+        await _api.uploadAbort(NexusTransferApi.uploadIdFor(t.id));
       } catch (_) {}
     } else {
       _signaling?.send('tx:state', {'id': t.offerId, 'state': 'cancelled'});
@@ -600,28 +601,25 @@ class TransferEngine extends ChangeNotifier {
       _fail(t, 'الملف المصدر غير موجود');
       return;
     }
-    if (t.transferred == 0 && t.totalBytes == 0) {
-      // ملف فارغ: init ثم complete مباشرة
-      await _api.uploadInit(
-        deviceId: _deviceId, name: t.fileName, size: 0, mime: t.mime,
-        localPath: t.localPath, dir: t.destDir, taskId: t.id,
-      );
-      await _completeUpload(t);
+    final uploadId = NexusTransferApi.uploadIdFor(t.id);
+    // init idempotent بنفس taskId في كل تشغيل: يعيد حالة الجلسة والبروتوكول (§8.2/§8.6)
+    final init = await _api.uploadInit(
+      deviceId: _deviceId, name: t.fileName, size: t.totalBytes, mime: t.mime,
+      localPath: t.localPath, dir: t.destDir, taskId: t.id,
+    );
+    if (init.uploadId.isNotEmpty && init.uploadId != uploadId) {
+      _fail(t, 'معرّف جلسة غير متوقع من السيرفر');
       return;
     }
-
-    // جلسة موجودة؟ (استئناف) وإلا init جديد
-    if (t.transferred == 0) {
-      try {
-        final init = await _api.uploadInit(
-          deviceId: _deviceId, name: t.fileName, size: t.totalBytes, mime: t.mime,
-          localPath: t.localPath, dir: t.destDir, taskId: t.id,
-        );
-        t.transferred = init.received;
-        await _persist(t);
-      } on TxException {
-        rethrow;
-      }
+    if (init.v == 2) {
+      await _runUploadV2(t, src, init);
+      return;
+    }
+    t.transferred = init.received;
+    await _persist(t);
+    if (t.totalBytes == 0) {
+      await _completeUpload(t);
+      return;
     }
 
     final raf = await src.open();
@@ -636,7 +634,7 @@ class TransferEngine extends ChangeNotifier {
           _fail(t, 'وصل نهاية الملف مبكرًا (الحجم تغيّر؟)');
           return;
         }
-        final received = await _api.uploadChunk(t.id, t.transferred, bytes);
+        final received = await _api.uploadChunk(uploadId, t.transferred, bytes);
         t.transferred = received;
         _sampleSpeed(t);
         final now = DateTime.now();
@@ -658,8 +656,105 @@ class TransferEngine extends ChangeNotifier {
     }
   }
 
-  Future<void> _completeUpload(TransferTask t) async {
-    final job = await _api.uploadComplete(t.id);
+  /// P1 — رفع v2 (§8.6): القطع الناقصة فقط، حتى [TxProtocol.uploadInflightV2] معًا،
+  /// كل قطعة بهاش SHA-256. digests القطع المستلمة سابقًا تُحسب محليًا (بلا رفع)
+  /// لأن الجذر عند الإتمام يحتاجها كلها. كل عامل يفتح الملف بمقبض خاص به.
+  Future<void> _runUploadV2(TransferTask t, File src, UploadInit init) async {
+    final uploadId = NexusTransferApi.uploadIdFor(t.id);
+    final ps = init.pieceSize;
+    final n = init.pieces;
+    if (ps <= 0 || n <= 0) {
+      _fail(t, 'استجابة v2 غير صالحة من السيرفر');
+      return;
+    }
+    if (await src.length() != t.totalBytes) {
+      _fail(t, 'حجم الملف تغيّر منذ بدء الرفع');
+      return;
+    }
+    final have = init.have.toSet();
+    final digests = List<String?>.filled(n, null);
+    t.transferred = init.received;
+    await _persist(t);
+    notifyListeners();
+
+    var next = 0;
+    var lastSignal = DateTime.now().subtract(TxProtocol.progressEvery);
+    var lastPersist = DateTime.now();
+    Object? failure;
+
+    Future<void> worker() async {
+      final raf = await src.open();
+      try {
+        while (failure == null && t.state == TxState.active) {
+          if (next >= n) return;
+          final i = next++;
+          final start = i * ps;
+          final len = min(ps, t.totalBytes - start);
+          await raf.setPosition(start);
+          final bytes = await raf.read(max(0, len));
+          if (bytes.length != max(0, len)) {
+            failure = TxException('وصل نهاية الملف مبكرًا (الحجم تغيّر؟)');
+            return;
+          }
+          final hex = NexusTransferApi.sha256Hex(bytes);
+          digests[i] = hex;
+          if (have.contains(i)) continue;
+          int received;
+          try {
+            received = await _api.uploadPiece(uploadId, i, bytes, hex);
+          } on TxHashMismatchException {
+            // تلف أثناء النقل: محاولة واحدة أخرى بنفس البايتات المقروءة
+            received = await _api.uploadPiece(uploadId, i, bytes, hex);
+          }
+          if (received > t.transferred) t.transferred = received;
+          _sampleSpeed(t);
+          final now = DateTime.now();
+          if (now.difference(lastSignal) >= TxProtocol.progressEvery) {
+            lastSignal = now;
+            notifyListeners();
+          }
+          if (now.difference(lastPersist) >= const Duration(seconds: 2)) {
+            lastPersist = now;
+            await _persist(t);
+          }
+        }
+      } catch (e) {
+        failure ??= e;
+      } finally {
+        await raf.close();
+      }
+    }
+
+    final workers = max(1, min(TxProtocol.uploadInflightV2, init.maxInflight));
+    await Future.wait(List.generate(workers, (_) => worker()));
+    final err = failure;
+    if (err != null) {
+      if (err is TxPausedException) {
+        t.transferred = err.received;
+        await _persist(t);
+        notifyListeners();
+        return;
+      }
+      throw err;
+    }
+    if (t.state != TxState.active) {
+      await _persist(t);
+      return;
+    }
+    if (digests.any((d) => d == null)) {
+      throw TxException('قطع لم تُحسب — أعد المحاولة');
+    }
+    final concat = <int>[];
+    for (final d in digests) {
+      for (var k = 0; k < d!.length; k += 2) {
+        concat.add(int.parse(d.substring(k, k + 2), radix: 16));
+      }
+    }
+    await _completeUpload(t, root: NexusTransferApi.sha256Hex(concat));
+  }
+
+  Future<void> _completeUpload(TransferTask t, {String? root}) async {
+    final job = await _api.uploadComplete(NexusTransferApi.uploadIdFor(t.id), root: root);
     t.state = TxState.done;
     t.transferred = t.totalBytes;
     t.finalPath = job.destPath;

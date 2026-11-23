@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:http/http.dart' as http;
 
 import '../core/protocol.dart';
@@ -12,14 +13,42 @@ class UploadInit {
   final int received; // حجم الجزئي الموجود لدى السيرفر (استئناف)
   final String jobId;
   final int chunkSize;
-  const UploadInit({required this.uploadId, required this.received, required this.jobId, required this.chunkSize});
 
-  static UploadInit fromJson(Map<String, dynamic> j) => UploadInit(
-        uploadId: '${j['uploadId'] ?? ''}',
-        received: (j['received'] as num?)?.toInt() ?? 0,
-        jobId: '${j['jobId'] ?? ''}',
-        chunkSize: (j['chunkSize'] as num?)?.toInt() ?? TxProtocol.uploadChunk,
-      );
+  /// P1 — بروتوكول الجلسة كما يقرّره السيرفر (§8.6): 2 = قطع متوازية بهاش.
+  /// سيرفر قديم لا يعيد v → 1 (العميل يتبع الرد لا الطلب).
+  final int v;
+  final int pieceSize;
+  final int pieces;
+  final List<int> have;
+  final int maxInflight;
+
+  const UploadInit({
+    required this.uploadId,
+    required this.received,
+    required this.jobId,
+    required this.chunkSize,
+    this.v = 1,
+    this.pieceSize = 0,
+    this.pieces = 0,
+    this.have = const [],
+    this.maxInflight = 1,
+  });
+
+  static UploadInit fromJson(Map<String, dynamic> j) {
+    final v = (j['v'] as num?)?.toInt() ?? 1;
+    final isV2 = v == 2 && j['hash'] == 'sha256';
+    return UploadInit(
+      uploadId: '${j['uploadId'] ?? ''}',
+      received: (j['received'] as num?)?.toInt() ?? 0,
+      jobId: '${j['jobId'] ?? ''}',
+      chunkSize: (j['chunkSize'] as num?)?.toInt() ?? TxProtocol.uploadChunk,
+      v: isV2 ? 2 : 1,
+      pieceSize: isV2 ? ((j['pieceSize'] as num?)?.toInt() ?? 0) : 0,
+      pieces: isV2 ? ((j['pieces'] as num?)?.toInt() ?? 0) : 0,
+      have: isV2 ? ((j['have'] as List?) ?? const []).whereType<num>().map((n) => n.toInt()).toList() : const [],
+      maxInflight: isV2 ? ((j['maxInflight'] as num?)?.toInt() ?? 1) : 1,
+    );
+  }
 }
 
 class UploadStatus {
@@ -53,6 +82,14 @@ class TxDriftException implements Exception {
   String toString() => 'drift: received=$received';
 }
 
+/// P1 — السيرفر رفض هاش القطعة (422): تُقرأ وتُرسل من جديد.
+class TxHashMismatchException implements Exception {
+  final int piece;
+  TxHashMismatchException(this.piece);
+  @override
+  String toString() => 'hash_mismatch: piece=$piece';
+}
+
 /// السيرفر أوقف الجلسة (pause من الكمبيوتر).
 class TxPausedException implements Exception {
   final int received;
@@ -71,6 +108,14 @@ class NexusTransferApi {
 
   NexusTransferApi(this.endpoint);
 
+  /// معرّف جلسة الرفع لدى السيرفر — مشتق حتميًا من taskId تمامًا كما في
+  /// route.ts stableUploadId: "up_" + أول 16 hex من sha256("nexus-upload:<taskId>").
+  /// (إصلاح: كان الهاتف يرسل taskId نفسه بدل uploadId فيرد السيرفر 404.)
+  static String uploadIdFor(String taskId) =>
+      'up_${crypto.sha256.convert(utf8.encode('nexus-upload:$taskId')).toString().substring(0, 16)}';
+
+  static String sha256Hex(List<int> bytes) => crypto.sha256.convert(bytes).toString();
+
   Map<String, String> get _jsonHeaders => {'Content-Type': 'application/json', 'Accept': 'application/json'};
 
   // ------------------------------------------------------------------
@@ -88,6 +133,7 @@ class NexusTransferApi {
     String dir = TxProtocol.uploadDir,
     String? taskId,
     int chunkSize = TxProtocol.uploadChunk,
+    int proto = 2,
   }) async {
     final res = await _client
         .post(
@@ -103,6 +149,8 @@ class NexusTransferApi {
             if (localPath != null) 'localPath': localPath,
             'chunkSize': chunkSize,
             if (taskId != null) 'taskId': taskId,
+            if (proto == 2) 'proto': 2,
+            if (proto == 2) 'pieceSize': TxProtocol.uploadPieceV2,
           }),
         )
         .timeout(Timeouts.restCall);
@@ -127,9 +175,25 @@ class NexusTransferApi {
     throw TxException('upload chunk فشل: ${j['error'] ?? 'HTTP ${res.statusCode}'}');
   }
 
+  /// P1 — v2 (§8.6): PUT ?piece=i مع x-nexus-sha256 → الحجم المستلم لدى السيرفر.
+  Future<int> uploadPiece(String uploadId, int index, Uint8List bytes, String sha256hex) async {
+    final uri = endpoint.api('fs/upload', {'upload': uploadId, 'piece': '$index'});
+    final req = http.Request('PUT', uri)
+      ..headers['x-nexus-sha256'] = sha256hex
+      ..headers['Content-Type'] = 'application/octet-stream'
+      ..bodyBytes = bytes;
+    final res = await _client.send(req).then(http.Response.fromStream).timeout(TxProtocol.chunkTimeout);
+    final j = _decode(res);
+    if (res.statusCode == 200 && j['ok'] == true) return (j['received'] as num?)?.toInt() ?? 0;
+    if (res.statusCode == 422 && j['code'] == 'hash_mismatch') throw TxHashMismatchException(index);
+    if (j['paused'] == true) throw TxPausedException((j['received'] as num?)?.toInt() ?? 0);
+    throw TxException('upload piece $index فشل: ${j['error'] ?? 'HTTP ${res.statusCode}'}');
+  }
+
   /// {op:"complete"} → المهمة النهائية (done) + مسار الوجهة الافتراضي.
-  Future<TransferJob> uploadComplete(String uploadId) async {
-    final j = await _op('complete', uploadId);
+  /// [root] لجلسات v2: sha256(تجميع digests القطع بالترتيب).
+  Future<TransferJob> uploadComplete(String uploadId, {String? root}) async {
+    final j = await _op('complete', uploadId, extra: {if (root != null) 'root': root});
     final job = j['job'];
     if (job is! Map) throw TxException('استجابة complete بلا مهمة');
     return TransferJob.fromJson(Map<String, dynamic>.from(job));
@@ -153,12 +217,12 @@ class NexusTransferApi {
     return UploadStatus.fromJson(j);
   }
 
-  Future<Map<String, dynamic>> _op(String op, String uploadId) async {
+  Future<Map<String, dynamic>> _op(String op, String uploadId, {Map<String, dynamic> extra = const {}}) async {
     final res = await _client
         .post(
           endpoint.api('fs/upload'),
           headers: _jsonHeaders,
-          body: jsonEncode({'op': op, 'uploadId': uploadId}),
+          body: jsonEncode({'op': op, 'uploadId': uploadId, ...extra}),
         )
         .timeout(Timeouts.restCall);
     final j = _decode(res);

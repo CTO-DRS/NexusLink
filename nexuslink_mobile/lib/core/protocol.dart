@@ -261,6 +261,9 @@ class Timeouts {
 class TxProtocol {
   /// حجم القطعة الافتراضي للرفع (السيرفر يقبل حتى 8MB).
   static const int uploadChunk = 2 * 1024 * 1024; // 2MB
+  /// P1 — حجم قطعة الرفع v2 (§8.6) وعدد القطع المتزامنة (السيرفر يحدّ بـ maxInflight).
+  static const int uploadPieceV2 = 4 * 1024 * 1024; // 4MB
+  static const int uploadInflightV2 = 4;
 
   /// مجلد الوجهة الافتراضي داخل مرآة الجهاز على السيرفر.
   static const String uploadDir = '/Downloads';
