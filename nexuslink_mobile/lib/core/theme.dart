@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// نظام تصميم NexusLink المطابق لنسخة الويب حرفيًا.
 /// الألوان محوَّلة من متغيرات oklch في src/app/globals.css
@@ -49,9 +48,11 @@ const double kRadius = 12;
 class NexusTheme {
   NexusTheme._();
 
-  static TextTheme _textTheme(ColorScheme cs) => GoogleFonts.ibmPlexSansArabicTextTheme(
-        ThemeData(brightness: cs.brightness).textTheme,
-      );
+  /// P0/G3: الخط مضمَّن محليًا (assets/fonts — رخصة OFL) — صفر جلب من الشبكة وقت التشغيل.
+  static const String kFontFamily = 'IBMPlexSansArabic';
+
+  static TextTheme _textTheme(ColorScheme cs) =>
+      ThemeData(brightness: cs.brightness).textTheme.apply(fontFamily: kFontFamily);
 
   static ThemeData light() {
     const cs = ColorScheme.light(
@@ -77,7 +78,8 @@ class NexusTheme {
         foregroundColor: NexusColors.lightForeground,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: GoogleFonts.ibmPlexSansArabic(
+        titleTextStyle: const TextStyle(
+          fontFamily: kFontFamily,
           fontSize: 18, fontWeight: FontWeight.w700, color: NexusColors.lightForeground,
         ),
       ),
@@ -113,7 +115,7 @@ class NexusTheme {
           foregroundColor: NexusColors.lightPrimaryFg,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadius)),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          textStyle: GoogleFonts.ibmPlexSansArabic(fontWeight: FontWeight.w700, fontSize: 14),
+          textStyle: const TextStyle(fontFamily: kFontFamily, fontWeight: FontWeight.w700, fontSize: 14),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -130,7 +132,7 @@ class NexusTheme {
       dividerTheme: const DividerThemeData(color: NexusColors.lightBorder, thickness: 1),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: NexusColors.lightForeground,
-        contentTextStyle: GoogleFonts.ibmPlexSansArabic(color: NexusColors.lightBackground),
+        contentTextStyle: const TextStyle(fontFamily: kFontFamily, color: NexusColors.lightBackground),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
@@ -168,7 +170,8 @@ class NexusTheme {
         foregroundColor: NexusColors.darkForeground,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: GoogleFonts.ibmPlexSansArabic(
+        titleTextStyle: const TextStyle(
+          fontFamily: kFontFamily,
           fontSize: 18, fontWeight: FontWeight.w700, color: NexusColors.darkForeground,
         ),
       ),
@@ -204,7 +207,7 @@ class NexusTheme {
           foregroundColor: NexusColors.darkPrimaryFg,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadius)),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          textStyle: GoogleFonts.ibmPlexSansArabic(fontWeight: FontWeight.w700, fontSize: 14),
+          textStyle: const TextStyle(fontFamily: kFontFamily, fontWeight: FontWeight.w700, fontSize: 14),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -221,7 +224,7 @@ class NexusTheme {
       dividerTheme: const DividerThemeData(color: NexusColors.darkBorder, thickness: 1),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: NexusColors.darkPopover,
-        contentTextStyle: GoogleFonts.ibmPlexSansArabic(color: NexusColors.darkForeground),
+        contentTextStyle: const TextStyle(fontFamily: kFontFamily, color: NexusColors.darkForeground),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
