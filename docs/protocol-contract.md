@@ -403,6 +403,15 @@ interface TransferJob {
 | G-10 | لا قناة نقل حقيقية للوكيل | ✅ مُصلحة | أحداث tx:* على 3006 + `/api/fs/upload` + send-file يوجّه للوكيل الحي |
 | G-11 | إيقاف/إلغاء الويب لا يصل الهاتف | ✅ مُصلحة | `POST /api/transfer` يبث tx:pause/resume/cancel، وPUT الرفع يُرفض 409 paused |
 
+### 8.6 الرفع v2 — قطع متوازية بهاش (P1 — المصدر: src/lib/nexus/upload-v2.ts + /api/fs/upload)
+v1 (§8.2) تسلسلي: كل PUT ينتظر اللي قبله، فزمن الذهاب والإياب في الواي فاي ينضاف على كل قطعة. v2 يتفاوض عليه عند init، وv1 يبقى للجوالات القديمة.
+- `POST {op:"init", proto:2, pieceSize?}` → `{ok, uploadId, received, jobId, chunkSize, v:2, pieceSize, pieces, have:[i…], hash:"sha256", maxInflight:8}`. الخادم يحجز حجم الملف كامل من البداية. pieceSize من 1 إلى 8MB، والافتراضي 4MB. **العميل يتبع قيمة `v` في الرد، مو اللي طلبه.** الخادم القديم يرد بدون `v` أو بـ `v:1`، وهذا معناه v1.
+- `PUT ?upload=<id>&piece=<i>` مع ترويسة `x-nexus-sha256: <hex>` والجسم بايتات القطعة i كاملة (الأخيرة ممكن تكون أقصر). الردود: 200 `{ok, piece, received, dup}`، و422 `hash_mismatch` (القطعة ما تنسجل، أعد إرسالها)، و400 `bad_index`/`bad_length`/`v2_session`، و409 `paused`. القطعة المكررة تُقبل بدون ما تنكتب مرة ثانية.
+- سجل القطع المستلمة `<name>.nexuspart.v2.json` (digests بترتيب القطع) يُكتب بشكل ذري. إعادة init بنفس taskId، حتى بعد ما يعيد الخادم التشغيل، ترجّع `have`.
+- `POST {op:"complete", root}`: `root = sha256(تجميع digests القطع بترتيب الفهرس)`. الردود: 400 `incomplete` مع have، و422 `root_mismatch`، ولما ينجح يتغيّر اسم الملف مثل v1 وينحذف السجل. الملف ما ينقرأ مرة ثانية لأن كل قطعة تحققنا منها وقت كتابتها.
+- **ليش SHA-256 مو BLAKE3:** BLAKE3 بـ JS (@noble/hashes) قسناه على arm64 وطلع 27MB/s، يعني أبطأ من v1 نفسه. أما SHA-256 الأصلي في node:crypto فطلع 314MB/s. الخوارزمية محددة في حقل `hash`.
+- الفحص: `scripts/xfer-v2-e2e.mjs`. القياس: `scripts/xfer-bench.mjs --proto 2 --inflight 4`.
+
 ## 9. طبقة أمان الهاتف — FA-10 (المصدر: e2e-crypto.ts + use-sec-bridge.ts + security-bridge.ts)
 
 ### 9.1 مطابقة التشفير حرفيًا (Kotlin/lazysodium ⇄ Web/@noble)

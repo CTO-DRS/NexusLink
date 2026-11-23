@@ -10,6 +10,11 @@
 // · POST {op:"complete"} → rename .nexuspart → الاسم النهائي الفريد → {ok, job}
 // · POST {op:"pause"|"resume"|"abort"} — abort يحذف الجزئي ويقفل المهمة
 // · GET  ?upload=<id> → {ok, received, size, name, status, jobId}
+// P1 — v2 (§8.6): init {proto:2} → {v:2, pieceSize, pieces, have, hash, maxInflight}
+// · PUT ?upload=<id>&piece=<i> + x-nexus-sha256 → 200 {ok, piece, received, dup} ·
+//   422 hash_mismatch · 400 bad_index/bad_length · 409 paused
+// · complete {root} → root = sha256(concatenated piece digests in order) — 422 on mismatch
+// v1 unchanged for old phones; the protocol follows the response's "v" field and not the request.
 // البيانات لا تمر عبر socket.io — هذه هي قناة البايتات (نمط §8).
 //
 // تكليف 48 (FA-20 — حرس العقود الحي): هذا المسار فُقد من الشجرة في commit
@@ -35,6 +40,10 @@ import {
 } from "@/lib/nexus/upload-sessions"
 import type { TransferJob } from "@/lib/nexus/types"
 import { publicErrorMessage } from "@/lib/nexus/safe-error"
+import {
+  openV2, writePiece, receivedBytes, haveList, isComplete, rootHash, dropV2, clampPiece,
+  V2_HASH, V2_MAX_INFLIGHT,
+} from "@/lib/nexus/upload-v2"
 
 export const dynamic = "force-dynamic"
 
@@ -93,11 +102,23 @@ function sweepIdleSessions() {
   }
 }
 
+function v2Shape(s: UploadSession) {
+  const st = s.v2!
+  return {
+    v: 2,
+    pieceSize: st.pieceSize,
+    pieces: st.pieces,
+    have: haveList(st),
+    hash: V2_HASH,
+    maxInflight: V2_MAX_INFLIGHT,
+  }
+}
+
 export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("upload") ?? ""
   const s = getSession(id)
   if (!s) return NextResponse.json({ ok: false, error: "جلسة غير معروفة" }, { status: 404 })
-  const received = await partialSize(s)
+  const received = s.v2 ? receivedBytes(s.v2, s.size) : await partialSize(s)
   const job = jobs().get(s.jobId)
   return NextResponse.json({
     ok: true,
@@ -107,6 +128,7 @@ export async function GET(req: NextRequest) {
     name: s.name,
     status: job?.status ?? "unknown",
     jobId: s.jobId,
+    ...(s.v2 ? v2Shape(s) : { v: 1 }),
   })
 }
 
@@ -115,6 +137,42 @@ export async function PUT(req: NextRequest) {
   const s = getSession(id)
   if (!s) return NextResponse.json({ ok: false, error: "جلسة غير معروفة" }, { status: 404 })
   const job = jobs().get(s.jobId)
+
+  // ---------- v2: index-addressed piece ----------
+  if (s.v2) {
+    const st = s.v2
+    const pieceRaw = req.nextUrl.searchParams.get("piece")
+    if (pieceRaw === null) {
+      return NextResponse.json(
+        { ok: false, code: "v2_session", error: "جلسة v2 تتطلب ?piece=" }, { status: 400 },
+      )
+    }
+    if (job && job.status === "paused") {
+      return NextResponse.json(
+        { ok: false, paused: true, received: receivedBytes(st, s.size), have: haveList(st) }, { status: 409 },
+      )
+    }
+    const declaredV2 = Number(req.headers.get("content-length") ?? "0")
+    if (Number.isFinite(declaredV2) && declaredV2 > st.pieceSize) {
+      return NextResponse.json({ ok: false, code: "bad_length", error: "القطعة أكبر من pieceSize" }, { status: 400 })
+    }
+    const body = Buffer.from(await req.arrayBuffer())
+    let r
+    try {
+      r = await writePiece(st, s.partialAbs, s.size, Number(pieceRaw), body, req.headers.get("x-nexus-sha256"))
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: publicErrorMessage(e, "فشل كتابة القطعة") }, { status: 500 })
+    }
+    if (!r.ok) return NextResponse.json({ ok: false, code: r.code, error: r.error }, { status: r.status })
+    const rec = receivedBytes(st, s.size)
+    await updateJobProgress(s, rec)
+    return NextResponse.json({ ok: true, piece: Number(pieceRaw), received: rec, dup: r.dup })
+  }
+  if (req.nextUrl.searchParams.get("piece") !== null) {
+    return NextResponse.json(
+      { ok: false, code: "v1_session", error: "جلسة v1 — استعمل ?offset=" }, { status: 400 },
+    )
+  }
   const received = await partialSize(s)
 
   // موقوفة من الكمبيوتر (§8.2: 409 paused) — حالة المهمة هي المصدر
@@ -183,10 +241,13 @@ export async function POST(req: NextRequest) {
     }
     const name = sanitizeName(String(body.name ?? ""))
     const size = Math.max(0, Number(body.size ?? 0) || 0)
-    const chunkSize = Math.min(
-      8 * 1024 * 1024,
-      Math.max(2 * 1024 * 1024, Number(body.chunkSize ?? DEFAULT_CHUNK) || DEFAULT_CHUNK),
-    )
+    const wantV2 = Number(body.proto) === 2
+    const chunkSize = wantV2
+      ? clampPiece(body.pieceSize ?? body.chunkSize)
+      : Math.min(
+          8 * 1024 * 1024,
+          Math.max(2 * 1024 * 1024, Number(body.chunkSize ?? DEFAULT_CHUNK) || DEFAULT_CHUNK),
+        )
     const sessionCore = {
       deviceId,
       dirV: String(body.path ?? "/Downloads"),
@@ -214,16 +275,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         ok: true,
         uploadId: existing.id,
-        received,
+        received: existing.v2 ? receivedBytes(existing.v2, existing.size) : received,
         jobId: existing.jobId,
         chunkSize: existing.chunkSize,
+        ...(existing.v2 ? v2Shape(existing) : { v: 1 }),
       })
     }
 
-    const received = await fs
-      .stat(sessionCore.partialAbs)
-      .then((st) => st.size)
-      .catch(() => 0)
+    let v2State
+    if (wantV2) {
+      try {
+        v2State = await openV2(sessionCore.partialAbs, size, chunkSize)
+      } catch (e) {
+        return NextResponse.json(
+          { ok: false, error: publicErrorMessage(e, "تعذر تجهيز الملف") }, { status: 500 },
+        )
+      }
+    }
+    const received = v2State
+      ? receivedBytes(v2State, size)
+      : await fs
+          .stat(sessionCore.partialAbs)
+          .then((st) => st.size)
+          .catch(() => 0)
     const job = makeJob(uploadId, sessionCore, received)
     jobs().set(job.id, job)
     const s: UploadSession = {
@@ -232,6 +306,7 @@ export async function POST(req: NextRequest) {
       jobId: job.id,
       createdAt: Date.now(),
       lastWriteAt: Date.now(),
+      ...(v2State ? { v2: v2State } : {}),
     }
     uploadSessions().set(uploadId, s)
     return NextResponse.json({
@@ -240,6 +315,7 @@ export async function POST(req: NextRequest) {
       received,
       jobId: job.id,
       chunkSize,
+      ...(s.v2 ? v2Shape(s) : { v: 1 }),
     })
   }
 
@@ -248,7 +324,22 @@ export async function POST(req: NextRequest) {
     const id = String(body.uploadId ?? "")
     const s = getSession(id)
     if (!s) return NextResponse.json({ ok: false, error: "جلسة غير معروفة" }, { status: 404 })
-    const received = await partialSize(s)
+    if (s.v2) {
+      if (!isComplete(s.v2)) {
+        const missing = s.v2.pieces - haveList(s.v2).length
+        return NextResponse.json(
+          { ok: false, code: "incomplete", error: `قطع ناقصة: ${missing}`, have: haveList(s.v2) }, { status: 400 },
+        )
+      }
+      const root = typeof body.root === "string" ? body.root.toLowerCase() : ""
+      if (root !== rootHash(s.v2)) {
+        return NextResponse.json(
+          { ok: false, code: "root_mismatch", error: "هاش الملف الكامل لا يطابق" }, { status: 422 },
+        )
+      }
+      await s.v2.saving
+    }
+    const received = s.v2 ? s.size : await partialSize(s)
     if (s.size > 0 && received < s.size) {
       return NextResponse.json(
         { ok: false, error: `الجلسة غير مكتملة: ${received}/${s.size}` },
@@ -291,6 +382,7 @@ export async function POST(req: NextRequest) {
       )
     }
     uploadSessions().delete(id)
+    if (s.v2) await dropV2(s.v2, s.partialAbs)
     const job = jobs().get(s.jobId)
     if (job) {
       job.status = "done"

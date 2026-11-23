@@ -7,6 +7,7 @@
 //
 // Usage (against a running server, `next build && next start`, or the gateway):
 //   node scripts/xfer-bench.mjs [--base http://127.0.0.1:3000] [--mb 256] [--chunk-mb 4] [--runs 3] [--pair <token>]
+//                               [--proto 2 --inflight 4]   (v2 §8.6: parallel pieces + sha256)
 // Output: one JSON line per run + a summary {mbps_median, ...}. It verifies the
 // stored file's sha256 equals the source, or exits 1.
 //
@@ -29,6 +30,8 @@ const RUNS = Number(opt("runs", "3"))
 const PAIR = opt("pair", process.env.NEXUS_PAIR || "")
 const DEVICE = opt("device", "benchdev")
 const DATA_ROOT = opt("data-root", "")
+const PROTO = Number(opt("proto", "1"))
+const INFLIGHT = Number(opt("inflight", "4"))
 
 const agent = new http.Agent({ keepAlive: true, maxSockets: 8 })
 
@@ -64,6 +67,7 @@ async function runOnce(n, data, sha) {
   const name = `bench-${Date.now()}-${n}.bin`
   const init = await post("/api/fs/upload", {
     op: "init", deviceId: DEVICE, path: "/Downloads", name, size: data.length, chunkSize: CHUNK,
+    ...(PROTO === 2 ? { proto: 2, pieceSize: CHUNK } : {}),
     taskId: `bench-${process.pid}-${Date.now()}-${n}`,
   })
   if (init.status !== 200 || !init.json?.ok) throw new Error(`init failed: ${init.status} ${init.text.slice(0, 200)}`)
@@ -72,6 +76,30 @@ async function runOnce(n, data, sha) {
   const t0 = process.hrtime.bigint()
   let offset = 0
   let puts = 0
+  let root = null
+  if (init.json.v === 2) {
+    // v2 (§8.6): index-addressed pieces, INFLIGHT at once, sha256 per piece, root at the end
+    const ps = init.json.pieceSize
+    const n = init.json.pieces
+    const digests = new Array(n)
+    let next = 0
+    const worker = async () => {
+      while (next < n) {
+        const i = next++
+        const piece = data.subarray(i * ps, Math.min((i + 1) * ps, data.length))
+        const d = createHash("sha256").update(piece).digest()
+        digests[i] = d
+        const r = await request("PUT", url("/api/fs/upload", { upload: uploadId, piece: i }), piece, {
+          "Content-Type": "application/octet-stream", "Content-Length": piece.length, "x-nexus-sha256": d.toString("hex"),
+        })
+        if (r.status !== 200 || !r.json?.ok) throw new Error(`PUT piece ${i} failed: ${r.status} ${r.text.slice(0, 200)}`)
+        puts++
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(INFLIGHT, init.json.maxInflight || INFLIGHT) }, worker))
+    root = createHash("sha256").update(Buffer.concat(digests)).digest("hex")
+    offset = data.length
+  }
   while (offset < data.length) {
     const piece = data.subarray(offset, Math.min(offset + chunk, data.length))
     const r = await request("PUT", url("/api/fs/upload", { upload: uploadId, offset }), piece, {
@@ -81,11 +109,11 @@ async function runOnce(n, data, sha) {
     offset = r.json.received
     puts++
   }
-  const done = await post("/api/fs/upload", { op: "complete", uploadId })
+  const done = await post("/api/fs/upload", { op: "complete", uploadId, ...(root ? { root } : {}) })
   const t1 = process.hrtime.bigint()
   if (done.status !== 200 || !done.json?.ok) throw new Error(`complete failed: ${done.status} ${done.text.slice(0, 200)}`)
   const secs = Number(t1 - t0) / 1e9
-  const out = { run: n, bytes: data.length, chunk, puts, secs: +secs.toFixed(3), mbps: +((data.length / 1048576) / secs).toFixed(1) }
+  const out = { run: n, v: init.json.v || 1, bytes: data.length, chunk, puts, secs: +secs.toFixed(3), mbps: +((data.length / 1048576) / secs).toFixed(1) }
   // integrity: read the stored file directly when its path is known
   const dest = done.json.job?.destPath
   if (DATA_ROOT || dest) {
@@ -110,7 +138,7 @@ for (let n = 1; n <= RUNS; n++) {
 }
 const sorted = results.map((r) => r.mbps).sort((a, b) => a - b)
 const summary = {
-  protocol: "v1-sequential",
+  protocol: PROTO === 2 ? `v2-parallel-x${INFLIGHT}` : "v1-sequential",
   base: BASE,
   mb: MB,
   chunk_mb: CHUNK / 1048576,

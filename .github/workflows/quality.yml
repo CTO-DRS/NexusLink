@@ -75,3 +75,7 @@ jobs:
       # عامة بلا مسارات داخلية: يشغّل الخادم المبني (standalone) ويفحص عينة مسارات
       - name: Security headers check (G7)
         run: node scripts/check-security-headers.mjs
+
+      # P1 — transfer v2 (§8.6): parallel pieces, hash per piece, resume, root, v1 unchanged
+      - name: Transfer v2 E2E (P1)
+        run: node scripts/xfer-v2-e2e.mjs
