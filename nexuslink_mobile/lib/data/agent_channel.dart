@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 
 import '../domain/models.dart';
+import 'pair_token_store.dart';
 
 /// جسر إلى الخدمة الخلفية الأصلية (Kotlin Foreground Service):
 /// - بدء/إيقاف الوكيل الذي يحمل اتصال socket.io الدائم (جسر الحماية 3006).
@@ -43,6 +44,8 @@ class AgentChannel {
         'serverKey': endpoint.key,
         // G1 — رمز البوابة الإلزامي للخدمة الأصلية (سوكِتات 3006/3007/3005/3009)
         'pairToken': endpoint.pairToken ?? '',
+        // P1 — stable PC identity (§44): the native agent finds the PC again after its IP changes
+        'pcId': await PcIdStore.load(endpoint.key) ?? '',
       });
       return ok ?? false;
     } on PlatformException catch (e) {
