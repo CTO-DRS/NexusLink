@@ -112,6 +112,8 @@ bunx esbuild mini-services/comms-service/index.ts --bundle --platform=node --for
 echo "== [3/4] gateway → $RES/gateway/gateway.cjs =="
 mkdir -p "$RES/gateway"
 cp mini-services/gateway/index.cjs "$RES/gateway/gateway.cjs"
+# P1 — منارة الاكتشاف (يتطلبها gateway.cjs بمسار نسبي ./discovery-beacon.cjs)
+cp mini-services/gateway/discovery-beacon.cjs "$RES/gateway/discovery-beacon.cjs"
 
 echo "== [4/4] sidecar node placeholder =="
 mkdir -p apps/desktop/src-tauri/binaries

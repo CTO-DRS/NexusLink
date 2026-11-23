@@ -46,6 +46,14 @@ let BOUND_PORT = GATEWAY_PORT
 const PAIR_FILE = process.env.NEXUSLINK_PAIR_FILE || pathMod.join(process.cwd(), ".zstate", "pair-token.json")
 // G1 — علامة «الوصول من الشبكة معطّل عمدًا» (يكتبها disable) — تمنع التوليد التلقائي
 const PAIR_DISABLED_FILE = `${PAIR_FILE}.disabled`
+
+// P1 — اكتشاف الأجهزة: هوية ثابتة للكمبيوتر (pcId) مستقلة عن IP وعن الرمز، تحملها منارة UDP
+// (discovery-beacon.cjs) و/__gw/health فيعيد الهاتف الاتصال تلقائيًا عند تغيّر العنوان.
+// غياب الوحدة (حزمة قديمة) لا يكسر البوابة.
+let beaconMod = null
+try { beaconMod = require("./discovery-beacon.cjs") } catch {}
+const PC_ID_FILE = process.env.NEXUSLINK_PC_ID_FILE || pathMod.join(pathMod.dirname(PAIR_FILE), "pc-id.json")
+const PC_ID = beaconMod ? beaconMod.loadOrCreatePcId(PC_ID_FILE) : null
 let pairCache = { mtimeMs: -1, size: -1, data: null }
 
 // §38 — السياسات المؤسسية المركزية (M4.1 النواة المحلية) — نفس نمط §37:
@@ -581,7 +589,7 @@ function handleRequest(req, res) {
     if (path === "/__gw/health") {
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store", "access-control-allow-origin": "*" })
       const pol = loadPolicy()
-      res.end(JSON.stringify({ ok: true, proto: "Nexus/1.2", role: "gateway", port: GATEWAY_PORT, rest: REST_PORT, uptimeMs: Date.now() - STARTED_AT, pair: !!loadPair(), pairRequired: true, lanAccess: loadPair() ? "token" : "closed", policyManaged: !!pol, policyRemoteAccess: pol ? pol.remoteAccess : null, oemPrivacy: oemPrivacyActive(), postureSource: pol ? "policy" : oemPrivacyActive() ? "oem-default" : "user-default", tls: TLS_MODE, tlsFingerprint }))
+      res.end(JSON.stringify({ ok: true, proto: "Nexus/1.2", role: "gateway", port: GATEWAY_PORT, pcId: PC_ID, rest: REST_PORT, uptimeMs: Date.now() - STARTED_AT, pair: !!loadPair(), pairRequired: true, lanAccess: loadPair() ? "token" : "closed", policyManaged: !!pol, policyRemoteAccess: pol ? pol.remoteAccess : null, oemPrivacy: oemPrivacyActive(), postureSource: pol ? "policy" : oemPrivacyActive() ? "oem-default" : "user-default", tls: TLS_MODE, tlsFingerprint }))
       return
     }
     if (!pairGateHttp(req, res, req.url)) return
@@ -613,6 +621,15 @@ server.listen(GATEWAY_PORT, () => {
   console.log(`[gateway] NexusLink gateway on :${BOUND_PORT} → rest:${REST_PORT} (+ ?XTransformPort=<port>)${TLS_MODE ? " [TLS]" : ""}`)
   // سطر آلي يقرؤه مدير العمليات (Rust) ليحدد NEXUSLINK_GATEWAY_PORT لجسر comms/mDNS
   console.log(`[gateway] PORT=${BOUND_PORT}`)
+  // P1 — المنارة: صامتة ما دام الوصول من الشبكة مغلقًا (لا رمز أو تعطيل متعمَّد)
+  if (beaconMod && PC_ID) {
+    beaconMod.startBeacon({
+      pcId: PC_ID,
+      getPort: () => BOUND_PORT,
+      isEnabled: () => !!loadPair() && !fs.existsSync(PAIR_DISABLED_FILE),
+      log: (m) => console.log(m),
+    })
+  }
 })
 server.on("error", (e) => {
   // تراجع محدد: المنافذ <1024 تحتاج صلاحيات (Linux/macOS) — نجرب المنفذ البديل مرة واحدة
