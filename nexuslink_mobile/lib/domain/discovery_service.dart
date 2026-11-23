@@ -23,6 +23,16 @@ class DiscoveryService {
     }
   }
 
+  /// إضافة خادم من مصدر آخر (منارة UDP — P1) بنفس منطق إزالة التكرار.
+  void ingest(DiscoveredServer server) {
+    final exists = _found.any((s) => s.host == server.host && s.port == server.port);
+    if (exists) return;
+    _found.add(server);
+    for (final cb in List.of(_onFound)) {
+      cb(server);
+    }
+  }
+
   Future<void> start() async {
     if (_discovery != null) return;
     try {
@@ -60,13 +70,7 @@ class DiscoveryService {
           port: svc.port,
           txt: attrs,
         );
-        final exists = _found.any((s) => s.host == server.host && s.port == server.port);
-        if (!exists) {
-          _found.add(server);
-          for (final cb in List.of(_onFound)) {
-            cb(server);
-          }
-        }
+        ingest(server);
       case BonsoirDiscoveryEventType.discoveryServiceLost:
         final svc = event.service;
         if (svc == null) return;
