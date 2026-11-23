@@ -154,7 +154,8 @@ export function primaryAssetFor(os: OsKind, version: string): string | null {
 export interface PlatformGroup {
   id: Exclude<OsKind, "other">
   /** main downloadable asset name templates, in display order ({{v}} = نسخة الإصدار) */
-  assets: { name: string; descKey: string }[]
+  /** splitOnly: يظهر فقط للإصدارات ذات أصول أندرويد المقسّمة (> 3.1.1) */
+  assets: { name: string; descKey: string; splitOnly?: boolean }[]
   requirementsKey: string
 }
 
@@ -188,6 +189,7 @@ export const PLATFORMS: PlatformGroup[] = [
     id: "android",
     assets: [
       { name: "NexusLink-{{v}}-release.apk", descKey: "تثبيت مباشر على هاتفك" },
+      { name: "NexusLink-{{v}}-armeabi-v7a-release.apk", descKey: "للهواتف القديمة (32-bit)", splitOnly: true },
       { name: "app-release.aab", descKey: "للنشر عبر Google Play أو أدوات MDM" },
     ],
     requirementsKey: "المتطلبات: Android 8+ (يُنصح 10 وما فوق)",

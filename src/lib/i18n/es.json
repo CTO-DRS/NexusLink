@@ -726,7 +726,7 @@
   "= مزامنة الصور + الإشعارات + الحافظة + المجلدات،\n        و": "= Sincronización de fotos + notificaciones + portapapeles + carpetas,\n        y", 
   "AES-256-GCM بعدّاد تسلسلي وبيانات مصادقة إضافية لكل رسالة — التقاط الحزم بـWireshark لا يُظهر محتوى مقروءًا، وهو معيار قبول معلن في المشروع.": "AES-256-GCM con contador secuencial y datos de autenticación adicionales por mensaje — capturar paquetes con Wireshark no muestra contenido legible, es un estándar declarado del proyecto.", 
   "AES-256-GCM كأي نقل — الأمان لا ينقص": "AES-256-GCM como cualquier transferencia — no se reduce la seguridad", 
-  "Android 7+ (يُنصح 10 وما فوق) — APK موقّع بالكامل الوظائف": "Android 7+ (recomendado 10 o superior) — APK con todas las funciones", 
+  "Android 8+ (يُنصح 10 وما فوق) — APK موقّع بالكامل الوظائف": "Android 8+ (recomendado 10 o superior) — APK con todas las funciones", 
   "AndroidManifest سليم": "AndroidManifest limpio", 
   "Authenticode (اختياري)": "Authenticode (opcional)", 
   "DAY_NAMES[d])\n    .join(\"، \")\n}\n\n/** المنبه القادم (بالثواني من الآن) */\nexport function nextAlarmIn(a: AlarmEntry): number | null {\n  if (!a.enabled) return null\n  const now = new Date()\n  for (let add = 0; add": "DAY_NAMES[d])\n    .join(\", \")\n}\n\n/** Próxima alarma (en segundos desde ahora) */\nexport function nextAlarmIn(a: AlarmEntry): number | null {\n  if (!a.enabled) return null\n  const now = new Date()\n  for (let add = 0; add", 
@@ -1603,7 +1603,7 @@
   "المتاحة": "Disponible", 
   "المتصفح": "Navegador", 
   "المتصفح منع النسخ — انسخ يدوياً": "El navegador impide la copia — copia manualmente", 
-  "المتطلبات: Android 7+ (يُنصح 10 وما فوق)": "Requisitos: Android 7+ (se recomienda 10 o superior)", 
+  "المتطلبات: Android 8+ (يُنصح 10 وما فوق)": "Requisitos: Android 8+ (se recomienda 10 o superior)", 
   "المتطلبات: Ubuntu 20.04+ / Debian 11+ (64-bit)": "Requisitos: Ubuntu 20.04+ / Debian 11+ (64-bit)", 
   "المتطلبات: Windows 10/11 (64-bit)": "Requisitos: Windows 10/11 (64-bit)", 
   "المتطلبات: macOS 12+ (Apple Silicon)": "Requisitos: macOS 12+ (Apple Silicon)", 
@@ -3878,5 +3878,6 @@
   "— لا بث محاكى ولا أرقام تقديرية.": "— sin transmisiones simuladas ni cifras estimadas.", 
   "لا توجد كاميرا حقيقية متاحة — البث المحاكى متاح في وضع العرض التوضيحي فقط": "No hay cámara real disponible — las transmisiones simuladas solo están disponibles en modo demo", 
   "لا يوجد ميكروفون حقيقي متاح — البث المحاكى متاح في وضع العرض التوضيحي فقط": "No hay micrófono real disponible — las transmisiones simuladas solo están disponibles en modo demo", 
-  "تعذر فتح الميكروفون": "No se pudo abrir el micrófono"
+  "تعذر فتح الميكروفون": "No se pudo abrir el micrófono", 
+  "للهواتف القديمة (32-bit)": "Para teléfonos antiguos de 32 bits"
 }
