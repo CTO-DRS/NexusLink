@@ -406,7 +406,7 @@ export function ensureSecurityBridge() {
       })
     })
 
-    httpServer.listen(PORT, () => console.log(`[sec-bridge] قناة الأمان المشفرة تعمل على ${PORT}`))
+    httpServer.listen(PORT, process.env.BRIDGE_HOST || "127.0.0.1", () => console.log(`[sec-bridge] قناة الأمان المشفرة تعمل على ${PORT}`))
   } catch (e) {
     g[BOOT_KEY] = false
     console.error("[sec-bridge] فشل الإقلاع:", e instanceof Error ? e.message : e)

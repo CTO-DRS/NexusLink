@@ -748,7 +748,7 @@ export function ensureAutomationBridge() {
     setInterval(pollTime, 5000)
     setInterval(() => { void pollHealthSustained() }, 15000)
 
-    httpServer.listen(PORT, () => {
+    httpServer.listen(PORT, process.env.BRIDGE_HOST || "127.0.0.1", () => {
       console.log(`[nexus] Automation Bridge on port ${PORT}`)
     })
   } catch {

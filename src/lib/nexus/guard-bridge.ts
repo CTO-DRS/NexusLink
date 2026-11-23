@@ -816,7 +816,7 @@ export function ensureGuardBridge() {
       })
     }, 1000)
 
-    httpServer.listen(PORT, () => {
+    httpServer.listen(PORT, process.env.BRIDGE_HOST || "127.0.0.1", () => {
       log(io2, "جسر الحماية وإدارة الأجهزة يعمل — مراقبة القرب جاهزة", "ok")
       console.log(`[nexus] Guard Bridge on port ${PORT}`)
     })
