@@ -13,6 +13,23 @@ class NexusApi {
 
   NexusApi(this.endpoint);
 
+  /// P1 — هوية الكمبيوتر الثابتة من /__gw/health (معفى من الرمز). null إن لم تتوفر
+  /// (اتصال مباشر، أو بوابة أقدم من المنارة).
+  Future<String?> gatewayPcId() async {
+    if (endpoint.mode != AccessMode.gateway) return null;
+    try {
+      final res = await _client
+          .get(Uri(scheme: 'http', host: endpoint.host, port: endpoint.port, path: '__gw/health'))
+          .timeout(Timeouts.healthCheck);
+      if (res.statusCode != 200) return null;
+      final j = jsonDecode(res.body);
+      final id = j is Map ? j['pcId'] : null;
+      return id is String && RegExp(r'^[a-f0-9]{32}$').hasMatch(id) ? id : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// فحص الصحة: GET /api/tools/ping — يقيس RTT فعليًا.
   /// يرمي [HealthException] عند الفشل.
   Future<int> healthCheck() async {
