@@ -259,7 +259,7 @@ function enqueue(
       const full: AuditRecord = { ...rec, h: hashRecord(rec) }
       fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 })
       const line = JSON.stringify(full) + "\n"
-      const fd = fs.openSync(file, "a", 0o600)
+      const fd = fs.openSync(/*turbopackIgnore: true*/ file, "a", 0o600)
       try {
         fs.writeSync(fd, line)
         fs.fsyncSync(fd)
@@ -336,7 +336,7 @@ export function verifyAuditChain(): AuditVerify {
   const file = resolveAuditPath()
   let raw: string
   try {
-    raw = fs.readFileSync(file, "utf8")
+    raw = fs.readFileSync(/*turbopackIgnore: true*/ file, "utf8")
   } catch {
     return { exists: false, count: 0, valid: true, brokenAt: null, head: null }
   }
@@ -371,7 +371,7 @@ export function verifyAuditChain(): AuditVerify {
 /** آخر N حدث بالترتيب الزمني (الأقدم أولًا) — للعرض الحلقي حصرًا */
 export function readAuditTail(limit: number): AuditRecord[] {
   try {
-    const raw = fs.readFileSync(resolveAuditPath(), "utf8")
+    const raw = fs.readFileSync(/*turbopackIgnore: true*/ resolveAuditPath(), "utf8")
     const lines = raw.split("\n").filter((l) => l.trim().length > 0)
     return lines
       .slice(Math.max(0, lines.length - limit))
@@ -453,7 +453,7 @@ export function rotateAuditEpoch(reason: string): Promise<AuditEpochRotateResult
       const full: AuditRecord = { ...rec, h: hashRecord(rec) }
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
       const line = JSON.stringify(full) + "\n"
-      const fd = fs.openSync(file, "a", 0o600)
+      const fd = fs.openSync(/*turbopackIgnore: true*/ file, "a", 0o600)
       try {
         fs.writeSync(fd, line)
         fs.fsyncSync(fd)
@@ -507,7 +507,7 @@ export function readAuditFiltered(opts: { type?: string; action?: string; limit?
   const limit = Math.min(Math.max(opts.limit ?? 200, 1), 500)
   let raw: string
   try {
-    raw = fs.readFileSync(resolveAuditPath(), "utf8")
+    raw = fs.readFileSync(/*turbopackIgnore: true*/ resolveAuditPath(), "utf8")
   } catch {
     return { items: [], total: 0, truncated: false }
   }

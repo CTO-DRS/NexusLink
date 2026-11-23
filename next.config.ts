@@ -11,7 +11,7 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(self), microphone=(self), clipboard-write=(self), geolocation=(), payment=(), usb=(), interest-cohort=()" },
 ]
 
-// G7 — الأصول الساكنة التي يتجاوزها الوسيط (matcher في src/middleware.ts) تأخذ CSP
+// G7 — الأصول الساكنة التي يتجاوزها الوسيط (matcher في src/proxy.ts) تأخذ CSP
 // ثابتة صارمة هنا، فلا مسار واحد بلا CSP. مستندات HTML ومسارات API يضبطها الوسيط
 // (nonce لكل طلب / سياسة API بلا مصادر) — لا تتكرر الترويسة على المسار نفسه.
 // worker-src/script-src 'self' تبقيان كي لا تنكسر أي سكربتات عاملة تُخدم من _next/static.

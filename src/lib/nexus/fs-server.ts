@@ -111,13 +111,13 @@ export async function listDir(
   vpath: string
 ): Promise<FsEntry[]> {
   const abs = resolveSafe(deviceId, vpath)
-  const dirents = await fs.readdir(abs, { withFileTypes: true })
+  const dirents = await fs.readdir(/*turbopackIgnore: true*/ abs, { withFileTypes: true })
   const out: FsEntry[] = []
   for (const d of dirents) {
     if (d.name.startsWith(".")) continue
-    const full = path.join(abs, d.name)
+    const full = path.join(/*turbopackIgnore: true*/ abs, d.name)
     try {
-      const st = await fs.stat(full)
+      const st = await fs.stat(/*turbopackIgnore: true*/ full)
       out.push({
         name: d.name,
         path: joinV(vpath, d.name),
@@ -147,13 +147,13 @@ export async function walk(
   const abs = resolveSafe(deviceId, vpath)
   let items: import("fs").Dirent[]
   try {
-    items = await fs.readdir(abs, { withFileTypes: true })
+    items = await fs.readdir(/*turbopackIgnore: true*/ abs, { withFileTypes: true })
   } catch {
     return
   }
   for (const d of items) {
     if (d.name.startsWith(".")) continue
-    const full = path.join(abs, d.name)
+    const full = path.join(/*turbopackIgnore: true*/ abs, d.name)
     const vp = joinV(vpath, d.name)
     if (d.isDirectory()) {
       cb({
@@ -163,7 +163,7 @@ export async function walk(
       await walk(deviceId, vp, cb)
     } else {
       try {
-        const st = await fs.stat(full)
+        const st = await fs.stat(/*turbopackIgnore: true*/ full)
         cb({
           name: d.name, path: vp, type: "file", size: st.size,
           mtime: st.mtimeMs, ext: extOf(d.name),

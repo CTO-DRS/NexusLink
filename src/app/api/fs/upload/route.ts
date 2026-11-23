@@ -295,7 +295,7 @@ export async function POST(req: NextRequest) {
     const received = v2State
       ? receivedBytes(v2State, size)
       : await fs
-          .stat(sessionCore.partialAbs)
+          .stat(/*turbopackIgnore: true*/ sessionCore.partialAbs)
           .then((st) => st.size)
           .catch(() => 0)
     const job = makeJob(uploadId, sessionCore, received)

@@ -35,7 +35,7 @@ function newSessionId(): string {
 
 function sessionDir(id: string): string {
   if (!/^s[a-z0-9]+-[a-z0-9]+-[a-z0-9]+$/.test(id)) throw new Error("bad-session-id")
-  return path.join(SCANS_ROOT, id)
+  return path.join(/*turbopackIgnore: true*/ SCANS_ROOT, id)
 }
 
 function readSession(id: string): ScanSession | null {
@@ -61,7 +61,7 @@ function removeSessionDir(id: string): void {
 
 export function openSessions(): ScanSession[] {
   try {
-    return fs.readdirSync(SCANS_ROOT)
+    return fs.readdirSync(/*turbopackIgnore: true*/ SCANS_ROOT)
       .map((d) => { try { return readSession(d) } catch { return null } })
       .filter((s): s is ScanSession => !!s)
       .sort((a, b) => a.createdAt - b.createdAt)
@@ -147,7 +147,7 @@ export async function actScanPage(id: string, action: "rotate" | "move" | "remov
     r = removePage(s, Number(args.n))
     if (r.ok) {
       const dead = s.pages.find((p) => p.n === Number(args.n))
-      if (dead) { try { fs.rmSync(path.join(sessionDir(id), dead.name), { force: true }) } catch { /* غائب */ } }
+      if (dead) { try { fs.rmSync(path.join(/*turbopackIgnore: true*/ sessionDir(id), dead.name), { force: true }) } catch { /* غائب */ } }
     }
   }
   if (!r.ok) {
@@ -195,7 +195,7 @@ export async function previewScanPage(id: string, n: number, rateKey = "preview"
   }
   let bytes: Buffer
   try {
-    bytes = fs.readFileSync(path.join(sessionDir(id), p.name))
+    bytes = fs.readFileSync(/*turbopackIgnore: true*/ path.join(/*turbopackIgnore: true*/ sessionDir(id), p.name))
   } catch {
     await appendAudit("scan.denied", false, "local", { reason: "page-file-missing", id: id.slice(0, 24), page: p.n, via: "preview" })
     return { ok: false as const, error: "page-file-missing" as const, status: 400 }
@@ -225,7 +225,7 @@ export async function sealScanSession(id: string, targetFolder?: string) {
   let filtered = 0
   for (const p of [...s.pages].sort((a, b) => a.n - b.n)) {
     try {
-      const bytes = fs.readFileSync(path.join(sessionDir(id), p.name))
+      const bytes = fs.readFileSync(/*turbopackIgnore: true*/ path.join(/*turbopackIgnore: true*/ sessionDir(id), p.name))
       if (p.filter === "gray" || p.filter === "bw") {
         // §61 — الاشتقاق في الذاكرة حصرًا: الناتج JPEG سليم يُفحص بالسحر والأبعاد قبل الدخول
         const d = await deriveScanPage(bytes, p.filter, p.thr)

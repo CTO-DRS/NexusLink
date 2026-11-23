@@ -31,7 +31,7 @@ export interface ScheduleState {
 
 function readSchedule(): ScheduleState {
   try {
-    const j = JSON.parse(fs.readFileSync(SCHEDULE_FILE, "utf8")) as Partial<ScheduleState>
+    const j = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ SCHEDULE_FILE, "utf8")) as Partial<ScheduleState>
     if (typeof j.enabled !== "boolean") return { enabled: false, hours: 24, lastRunAt: null }
     const hours = (SCHEDULE_HOURS as readonly number[]).includes(Number(j.hours)) ? Number(j.hours) : 24
     return { enabled: j.enabled, hours, lastRunAt: typeof j.lastRunAt === "number" ? j.lastRunAt : null }
@@ -67,10 +67,10 @@ async function writeLocalKey(key: string): Promise<void> {
 
 function listFiles(): Array<{ name: string; kind: SecureBackupKind; at: number; size: number }> {
   try {
-    return fs.readdirSync(BACKUP_DIR)
+    return fs.readdirSync(/*turbopackIgnore: true*/ BACKUP_DIR)
       .filter((f) => f.endsWith(".nexusbackup"))
       .map((f) => {
-        const st = fs.statSync(path.join(BACKUP_DIR, f))
+        const st = fs.statSync(/*turbopackIgnore: true*/ path.join(/*turbopackIgnore: true*/ BACKUP_DIR, f))
         return { name: f, kind: kindFromName(f), at: Math.floor(st.mtimeMs), size: st.size }
       })
       .sort((a, b) => b.at - a.at)
@@ -82,7 +82,7 @@ function listFiles(): Array<{ name: string; kind: SecureBackupKind; at: number; 
 function readEnvelope(name: string): SecureEnvelope | null {
   if (!/^backup-[\d-]+-(manual|scheduled)\.nexusbackup$/.test(name)) return null
   try {
-    return JSON.parse(fs.readFileSync(path.join(BACKUP_DIR, name), "utf8")) as SecureEnvelope
+    return JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ path.join(/*turbopackIgnore: true*/ BACKUP_DIR, name), "utf8")) as SecureEnvelope
   } catch {
     return null
   }
@@ -116,9 +116,9 @@ export async function createSecureBackup(opts: {
   const env = sealBackup(plain, pass as string, opts.kind, now)
   fs.mkdirSync(BACKUP_DIR, { recursive: true, mode: 0o700 })
   const name = backupFileName(opts.kind, now)
-  fs.writeFileSync(path.join(BACKUP_DIR, name), JSON.stringify(env), { mode: 0o600 })
+  fs.writeFileSync(path.join(/*turbopackIgnore: true*/ BACKUP_DIR, name), JSON.stringify(env), { mode: 0o600 })
   await appendAudit("backup.create", true, "local", { kind: opts.kind, file: name, bytes: env.manifest.plainBytes, items: env.manifest.counts })
-  return { ok: true, file: name, bytes: fs.statSync(path.join(BACKUP_DIR, name)).size, counts: env.manifest.counts }
+  return { ok: true, file: name, bytes: fs.statSync(/*turbopackIgnore: true*/ path.join(/*turbopackIgnore: true*/ BACKUP_DIR, name)).size, counts: env.manifest.counts }
 }
 
 /** قائمة العرض: ملفات + حالة الجدولة — لا مفاتيح ولا عبارة أبدًا */
@@ -181,7 +181,7 @@ export async function restoreSecureBackup(name: string, passphrase: string, mode
 /** حذف نسخة واحدة — يد محلية */
 export async function deleteSecureBackup(name: string) {
   if (!/^backup-[\d-]+-(manual|scheduled)\.nexusbackup$/.test(name)) return { ok: false, error: "bad-name" as const }
-  try { fs.rmSync(path.join(BACKUP_DIR, name), { force: true }) } catch { /* غائب */ }
+  try { fs.rmSync(path.join(/*turbopackIgnore: true*/ BACKUP_DIR, name), { force: true }) } catch { /* غائب */ }
   await appendAudit("backup.delete", true, "local", { file: name.slice(0, 60) })
   return { ok: true as const }
 }
@@ -191,7 +191,7 @@ export async function pruneSecureBackups(keepOverride?: number) {
   const files = listFiles()
   const drop = retentionFilter(files, keepOverride)
   for (const f of drop) {
-    try { fs.rmSync(path.join(BACKUP_DIR, f), { force: true }) } catch { /* غائب */ }
+    try { fs.rmSync(path.join(/*turbopackIgnore: true*/ BACKUP_DIR, f), { force: true }) } catch { /* غائب */ }
   }
   if (drop.length) await appendAudit("backup.prune", true, "local", { removed: drop.length })
   return { ok: true, removed: drop }

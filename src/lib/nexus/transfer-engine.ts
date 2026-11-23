@@ -26,7 +26,7 @@ async function uniqueDest(dir: string, name: string): Promise<string> {
   let candidate = path.join(dir, name)
   let i = 1
   for (;;) {
-    try { await fs.stat(candidate); candidate = path.join(dir, `${stem} (${i++})${ext}`) } catch { return candidate }
+    try { await fs.stat(/*turbopackIgnore: true*/ candidate); candidate = path.join(dir, `${stem} (${i++})${ext}`) } catch { return candidate }
   }
 }
 

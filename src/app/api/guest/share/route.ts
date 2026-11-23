@@ -32,7 +32,7 @@ const INBOX_DIR = path.join(DATA_ROOT, "guest-inbox")
 
 function readGuestState(): GuestState | null {
   try {
-    const j = JSON.parse(fs.readFileSync(GUEST_FILE, "utf8"))
+    const j = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ GUEST_FILE, "utf8"))
     if (j && typeof j.token === "string" && j.token.length >= 16 && (j.mode === "send" || j.mode === "drop")) {
       return {
         token: j.token, fingerprint: String(j.fingerprint ?? ""), mode: j.mode,
@@ -163,7 +163,7 @@ export async function POST(req: Request) {
       const dstDir = resolveSafe("pc-office", "/Downloads")
       let target = path.join(dstDir, name)
       for (let i = 1; i < 50; i++) {
-        if (!fs.existsSync(target)) break
+        if (!fs.existsSync(/*turbopackIgnore: true*/ target)) break
         const dot = name.lastIndexOf(".")
         const stem = dot > 0 ? name.slice(0, dot) : name
         const ext = dot > 0 ? name.slice(dot) : ""
