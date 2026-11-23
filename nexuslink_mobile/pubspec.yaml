@@ -16,6 +16,7 @@ dependencies:
   # ---- الاتصال بالسيرفر ----
   socket_io_client: ^2.0.3+1   # قنوات socket.io التفاعلية (نفس بروتوكول السيرفر v4)
   http: ^1.2.2                  # REST (/api/*)
+  crypto: ^3.0.3                # P1 — SHA-256 لقطع الرفع v2 (§8.6) ومعرّف الجلسة
   bonsoir: ^5.1.0               # اكتشاف mDNS: _nexuslink._tcp
   # G3: مسح QR الاقتران أصلي عبر ZXing (android/app/build.gradle) — mobile_scanner
   # أُزيل لأنه يجرّ Google ML Kit + Firebase إلى APK (ادعاء «صفر سحابة»).

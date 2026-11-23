@@ -1232,6 +1232,7 @@ class MediaService {
 
       // رفع كملف إلى جذر الجهاز (نفس بروتوكول §8 — init/PUT/complete)
       final init = await api.uploadInit(
+        proto: 1, // v1 offsets (§8.2): this path sends sequentially
         deviceId: deviceId,
         name: name,
         size: bytes.length,
