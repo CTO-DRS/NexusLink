@@ -821,7 +821,7 @@ export function ensureRemoteBridge() {
           try {
             httpServer.close()
           } catch {}
-          httpServer.listen(PORT)
+          httpServer.listen(PORT, process.env.BRIDGE_HOST || "127.0.0.1")
         }, 1000)
         return
       }
@@ -834,7 +834,7 @@ export function ensureRemoteBridge() {
       console.error(`[nexus] Remote bridge bind failed on ${PORT}:`, err?.code)
     })
 
-    httpServer.listen(PORT, () => {
+    httpServer.listen(PORT, process.env.BRIDGE_HOST || "127.0.0.1", () => {
       io2.emit("rc:log", { id: uid(), text: `جسر التحكم عن بُعد يعمل — الكمبيوتر ${desktop.name}`, kind: "ok", at: Date.now() })
       console.log(`[nexus] Remote Control Bridge on port ${PORT}`)
     })

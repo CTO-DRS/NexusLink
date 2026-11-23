@@ -435,7 +435,7 @@ async function startMdns() {
   }
 }
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, process.env.BRIDGE_HOST || "127.0.0.1", () => {
   console.log(`NexusLink Comms Bridge (virtual phone) on port ${PORT}`)
   scheduleAuto()
   void startMdns()

@@ -59,6 +59,9 @@ jobs:
       - name: G1 gateway pair-token E2E (LAN 401 / token 200)
         run: node scripts/g1-gateway-e2e.mjs
 
+      - name: Bridges bind loopback only (P0)
+        run: node scripts/bridge-bind-check.mjs
+
       - name: Types (tsc — الأساس صفر منذ تكليف 29)
         run: bunx tsc --noEmit
 
