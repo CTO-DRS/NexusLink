@@ -190,8 +190,8 @@ try {
   const svc = rd("nexuslink_mobile/android/app/src/main/kotlin/com/nexuslink/mobile/AgentForegroundService.kt")
   const sec = rd("nexuslink_mobile/android/app/src/main/kotlin/com/nexuslink/mobile/SecChannel.kt")
   const boot = rd("nexuslink_mobile/android/app/src/main/kotlin/com/nexuslink/mobile/BootReceiver.kt")
-  ok("G1-22 Android: الخدمة الأصلية تمرر الرمز لكل سوكِت (3006/3007/3005/3009) وتحفظه للإقلاع التلقائي",
-    (svc.match(/AgentServicePrefs\.gatewayQuery\(/g) || []).length === 3 && sec.includes("AgentServicePrefs.gatewayQuery(secPort, pairToken)")
+  ok("G1-22 Android: الخدمة الأصلية تمرر الرمز لكل سوكِت (3006/3007/3005/3003/3009) وتحفظه للإقلاع التلقائي",
+    (svc.match(/AgentServicePrefs\.gatewayQuery\(/g) || []).length === 4 && sec.includes("AgentServicePrefs.gatewayQuery(secPort, pairToken)")
     && svc.includes("KEY_PAIR_TOKEN, pairToken") && boot.includes("KEY_PAIR_TOKEN") && !svc.includes('opts.query = "XTransformPort='))
   const proc = rd("apps/desktop/src-tauri/src/procman.rs")
   ok("G1-23 سطح المكتب: Next على 127.0.0.1 حصرًا (لا تجاوز للبوابة) ومسار رمز واحد للطرفين في مجلد البيانات",
