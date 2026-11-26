@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useProd } from "@/lib/prod-store"
-import { handPush, handOpened } from "@/lib/prod-socket"
+import { handOpened } from "@/lib/prod-socket"
 import { fmtDuration, useNexus } from "@/lib/store"
 import { cn } from "@/lib/utils"
 

@@ -6,7 +6,7 @@ import { promises as fs } from "fs"
 import path from "path"
 import { db } from "@/lib/db"
 import { store as deviceStore } from "./devices"
-import { DEVICE_ROOTS, resolveSafe } from "./fs-server"
+import { resolveSafe } from "./fs-server"
 
 export interface SyncEmit {
   (event: string, payload: Record<string, unknown>): void
@@ -136,7 +136,7 @@ export async function runPairSync(pairId: string, emit: SyncEmit = noEmit) {
           dstAbs = path.join(rootA, rel)
         }
         // تعارض: الطرفان تغيّرا منذ آخر مزامنة → نختار الأحدث لكن نسجل التعارض
-        if (a.mtime > lastSync && b.mtime > lastSync && action) {
+        if (a.mtime > lastSync && b.mtime > lastSync) {
           action = "conflict"
         }
       }

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { useSec } from "@/lib/sec-store"
 import { getSecSocket } from "@/lib/sec-socket"
 import { scanLeak, fromB64 } from "@/lib/nexus/e2e-crypto"
-import { fmtSize, fmtDate } from "@/lib/store"
+import { fmtSize } from "@/lib/store"
 
 export function CaptureTab() {
   const { wire, capturePaused, toggleCapturePaused, leakScan, setLeakScan, setCheck, setTab } = useSec()

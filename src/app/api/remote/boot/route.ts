@@ -1,5 +1,5 @@
 // تشغيل جسر التحكم عن بُعد (idempotent) — يُستدعى من الصفحتين عند الإقلاع
-import { ensureRemoteBridge, remoteBridgeStatus } from "@/lib/nexus/remote-bridge"
+import { ensureRemoteBridge } from "@/lib/nexus/remote-bridge"
 
 export const dynamic = "force-dynamic"
 

@@ -3,7 +3,6 @@
 // لوحة الجهاز · التطبيقات · أين هاتفي · وضع الفقدان · القرب التلقائي · المنبهات
 import { useEffect, useState } from "react"
 import QRCode from "qrcode"
-import { toast } from "sonner"
 import {
   Gauge, PackageOpen, BellRing, ShieldAlert, RadioTower, SlidersHorizontal,
   CheckCircle2, Circle, QrCode, PartyPopper, ShieldCheck, LockKeyhole, Hand, OctagonAlert,

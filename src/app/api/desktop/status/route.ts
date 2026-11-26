@@ -10,8 +10,6 @@
 //    - transfers: مهام الاستقبال المنتهية (اتجاه in) — تُشغّل إشعار «حفظ في» الأصلي
 //    - notifs: آخر إشعارات الهاتف الجديدة — تُشغّل إشعارات النظام بأزرار (فتح/رد)
 //    - agentId: هوية الوكيل الحقيقي المتصل (هدف إرسال الملفات من سطح المكتب)
-import { promises as fsSyncPromises } from "fs"
-import path from "path"
 import { ensureMediaBridge } from "@/lib/nexus/media-bridge"
 import { ensureGuardBridge, getAgentDeviceId } from "@/lib/nexus/guard-bridge"
 import { ensureProdBridge } from "@/lib/nexus/productivity-bridge"

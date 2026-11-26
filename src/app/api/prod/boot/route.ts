@@ -1,5 +1,5 @@
 // تشغيل جسر الإنتاجية + البذور (idempotent) — يُستدعى من الصفحات عند الإقلاع
-import { ensureProdBridge, prodBridgeStatus } from "@/lib/nexus/productivity-bridge"
+import { ensureProdBridge } from "@/lib/nexus/productivity-bridge"
 import { ensureProdSeed } from "@/lib/nexus/prod-seed"
 
 export const dynamic = "force-dynamic"

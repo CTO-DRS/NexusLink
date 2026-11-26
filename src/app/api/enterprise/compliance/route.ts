@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server"
-import crypto from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
 import { readEnterprisePolicy, policyPaths, POLICY_CONTRACT, oemPrivacyActive, resolveEffectivePosture, rotationDue } from "@/lib/enterprise-policy"

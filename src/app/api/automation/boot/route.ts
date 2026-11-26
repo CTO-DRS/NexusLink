@@ -1,5 +1,5 @@
 // تشغيل محرك الروتينات (idempotent) — يُستدعى من الصفحات عند الإقلاع (عقد §26)
-import { ensureAutomationBridge, automationBridgeStatus } from "@/lib/nexus/automation-bridge"
+import { ensureAutomationBridge } from "@/lib/nexus/automation-bridge"
 
 export const dynamic = "force-dynamic"
 

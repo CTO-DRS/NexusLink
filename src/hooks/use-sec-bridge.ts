@@ -146,7 +146,6 @@ async function onSecureFrame(d: { to?: string; from?: string; kind?: string; e?:
 // ---------- توجيه المحتوى المفكوك ----------
 async function handleDecrypted(kind: string, msg: Record<string, unknown>, from: string) {
   const st = useSec.getState()
-  const isDesktop = S.role === "desktop"
 
   if (kind === "file-meta") {
     S.chunksIn.set(String(msg.tid), {

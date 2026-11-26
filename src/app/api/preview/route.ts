@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server"
-import { createReadStream, promises as fs, statSync } from "fs"
+import { createReadStream, promises as fs } from "fs"
 import { Readable } from "stream"
 import { resolveSafe, mimeOf } from "@/lib/nexus/fs-server"
 

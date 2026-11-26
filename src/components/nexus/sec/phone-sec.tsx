@@ -59,7 +59,7 @@ function saveCfg(cfg: LockCfg) {
 export function PhoneSecTab() {
   // جسر الأمان بدور الهاتف — يستقبل الأوامر المشفرة (رن/قفل) ويتحقق من الصلاحيات
   useSecBridge("phone")
-  const { kexDone, perms, stealth, transfer, receivedClip, phoneLock, setCheck } = useSec()
+  const { kexDone, perms, stealth, transfer, receivedClip, setCheck } = useSec()
   const cfg = useSyncExternalStore(subscribeCfg, readCfg, () => DEFAULT_CFG)
   const [locked, setLocked] = useState(false)
   const [pin, setPin] = useState("")

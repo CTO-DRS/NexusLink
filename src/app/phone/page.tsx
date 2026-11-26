@@ -4,10 +4,7 @@
 // + جهاز تحكم بالبث وعرض الشرائح — عبر جسر الوسائط (Nexus Protocol)
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import {
-  Video, Mic, Baby, Gamepad2, Camera, Flashlight, RefreshCcw, ArrowLeft,
-  Play, Pause, SkipForward, SkipBack, Images, Cast, Link2, Square, Loader2, ShieldCheck, Zap, LockKeyhole,
-} from "lucide-react"
+import { Video, Mic, Baby, Gamepad2, Camera, Flashlight, RefreshCcw, ArrowLeft, Play, SkipForward, SkipBack, Images, Cast, Link2, Square, Loader2, ShieldCheck, Zap, LockKeyhole } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { getMediaSocket, mediaRole, rtcSignal, slideshowCmd, castCmd } from "@/lib/media-socket"

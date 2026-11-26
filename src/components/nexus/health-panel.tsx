@@ -289,7 +289,6 @@ function ChartCard({
   yMax?: number
   empty: string
 }) {
-  const { t } = useI18n()
   const has = data.length > 0
   return (
     <div className="rounded-xl border bg-card p-3">

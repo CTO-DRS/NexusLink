@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { useComms, relTime } from "@/lib/comms-store"
-import { simulate, setAutoMode, pushDndToPhone } from "@/lib/comms-socket"
+import { simulate, setAutoMode } from "@/lib/comms-socket"
 import { syncDnd } from "@/hooks/use-comms"
 import { appMeta } from "@/lib/nexus/comms-types"
 import { Button } from "@/components/ui/button"

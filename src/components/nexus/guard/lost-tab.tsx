@@ -17,7 +17,7 @@ import { GuardCard, InfoRow } from "./guard-bits"
 import { fmtDate } from "@/lib/store"
 
 export function LostTab() {
-  const { lost, setLost, setCheck, wipe, setWipe, pin, pushLog } = useGuard()
+  const { lost, setLost, setCheck, wipe, setWipe, pushLog } = useGuard()
   const demo = useDemoMode()
   const [message, setMessage] = useState(lost.message)
   const [callback, setCallback] = useState(lost.callback)

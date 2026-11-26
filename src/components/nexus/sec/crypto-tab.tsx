@@ -33,7 +33,7 @@ export function CryptoTab({ onOpenPhone }: { onOpenPhone: () => void }) {
   }, [])
 
   async function sendPicked() {
-    const [deviceId, vPath, name, sizeStr] = picked.split("|")
+    const [deviceId, vPath, name] = picked.split("|")
     if (!deviceId || !vPath) { toast.error("اختر ملفاً أولاً"); return }
     setSending(true)
     try {

@@ -25,7 +25,7 @@ type SortBy = "name" | "size" | "date"
 
 export function AppsTab() {
   const demo = useDemoMode()
-  const { apps, backup, install, startBackup, tickBackup, finishBackup, cancelBackup, startInstall, tickInstall, finishInstall, uninstallApp } = useGuard()
+  const { apps, backup, install, startBackup, finishBackup, cancelBackup, startInstall, finishInstall, uninstallApp } = useGuard()
   const [query, setQuery] = useState("")
   const [sortBy, setSortBy] = useState<SortBy>("size")
   const [confirmPkg, setConfirmPkg] = useState<AppEntry | null>(null)

@@ -1,7 +1,6 @@
 // النسخ الاحتياطي والاستعادة الشاملة — إعدادات + أجهزة موثوقة + ملفات تعريف + أزواج مزامنة
 // §54: بناء التصدير وتطبيق الاستعادة انتقلا للمكتبة المشتركة backup-export.ts
 // (مصدر حقيقة واحد — مسار prod والعقد المشفّر §54 كلاهما منها حرفيًا)
-import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { buildExport, applyRestore } from "@/lib/nexus/backup-export"
 import { prodEmit } from "@/lib/nexus/productivity-bridge"

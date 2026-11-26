@@ -3,7 +3,6 @@
 import { BellRing, BellOff, Lightbulb, Smartphone, Wifi, MapPin, VolumeX, BadgeAlert } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { useGuard } from "@/lib/guard-store"
 import { useDemoMode } from "@/lib/demo-client"
