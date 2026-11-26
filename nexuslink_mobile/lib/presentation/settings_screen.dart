@@ -226,6 +226,10 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 14),
 
+          // ==== §45 مرآة الإشعارات ====
+          const _NotifMirrorCard(),
+          const SizedBox(height: 14),
+
           // ==== هوية الجهاز ====
           _Header('settings.deviceInfo'.tr()),
           Card(
@@ -282,6 +286,59 @@ class _Header extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(text, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+    );
+  }
+}
+
+/// §45 — مرآة الإشعارات: حالة «الوصول إلى الإشعارات» + فتح إعدادات النظام.
+class _NotifMirrorCard extends ConsumerStatefulWidget {
+  const _NotifMirrorCard();
+
+  @override
+  ConsumerState<_NotifMirrorCard> createState() => _NotifMirrorCardState();
+}
+
+class _NotifMirrorCardState extends ConsumerState<_NotifMirrorCard> with WidgetsBindingObserver {
+  bool _on = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // العودة من إعدادات النظام: أعد فحص المنح
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final on = await ref.read(nativeBridgeProvider).notifAccessStatus();
+    if (mounted) setState(() => _on = on);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      child: ListTile(
+        leading: Icon(
+          _on ? Icons.notifications_active_rounded : Icons.notifications_off_rounded,
+          color: _on ? cs.primary : cs.onSurface.withOpacity(.5),
+        ),
+        title: Text('settings.notifMirror'.tr()),
+        subtitle: Text(_on ? 'settings.notifMirrorOn'.tr() : 'settings.notifMirrorSub'.tr()),
+        trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+        onTap: () => ref.read(nativeBridgeProvider).openNotifAccessSettings(),
+      ),
     );
   }
 }

@@ -51,7 +51,7 @@ export interface NotifFilter {
 
 // ---------- SMS ----------
 export type MsgDirection = "in" | "out"
-export type MsgStatus = "sending" | "sent" | "delivered" | "read"
+export type MsgStatus = "sending" | "sent" | "delivered" | "read" | "failed"
 
 export interface SmsMessage {
   id: string

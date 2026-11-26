@@ -2401,3 +2401,25 @@ E2E حي (scripts/sign-core-e2e.mjs) ‏32 فحصًا مرتين متتاليت�
 - **الصمت:** إذا الوصول من الشبكة مغلق (لا رمز، أو علامة `.disabled`)، أو `NEXUSLINK_BEACON=0`.
 - **الهاتف:** يحفظ `pcId` عند الاقتران. إذا فشل الاتصال بالعنوان المحفوظ، يستمع للمنارة ويطابق `pcId`، ثم يعيد الاتصال بالعنوان الجديد بالرمز المحفوظ نفسه.
 - **الإثبات:** `scripts/discovery-beacon-e2e.mjs` في quality CI.
+
+### 45. مرآة الإشعارات الحقيقية + صدق جسر الاتصالات (2026-11-26)
+
+**المشكلة التي أُغلقت**: جسر الاتصالات 3003 كان هاتفًا افتراضيًا يعمل دائمًا — يولّد إشعارات ورسائل
+ومكالمات وهمية كل 22–40 ثانية ويحفظها، ويؤكد «أُرسلت/سُلّمت» لرسائل SMS لم تُرسل.
+
+**الآن**:
+- المحاكاة (`autoMode`، `phone:simulate`، الرد، إرسال SMS، الاتصال) تعمل فقط مع `NEXUSLINK_DEMO=1`.
+- خارج العرض: `phone:sms-send` → `sms:status {status:"failed", reason:"no-phone-agent"}`،
+  `phone:call-dial` → `call:state {state:"ended", unsupported:true}`، وكلاهما + `phone:simulate`/`phone:auto-mode`/`phone:reply-action` → `comms:unsupported {action, reason}`.
+- `bridge:hello` يحمل `demo` و`agent`.
+
+**وكيل أندرويد (هاتف → كمبيوتر)**:
+- `phone:hello-agent {name, deviceId, features:["notif"]}` — إلزامي قبل أي إشعار؛ الجسر يبث `comms:agent {online, name, deviceId}`.
+- `phone:notif {app, appName, title≤200, body≤600}` → يمر عبر فلاتر الكمبيوتر (`/api/comms/notifications`) ثم `notif:mirror`.
+- سقف 30 إشعارًا لكل 10 ثوانٍ لكل وكيل؛ لا إشعار قبل التعريف.
+- الهاتف: `NexusNotificationListener` (يتطلب منح «الوصول إلى الإشعارات» يدويًا من إعدادات النظام)
+  يتجاهل: إشعارات NexusLink نفسها، الجارية (ongoing)، ملخصات المجموعات، و`VISIBILITY_SECRET`.
+  بلا طابور: إشعار وقع أثناء الانقطاع لا يُعاد.
+
+**حدود صادقة**: SMS والمكالمات من الكمبيوتر غير مدعومة بعد (تتطلب صلاحيات SMS/Call Log المقيّدة في Google Play).
+الرد على الإشعارات غير مدعوم (`actionable:false`). لم يُختبر على جهاز حقيقي بعد.

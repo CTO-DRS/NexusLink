@@ -63,6 +63,12 @@ class AgentForegroundService : Service() {
             svc.pushClipText(text)
         }
 
+        /** §45 — مرآة الإشعارات: يستدعيها NexusNotificationListener (لا شيء إن لم يكن الوكيل حيًا). */
+        fun mirrorNotification(pkg: String, appName: String, title: String, body: String) {
+            val svc = liveInstance ?: return
+            svc.main.post { svc.emitNotif(pkg, appName, title, body) }
+        }
+
         private const val BEACON_MS = 5_000L
         private const val STATE_MS = 30_000L
         private const val WATCHDOG_MS = 15_000L
@@ -178,6 +184,7 @@ class AgentForegroundService : Service() {
     private var socket: Socket? = null
     private var prodSocket: Socket? = null
     private var mediaSocket: Socket? = null
+    private var commsSocket: Socket? = null // §45 جسر الاتصالات 3003 (مرآة الإشعارات)
 
     /** FA-10: عميل قناة الأمان المشفرة 3009 — يعمل بلا واجهة إطلاقًا. */
     private var sec: SecChannel? = null
@@ -269,6 +276,7 @@ class AgentForegroundService : Service() {
             connectProd()
             connectMedia()
             connectSec()
+            connectComms()
         }
 
         // إعادة البدء إن قتلها النظام
@@ -547,6 +555,47 @@ class AgentForegroundService : Service() {
      * وظيفته الوحيدة: التقاط cam:shutter عندما تكون الواجهة ميتة → إشعار
      * "افتح التطبيق" (الكاميرا من الخلفية محظورة على Android 11+ بلا نوع camera).
      */
+    // ------------------------------------------------------------------
+    // §45 جسر الاتصالات 3003 — مرآة الإشعارات (هاتف → كمبيوتر)
+    // ------------------------------------------------------------------
+
+    private fun connectComms() {
+        val commsPort = AgentBridge.COMMS_PORT
+        val url = if (mode == "gateway") "http://$host:$port" else "http://$host:$commsPort"
+        try {
+            commsSocket?.off(); commsSocket?.disconnect()
+            val opts = IO.Options()
+            opts.reconnection = true
+            opts.reconnectionDelay = 2_000
+            opts.reconnectionDelayMax = 15_000
+            opts.timeout = 10_000
+            if (mode == "gateway") {
+                opts.query = AgentServicePrefs.gatewayQuery(commsPort, pairToken)
+            }
+            val s = IO.socket(url, opts)
+            commsSocket = s
+            s.on(Socket.EVENT_CONNECT) {
+                s.emit(
+                    "phone:hello-agent",
+                    JSONObject().put("name", deviceName).put("deviceId", deviceId)
+                        .put("features", org.json.JSONArray().put("notif")),
+                )
+            }
+            s.connect()
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "comms bridge: ${e.message}")
+        }
+    }
+
+    internal fun emitNotif(pkg: String, appName: String, title: String, body: String) {
+        val s = commsSocket ?: return
+        if (!s.connected()) return // بلا طابور: إشعار فائت أثناء الانقطاع لا يُعاد لاحقًا
+        s.emit(
+            "phone:notif",
+            JSONObject().put("app", pkg).put("appName", appName).put("title", title).put("body", body),
+        )
+    }
+
     private fun connectMedia() {
         val mediaPort = 3005
         val url = if (mode == "gateway") "http://$host:$port" else "http://$host:$mediaPort"
@@ -1306,12 +1355,14 @@ class AgentForegroundService : Service() {
             socket?.off(); socket?.disconnect()
             prodSocket?.off(); prodSocket?.disconnect()
             mediaSocket?.off(); mediaSocket?.disconnect()
+            commsSocket?.off(); commsSocket?.disconnect()
             sec?.shutdown()
         } catch (_: Exception) {
         }
         socket = null
         prodSocket = null
         mediaSocket = null
+        commsSocket = null
         sec = null
         host = newHost
         port = newPort
@@ -1329,6 +1380,7 @@ class AgentForegroundService : Service() {
         connectProd()
         connectMedia()
         connectSec()
+        connectComms()
     }
 
     // ------------------------------------------------------------------
@@ -1466,6 +1518,8 @@ class AgentForegroundService : Service() {
             prodSocket?.disconnect()
             mediaSocket?.off()
             mediaSocket?.disconnect()
+            commsSocket?.off()
+            commsSocket?.disconnect()
             sec?.shutdown() // FA-10
         } catch (_: Exception) {
         }
@@ -1506,6 +1560,7 @@ class AgentForegroundService : Service() {
 object AgentBridge {
     const val GUARD_PORT = 3006
     const val PROD_PORT = 3007
+    const val COMMS_PORT = 3003
     const val SEC_PORT = 3009
 
     const val EV_HELLO_PHONE = "guard:hello-phone"

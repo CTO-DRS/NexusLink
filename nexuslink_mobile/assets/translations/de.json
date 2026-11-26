@@ -100,7 +100,10 @@
     "remoteActiveHint": "Aktive Steuersitzung — tippen, um anzuzeigen oder sofort zu beenden",
     "remoteHint": "Verfügbarkeitsdienst, Bestätigungsanfrage und Sitzungsende",
     "p2pEntry": "Steuerung eines anderen Telefons",
-    "p2pHint": "Bildschirm eines anderen Telefons anzeigen und fernsteuern über das Zentrum"
+    "p2pHint": "Bildschirm eines anderen Telefons anzeigen und fernsteuern über das Zentrum",
+    "notifMirror": "Benachrichtigungen am PC spiegeln",
+    "notifMirrorSub": "Zeigt die Benachrichtigungen deines Telefons auf dem gekoppelten PC. Tippen, um den Benachrichtigungszugriff in den Systemeinstellungen zu erlauben.",
+    "notifMirrorOn": "Aktiv — Benachrichtigungen erreichen den PC"
   },
   "perms": {
     "notificationsTitle": "Benachrichtigungsberechtigung",

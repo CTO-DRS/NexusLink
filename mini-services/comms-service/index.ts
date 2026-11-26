@@ -56,10 +56,19 @@ const SMS_TEMPLATES = [
 
 // ---------- phone runtime ----------
 interface ActiveCall { id: string; number: string; contactName?: string; direction: 'in' | 'out'; startedAt: number }
+// الصدق أولًا: هذا الجسر هاتف افتراضي. لا وكيل أندرويد يرسل إشعارات/SMS/مكالمات بعد،
+// فالمحاكاة (توليد رسائل ومكالمات وحالات «تم التسليم») تعمل فقط مع NEXUSLINK_DEMO=1.
+// بدونه: لا بيانات وهمية، وأوامر الإرسال/الاتصال تُرفض صراحةً بدل تأكيد كاذب.
+const DEMO = ['1', 'true', 'yes', 'on'].includes(String(process.env.NEXUSLINK_DEMO ?? '').trim().toLowerCase())
+function refuse(socket: { emit: (e: string, d: unknown) => void }, action: string) {
+  socket.emit('comms:unsupported', { action, reason: 'no-phone-agent', at: Date.now() })
+  phoneLog(`رُفض «${action}»: لا يوجد وكيل هاتف للاتصالات بعد (المحاكاة تعمل فقط في وضع العرض)`, 'info')
+}
+const agents = new Map<string, { deviceId: string; name: string; notif: number; windowAt: number }>()
 const phone = {
-  name: 'Galaxy-S24',
+  name: DEMO ? 'Galaxy-S24' : '',
   dnd: false,
-  autoMode: true,
+  autoMode: DEMO,
   activeCall: null as ActiveCall | null,
   ringingCall: null as { id: string; number: string; contactName?: string; timeout: NodeJS.Timeout } | null,
   logs: [] as { id: string; text: string; kind: string; at: number }[],
@@ -94,8 +103,8 @@ async function persist(path: string, body: unknown): Promise<Record<string, unkn
 }
 
 // ---------- notification mirroring (ingest → filter rules on desktop server) ----------
-async function mirrorNotification(input: { appId: string; title: string; body: string; actionable?: boolean }) {
-  const app = APPS[input.appId] ?? { id: input.appId, name: input.appId, color: '#64748b', actionable: true }
+async function mirrorNotification(input: { appId: string; appName?: string; title: string; body: string; actionable?: boolean }) {
+  const app = APPS[input.appId] ?? { id: input.appId, name: input.appName || input.appId, color: '#64748b', actionable: false }
   const out = await persist('/api/comms/notifications', {
     appId: app.id, appName: app.name, title: input.title, body: input.body,
     actionable: input.actionable ?? app.actionable,
@@ -270,13 +279,15 @@ httpServer.on('request', (req, res) => {
 io.on('connection', (socket) => {
   console.log('desktop connected:', socket.id)
   socket.emit('bridge:hello', {
-    phone: { name: phone.name, dnd: phone.dnd, autoMode: phone.autoMode, battery: 78 },
+    phone: { name: phone.name, dnd: phone.dnd, autoMode: phone.autoMode, battery: DEMO ? 78 : null },
+    demo: DEMO, agent: agents.size > 0,
     at: Date.now(),
   })
   phoneLog('اتصال جديد من سطح المكتب عبر Nexus Protocol (TLS)', 'ok')
 
   // ==== محاكي الهاتف ====
   socket.on('phone:simulate', (data: { kind: string }) => {
+    if (!DEMO) return refuse(socket, 'phone:simulate')
     if (!pcOnly(socket, 'phone:simulate')) return
     switch (data?.kind) {
       case 'whatsapp': case 'telegram': case 'gmail': case 'instagram': case 'youtube': case 'slack': {
@@ -305,6 +316,7 @@ io.on('connection', (socket) => {
   })
 
   socket.on('phone:auto-mode', (data: { enabled: boolean }) => {
+    if (!DEMO) return refuse(socket, 'phone:auto-mode')
     if (!pcOnly(socket, 'phone:auto-mode')) return
     phone.autoMode = !!data?.enabled
     scheduleAuto()
@@ -313,6 +325,7 @@ io.on('connection', (socket) => {
 
   // ==== الرد السريع من الإشعار ====
   socket.on('phone:reply-action', (data: { notifId: string; appId: string; text: string }) => {
+    if (!DEMO) return refuse(socket, 'phone:reply-action')
     if (!pcOnly(socket, 'phone:reply-action')) return
     const app = APPS[data?.appId]
     phoneLog(`رد سريع عبر ${app?.name ?? data?.appId}: «${data?.text}»`, 'out')
@@ -328,6 +341,10 @@ io.on('connection', (socket) => {
 
   // ==== إرسال SMS من الكمبيوتر ====
   socket.on('phone:sms-send', async (data: { messageId: string; address: string; body: string; contactName?: string }) => {
+    if (!DEMO) {
+      socket.emit('sms:status', { messageId: data?.messageId, status: 'failed', reason: 'no-phone-agent' })
+      return refuse(socket, 'phone:sms-send')
+    }
     if (!pcOnly(socket, 'phone:sms-send')) return
     phoneLog(`إرسال SMS إلى ${data.contactName ?? data.address}: ${data.body}`, 'out')
     setTimeout(() => {
@@ -352,6 +369,10 @@ io.on('connection', (socket) => {
 
   // ==== المكالمات ====
   socket.on('phone:call-dial', (data: { callId: string; number: string; contactName?: string }) => {
+    if (!DEMO) {
+      socket.emit('call:state', { callId: data?.callId, state: 'ended', unsupported: true })
+      return refuse(socket, 'phone:call-dial')
+    }
     if (!pcOnly(socket, 'phone:call-dial')) return
     if (phone.activeCall || phone.ringingCall) {
       io?.emit('call:state', { callId: data.callId, state: 'ended', busy: true })
@@ -406,7 +427,40 @@ io.on('connection', (socket) => {
     io?.emit('dnd:state', { enabled: phone.dnd, source: 'pc' })
   })
 
+  // ==== وكيل الهاتف الحقيقي (أندرويد) — مرآة الإشعارات (§45) ====
+  // الوصول عبر البوابة محكوم برمز الاقتران (G1)؛ الوكيل يعرّف نفسه أولًا ثم يرسل
+  // إشعارات مختصرة. لا SMS ولا مكالمات بعد — تبقى مرفوضة صراحةً خارج وضع العرض.
+  socket.on('phone:hello-agent', (d: { name?: unknown; deviceId?: unknown; features?: unknown }) => {
+    const name = String(d?.name ?? '').trim().slice(0, 60) || 'هاتف Nexus'
+    const deviceId = String(d?.deviceId ?? '').trim().slice(0, 80)
+    if (!deviceId) return
+    agents.set(socket.id, { deviceId, name, notif: 0, windowAt: Date.now() })
+    if (!DEMO) phone.name = name
+    io?.emit('comms:agent', { online: true, name, deviceId, features: ['notif'] })
+    phoneLog(`وكيل الهاتف متصل بجسر الاتصالات: ${name} — مرآة الإشعارات`, 'ok')
+  })
+  socket.on('phone:notif', (d: { app?: unknown; appName?: unknown; title?: unknown; body?: unknown }) => {
+    const a = agents.get(socket.id)
+    if (!a) return // لا إشعار بلا تعريف وكيل
+    const now = Date.now()
+    if (now - a.windowAt > 10_000) { a.windowAt = now; a.notif = 0 }
+    if (++a.notif > 30) return // سقف 30 إشعارًا لكل 10 ثوانٍ — حماية من الإغراق
+    const appId = String(d?.app ?? '').trim().slice(0, 120)
+    const title = String(d?.title ?? '').trim().slice(0, 200)
+    const body = String(d?.body ?? '').trim().slice(0, 600)
+    if (!appId || (!title && !body)) return
+    void mirrorNotification({ appId, appName: String(d?.appName ?? '').trim().slice(0, 60), title, body, actionable: false })
+  })
+
   socket.on('disconnect', () => {
+    const a = agents.get(socket.id)
+    if (a) {
+      agents.delete(socket.id)
+      if (!DEMO && agents.size === 0) phone.name = ''
+      io?.emit('comms:agent', { online: agents.size > 0, name: a.name, deviceId: a.deviceId })
+      phoneLog(`وكيل الهاتف انفصل: ${a.name}`, 'info')
+      return
+    }
     console.log('desktop disconnected:', socket.id)
   })
 })

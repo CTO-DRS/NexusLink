@@ -10,12 +10,13 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
-  Send, Search, ArrowRight, RefreshCw, Phone, Check, CheckCheck, Clock3, MessageSquare,
+  Send, Search, ArrowRight, RefreshCw, Phone, Check, CheckCheck, Clock3, MessageSquare, CircleAlert,
 } from "lucide-react"
 
 function StatusTicks({ status }: { status: string }) {
   if (status === "sending") return <Clock3 className="w-3 h-3 text-white/60" />
   if (status === "sent") return <Check className="w-3 h-3 text-white/70" />
+  if (status === "failed") return <CircleAlert className="w-3 h-3 text-red-300" aria-label="لم تُرسل" />
   if (status === "read") return <CheckCheck className="w-3 h-3 text-cyan-200" />
   return <CheckCheck className="w-3 h-3 text-white/70" /> // delivered
 }
