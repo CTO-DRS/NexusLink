@@ -96,6 +96,8 @@ export function hasSplitAndroidAssets(version: string): boolean {
   const [a1, a2, a3] = p(version)
   const [b1, b2, b3] = p(LAST_UNIVERSAL_APK_VERSION)
   if ([a1, a2, a3].some((n) => Number.isNaN(n))) return true
+  // إعادة الترقيم 2026-11-26: السلسلة 0.x جديدة وكلها مقسّمة (الشاملة حصرًا 1.x..3.1.1 القديمة)
+  if (a1 === 0) return true
   if (a1 !== b1) return a1 > b1
   if (a2 !== b2) return a2 > b2
   return a3 > b3
