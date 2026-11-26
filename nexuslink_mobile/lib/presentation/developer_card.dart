@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -156,7 +158,7 @@ class DeveloperCard extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               const Text('CTO: DRS',
-                  textDirection: TextDirection.ltr,
+                  textDirection: ui.TextDirection.ltr,
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
               const SizedBox(height: 2),
               Text('settings.developerLine'.tr(),
@@ -166,7 +168,7 @@ class DeveloperCard extends ConsumerWidget {
               ...rows,
               const SizedBox(height: 10),
               const Text('NexusLink • v0.1.0',
-                  textDirection: TextDirection.ltr,
+                  textDirection: ui.TextDirection.ltr,
                   style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
             ],
           ),
