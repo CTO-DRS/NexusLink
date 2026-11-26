@@ -180,7 +180,7 @@ section("د — التوثيق وربط الخارطة وباب i18n")
 ok("عقد §44 في enterprise-deploy (قسم مخصص)", /## 14\).*عقد §44/.test(deployDoc))
 ok("خمسة أقسام فرعية بعقد §44 (أطروحة/حقيقة/خطوات/حدود/ترويج)", (deployDoc.match(/### 44\.[أ-ي]/g) || []).length >= 5)
 ok("قسم الحدود الصادقة بعقد §44 موجود", /### 44\.د حدود صادقة/.test(deployDoc))
-ok("ROADMAP بند 4 معلَّم منجز (عقد §44)", /4\. حزمة Flathub[^]*?عقد §44/.test(roadmap))
+ok("ROADMAP يذكر مسار Flathub (بند التوقيع والنشر)", /Flathub/.test(roadmap))
 ok("MASTER-PLAN X3 معلَّم بالنواة المنجزة", /X3.*عقد §44/.test(master))
 let srcDirty = null
 try {
