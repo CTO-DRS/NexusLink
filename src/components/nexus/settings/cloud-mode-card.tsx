@@ -1,0 +1,149 @@
+"use client"
+// Cloud Mode: optional hosted link-in-bio page with analytics. OFF by default.
+// Enabling requires accepting an explicit disclosure; while off, no cloud request is ever made.
+import { useEffect, useState } from "react"
+import { Cloud, ShieldAlert, ExternalLink } from "lucide-react"
+import { toast } from "sonner"
+import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useI18n } from "@/lib/i18n"
+import { DEVELOPER } from "@/lib/developer-links"
+import { DEVELOPER_BANNERS } from "@/lib/developer-banners"
+import { buildCloudPage, cloudDeployed, cloudDelete, cloudPublish, handleOk, loadCloud, newToken, saveCloud, type CloudState } from "@/lib/cloud-mode"
+
+async function photoDataUrl(): Promise<string> {
+  try {
+    const img = new Image()
+    img.src = DEVELOPER.photo
+    await img.decode()
+    const c = document.createElement("canvas")
+    c.width = c.height = 256
+    c.getContext("2d")!.drawImage(img, 0, 0, 256, 256)
+    return c.toDataURL("image/jpeg", 0.85)
+  } catch { return "" }
+}
+
+export function CloudModeCard() {
+  const { t, lang } = useI18n()
+  const [s, setS] = useState<CloudState>(() => (typeof window === "undefined" ? { enabled: false, handle: "", token: "", capture: false } : loadCloud()))
+  const [deployed, setDeployed] = useState<boolean | null>(null)
+  const [ask, setAsk] = useState(false)
+  const [agree, setAgree] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const update = (p: Partial<CloudState>) => setS((cur) => { const n = { ...cur, ...p }; saveCloud(n); return n })
+
+  useEffect(() => {
+    // Only the deployment flag of our own local server is read here; it contacts nothing remote.
+    if (!s.enabled) return
+    let alive = true
+    cloudDeployed().then((d) => alive && setDeployed(d))
+    return () => { alive = false }
+  }, [s.enabled])
+
+  const turnOn = () => { setAgree(false); setAsk(true) }
+  const confirm = () => { update({ enabled: true, acceptedAt: Date.now(), token: s.token || newToken() }); setAsk(false) }
+  const turnOff = () => update({ enabled: false })
+
+  const publish = async () => {
+    if (!handleOk(s.handle)) { toast.error(t("معرّف غير صالح (حروف إنجليزية صغيرة وأرقام وشرطة، من 3 إلى 32)")); return }
+    setBusy(true)
+    try {
+      const titles: Record<string, string> = {}
+      for (const l of DEVELOPER.links) titles[l.id] = l.id === "github" ? "GitHub" : t(l.label)
+      for (const b of DEVELOPER_BANNERS) { titles[b.title] = t(b.title); titles[b.body] = t(b.body); titles[b.cta] = t(b.cta) }
+      const theme = (typeof localStorage !== "undefined" && localStorage.getItem("nexus.devcard.theme")) || "violet"
+      const page = buildCloudPage({
+        theme, animated: typeof localStorage !== "undefined" && localStorage.getItem("nexus.devcard.anim") === "1", capture: s.capture,
+        lang: lang === "ar" ? "ar" : "en", photo: await photoDataUrl(),
+        texts: { role: t("مطوّر تطبيقات • استشارات تقنية"), label: t("اترك بريدك أو رقمك وسنتواصل معك"), consent: t("أوافق على التواصل معي"), titles },
+      })
+      const r = await cloudPublish(s, page)
+      update({ publishedUrl: r.url, publishedAt: Date.now() })
+      toast.success(t("تم نشر الصفحة"))
+    } catch (e) {
+      const code = (e as { code?: string | number }).code
+      toast.error(code === "not_deployed" ? t("الخدمة المستضافة لم تُفعَّل بعد") : code === 403 ? t("هذا المعرّف مأخوذ") : t("تعذّر الاتصال بالخدمة"))
+    } finally { setBusy(false) }
+  }
+  const remove = async () => {
+    setBusy(true)
+    try { await cloudDelete(s); update({ publishedUrl: undefined, publishedAt: undefined }); toast.success(t("حُذفت الصفحة وبياناتها")) }
+    catch { toast.error(t("تعذّر الاتصال بالخدمة")) }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <Card data-testid="cloud-mode-card">
+      <CardContent className="space-y-4 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <Cloud className="mt-0.5 h-4 w-4 text-primary" />
+            <div>
+              <div className="text-sm font-semibold">{t("الوضع السحابي (اختياري)")}</div>
+              <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{t("صفحة روابط مستضافة مع إحصاءات. مُعطَّل افتراضيًا، ولا يُرسل التطبيق أي شيء إلى السحابة ما دام مُعطَّلًا.")}</p>
+            </div>
+          </div>
+          <Switch checked={s.enabled} onCheckedChange={(v) => (v ? turnOn() : turnOff())} aria-label={t("تفعيل الوضع السحابي")} data-testid="cloud-switch" />
+        </div>
+
+        {s.enabled && (
+          <div className="space-y-3 border-t pt-4">
+            <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 p-2.5 text-[11px] leading-5 text-amber-700 dark:text-amber-300">
+              <ShieldAlert className="h-4 w-4 shrink-0" /> {t("الوضع السحابي مُفعَّل: بيانات زيارات صفحتك تُرسَل إلى الخدمة المستضافة.")}
+            </div>
+            {deployed === false && <p className="text-[11px] text-muted-foreground">{t("الخدمة المستضافة لم تُفعَّل بعد")}</p>}
+            <label className="block text-xs text-muted-foreground">
+              {t("معرّف الصفحة")}
+              <input
+                dir="ltr"
+                value={s.handle}
+                onChange={(e) => update({ handle: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32) })}
+                placeholder="cto-drs"
+                className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                data-testid="cloud-handle"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 text-xs">
+              <span>{t("جمع البريد أو الرقم من الزوار")}</span>
+              <Switch checked={s.capture} onCheckedChange={(v) => update({ capture: v })} />
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={publish} disabled={busy} data-testid="cloud-publish">{t("نشر الصفحة")}</Button>
+              {s.publishedUrl && <Button size="sm" variant="outline" onClick={remove} disabled={busy}>{t("حذف الصفحة وبياناتها")}</Button>}
+            </div>
+            {s.publishedUrl && (
+              <a href={s.publishedUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-primary underline" dir="ltr">
+                <ExternalLink className="h-3.5 w-3.5" /> {s.publishedUrl}
+              </a>
+            )}
+          </div>
+        )}
+      </CardContent>
+
+      <Dialog open={ask} onOpenChange={setAsk}>
+        <DialogContent data-testid="cloud-disclosure">
+          <DialogHeader>
+            <DialogTitle>{t("قبل تفعيل الوضع السحابي")}</DialogTitle>
+            <DialogDescription>{t("اقرأ ما سيُرسَل ويُحفظ على الخدمة المستضافة.")}</DialogDescription>
+          </DialogHeader>
+          <ul className="list-disc space-y-2 ps-5 text-sm leading-6">
+            <li>{t("عند التفعيل تُنشر بطاقة المطوّر كصفحة عامة على خدمة مستضافة.")}</li>
+            <li>{t("يُرسَل إلى الخدمة ويُحفظ فيها: عدد زيارات الصفحة والنقرات ومصدر الزيارة (اسم الموقع المُحيل فقط) وبلد الزائر التقريبي وساعة الزيارة. لا تُحفظ عناوين IP ولا ملفات تعريف الارتباط.")}</li>
+            <li>{t("إن فعّلتَ نموذج جمع البيانات، يُحفظ البريد أو الرقم الذي يرسله الزائر بنفسه على الخدمة، وأنت مسؤول عن إشعار الخصوصية في صفحتك.")}</li>
+            <li>{t("يمكنك الإيقاف وحذف الصفحة وكل بياناتها في أي وقت. وبقية التطبيق يبقى محليًا بالكامل.")}</li>
+          </ul>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-1" data-testid="cloud-agree" />
+            <span>{t("أفهم أن بيانات زيارات الصفحة تُرسَل إلى الخدمة المستضافة")}</span>
+          </label>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setAsk(false)}>{t("إلغاء")}</Button>
+            <Button disabled={!agree} onClick={confirm} data-testid="cloud-confirm">{t("تفعيل")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  )
+}
