@@ -86,7 +86,7 @@ jobs:
           if [ "$A64" -gt $((60*1048576)) ]; then
             echo "::warning::arm64-v8a APK > 60MB (G4 target ≈ 40–50MB)"
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android-pr-build
           path: |

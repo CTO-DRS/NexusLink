@@ -330,7 +330,7 @@ jobs:
           ls -la apps/desktop/src-tauri/target/portable/
 
       - name: Upload bundles
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.os-name }}
           path: |
@@ -347,7 +347,7 @@ jobs:
 
       - name: Upload updater signatures
         if: env.UPDATER_SIGN == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.os-name }}-sigs
           path: apps/desktop/src-tauri/target/release/bundle/**/*.sig
@@ -452,12 +452,12 @@ jobs:
           cp build/app/outputs/bundle/release/app-release.aab "dist-android/NexusLink-${VERSION}-release.aab"
           ls -la dist-android/
           { echo "### Android release assets"; for f in dist-android/*; do echo "- $(basename "$f") — $(stat -c %s "$f") bytes"; done; } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android-apk
           path: nexuslink_mobile/dist-android/NexusLink-*-release.apk
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android-aab
           path: nexuslink_mobile/dist-android/NexusLink-*-release.aab
@@ -481,7 +481,7 @@ jobs:
         with: { channel: stable }
       - name: Build IPA (unsigned — TestFlight needs Apple account)
         run: echo "flutter build ipa --release --no-codesign"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ios
           path: dist/**
