@@ -71,8 +71,10 @@ export async function secureWipe(opts: {
   onProgress?: (p: { pass: number; totalPasses: number; pattern: string; pct: number; speedBps: number; phase: "write" | "unlink" | "verify" }) => void
 }): Promise<WipeResult> {
   const abs = resolveSafe(opts.deviceId, opts.vPath)
-  const st = await fs.stat(abs)
-  if (!st.isFile()) throw new Error("الهدف ليس ملفاً")
+  // fd واحد للفحص والكتابة (لا TOCTOU بين stat وopen)
+  const fh = await fs.open(abs, "r+")
+  const st = await fh.stat().catch(async (e) => { await fh.close(); throw e })
+  if (!st.isFile()) { await fh.close(); throw new Error("الهدف ليس ملفاً") }
   const size = st.size
   const hashBefore = size > 0 ? await streamHash(abs) : "—"
   const passes: WipePass[] = []
@@ -81,7 +83,6 @@ export async function secureWipe(opts: {
     ? [0, 1, 2, 0, 1, 2, 2]
     : [0, 1, 2]
 
-  const fh = await fs.open(abs, "r+")
   try {
     const CHUNK = 1024 * 1024
     const buf = Buffer.alloc(Math.min(size || CHUNK, CHUNK))

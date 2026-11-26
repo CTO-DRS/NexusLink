@@ -122,15 +122,20 @@ function resolvePolicyFile() {
 function loadPolicy() {
   const p = resolvePolicyFile()
   if (!p) { policyCache = { mtimeMs: -1, size: -1, data: null }; return null }
+  let fd = -1
   try {
-    const st = fs.statSync(p)
+    // fd واحد للفحص والقراءة (لا TOCTOU بين stat وread)
+    fd = fs.openSync(p, "r")
+    const st = fs.fstatSync(fd)
     if (st.mtimeMs !== policyCache.mtimeMs || st.size !== policyCache.size) {
-      policyCache = { mtimeMs: st.mtimeMs, size: st.size, data: parsePolicy(fs.readFileSync(p, "utf8")) }
+      policyCache = { mtimeMs: st.mtimeMs, size: st.size, data: parsePolicy(fs.readFileSync(fd, "utf8")) }
     }
     return policyCache.data
   } catch {
     policyCache = { mtimeMs: -1, size: -1, data: null }
     return null
+  } finally {
+    if (fd >= 0) try { fs.closeSync(fd) } catch { /* مغلق */ }
   }
 }
 
@@ -261,16 +266,20 @@ function parsePolicy(raw) {
 }
 
 function loadPair() {
+  let fd = -1
   try {
-    const st = fs.statSync(PAIR_FILE)
+    fd = fs.openSync(PAIR_FILE, "r")
+    const st = fs.fstatSync(fd)
     if (st.mtimeMs !== pairCache.mtimeMs || st.size !== pairCache.size) {
-      const j = JSON.parse(fs.readFileSync(PAIR_FILE, "utf8"))
+      const j = JSON.parse(fs.readFileSync(fd, "utf8"))
       pairCache = { mtimeMs: st.mtimeMs, size: st.size, data: j && typeof j.token === "string" && j.token.length >= 16 ? { token: j.token } : null }
     }
     return pairCache.data
   } catch {
     pairCache = { mtimeMs: -1, size: -1, data: null }
     return null
+  } finally {
+    if (fd >= 0) try { fs.closeSync(fd) } catch { /* مغلق */ }
   }
 }
 
