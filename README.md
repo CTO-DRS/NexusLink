@@ -17,7 +17,7 @@
 
 > 🧭 **خارطة الطريق:** [docs/ROADMAP-2027.md](docs/ROADMAP-2027.md) — من «منتج مكتمل محليًا» إلى الأقوى والأذكى عالميًا.
 
-> **Quick facts (باهتزاز واحد):** NexusLink · v3.1.1 · مجاني للاستخدام الشخصي ·
+> **Quick facts (باهتزاز واحد):** NexusLink · v0.1.0 · مجاني للاستخدام الشخصي ·
 > Windows 10/11 · macOS 12+ · Linux x64 · Android 8+ (iOS: وسائط/ملفات/حافظة فقط — حد معلن) ·
 > ازدواجية ترخيص صادقة: نواة مملوكة + مجموعة مفتوحة MIT (انظر `LICENSE` و`docs/OPEN-COMPONENTS.md`) ·
 > لا سحابة · لا حسابات · لا تتبع · تشفير X25519 + AES-256-GCM من الطرف للطرف ·
@@ -75,10 +75,10 @@ reserved; a declared open set (SDK · CLI · pairing math · oplog · docs) unde
 
    | المنصة | الحزمة | ملاحظة |
    |---|---|---|
-   | Windows | `NexusLink_3.1.1_x64-setup.exe` | NSIS — يثبّت WebView2 تلقائيًا إن غاب؛ بديل MSI أو ZIP محمول |
-   | macOS | `NexusLink_3.1.1_aarch64.dmg` | اسحب التطبيق إلى Applications؛ غير موقّع: زر يمين ← Open أول مرة |
-   | Linux | `NexusLink_3.1.1_amd64.deb` أو `*.AppImage` | AppImage: `chmod +x` ثم شغّل — بلا تثبيت |
-   | Android 8+ | `NexusLink-<الإصدار>-arm64-v8a-release.apk` | الوكيل — «تثبيت من مصدر غير معروف» مرة واحدة · أجهزة 32-بت: `-armeabi-v7a-release.apk` · حتى v3.1.1: APK شامل واحد `NexusLink-3.1.1-release.apk` |
+   | Windows | `NexusLink_0.1.0_x64-setup.exe` | NSIS — يثبّت WebView2 تلقائيًا إن غاب؛ بديل MSI أو ZIP محمول |
+   | macOS | `NexusLink_0.1.0_aarch64.dmg` | اسحب التطبيق إلى Applications؛ غير موقّع: زر يمين ← Open أول مرة |
+   | Linux | `NexusLink_0.1.0_amd64.deb` أو `*.AppImage` | AppImage: `chmod +x` ثم شغّل — بلا تثبيت |
+   | Android 8+ | `NexusLink-<الإصدار>-arm64-v8a-release.apk` | الوكيل — «تثبيت من مصدر غير معروف» مرة واحدة · أجهزة 32-بت: `-armeabi-v7a-release.apk` · حتى v0.1.0: APK شامل واحد `NexusLink-0.1.0-release.apk` |
 
 2. **المركز يعمل فور الإقلاع بلا أي إعداد**: الواجهة + الخادم المضمّن (:3000)
    + جسور الإشعارات/الوسائط/التحكم (:3003/:3004/:3005/:3006/:3007/:3009)
@@ -106,7 +106,7 @@ reserved; a declared open set (SDK · CLI · pairing math · oplog · docs) unde
    حرّك مؤشر الكمبيوتر من شاشة Touchpad بالتطبيق؛ أرسل ملفًا بالسحب والإفلات.
    قائمة التحقق الكاملة لكل ميزة: `docs/e2e-checklist.md`.
 
-**بلا تثبيت إطلاقًا؟** النسخة المحمولة `NexusLink_3.1.1_x64-portable.zip`
+**بلا تثبيت إطلاقًا؟** النسخة المحمولة `NexusLink_0.1.0_x64-portable.zip`
 (فك ← شغّل NexusLink.exe) أو AppImage على لينكس.
 
 > طريق المطوّر (تشغيل السيرفر بدون تطبيق سطح المكتب) في §2 أدناه —
