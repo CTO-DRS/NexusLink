@@ -85,6 +85,12 @@
     <content_attribute id="money-gambling">none</content_attribute>
   </content_rating>
   <releases>
+    <release version="0.1.0" date="2026-11-26">
+      <description>
+        <p>First release under the new numbering. New official signing keys, pairing token required for network access, Android without cloud SDKs, per-architecture APKs.</p>
+        <p xml:lang="ar">‏أول إصدار بالترقيم الجديد: مفاتيح توقيع رسمية جديدة، ورمز اقتران إلزامي للوصول عبر الشبكة، وأندرويد بلا خدمات سحابية، وAPK لكل معمارية.</p>
+      </description>
+    </release>
     <release version="3.1.1" date="2026-11-15">
       <description>
         <p>Clean packaging patch: ships an empty seed database, fixes the Prisma client in deb/AppImage builds, removes source maps, disables Android auto-backup, slims the APK, and replaces the leftover template logo.</p>
