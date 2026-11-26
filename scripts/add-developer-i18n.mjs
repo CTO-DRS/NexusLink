@@ -46,6 +46,13 @@ const T = [
   ["إصدار جديد متاح", "A new version is available", "Une nouvelle version est disponible", "Hay una nueva versión disponible", "Eine neue Version ist verfügbar", "Доступна новая версия"],
   ["عرض الإصدار", "View release", "Voir la version", "Ver versión", "Version ansehen", "Открыть релиз"],
   ["تعذّر التحقق — تأكد من اتصالك بالإنترنت", "Couldn't check — make sure you're online", "Vérification impossible — vérifiez votre connexion", "No se pudo comprobar — verifica tu conexión", "Prüfung fehlgeschlagen — prüfe deine Internetverbindung", "Не удалось проверить — проверьте подключение к интернету"],
+  ["حفظ جهة الاتصال", "Save contact", "Enregistrer le contact", "Guardar contacto", "Kontakt speichern", "Сохранить контакт"],
+  ["حُفظت جهة الاتصال", "Contact file saved", "Fiche contact enregistrée", "Contacto guardado", "Kontaktdatei gespeichert", "Контакт сохранён"],
+  ["مظهر البطاقة", "Card theme", "Thème de la carte", "Tema de la tarjeta", "Kartenthema", "Тема карточки"],
+  ["خلفية متحركة", "Animated background", "Arrière-plan animé", "Fondo animado", "Animierter Hintergrund", "Анимированный фон"],
+  ["بنفسجي", "Violet", "Violet", "Violeta", "Violett", "Фиолетовый"],
+  ["محيط", "Ocean", "Océan", "Océano", "Ozean", "Океан"],
+  ["غروب", "Sunset", "Coucher de soleil", "Atardecer", "Sonnenuntergang", "Закат"],
   ["حساب موثّق", "Verified account", "Compte vérifié", "Cuenta verificada", "Verifiziertes Konto", "Подтверждённый аккаунт"],
 ]
 const langs = ["en", "fr", "es", "de", "ru"]

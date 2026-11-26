@@ -120,6 +120,7 @@
     "dev_view_release": "Ver versión",
     "dev_update_error": "No se pudo comprobar — verifica tu conexión",
     "dev_version": "Versión",
+    "dev_save_contact": "Guardar contacto",
     "dev_web": "Sitio web",
     "serviceRunning": "El servicio de conexión permanente está activo (Servicio en primer plano)",
     "serviceStopped": "El servicio de conexión permanente está detenido",

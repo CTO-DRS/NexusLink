@@ -3926,5 +3926,11 @@
   "جارٍ التحقق…": "Checking…", 
   "إصدار جديد متاح": "A new version is available", 
   "عرض الإصدار": "View release", 
-  "تعذّر التحقق — تأكد من اتصالك بالإنترنت": "Couldn't check — make sure you're online"
+  "تعذّر التحقق — تأكد من اتصالك بالإنترنت": "Couldn't check — make sure you're online", 
+  "حفظ جهة الاتصال": "Save contact", 
+  "حُفظت جهة الاتصال": "Contact file saved", 
+  "مظهر البطاقة": "Card theme", 
+  "خلفية متحركة": "Animated background", 
+  "بنفسجي": "Violet", 
+  "محيط": "Ocean"
 }

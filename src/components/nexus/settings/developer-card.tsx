@@ -6,10 +6,10 @@ import Image from "next/image"
 import { createPortal } from "react-dom"
 import QRCode from "qrcode"
 import { toast } from "sonner"
-import { Globe, Check, X as XIcon, Copy, ExternalLink, Share2, QrCode } from "lucide-react"
+import { Globe, Check, X as XIcon, Copy, ExternalLink, Share2, QrCode, ContactRound } from "lucide-react"
 import { useI18n } from "@/lib/i18n"
-import { BRAND_PATHS, DEVELOPER } from "@/lib/developer-links"
-import { APP_SITE_URL, BANNER_INTERVAL_MS, DEVELOPER_BANNERS, RELEASES_PAGE } from "@/lib/developer-banners"
+import { BRAND_PATHS, CARD_THEMES, DEVELOPER, buildVCard } from "@/lib/developer-links"
+import { APP_SITE_URL, BANNER_INTERVAL_MS, DEVELOPER_BANNERS, RELEASES_PAGE, activeBanners } from "@/lib/developer-banners"
 import pkg from "../../../../package.json"
 
 function Glyph({ id }: { id: string }) {
@@ -64,14 +64,35 @@ export function DeveloperCard() {
     } catch { setUpd({ state: "error" }) }
   }
   // Banner carousel: auto-advances, pauses on hover/focus, respects reduced motion.
+  const [banners] = useState(() => activeBanners(DEVELOPER_BANNERS, Date.now()))
+  const [themeId, setThemeId] = useState<string>(() => (typeof window !== "undefined" && localStorage.getItem("nexus.devcard.theme")) || "violet")
+  const [anim, setAnim] = useState<boolean>(() => typeof window !== "undefined" && localStorage.getItem("nexus.devcard.anim") === "1")
+  const theme = CARD_THEMES.find((x) => x.id === themeId) ?? CARD_THEMES[0]
+  const pickTheme = (id: string) => { setThemeId(id); try { localStorage.setItem("nexus.devcard.theme", id) } catch { /* private mode */ } }
+  const toggleAnim = () => { const v = !anim; setAnim(v); try { localStorage.setItem("nexus.devcard.anim", v ? "1" : "0") } catch { /* private mode */ } }
+  // One-tap contact save: a vCard (.vcf) with the photo, built on-device.
+  const saveContact = async () => {
+    let b64: string | undefined
+    try {
+      const buf = new Uint8Array(await (await fetch(DEVELOPER.photo)).arrayBuffer())
+      let bin = ""
+      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000))
+      b64 = btoa(bin)
+    } catch { /* photo optional */ }
+    const blob = new Blob([buildVCard(b64)], { type: "text/vcard;charset=utf-8" })
+    const a = document.createElement("a")
+    a.href = URL.createObjectURL(blob); a.download = "CTO-DRS.vcf"; a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+    toast.success(t("حُفظت جهة الاتصال"))
+  }
   const [bi, setBi] = useState(0)
   const [paused, setPaused] = useState(false)
   useEffect(() => {
-    if (paused || DEVELOPER_BANNERS.length < 2) return
+    if (paused || banners.length < 2) return
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
-    const id = setInterval(() => setBi((i) => (i + 1) % DEVELOPER_BANNERS.length), BANNER_INTERVAL_MS)
+    const id = setInterval(() => setBi((i) => (i + 1) % banners.length), BANNER_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [paused])
+  }, [paused, banners.length])
   // Share the account URL through the native share sheet (Web Share API); clipboard fallback.
   const shareLink = async (l: { label: string; url: string }) => {
     const title = l.label === "GitHub" ? "GitHub" : t(l.label)
@@ -121,7 +142,7 @@ export function DeveloperCard() {
         onBlurCapture={() => setPaused(false)}
       >
         <div className="flex transition-transform duration-500 ease-out motion-reduce:transition-none" style={{ transform: `translateX(-${bi * 100}%)` }} dir="ltr">
-          {DEVELOPER_BANNERS.map((b) => (
+          {banners.map((b) => (
             <a
               key={b.id}
               href={b.url}
@@ -130,8 +151,8 @@ export function DeveloperCard() {
               dir="auto"
               className="flex min-h-[88px] w-full shrink-0 items-center justify-between gap-3 p-4 text-white"
               style={{ background: b.gradient }}
-              aria-hidden={DEVELOPER_BANNERS[bi].id !== b.id}
-              tabIndex={DEVELOPER_BANNERS[bi].id === b.id ? 0 : -1}
+              aria-hidden={(banners[bi] ?? banners[0]).id !== b.id}
+              tabIndex={(banners[bi] ?? banners[0]).id === b.id ? 0 : -1}
             >
               <span className="min-w-0 flex-1 text-start">
                 <span className="block text-[15px] font-bold leading-6">{t(b.title)}</span>
@@ -141,9 +162,9 @@ export function DeveloperCard() {
             </a>
           ))}
         </div>
-        {DEVELOPER_BANNERS.length > 1 && (
+        {banners.length > 1 && (
           <div className="absolute inset-x-0 bottom-1.5 flex justify-center gap-1.5" dir="ltr">
-            {DEVELOPER_BANNERS.map((b, i) => (
+            {banners.map((b, i) => (
               <button key={b.id} type="button" aria-label={`${i + 1}`} onClick={() => setBi(i)} className={`h-1.5 rounded-full transition-all ${i === bi ? "w-4 bg-white" : "w-1.5 bg-white/50"}`} />
             ))}
           </div>
@@ -160,7 +181,7 @@ export function DeveloperCard() {
         }}
       >
         <div className="pointer-events-none absolute inset-x-0 top-0 h-16" style={{ background: "linear-gradient(180deg,rgba(255,255,255,.11),transparent)" }} aria-hidden />
-        <div className="pointer-events-none absolute -top-16 left-1/2 h-40 w-72 -translate-x-1/2 rounded-full blur-3xl" style={{ background: "radial-gradient(closest-side,rgba(99,102,241,.35),transparent)" }} aria-hidden />
+        <div className="pointer-events-none absolute -top-16 left-1/2 h-40 w-72 -translate-x-1/2 rounded-full blur-3xl" style={{ background: `radial-gradient(closest-side,${theme.glow},transparent)`, animation: anim ? "nx-aurora 9s ease-in-out infinite alternate" : undefined }} aria-hidden />
 
         <div className="relative flex flex-col items-center text-center">
           <button
@@ -168,7 +189,7 @@ export function DeveloperCard() {
             onClick={() => setViewer(true)}
             aria-label={t("صورة المطوّر")}
             className="relative h-24 w-24 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
-            style={{ background: "linear-gradient(135deg,#6366F1,#06B6D4,#A855F7)", padding: 3 }}
+            style={{ background: theme.ring, padding: 3 }}
           >
             <span className="block h-full w-full rounded-full" style={{ background: "#161437", padding: 3 }}>
               <Image src={DEVELOPER.photo} alt={DEVELOPER.name} width={90} height={90} className="h-full w-full rounded-full object-cover" />
@@ -207,11 +228,26 @@ export function DeveloperCard() {
           </nav>
 
           <div className="mt-5 grid w-full max-w-sm grid-cols-2 gap-3">
-            <button type="button" onClick={shareApp} data-testid="dev-share-app" className="flex h-11 items-center justify-center gap-2 rounded-2xl text-sm font-semibold text-white" style={{ background: "linear-gradient(135deg,#6366F1,#A855F7)" }}>
+            <button type="button" onClick={shareApp} data-testid="dev-share-app" className="flex h-11 items-center justify-center gap-2 rounded-2xl text-sm font-semibold text-white" style={{ background: theme.btn }}>
               <Share2 className="h-4 w-4" /> {t("شارك التطبيق")}
             </button>
             <button type="button" onClick={shareAll} data-testid="dev-share-all" className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 text-sm font-semibold text-white hover:bg-white/15">
               <Share2 className="h-4 w-4" /> {t("شارك كل الحسابات")}
+            </button>
+          </div>
+
+          <button type="button" onClick={saveContact} data-testid="dev-save-contact" className="mt-3 flex h-11 w-full max-w-sm items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 text-sm font-semibold text-white hover:bg-white/15">
+            <ContactRound className="h-4 w-4" /> {t("حفظ جهة الاتصال")}
+          </button>
+
+          <div className="mt-4 flex items-center gap-2" data-testid="dev-themes" aria-label={t("مظهر البطاقة")} role="group">
+            {CARD_THEMES.map((x) => (
+              <button key={x.id} type="button" aria-label={t(x.label)} aria-pressed={x.id === theme.id} onClick={() => pickTheme(x.id)}
+                className="h-6 w-6 rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+                style={{ background: x.swatch, boxShadow: x.id === theme.id ? "0 0 0 2px #0B0C24, 0 0 0 4px rgba(255,255,255,.8)" : "0 0 0 1px rgba(255,255,255,.25)" }} />
+            ))}
+            <button type="button" onClick={toggleAnim} aria-pressed={anim} className={`ms-2 rounded-full border px-3 py-1 text-[11px] font-medium ${anim ? "border-white/60 bg-white/20 text-white" : "border-white/20 text-white/70"}`}>
+              {t("خلفية متحركة")}
             </button>
           </div>
 

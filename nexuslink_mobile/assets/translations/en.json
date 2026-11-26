@@ -120,6 +120,7 @@
     "dev_view_release": "View release",
     "dev_update_error": "Couldn't check — make sure you're online",
     "dev_version": "Version",
+    "dev_save_contact": "Save contact",
     "dev_web": "Website",
     "serviceRunning": "Persistent connection service is running (Foreground Service)",
     "serviceStopped": "Persistent connection service is stopped",

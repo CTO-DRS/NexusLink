@@ -375,3 +375,10 @@ html.motion-reduced .nx-reveal-in { opacity: 1 !important; transform: none !impo
 .nx-toast-in { animation: nx-toast-in 0.28s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
 html.motion-reduced .nx-toast-in { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { .nx-toast-in { animation: none !important; } }
+
+@keyframes nx-aurora {
+  from { transform: translate(-60%, 0) scale(1); opacity: .8; }
+  to { transform: translate(-40%, 14px) scale(1.25); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { [style*="nx-aurora"] { animation: none !important; } }
+html.motion-reduced [style*="nx-aurora"] { animation: none !important; }

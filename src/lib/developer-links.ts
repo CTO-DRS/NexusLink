@@ -28,3 +28,33 @@ export const DEVELOPER = {
     { id: "website", label: "الموقع", url: "https://cto-drs.com", color: "#4F46E5" },
   ] as { id: DeveloperLinkId; label: string; url: string; color: string }[],
 } as const
+
+// Card themes (accent presets). Purely local; the choice is remembered in localStorage.
+export const CARD_THEMES = [
+  { id: "violet", label: "بنفسجي", ring: "linear-gradient(135deg,#6366F1,#06B6D4,#A855F7)", glow: "rgba(99,102,241,.35)", btn: "linear-gradient(135deg,#6366F1,#A855F7)", swatch: "#6D3FC9" },
+  { id: "ocean", label: "محيط", ring: "linear-gradient(135deg,#0EA5E9,#14B8A6,#6366F1)", glow: "rgba(14,165,233,.35)", btn: "linear-gradient(135deg,#0EA5E9,#14B8A6)", swatch: "#0EA5E9" },
+  { id: "sunset", label: "غروب", ring: "linear-gradient(135deg,#F97316,#EC4899,#8B5CF6)", glow: "rgba(236,72,153,.32)", btn: "linear-gradient(135deg,#F97316,#EC4899)", swatch: "#EC4899" },
+] as const
+
+export function buildVCard(photoB64?: string): string {
+  const esc = (v: string) => v.replace(/([,;\\])/g, "\\$1")
+  const lines = [
+    "BEGIN:VCARD",
+    "VERSION:3.0",
+    "FN:CTO: DRS",
+    "N:DRS;CTO;;;",
+    "ORG:CTO: DRS",
+    "TITLE:App developer",
+    "URL:https://cto-drs.com",
+  ]
+  const labels: Record<string, string> = { github: "GitHub", x: "X", instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube", telegram: "Telegram", whatsapp: "WhatsApp Business" }
+  let n = 1
+  for (const l of DEVELOPER.links) {
+    if (l.id === "website") continue
+    lines.push(`item${n}.URL:${l.url}`, `item${n}.X-ABLabel:${esc(labels[l.id] ?? l.id)}`)
+    n++
+  }
+  if (photoB64) lines.push(`PHOTO;ENCODING=b;TYPE=JPEG:${photoB64}`)
+  lines.push("END:VCARD")
+  return lines.join("\r\n") + "\r\n"
+}
