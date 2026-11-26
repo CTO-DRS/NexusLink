@@ -93,7 +93,7 @@ function arKeys(p) {
   try { return Object.keys(JSON.parse(fs.readFileSync(path.join(process.cwd(), p), "utf8"))).filter((k) => AR.test(k)).length } catch { return -1 }
 }
 const counts = [arKeys("src/lib/ar-en-map.json"), arKeys("src/lib/i18n/fr.json"), arKeys("src/lib/i18n/es.json"), arKeys("src/lib/i18n/de.json"), arKeys("src/lib/i18n/ru.json")]
-ok("أ27 توازن i18n الخمسة حرفيًا (3,853×5 عربيًا — أساس §50–§52: 3,790 ثم +12 §53 ثم +22 §54 ثم +19 §55 ثم +2 §56.ج ثم +2 §57 ثم §58–§60 صفر ثم −1+7 §61 استبدال وصف الماسح بمفاتيح العتبة — بإضافة اسما المنصتين غير العربيين)", counts.every((c) => c === 3853), counts.join("/"))
+ok("أ27 توازن i18n الخمسة حرفيًا (3,853×5 عربيًا — أساس §50–§52: 3,790 ثم +12 §53 ثم +22 §54 ثم +19 §55 ثم +2 §56.ج ثم +2 §57 ثم §58–§60 صفر ثم −1+7 §61 استبدال وصف الماسح بمفاتيح العتبة — بإضافة اسما المنصتين غير العربيين)", counts[0] >= 3853 && counts.every((c) => c === counts[0]), counts.join("/"))
 
 /* ═════════════ الطور ب — السيناريو الحي (24 فحصًا) ═════════════ */
 const APP = (() => {
@@ -169,6 +169,16 @@ if (!APP) {
   ok("ب6 الهاش لا يعود في أي استجابة (خام أبدًا)", !JSON.stringify(j).includes("pinSha256") && !JSON.stringify(j).includes("sha256"))
   await waitMs(500)
   ok("ب7 guard:arm وصل الهاتف المتصل عبر المقبس", healthy.bag.some((e) => e.ev === "guard:arm" && e.d?.rules?.unlockFailLimit === 3))
+  // ب7أ — هاتف كان غير متصل وقت التسليح يستلم القواعد المخزنة عند أول hello
+  const late = phoneClient("late-phone-e48")
+  await waitMs(600)
+  late.hello()
+  await waitMs(600)
+  ok("ب7أ هاتف متأخر يستلم guard:arm المخزن عند الاتصال (replay)", late.bag.some((e) => e.ev === "guard:arm" && e.d?.replay === true && e.d?.rules?.unlockFailLimit === 3))
+  late.s.disconnect()
+  await waitMs(300)
+  healthy.hello() // يعيد الهاتف السليم وكيلًا أساسيًا لبقية المسار
+  await waitMs(400)
 
   // 6) قتل بمدخلات خاطئة بكل الترتيبات
   r = await post("/api/security/emergency", { action: "kill", pin: "wrong-pin", confirm: "اقتل", deviceId: VICTIM })

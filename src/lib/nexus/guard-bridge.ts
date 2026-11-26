@@ -8,7 +8,7 @@ import { Server as SocketServer } from "socket.io"
 import { applyAgentTx } from "./transfer-engine"
 import { store } from "./devices"
 import { socketCors, isLocalSocket, realClientIp } from "./socket-security" // SEC (M0.3 F4) + FA-13
-import { isDeviceKilled, noteRefired } from "./emergency" // §48 — قائمة القتل عند إعادة الاتصال
+import { isDeviceKilled, noteRefired, readEmergencyState } from "./emergency" // §48 — قائمة القتل عند إعادة الاتصال
 
 // منفذ الجسر قابل للتجاوز بالبيئة (نمط جسر الإنتاجية §59) — مكدسات E2E معزولة — الافتراضي 3006
 const PORT = Number(process.env.NEXUS_GUARD_PORT) || 3006
@@ -345,6 +345,12 @@ export function ensureGuardBridge() {
             return
           }
           phoneGuardOnline = true
+          // §48.ح — إعادة بث قواعد التسليح المخزنة: الهاتف الذي كان غير متصل
+          // وقت التسليح يستلمها عند أول اتصال (وإلا يبقى بلا تصعيد ذاتي).
+          try {
+            const em = readEmergencyState()
+            if (em.rules) socket.emit("guard:arm", { rules: em.rules, at: em.armedAt, replay: true })
+          } catch { /* لا حالة طوارئ */ }
           // تسجيل الوكيل الحقيقي (لإرسال عروض النقل tx:offer إليه لاحقًا)
           const reg = agentReg()
           reg.socketId = socket.id
