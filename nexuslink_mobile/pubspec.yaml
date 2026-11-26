@@ -32,6 +32,9 @@ dependencies:
   easy_localization: ^3.0.7
   intl: any
 
+  # ---- أيقونات العلامات التجارية (بطاقة عن المطوّر) — خطوط مضمّنة، بلا شبكة ----
+  font_awesome_flutter: 10.7.0
+
   # ---- الأذونات (طلب وقت الاستخدام) ----
   permission_handler: ^11.3.1
 
@@ -55,6 +58,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/translations/
+    - assets/developer/
   # P0/G3: IBM Plex Sans Arabic مضمَّن (OFL — assets/fonts/ibm-plex-sans-arabic/OFL.txt) بدل google_fonts
   fonts:
     - family: IBMPlexSansArabic

@@ -12,6 +12,7 @@ import '../state/transfer_providers.dart';
 import 'control_screen.dart';
 import 'phone_remote_screen.dart';
 import 'unblock_center_screen.dart';
+import 'developer_card.dart';
 import 'language_chips.dart';
 
 /// الإعدادات: المظهر (داكن/فاتح/نظام)، اللغة (ar/en)، معلومات الهوية، حالة الخدمة.
@@ -271,6 +272,8 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
           ),
+          const SizedBox(height: 14),
+          const DeveloperCard(),
         ],
       ),
     );

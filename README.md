@@ -9,6 +9,8 @@
 
 **🌐 الموقع والتحميل المباشر: <https://cto-drs.github.io/NexusLink/>**
 
+Developed by [CTO: DRS](https://cto-drs.com) · تطوير [CTO: DRS](https://cto-drs.com)
+
 <p align="center">
   <a href="https://cto-drs.github.io/NexusLink/#video"><img src="docs/media/walkthrough-preview.gif" width="720" alt="جولة فيديو في واجهة NexusLink — NexusLink UI walkthrough"></a>
   <br>
