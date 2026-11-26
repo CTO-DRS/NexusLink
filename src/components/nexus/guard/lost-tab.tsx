@@ -12,11 +12,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { useGuard } from "@/lib/guard-store"
 import { cmdLost, cmdWipe } from "@/lib/guard-socket"
+import { useDemoMode } from "@/lib/demo-client"
 import { GuardCard, InfoRow } from "./guard-bits"
 import { fmtDate } from "@/lib/store"
 
 export function LostTab() {
   const { lost, setLost, setCheck, wipe, setWipe, pin, pushLog } = useGuard()
+  const demo = useDemoMode()
   const [message, setMessage] = useState(lost.message)
   const [callback, setCallback] = useState(lost.callback)
   const [pinOpen, setPinOpen] = useState(false)
@@ -24,9 +26,22 @@ export function LostTab() {
   const [wipeConfirm, setWipeConfirm] = useState("")
   const [wipePinOpen, setWipePinOpen] = useState(false)
 
-  // محرك تقدم المسح
+  // محرك المسح: الحقيقي ينتظر نتيجة الهاتف (sec:wipe-state في use-sec-bridge
+  // يضع stage=wiped) مع مهلة صادقة؛ التقدم المحاكى للعرض حصرًا (NEXUSLINK_DEMO).
   useEffect(() => {
-    if (wipe.stage !== "wiping") return
+    if (wipe.stage !== "wiping" || demo) return
+    const t = setTimeout(() => {
+      const s = useGuard.getState()
+      if (s.wipe.stage !== "wiping") return
+      s.setWipe({ stage: "idle", progress: 0 })
+      s.pushLog("لم يصل رد المسح من الهاتف خلال 60 ثانية", "warn")
+      toast.error("لم يؤكد الهاتف المسح", { description: "تأكد أن الهاتف متصل بقناة الأمان ثم أعد المحاولة" })
+    }, 60_000)
+    return () => clearTimeout(t)
+  }, [wipe.stage, demo])
+
+  useEffect(() => {
+    if (wipe.stage !== "wiping" || !demo) return
     const iv = setInterval(() => {
       const s = useGuard.getState()
       const next = Math.min(100, s.wipe.progress + 4 + Math.random() * 7)
@@ -35,12 +50,12 @@ export function LostTab() {
         clearInterval(iv)
         s.setWipe({ stage: "wiped", progress: 100 })
         s.setLost(false)
-        s.pushLog("اكتمل المسح عن بُعد — كل بيانات الهاتف أُزيلت", "warn")
-        toast.error("اكتمل المسح عن بُعد للهاتف", { description: "سيطلب الهاتف إعادة تنشيط عند أول تشغيل" })
+        s.pushLog("اكتمل المسح الآمن (عرض) — الملفات المستلمة على الهاتف", "warn")
+        toast.error("اكتمل المسح الآمن (عرض)")
       }
     }, 240)
     return () => clearInterval(iv)
-  }, [wipe.stage])
+  }, [wipe.stage, demo])
 
   const activate = () => {
     if (!message.trim()) { toast.error("اكتب رسالة تظهر على شاشة الهاتف"); return }
@@ -64,7 +79,7 @@ export function LostTab() {
     cmdWipe()
     setWipePinOpen(false)
     setWipeConfirm("")
-    pushLog("بدأ المسح عن بُعد — حذف كل البيانات", "warn")
+    pushLog("بدأ المسح الآمن عن بُعد — الملفات المستلمة على الهاتف", "warn")
   }
 
   return (
@@ -113,22 +128,22 @@ export function LostTab() {
       <GuardCard title="مسح عن بُعد" icon={Eraser} tone={wipe.stage === "wiped" ? "ok" : "danger"}>
         {wipe.stage === "wiped" ? (
           <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/5 p-4 text-center">
-            <p className="text-[12.5px] font-bold text-emerald-600 dark:text-emerald-400">تم مسح الجهاز بالكامل</p>
-            <p className="text-[10.5px] text-muted-foreground mt-1">أُزيلت كل الحسابات والصور والتطبيقات — سيبدأ الهاتف كجهاز جديد عند إعادة تنشيطه</p>
+            <p className="text-[12.5px] font-bold text-emerald-600 dark:text-emerald-400">اكتمل المسح الآمن</p>
+            <p className="text-[10.5px] text-muted-foreground mt-1">حُذفت الملفات التي استلمها الهاتف عبر NexusLink بالكتابة فوقها — لا يمسح هذا حسابات الهاتف أو تطبيقاته (يتطلب ذلك صلاحية مدير الجهاز)</p>
             <Button variant="outline" size="sm" className="mt-3 rounded-xl text-[11px]" onClick={() => useGuard.getState().setWipe({ stage: "idle", progress: 0 })}>
-              إعادة تعيين الحالة (تجربة أخرى)
+              تم
             </Button>
           </div>
         ) : wipe.stage === "wiping" ? (
           <div className="rounded-2xl border border-red-500/40 bg-red-500/5 p-4 text-center">
             <TriangleAlert className="w-7 h-7 mx-auto text-red-500 animate-pulse mb-1.5" />
-            <p className="text-[12.5px] font-bold">جارٍ مسح كل البيانات… {Math.round(wipe.progress)}%</p>
-            <p className="text-[10.5px] text-muted-foreground mt-1">الحسابات · الصور · التطبيقات · إعدادات المصنع</p>
+            <p className="text-[12.5px] font-bold">{demo ? `جارٍ المسح الآمن… ${Math.round(wipe.progress)}%` : "جارٍ المسح الآمن… بانتظار تأكيد الهاتف"}</p>
+            <p className="text-[10.5px] text-muted-foreground mt-1">الملفات المستلمة عبر NexusLink · كتابة فوقها ثم حذفها</p>
           </div>
         ) : (
           <>
             <p className="text-[11.5px] text-muted-foreground leading-relaxed">
-              الملاذ الأخير إذا كان الهاتف في أيدي شخص آخر: حذف نهائي لكل البيانات عن بُعد. يتطلب تأكيداً مزدوجاً.
+              الملاذ الأخير إذا كان الهاتف في يد غيرك: حذف آمن غير قابل للاسترجاع للملفات التي استلمها الهاتف عبر NexusLink. لا يعيد ضبط المصنع. يتطلب تأكيداً مزدوجاً.
             </p>
             <div className="space-y-2">
               <Input
@@ -167,7 +182,7 @@ export function LostTab() {
         entry={pinEntry}
         onEntry={setPinEntry}
         onClose={() => setWipePinOpen(false)}
-        title="تأكيد أخير — مسح كل البيانات"
+        title="تأكيد أخير — المسح الآمن للملفات المستلمة"
         desc="لا يمكن التراجع بعد بدء المسح. أدخل كلمة المرور"
         onSuccess={startWipe}
         danger

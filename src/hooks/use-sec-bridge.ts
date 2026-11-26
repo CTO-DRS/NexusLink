@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { getSecSocket } from "@/lib/sec-socket"
 import { useSec, type PermRow } from "@/lib/sec-store"
+import { useGuard } from "@/lib/guard-store"
 import { enqueueClipOutbox, flushClipOutbox } from "@/lib/nexus/clip-outbox" // M1.2 §28
 import {
   generateIdentity, ecdh, deriveSessionKey, importSessionKey, seal, open,
@@ -398,9 +399,12 @@ export function useSecBridge(role: "desktop" | "phone") {
       const stx = useSec.getState()
       if (r.ok) {
         stx.setCheck("wipe", true)
+        // يُنهي حالة «جارٍ المسح» في بطاقة الفقدان بنتيجة الهاتف الحقيقية
+        if (useGuard.getState().wipe.stage === "wiping") useGuard.getState().setWipe({ stage: "wiped", progress: 100 })
         toast.success(`مسح آمن على الهاتف: ${r.count ?? 0} ملف (${((r.bytes ?? 0) / 1024).toFixed(1)}KB) — لم تعد قابلة للاسترجاع`)
         void clientAudit({ actor: "الهاتف", action: "wipe", detail: `حذف آمن لـ ${r.count ?? 0} ملف مستلم على الهاتف`, severity: "warn" })
       } else {
+        if (useGuard.getState().wipe.stage === "wiping") useGuard.getState().setWipe({ stage: "idle", progress: 0 })
         toast.error(`فشل المسح الآمن على الهاتف: ${r.error ?? "غير معروف"}`)
       }
     })

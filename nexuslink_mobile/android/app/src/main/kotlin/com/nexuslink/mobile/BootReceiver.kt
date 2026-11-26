@@ -21,6 +21,9 @@ class BootReceiver : BroadcastReceiver() {
             action != "android.intent.action.LOCKED_BOOT_COMPLETED"
         ) return
 
+        // §48.ز: الجهاز المقتول يعيد شاشة القتل مع كل إقلاع (حتى بلا اتصال محفوظ)
+        if (KillMode.isKilled(context)) KillMode.show(context)
+
         try {
             val p = context.getSharedPreferences(AgentServicePrefs.PREFS, Context.MODE_PRIVATE)
             val autoStart = p.getBoolean(AgentServicePrefs.KEY_AUTOSTART, true)

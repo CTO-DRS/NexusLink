@@ -398,7 +398,13 @@ class AppLockController extends StateNotifier<bool> {
       if (stored == null || !stored.contains(':')) return false;
       final parts = stored.split(':'); // salt:hash
       final ok = await _native.pbkdf2Verify(pin, parts[0], parts[1]);
-      if (ok) await _completeUnlock();
+      if (ok) {
+        await _native.resetUnlockFails();
+        await _completeUnlock();
+      } else {
+        // §48.ز: الوكيل الأصلي يعدّ ويقرر (decideSelfEscalation) — بلا شبكة
+        await _native.recordUnlockFail();
+      }
       return ok;
     } catch (_) {
       return false;
