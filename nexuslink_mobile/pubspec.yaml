@@ -33,7 +33,7 @@ dependencies:
   intl: any
 
   # ---- أيقونات العلامات التجارية (بطاقة عن المطوّر) — خطوط مضمّنة، بلا شبكة ----
-  font_awesome_flutter: ^10.7.0
+  font_awesome_flutter: 10.7.0
 
   # ---- الأذونات (طلب وقت الاستخدام) ----
   permission_handler: ^11.3.1
