@@ -3,13 +3,13 @@ import { readEnterprisePolicy, isValidSemver, semverGte } from "@/lib/enterprise
 
 // /api/version — الإصدار + سجل الإصدارات الحقيقي (عقد §16 بند 2 + §23).
 // ============================================================
-// الإصدار موحّد 3.1.1 عبر كل المنصات (tauri.conf.json/Cargo.toml/pubspec/package.json
+// الإصدار موحّد 0.1.0 (إعادة ترقيم 2026-11-26: المشروع يبدأ من v0.1.0 والوسوم القديمة محفوظة) عبر كل المنصات (tauri.conf.json/Cargo.toml/pubspec/package.json
 // — أول minor بعد ختم M4: عقود ما بعد الوسم §41–§49 من TLS الذاتي إلى المرحّل
 // الذاتي فوق 3.0.0 — إيقاع minor المعتمد في ROADMAP).
 // سجل الإصدارات = GitHub Releases للمستودع العام (كاش 10 دقائق) — بلا
 // مفاتيح API — مُتحداً مع التاريخ المحلي (البعيد يفوز عند التعارض) وفشل الجلب
 // (أوفلاين/معدل) يعيد قائمة من الإصدار المحلي وحده.
-const CURRENT = "3.1.1"
+const CURRENT = "0.1.0"
 const RELEASES_API = "https://api.github.com/repos/CTO-DRS/NexusLink/releases?per_page=12"
 
 type HistoryEntry = { version: string; tag: string; date: string; items: string[] }
@@ -21,6 +21,15 @@ function localHistory(): HistoryEntry[] {
   return [
     {
       version: CURRENT,
+      tag: "v0.1.0",
+      date: "2026-11-26",
+      items: [
+        "إعادة ترقيم: يبدأ المشروع رسميًا من v0.1.0 (الوسوم والإصدارات السابقة محفوظة كما هي)",
+        "مفاتيح توقيع جديدة رسمية لأندرويد ولمحدّث سطح المكتب",
+      ],
+    },
+    {
+      version: "3.1.1",
       tag: "v3.1.1",
       date: "2026-11-15",
       items: [

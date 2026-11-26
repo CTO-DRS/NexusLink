@@ -1,6 +1,6 @@
 {
   "name": "nextjs_tailwind_shadcn_ts",
-  "version": "3.1.1",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "NEXUSLINK_DEMO=1 next dev -p 3000 2>&1 | tee dev.log",
