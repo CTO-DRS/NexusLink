@@ -378,7 +378,7 @@ export const useGuard = create<GuardState>((set, get) => ({
   strobe: false,
   setStrobe: (b) => set({ strobe: b }),
 
-  lost: { active: false, message: "هذا الهاتف مفقود. إن وجدته يرجى التواصل معي — شكراً لكم.", callback: "+966 5X XXX XXXX", at: 0 },
+  lost: { active: false, message: "هذا الهاتف مفقود. إن وجدته يرجى التواصل معي — شكراً لكم.", callback: "", at: 0 },
   setLost: (active, message, callback) =>
     set((s) => ({
       lost: {

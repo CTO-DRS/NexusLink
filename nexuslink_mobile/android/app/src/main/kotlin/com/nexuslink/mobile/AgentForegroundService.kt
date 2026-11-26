@@ -254,6 +254,8 @@ class AgentForegroundService : Service() {
         currentServerKey = "$host:$port"
 
         startForegroundCompat()
+        // §48.ز: الجهاز المقتول يعيد شاشته عند كل إقلاع للخدمة
+        if (KillMode.isKilled(this)) KillMode.show(this)
         // FA-10: احفظ الاتصال الأخير للإقلاع التلقائي (BootReceiver يقرأه)
         try {
             getSharedPreferences(AgentServicePrefs.PREFS, Context.MODE_PRIVATE).edit()
@@ -309,6 +311,40 @@ class AgentForegroundService : Service() {
     /** الوكيل العام — من LostMode (خيط الموقع). */
     fun emitLostState(location: JSONObject?) {
         sec?.emitLostState(location)
+    }
+
+    // ---------- §48.ز: الطوارئ الذكي ----------
+
+    private fun handleGuardArm(data: JSONObject) {
+        if (KillMode.isKilled(this)) return
+        if (!KillMode.storeRules(this, data)) return
+        val st = KillMode.status(this)
+        socket?.emit(
+            AgentBridge.EV_DEV_ACKED,
+            JSONObject().put("text", "الطوارئ الذكي: القواعد خُزّنت على الهاتف (حد ${st["unlockFailLimit"]} محاولات · الشريحة ${st["simChangeAction"]})"),
+        )
+        sec?.audit("lock", "guard:arm — قواعد التصعيد الذاتي مخزنة محليًا", "info")
+        MainActivity.pushDataEvent("kill", st)
+    }
+
+    /** فحص الشريحة الدوري (مع تقرير الحالة) — يعمل بلا شبكة أيضًا. */
+    fun checkSimNow() {
+        when (KillMode.checkSim(this)) {
+            "warn" -> {
+                socket?.emit(AgentBridge.EV_DEV_ACKED, JSONObject().put("text", "تنبيه الطوارئ: تغيّرت شريحة الهاتف"))
+                sec?.audit("lock", "تغيّرت شريحة الهاتف (قاعدة warn)", "warn")
+            }
+            else -> {}
+        }
+    }
+
+    /** يُستدعى من KillMode.kill — إبلاغ صادق للكمبيوتر إن كانت القناة حية. */
+    fun onSelfKilled(reason: String) {
+        try {
+            socket?.emit(AgentBridge.EV_DEV_ACKED, JSONObject().put("text", "الطوارئ الذكي: الهاتف عطّل نفسه ($reason)"))
+            sec?.audit("lock", "قتل نهائي على الهاتف: $reason", "warn")
+        } catch (_: Exception) {
+        }
     }
 
     // ---------- FA-10: وكلاء الواجهة إلى قناة الأمان (MethodChannel) ----------
@@ -392,7 +428,19 @@ class AgentForegroundService : Service() {
 
             // أوامر الكمبيوتر → الهاتف: إقرار الاستلام (التنفيذ الكامل في مرحلة الحماية)
             for (cmd in AgentBridge.PC_COMMANDS) {
-                s.on(cmd) { args -> main.post { ackCommand(cmd, args) } }
+                s.on(cmd) { args -> main.post { if (!KillMode.isKilled(this@AgentForegroundService)) ackCommand(cmd, args) } }
+            }
+
+            // ==== §48.ز: الطوارئ الذكي — قواعد التصعيد الذاتي + القتل من الخادم ====
+            s.on(AgentBridge.EV_GUARD_ARM) { args ->
+                val data = args.firstOrNull() as? JSONObject ?: return@on
+                main.post { handleGuardArm(data) }
+            }
+            s.on(AgentBridge.EV_DEV_KILL) { _ ->
+                main.post {
+                    val ctx = this@AgentForegroundService
+                    if (!KillMode.isKilled(ctx)) KillMode.kill(ctx, "server") else KillMode.show(ctx)
+                }
             }
 
             // ==== FA-7: جلسة التحكم + أوامر اللمس/النص/الأزرار + فتح التطبيقات ====
@@ -1260,6 +1308,9 @@ class AgentForegroundService : Service() {
 
     /** تقرير الحالة الدوري + بعد جلسة التحكم والإتاحة (البند 6 — مؤشر الحالة). */
     private fun emitDevState() {
+        // §48.ز: فحص الشريحة مع كل دورة تقرير — حتى بلا اتصال (التصعيد محلي)
+        try { checkSimNow() } catch (_: Exception) {
+        }
         try {
             if (socket?.connected() != true) return
             socket?.emit(
@@ -1273,6 +1324,7 @@ class AgentForegroundService : Service() {
                     .put("ctl", JSONObject(ctlSnapshot()))
                     .put("media", mediaJson())
                     .put("find", JSONObject().put("ringing", FindMyPhone.isRinging()))
+                    .put("emergency", JSONObject(KillMode.status(this)))
                     .put("at", System.currentTimeMillis()),
             )
         } catch (_: Exception) {
@@ -1564,6 +1616,8 @@ object AgentBridge {
     const val SEC_PORT = 3009
 
     const val EV_HELLO_PHONE = "guard:hello-phone"
+    const val EV_GUARD_ARM = "guard:arm"
+    const val EV_DEV_KILL = "dev:kill"
     const val EV_GUARD_MEDIA = "guard:media"
     const val EV_BEACON = "prox:beacon"
     const val EV_DEV_STATE = "dev:state"

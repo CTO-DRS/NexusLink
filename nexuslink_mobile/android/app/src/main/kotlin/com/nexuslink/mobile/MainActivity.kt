@@ -420,6 +420,14 @@ class MainActivity : FlutterFragmentActivity() {
                     result.success(mapOf("enabled" to enabled, "ready" to NexusAccessibilityService.isReady))
                 }
 
+                // ---------- §48.ز: الطوارئ الذكي (قفل التطبيق يعدّ المحاولات) ----------
+                "emergencyStatus" -> result.success(KillMode.status(this))
+                "recordUnlockFail" -> result.success(KillMode.recordUnlockFail(this))
+                "resetUnlockFails" -> {
+                    KillMode.resetUnlockFails(this)
+                    result.success(true)
+                }
+
                 // ---------- §45: مرآة الإشعارات ----------
                 "notifAccessStatus" -> {
                     val on = try {
@@ -591,6 +599,12 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         handleIncoming(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // §48.ز: لا واجهة على جهاز مقتول — الشاشة الحمراء فقط
+        if (KillMode.isKilled(this)) KillMode.show(this)
     }
 
     override fun onNewIntent(intent: Intent) {

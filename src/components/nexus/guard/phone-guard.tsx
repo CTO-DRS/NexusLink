@@ -267,7 +267,7 @@ export function usePhoneGuard(): PhoneGuardCore {
         devState({ wipe: { stage: "wiping", progress: next } })
         if (next >= 100) {
           clearInterval(iv)
-          devAcked("اكتمل مسح الهاتف — كل البيانات أُزيلت")
+          devAcked("التوأم الويب: انتهت محاكاة المسح — لا ملفات حقيقية تُمسح على هذا العميل")
           return { stage: "wiped", progress: 100 }
         }
         return { stage: "wiping", progress: next }
@@ -523,7 +523,7 @@ export function GuardOverlays({ guard }: { guard: PhoneGuardCore }) {
       <div className="fixed inset-0 z-[300] bg-black flex flex-col items-center justify-center select-none" dir="rtl">
         {guard.wipe.stage === "wiping" ? (
           <>
-            <div className="text-red-500 text-lg font-black mb-4 animate-pulse">جارٍ مسح كل البيانات…</div>
+            <div className="text-red-500 text-lg font-black mb-4 animate-pulse">جارٍ المسح (محاكاة التوأم)…</div>
             <div className="w-56 h-2 rounded-full bg-white/10 overflow-hidden">
               <div className="h-full bg-red-500 transition-all" style={{ width: `${guard.wipe.progress}%` }} />
             </div>

@@ -3886,5 +3886,19 @@
   "لا توجد كاميرا حقيقية متاحة — البث المحاكى متاح في وضع العرض التوضيحي فقط": "No real camera available — simulated streams are only available in demo mode", 
   "لا يوجد ميكروفون حقيقي متاح — البث المحاكى متاح في وضع العرض التوضيحي فقط": "No real microphone available — simulated streams are only available in demo mode", 
   "تعذر فتح الميكروفون": "Couldn't open the microphone", 
-  "للهواتف القديمة (32-bit)": "For older 32-bit phones"
+  "للهواتف القديمة (32-bit)": "For older 32-bit phones",
+  "لم يصل رد المسح من الهاتف خلال 60 ثانية": "No wipe reply from the phone within 60 seconds",
+  "لم يؤكد الهاتف المسح": "The phone did not confirm the wipe",
+  "تأكد أن الهاتف متصل بقناة الأمان ثم أعد المحاولة": "Make sure the phone is connected to the security channel, then try again",
+  "اكتمل المسح الآمن (عرض) — الملفات المستلمة على الهاتف": "Secure wipe complete (demo) — files received on the phone",
+  "اكتمل المسح الآمن (عرض)": "Secure wipe complete (demo)",
+  "بدأ المسح الآمن عن بُعد — الملفات المستلمة على الهاتف": "Remote secure wipe started — files received on the phone",
+  "اكتمل المسح الآمن": "Secure wipe complete",
+  "حُذفت الملفات التي استلمها الهاتف عبر NexusLink بالكتابة فوقها — لا يمسح هذا حسابات الهاتف أو تطبيقاته (يتطلب ذلك صلاحية مدير الجهاز)": "Files the phone received via NexusLink were overwritten and deleted — this does not erase the phone's accounts or apps (that needs device-admin rights)",
+  "جارٍ المسح الآمن… بانتظار تأكيد الهاتف": "Secure wipe in progress… waiting for the phone to confirm",
+  "الملفات المستلمة عبر NexusLink · كتابة فوقها ثم حذفها": "Files received via NexusLink · overwritten then deleted",
+  "الملاذ الأخير إذا كان الهاتف في يد غيرك: حذف آمن غير قابل للاسترجاع للملفات التي استلمها الهاتف عبر NexusLink. لا يعيد ضبط المصنع. يتطلب تأكيداً مزدوجاً.": "Last resort if your phone is in someone else's hands: unrecoverable secure deletion of files the phone received via NexusLink. Not a factory reset. Requires double confirmation.",
+  "تأكيد أخير — المسح الآمن للملفات المستلمة": "Final confirmation — secure wipe of received files",
+  "التوأم الويب: انتهت محاكاة المسح — لا ملفات حقيقية تُمسح على هذا العميل": "Web twin: wipe simulation finished — no real files are wiped on this client",
+  "جارٍ المسح (محاكاة التوأم)…": "Wiping (twin simulation)…"
 }

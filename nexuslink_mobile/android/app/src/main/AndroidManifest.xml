@@ -131,6 +131,17 @@
             android:turnScreenOn="true"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
 
+        <!-- §48.ز: شاشة القتل — بلا أزرار ولا رجوع، تُرسَّخ عبر الإقلاع -->
+        <activity
+            android:name=".KillModeActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:lockTaskMode="if_whitelisted"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
+
         <!-- FA-10: الإقلاع تلقائيًا مع النظام — يعيد الوكيل من آخر اتصال محفوظ -->
         <receiver
             android:name=".BootReceiver"

@@ -76,6 +76,32 @@ class AgentChannel {
     }
   }
 
+  /// §48.ز — محاولة فتح فاشلة؛ true = بلغت حد التسليح وعطّل الوكيل الجهاز.
+  Future<bool> recordUnlockFail() async {
+    try {
+      return await _ch.invokeMethod<bool>('recordUnlockFail') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// §48.ز — فتح ناجح يصفّر عداد المحاولات.
+  Future<void> resetUnlockFails() async {
+    try {
+      await _ch.invokeMethod<bool>('resetUnlockFails');
+    } catch (_) {}
+  }
+
+  /// §48.ز — حالة الطوارئ الذكي (مسلّح، الحد، العداد، مقتول).
+  Future<Map<String, dynamic>> emergencyStatus() async {
+    try {
+      final r = await _ch.invokeMethod<dynamic>('emergencyStatus');
+      return r is Map ? Map<String, dynamic>.from(r) : <String, dynamic>{};
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
   Future<bool> pbkdf2Verify(String secret, String salt, String hash) async {
     try {
       return await _ch.invokeMethod<bool>('pbkdf2Verify', {
