@@ -1,0 +1,14 @@
+[
+ {"t":"أرسل آخر 10 صور للكمبيوتر","a":"send_files","k":{"kind":"photo","count":10}},
+ {"t":"send the last 5 photos to my desktop","a":"send_files","k":{"kind":"photo","count":5}},
+ {"t":"فعّل وضع عدم الإزعاج ساعة","a":"set_dnd","k":{"on":true,"minutes":60}},
+ {"t":"turn off do not disturb","a":"set_dnd","k":{"on":false}},
+ {"t":"ابدأ مرآة الشاشة","a":"start_mirror","k":{}},
+ {"t":"mirror my phone screen","a":"start_mirror","k":{}},
+ {"t":"ابحث عن فاتورة الكهرباء","a":"search","k":{"query":"فاتورة الكهرباء"}},
+ {"t":"find the electricity bill","a":"search","k":{"query":"electricity bill"}},
+ {"t":"أرسل الحافظة إلى الهاتف","a":"send_clipboard","k":{"to":"phone"}},
+ {"t":"copy my clipboard to the desktop","a":"send_clipboard","k":{"to":"desktop"}},
+ {"t":"ما هو الطقس اليوم؟","a":"none","k":{}},
+ {"t":"امسح كل ملفات الهاتف","a":"none","k":{}}
+]
