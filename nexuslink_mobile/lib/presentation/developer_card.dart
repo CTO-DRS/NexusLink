@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:easy_localization/easy_localization.dart';
@@ -5,8 +8,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../data/developer_banners.dart';
 import '../state/transfer_providers.dart';
 
 /// بطاقة «عن المطوّر» — زجاج داكن، حلقة تدرّج حول الصورة، شارة توثيق، شبكة 4×2 بألوان العلامات.
@@ -41,6 +49,41 @@ class DeveloperCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// QR كصورة PNG تُرسم على الجهاز (بلا شبكة) ثم تُشارك عبر ورقة المشاركة الأصلية.
+  Future<void> _shareQrImage(String url, String id) async {
+    final painter = QrPainter(
+      data: url,
+      version: QrVersions.auto,
+      errorCorrectionLevel: QrErrorCorrectLevel.M,
+      eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Colors.black),
+      dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black),
+    );
+    final rec = ui.PictureRecorder();
+    final canvas = Canvas(rec);
+    canvas.drawRect(const Rect.fromLTWH(0, 0, 1000, 1000), Paint()..color = Colors.white);
+    canvas.translate(100, 100);
+    painter.paint(canvas, const Size(800, 800));
+    final img = await rec.endRecording().toImage(1000, 1000);
+    final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
+    if (bytes == null) return;
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/cto-drs-$id-qr.png');
+    await file.writeAsBytes(bytes.buffer.asUint8List(), flush: true);
+    await Share.shareXFiles([XFile(file.path, mimeType: 'image/png')], text: url);
+  }
+
+  void _shareApp() {
+    Share.share('${'settings.dev_share_app_msg'.tr()}\n$kAppSiteUrl', subject: 'NexusLink');
+  }
+
+  void _shareAll() {
+    final b = StringBuffer('CTO: DRS\n');
+    for (final l in _links) {
+      b.writeln('${l.$1.tr()}: ${l.$4}');
+    }
+    Share.share(b.toString().trimRight(), subject: 'CTO: DRS');
   }
 
   /// ورقة زجاجية: QR مُولَّد على الجهاز + «فتح» و«نسخ الرابط».
@@ -151,6 +194,38 @@ class DeveloperCard extends ConsumerWidget {
                     ),
                   ],
                 ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(46),
+                          side: const BorderSide(color: Color(0x40FFFFFF)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed: () => Share.share(l.$4, subject: 'CTO: DRS • ${l.$1.tr()}'),
+                        icon: const Icon(Icons.ios_share_rounded, size: 18),
+                        label: Text('settings.dev_share_link'.tr()),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(46),
+                          side: const BorderSide(color: Color(0x40FFFFFF)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed: () => _shareQrImage(l.$4, l.$1.split('_').last),
+                        icon: const Icon(Icons.qr_code_2_rounded, size: 18),
+                        label: Text('settings.dev_share_qr'.tr()),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -216,6 +291,8 @@ class DeveloperCard extends ConsumerWidget {
           const SizedBox(width: 10),
           const Expanded(child: Divider(height: 1, thickness: 1, color: Color(0x40A78BFA))),
         ]),
+        const SizedBox(height: 10),
+        const _BannerCarousel(),
         const SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.all(16),
@@ -284,13 +361,256 @@ class DeveloperCard extends ConsumerWidget {
                   style: const TextStyle(fontSize: 13, color: Color(0xFFA5B4FC))),
               const SizedBox(height: 14),
               ...rows,
-              const SizedBox(height: 10),
-              const Text('NexusLink • v0.1.0',
-                  textDirection: ui.TextDirection.ltr,
-                  style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF6D3FC9),
+                        minimumSize: const Size.fromHeight(46),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onPressed: _shareApp,
+                      icon: const Icon(Icons.ios_share_rounded, size: 18),
+                      label: Text('settings.dev_share_app'.tr(), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size.fromHeight(46),
+                        side: const BorderSide(color: Color(0x40FFFFFF)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onPressed: _shareAll,
+                      icon: const Icon(Icons.groups_rounded, size: 18),
+                      label: Text('settings.dev_share_all'.tr(), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const _UpdateRow(),
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+
+/// لافتات دوّارة مدفوعة بالبيانات (developer_banners.dart): تتقدم تلقائيًا وتتوقف عند اللمس.
+class _BannerCarousel extends ConsumerStatefulWidget {
+  const _BannerCarousel();
+  @override
+  ConsumerState<_BannerCarousel> createState() => _BannerCarouselState();
+}
+
+class _BannerCarouselState extends ConsumerState<_BannerCarousel> {
+  final _ctl = PageController();
+  Timer? _timer;
+  int _i = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _start();
+  }
+
+  void _start() {
+    _timer?.cancel();
+    if (kDeveloperBanners.length < 2) return;
+    _timer = Timer.periodic(kBannerInterval, (_) {
+      if (!mounted || !_ctl.hasClients) return;
+      final next = (_i + 1) % kDeveloperBanners.length;
+      _ctl.animateToPage(next, duration: const Duration(milliseconds: 450), curve: Curves.easeOutCubic);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(
+        height: 96,
+        child: Stack(
+          children: [
+            Listener(
+              onPointerDown: (_) => _timer?.cancel(),
+              onPointerUp: (_) => _start(),
+              child: PageView.builder(
+                controller: _ctl,
+                itemCount: kDeveloperBanners.length,
+                onPageChanged: (v) => setState(() => _i = v),
+                itemBuilder: (ctx, idx) {
+                  final b = kDeveloperBanners[idx];
+                  return InkWell(
+                    onTap: () => ref.read(nativeBridgeProvider).openUrl(b.url),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: b.colors),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(b.titleKey.tr(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+                                const SizedBox(height: 2),
+                                Text(b.bodyKey.tr(),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 12, color: Color(0xCCFFFFFF), height: 1.4)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                            decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(20)),
+                            child: Text(b.ctaKey.tr(),
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            if (kDeveloperBanners.length > 1)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 6,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var d = 0; d < kDeveloperBanners.length; d++)
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        width: d == _i ? 16 : 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: d == _i ? Colors.white : const Color(0x80FFFFFF),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum _UpdState { idle, busy, latest, available, error }
+
+/// الإصدار الحي + «التحقق من التحديثات»: طلب واحد لصفحة إصدارات المشروع العامة عند الضغط فقط.
+class _UpdateRow extends ConsumerStatefulWidget {
+  const _UpdateRow();
+  @override
+  ConsumerState<_UpdateRow> createState() => _UpdateRowState();
+}
+
+class _UpdateRowState extends ConsumerState<_UpdateRow> {
+  String _version = '';
+  _UpdState _st = _UpdState.idle;
+  String _tag = '';
+
+  @override
+  void initState() {
+    super.initState();
+    PackageInfo.fromPlatform().then((p) {
+      if (mounted) setState(() => _version = p.version);
+    }).catchError((_) {});
+  }
+
+  bool _isNewer(String a, String b) {
+    List<int> n(String v) => v.split('.').map((x) => int.tryParse(x.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0).toList();
+    final x = n(a), y = n(b);
+    for (var i = 0; i < 3; i++) {
+      final p = i < x.length ? x[i] : 0, q = i < y.length ? y[i] : 0;
+      if (p != q) return p > q;
+    }
+    return false;
+  }
+
+  Future<void> _check() async {
+    setState(() => _st = _UpdState.busy);
+    try {
+      final r = await http.get(Uri.parse(kReleasesApi), headers: {'Accept': 'application/vnd.github+json'}).timeout(const Duration(seconds: 8));
+      if (r.statusCode != 200) throw Exception('http ${r.statusCode}');
+      final tag = (jsonDecode(r.body)['tag_name'] as String? ?? '').replaceFirst(RegExp('^v'), '');
+      if (!mounted) return;
+      setState(() {
+        _tag = tag;
+        _st = _isNewer(tag, _version) ? _UpdState.available : _UpdState.latest;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _st = _UpdState.error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text('NexusLink • v${_version.isEmpty ? '…' : _version}',
+            textDirection: ui.TextDirection.ltr,
+            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: const BorderSide(color: Color(0x40FFFFFF)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          ),
+          onPressed: _st == _UpdState.busy ? null : _check,
+          child: Text(_st == _UpdState.busy ? 'settings.dev_checking'.tr() : 'settings.dev_check_update'.tr(),
+              style: const TextStyle(fontSize: 12)),
+        ),
+        if (_st == _UpdState.latest)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text('settings.dev_up_to_date'.tr(), style: const TextStyle(fontSize: 12, color: Color(0xFF6EE7B7))),
+          ),
+        if (_st == _UpdState.error)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text('settings.dev_update_error'.tr(),
+                textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Color(0xFFFCA5A5))),
+          ),
+        if (_st == _UpdState.available)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: InkWell(
+              onTap: () => ref.read(nativeBridgeProvider).openUrl(kReleasesPage),
+              child: Text('${'settings.dev_update_available'.tr()} v$_tag • ${'settings.dev_view_release'.tr()}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFA5B4FC), decoration: TextDecoration.underline)),
+            ),
+          ),
       ],
     );
   }

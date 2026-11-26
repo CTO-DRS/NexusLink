@@ -6,9 +6,10 @@ import Image from "next/image"
 import { createPortal } from "react-dom"
 import QRCode from "qrcode"
 import { toast } from "sonner"
-import { Globe, Check, X as XIcon, Copy, ExternalLink } from "lucide-react"
+import { Globe, Check, X as XIcon, Copy, ExternalLink, Share2, QrCode } from "lucide-react"
 import { useI18n } from "@/lib/i18n"
 import { BRAND_PATHS, DEVELOPER } from "@/lib/developer-links"
+import { APP_SITE_URL, BANNER_INTERVAL_MS, DEVELOPER_BANNERS, RELEASES_PAGE } from "@/lib/developer-banners"
 import pkg from "../../../../package.json"
 
 function Glyph({ id }: { id: string }) {
@@ -34,6 +35,65 @@ export function DeveloperCard() {
     window.addEventListener("keydown", h)
     return () => { alive = false; window.removeEventListener("keydown", h) }
   }, [sel])
+  const shareText = async (title: string, text: string) => {
+    try {
+      if (typeof navigator.share === "function") { await navigator.share({ title, text }); return }
+    } catch (e) { if ((e as Error)?.name === "AbortError") return }
+    try { await navigator.clipboard.writeText(text); toast.success(t("نُسخ الرابط")) } catch { /* clipboard blocked */ }
+  }
+  const shareApp = () => shareText("NexusLink", `${t("جرّب NexusLink — اربط أجهزتك عبر شبكتك المحلية، بلا سحابة وبلا حساب.")}\n${APP_SITE_URL}`)
+  const shareAll = () =>
+    shareText(
+      `CTO: DRS • ${t("حسابات المطوّر")}`,
+      `CTO: DRS\n` + DEVELOPER.links.map((l) => `${l.id === "github" ? "GitHub" : t(l.label)}: ${l.url}`).join("\n"),
+    )
+  // Update check: a single request to the public GitHub releases API, only when the user taps the button.
+  const [upd, setUpd] = useState<{ state: "idle" | "busy" | "latest" | "new" | "error"; tag?: string }>({ state: "idle" })
+  const checkUpdates = async () => {
+    setUpd({ state: "busy" })
+    try {
+      // Same-origin proxy (CSP connect-src 'self'); live=false means GitHub was unreachable.
+      const r = await fetch("/api/releases/latest", { cache: "no-store" })
+      const d = await r.json()
+      if (!r.ok || !d?.live) throw new Error("offline")
+      const tag = String(d.version ?? d.tag ?? "").replace(/^v/, "")
+      const num = (v: string) => v.split(".").map((x) => parseInt(x, 10) || 0)
+      const [a, b] = [num(tag), num(pkg.version)]
+      const newer = (() => { for (let i = 0; i < 3; i++) { if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) > (b[i] ?? 0) } return false })()
+      setUpd({ state: newer ? "new" : "latest", tag })
+    } catch { setUpd({ state: "error" }) }
+  }
+  // Banner carousel: auto-advances, pauses on hover/focus, respects reduced motion.
+  const [bi, setBi] = useState(0)
+  const [paused, setPaused] = useState(false)
+  useEffect(() => {
+    if (paused || DEVELOPER_BANNERS.length < 2) return
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
+    const id = setInterval(() => setBi((i) => (i + 1) % DEVELOPER_BANNERS.length), BANNER_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [paused])
+  // Share the account URL through the native share sheet (Web Share API); clipboard fallback.
+  const shareLink = async (l: { label: string; url: string }) => {
+    const title = l.label === "GitHub" ? "GitHub" : t(l.label)
+    try {
+      if (typeof navigator.share === "function") { await navigator.share({ title: `CTO: DRS • ${title}`, url: l.url }); return }
+    } catch (e) { if ((e as Error)?.name === "AbortError") return }
+    await copy(l.url)
+  }
+  // Share the on-device QR as a PNG file; when files can't be shared natively, download it.
+  const shareQr = async (l: { id: string; url: string }, dataUrl: string) => {
+    const blob = await (await fetch(dataUrl)).blob()
+    const file = new File([blob], `cto-drs-${l.id}-qr.png`, { type: "image/png" })
+    try {
+      if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: `CTO: DRS • ${l.id}`, url: l.url }); return
+      }
+    } catch (e) { if ((e as Error)?.name === "AbortError") return }
+    const a = document.createElement("a")
+    a.href = URL.createObjectURL(blob); a.download = file.name; a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+    toast.success(t("حُفظ رمز QR كصورة"))
+  }
   const copy = async (url: string) => {
     try { await navigator.clipboard.writeText(url); toast.success(t("نُسخ الرابط")) } catch { /* clipboard blocked */ }
   }
@@ -50,6 +110,44 @@ export function DeveloperCard() {
         <span className="h-5 w-1 rounded-full" style={{ background: "#6D3FC9" }} aria-hidden />
         <h3 className="text-[17px] font-semibold text-foreground">{t("عن المطوّر")}</h3>
         <span className="h-px flex-1" style={{ background: "#40A78BFA" }} aria-hidden />
+      </div>
+
+      <div
+        data-testid="dev-banner"
+        className="relative overflow-hidden rounded-2xl"
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onFocusCapture={() => setPaused(true)}
+        onBlurCapture={() => setPaused(false)}
+      >
+        <div className="flex transition-transform duration-500 ease-out motion-reduce:transition-none" style={{ transform: `translateX(-${bi * 100}%)` }} dir="ltr">
+          {DEVELOPER_BANNERS.map((b) => (
+            <a
+              key={b.id}
+              href={b.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              dir="auto"
+              className="flex min-h-[88px] w-full shrink-0 items-center justify-between gap-3 p-4 text-white"
+              style={{ background: b.gradient }}
+              aria-hidden={DEVELOPER_BANNERS[bi].id !== b.id}
+              tabIndex={DEVELOPER_BANNERS[bi].id === b.id ? 0 : -1}
+            >
+              <span className="min-w-0 flex-1 text-start">
+                <span className="block text-[15px] font-bold leading-6">{t(b.title)}</span>
+                <span className="block text-[12px] leading-5 text-white/80">{t(b.body)}</span>
+              </span>
+              <span className="shrink-0 rounded-full bg-white/20 px-3.5 py-1.5 text-xs font-semibold backdrop-blur">{t(b.cta)}</span>
+            </a>
+          ))}
+        </div>
+        {DEVELOPER_BANNERS.length > 1 && (
+          <div className="absolute inset-x-0 bottom-1.5 flex justify-center gap-1.5" dir="ltr">
+            {DEVELOPER_BANNERS.map((b, i) => (
+              <button key={b.id} type="button" aria-label={`${i + 1}`} onClick={() => setBi(i)} className={`h-1.5 rounded-full transition-all ${i === bi ? "w-4 bg-white" : "w-1.5 bg-white/50"}`} />
+            ))}
+          </div>
+        )}
       </div>
 
       <div
@@ -108,7 +206,28 @@ export function DeveloperCard() {
             ))}
           </nav>
 
-          <div className="mt-5 text-[11px]" style={{ color: "#64748B" }} dir="ltr" data-no-i18n>NexusLink • v{pkg.version}</div>
+          <div className="mt-5 grid w-full max-w-sm grid-cols-2 gap-3">
+            <button type="button" onClick={shareApp} data-testid="dev-share-app" className="flex h-11 items-center justify-center gap-2 rounded-2xl text-sm font-semibold text-white" style={{ background: "linear-gradient(135deg,#6366F1,#A855F7)" }}>
+              <Share2 className="h-4 w-4" /> {t("شارك التطبيق")}
+            </button>
+            <button type="button" onClick={shareAll} data-testid="dev-share-all" className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 text-sm font-semibold text-white hover:bg-white/15">
+              <Share2 className="h-4 w-4" /> {t("شارك كل الحسابات")}
+            </button>
+          </div>
+
+          <div className="mt-5 flex flex-col items-center gap-2">
+            <div className="text-[11px]" style={{ color: "#64748B" }} dir="ltr" data-no-i18n>NexusLink • v{pkg.version}</div>
+            <button type="button" onClick={checkUpdates} disabled={upd.state === "busy"} data-testid="dev-check-updates" className="rounded-full border border-white/20 bg-white/5 px-4 py-1.5 text-xs font-medium text-white/90 hover:bg-white/10 disabled:opacity-60">
+              {upd.state === "busy" ? t("جارٍ التحقق…") : t("التحقق من التحديثات")}
+            </button>
+            {upd.state === "latest" && <div className="text-xs" style={{ color: "#6EE7B7" }}>{t("أنت على أحدث إصدار")}</div>}
+            {upd.state === "error" && <div className="text-xs" style={{ color: "#FCA5A5" }}>{t("تعذّر التحقق — تأكد من اتصالك بالإنترنت")}</div>}
+            {upd.state === "new" && (
+              <a href={RELEASES_PAGE} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold underline" style={{ color: "#A5B4FC" }}>
+                {t("إصدار جديد متاح")} <span dir="ltr" data-no-i18n>v{upd.tag}</span> • {t("عرض الإصدار")}
+              </a>
+            )}
+          </div>
         </div>
       </div>
 
@@ -160,6 +279,21 @@ export function DeveloperCard() {
                 className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 text-sm font-semibold text-white hover:bg-white/15"
               >
                 <Copy className="h-4 w-4" /> {t("نسخ الرابط")}
+              </button>
+              <button
+                type="button"
+                onClick={() => shareLink(sel)}
+                className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 text-sm font-semibold text-white hover:bg-white/15"
+              >
+                <Share2 className="h-4 w-4" /> {t("مشاركة الرابط")}
+              </button>
+              <button
+                type="button"
+                disabled={!qr || qr.url !== sel.url}
+                onClick={() => qr && shareQr(sel, qr.data)}
+                className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-50"
+              >
+                <QrCode className="h-4 w-4" /> {t("مشاركة رمز QR")}
               </button>
             </div>
           </div>

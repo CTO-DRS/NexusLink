@@ -3909,5 +3909,22 @@
   "صورة المطوّر": "Photo du développeur", 
   "حساب موثّق": "Compte vérifié", 
   "نُسخ الرابط": "Lien copié", 
-  "امسح الرمز بهاتفك لفتح الحساب": "Scannez le code avec votre téléphone pour ouvrir le compte"
+  "امسح الرمز بهاتفك لفتح الحساب": "Scannez le code avec votre téléphone pour ouvrir le compte", 
+  "مشاركة الرابط": "Partager le lien", 
+  "مشاركة رمز QR": "Partager le QR", 
+  "حُفظ رمز QR كصورة": "QR enregistré en image", 
+  "NexusLink متاح للتحميل الآن": "NexusLink est disponible au téléchargement", 
+  "اربط أجهزتك عبر شبكتك المحلية — بلا سحابة وبلا حساب": "Reliez vos appareils sur votre réseau local — sans cloud, sans compte", 
+  "تحميل": "Télécharger", 
+  "عندك فكرة تطبيق؟": "Une idée d'application ?", 
+  "نصمّم ونطوّر تطبيقك — تواصل مع المطوّر مباشرة": "Nous concevons et développons votre application — contactez directement le développeur", 
+  "تواصل": "Contacter", 
+  "شارك التطبيق": "Partager l'app", 
+  "شارك كل الحسابات": "Partager tous les comptes", 
+  "جرّب NexusLink — اربط أجهزتك عبر شبكتك المحلية، بلا سحابة وبلا حساب.": "Essayez NexusLink — reliez vos appareils sur votre réseau local, sans cloud ni compte.", 
+  "التحقق من التحديثات": "Rechercher des mises à jour", 
+  "جارٍ التحقق…": "Vérification…", 
+  "إصدار جديد متاح": "Une nouvelle version est disponible", 
+  "عرض الإصدار": "Voir la version", 
+  "تعذّر التحقق — تأكد من اتصالك بالإنترنت": "Vérification impossible — vérifiez votre connexion"
 }
