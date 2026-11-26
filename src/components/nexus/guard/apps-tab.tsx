@@ -188,7 +188,7 @@ export function AppsTab() {
           >
             <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
             <p className="text-[12px] font-semibold">اسحب ملف .apk هنا أو اضغط للاختيار</p>
-            <p className="text-[10px] text-muted-foreground mt-1">سيُثبَّت على Galaxy-S24 عبر Nexus Protocol</p>
+            <p className="text-[10px] text-muted-foreground mt-1">سيُثبَّت على هاتفك المقترن عبر Nexus Protocol</p>
             <input
               ref={fileRef}
               type="file"

@@ -157,7 +157,7 @@ export function BabyTab() {
         <div className="space-y-3">
           {baby.receiver === "galaxy-s24" ? (
             <PhoneFrame
-              name="Galaxy-S24 · هاتف الوالدين"
+              name="هاتف الوالدين"
               sub={baby.enabled ? `يستمع بمستوى ${baby.gain}%` : "بلا بث"}
               active={baby.enabled}
               screenClassName="grid place-items-center"

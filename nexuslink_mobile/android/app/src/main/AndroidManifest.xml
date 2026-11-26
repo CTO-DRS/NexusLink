@@ -87,6 +87,17 @@
             android:stopWithTask="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- §45: مرآة الإشعارات — تعمل فقط بعد منح «الوصول إلى الإشعارات» من إعدادات النظام -->
+        <service
+            android:name=".NexusNotificationListener"
+            android:exported="true"
+            android:label="@string/notif_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- FA-7: محرك حقن اللمس والإدخال (بديل AirMirror) —
              لا يعمل إلا بجلسة تحكم صريحة يقبلها المستخدم على الهاتف -->
         <service

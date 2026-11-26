@@ -174,7 +174,7 @@ export function CastTab() {
         {/* ===== الهاتف المرسل ===== */}
         <div className="space-y-3">
           <PhoneFrame
-            name="Galaxy-S24 · المرسل"
+            name="الهاتف المرسل"
             sub={cast ? `يبث إلى ${cast.target === "tv" ? "Nexus-TV" : "الكمبيوتر"}` : "اختر مقطعاً للبث"}
             active={!!cast}
             screenClassName="grid place-items-center"
@@ -273,7 +273,7 @@ export function CastTab() {
                 </div>
               ) : (
                 <div className="absolute top-2 start-2 rounded-md bg-black/60 px-2 py-1 text-[10px] text-white flex items-center gap-1.5">
-                  <Smartphone className="w-3 h-3" /> يُبث من Galaxy-S24 · {cast.playing ? "يعرض" : "موقوف مؤقتاً"}
+                  <Smartphone className="w-3 h-3" /> يُبث من الهاتف · {cast.playing ? "يعرض" : "موقوف مؤقتاً"}
                 </div>
               )}
             </div>
@@ -353,7 +353,7 @@ export function CastTab() {
       <div className="rounded-xl border bg-card">
         <div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-2.5">
           <ListVideo className="w-4 h-4 text-primary" />
-          <h4 className="text-[13px] font-bold">مكتبة Galaxy-S24</h4>
+          <h4 className="text-[13px] font-bold">مكتبة الهاتف</h4>
           <Badge variant="outline" className="rounded-full text-[10px]">{library.length} مقطع</Badge>
           {castLoading && <span className="text-[10px] text-muted-foreground animate-pulse">جارٍ القراءة من /Movies و /Music…</span>}
         </div>

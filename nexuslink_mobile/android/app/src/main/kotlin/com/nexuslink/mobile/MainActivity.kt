@@ -420,6 +420,22 @@ class MainActivity : FlutterFragmentActivity() {
                     result.success(mapOf("enabled" to enabled, "ready" to NexusAccessibilityService.isReady))
                 }
 
+                // ---------- §45: مرآة الإشعارات ----------
+                "notifAccessStatus" -> {
+                    val on = try {
+                        androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
+                    } catch (_: Exception) { false }
+                    result.success(on)
+                }
+                "openNotifAccessSettings" -> {
+                    try {
+                        startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("open_failed", e.message, null)
+                    }
+                }
+
                 "openAccessibilitySettings" -> {
                     try {
                         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))

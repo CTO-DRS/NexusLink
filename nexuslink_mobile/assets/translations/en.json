@@ -100,7 +100,10 @@
     "remoteActiveHint": "A control session is active now — tap to view or cut instantly",
     "remoteHint": "Accessibility service, confirmation prompt, and session cut",
     "p2pEntry": "Control another phone",
-    "p2pHint": "View and remotely control your other phone through the hub"
+    "p2pHint": "View and remotely control your other phone through the hub",
+    "notifMirror": "Mirror notifications to PC",
+    "notifMirrorSub": "Show your phone's notifications on the paired PC. Tap to grant Notification access in system settings.",
+    "notifMirrorOn": "On — notifications reach your PC"
   },
   "perms": {
     "notificationsTitle": "Notification permission",

@@ -171,6 +171,16 @@ class NativeBridge {
     }, const CtlAccessibility());
   }
 
+  /// §45 — هل منح المستخدم «الوصول إلى الإشعارات» لمرآة الإشعارات؟
+  Future<bool> notifAccessStatus() async {
+    return _guard<bool>(() async => (await _ch.invokeMethod<dynamic>('notifAccessStatus')) == true, false);
+  }
+
+  /// §45 — افتح شاشة النظام لمنح الوصول إلى الإشعارات.
+  Future<void> openNotifAccessSettings() async {
+    await _guard<dynamic>(() => _ch.invokeMethod('openNotifAccessSettings'), null);
+  }
+
   /// افتح إعدادات الإتاحة مباشرة (خطوة الإرشاد).
   Future<void> openAccessibilitySettings() async {
     await _guard<dynamic>(

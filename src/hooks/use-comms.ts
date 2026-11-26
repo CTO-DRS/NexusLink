@@ -74,6 +74,15 @@ export function useCommsBridge() {
     })
 
     // ==== حالة رسالة صادرة (وصلت/تم التسليم) ====
+    // §45 — وكيل الهاتف الحقيقي (مرآة الإشعارات) اتصل/انفصل
+    socket.on("comms:agent", (d: { online?: boolean; name?: string }) => {
+      if (d?.online) toast.success(`مرآة الإشعارات متصلة: ${d?.name ?? "هاتفك"}`, { id: "comms-agent" })
+      else toast(`انفصلت مرآة الإشعارات: ${d?.name ?? "هاتفك"}`, { id: "comms-agent" })
+    })
+    // جسر الاتصالات يرفض صراحةً خارج وضع العرض: لا وكيل هاتف للاتصالات بعد
+    socket.on("comms:unsupported", (d: { action?: string }) => {
+      toast.error("الرسائل والمكالمات من الكمبيوتر تحتاج وكيل الهاتف — غير مدعومة بعد في تطبيق أندرويد", { id: "comms-unsupported", description: d?.action })
+    })
     socket.on("sms:status", (data: { messageId: string; status: SmsMessage["status"] }) => {
       s().patchMessage(data.messageId, data.status)
     })

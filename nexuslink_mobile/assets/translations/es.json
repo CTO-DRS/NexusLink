@@ -100,7 +100,10 @@
     "remoteActiveHint": "Sesión de control activa ahora — presiona para ver o finalizar inmediatamente",
     "remoteHint": "Servicio de disponibilidad, solicitud de confirmación y finalización de sesión",
     "p2pEntry": "Controla otro teléfono",
-    "p2pHint": "Muestra y controla la pantalla de otro teléfono de forma remota a través del centro"
+    "p2pHint": "Muestra y controla la pantalla de otro teléfono de forma remota a través del centro",
+    "notifMirror": "Reflejar notificaciones en el PC",
+    "notifMirrorSub": "Muestra las notificaciones del teléfono en el PC vinculado. Toca para conceder el acceso a notificaciones en los ajustes del sistema.",
+    "notifMirrorOn": "Activado — las notificaciones llegan al PC"
   },
   "perms": {
     "notificationsTitle": "Permisos de notificación",
