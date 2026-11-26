@@ -18,6 +18,13 @@ updates:
     labels: ["dependencies"]
     commit-message:
       prefix: "deps"
+    ignore:
+      # E2E crypto core (X25519/HKDF): a major bump renames the API and changes the
+      # bundled hashes peer. It is a deliberate migration with device QA, not a drive-by bump.
+      - dependency-name: "@noble/curves"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@noble/hashes"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
