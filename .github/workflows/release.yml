@@ -103,6 +103,13 @@ jobs:
             tauri-args: "-v"
             node-dist: "linux-x64"
             node-triple: "x86_64-unknown-linux-gnu"
+          # G6: Linux arm64 (runner أصلي ubuntu-24.04-arm) — deb + AppImage
+          - os: ubuntu-24.04-arm
+            os-name: linux-arm64
+            bundles: "deb appimage"
+            tauri-args: "-v"
+            node-dist: "linux-arm64"
+            node-triple: "aarch64-unknown-linux-gnu"
           - os: windows-latest
             os-name: windows
             bundles: "nsis msi"
@@ -163,7 +170,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Install Linux deps (webkit2gtk + enigo xkbcommon)
-        if: matrix.os-name == 'linux'
+        if: startsWith(matrix.os-name, 'linux')
         run: |
           sudo apt-get update
           # cmake + g++: بناء openh264/audiopus_sys (libopus) المضمنين (FA-media §15)
@@ -537,7 +544,8 @@ jobs:
           # ‏** تعبر المجلدات (recursive=True) — تحصين إضافي بعد تسطيح dist
           picks = {
               "windows-x86_64": "dist/**/NexusLink_*_x64-setup.exe.sig",
-              "linux-x86_64": "dist/**/*.AppImage.sig",
+              "linux-x86_64": "dist/**/*_amd64.AppImage.sig",
+              "linux-aarch64": "dist/**/*_aarch64.AppImage.sig",
               "darwin-aarch64": "dist/**/*.app.tar.gz.sig",
           }
           platforms = {}
