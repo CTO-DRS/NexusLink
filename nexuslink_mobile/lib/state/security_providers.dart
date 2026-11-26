@@ -1,7 +1,9 @@
 import 'dart:async';
 import '../state/providers.dart' show agentChannelProvider;
 
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local_auth/error_codes.dart' as auth_error;
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -418,8 +420,19 @@ class AppLockController extends StateNotifier<bool> {
         localizedReason: 'افتح NexusLink',
         options: const AuthenticationOptions(biometricOnly: true, stickyAuth: true),
       );
-      if (ok) await _completeUnlock();
+      if (ok) {
+        await _native.resetUnlockFails();
+        await _completeUnlock();
+      }
+      // false = إلغاء أو رجوع لـ PIN: لا يُعدّ فشلًا (لا قتل بسبب ضغطة إلغاء).
       return ok;
+    } on PlatformException catch (e) {
+      // §48.ز: قفل النظام بعد محاولات بصمة/وجه فاشلة متتالية = محاولة فتح فاشلة
+      // واحدة تُحسب مع حد PIN (النظام نفسه يعدّ اللمسات الفردية ويقفل).
+      if (e.code == auth_error.lockedOut || e.code == auth_error.permanentlyLockedOut) {
+        await _native.recordUnlockFail();
+      }
+      return false;
     } catch (_) {
       return false;
     }
