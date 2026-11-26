@@ -23,7 +23,7 @@
       "endpoints": [
         "https://github.com/CTO-DRS/NexusLink/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFENUNGRjAyNUEzQ0FDNkMKUldSc3JEeGFBdjljSGVDWjIrck1uMmpNSWd3enJ5MGwzNUsvdHY0aUVzV0pjczREZnNPeDdYd2EK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdENUZFQTY4QjIxRTg5QkUKUldTK2lSNnlhT3BmZmZtSDB3OGdJVDlyZWdYWWdDbzFxU3VncEFldXY4cW9hQ1Y0ZVhXZGRCNnYK",
       "dialog": false
     }
   },
