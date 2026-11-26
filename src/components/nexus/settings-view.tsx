@@ -26,6 +26,7 @@ import { pickFolder } from "@/lib/desktop-files"
 import { tauriInvoke } from "@/lib/tauri"
 import { BackupShieldCard } from "@/components/nexus/settings/backup-shield-card"
 import { DeveloperCard } from "@/components/nexus/settings/developer-card"
+import { CloudModeCard } from "@/components/nexus/settings/cloud-mode-card"
 
 const SHORTCUT_ORDER: ShortcutAction[] = [
   "palette", "help", "sendFile", "lock", "theme", "lang", "contrast", "speedtest", "dnd",
@@ -1022,6 +1023,7 @@ export function SettingsView() {
       </Card>
 
       {/* عن المطور */}
+      <CloudModeCard />
       <DeveloperCard />
     </div>
   )

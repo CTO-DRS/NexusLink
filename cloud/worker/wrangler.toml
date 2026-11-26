@@ -1,0 +1,9 @@
+# Not deployed yet. Fill database_id after `wrangler d1 create nexuslink-cloud` (owner's Cloudflare account).
+name = "nexuslink-cloud"
+main = "index.mjs"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nexuslink-cloud"
+database_id = "REPLACE_AFTER_CREATE"
