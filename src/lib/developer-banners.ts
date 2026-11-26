@@ -10,6 +10,18 @@ export type DeveloperBanner = {
   url: string
   /** CSS gradient behind the banner */
   gradient: string
+  /** Optional ISO date-times: the banner shows only inside [startsAt, endsAt]. E.g. a 24-hour offer. */
+  startsAt?: string
+  endsAt?: string
+}
+
+export function activeBanners(all: DeveloperBanner[], now: number): DeveloperBanner[] {
+  const live = all.filter((b) => {
+    const s = b.startsAt ? Date.parse(b.startsAt) : -Infinity
+    const e = b.endsAt ? Date.parse(b.endsAt) : Infinity
+    return now >= s && now <= e
+  })
+  return live.length ? live : all.filter((b) => !b.startsAt && !b.endsAt)
 }
 
 export const BANNER_INTERVAL_MS = 5500

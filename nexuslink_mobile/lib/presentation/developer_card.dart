@@ -74,6 +74,27 @@ class DeveloperCard extends ConsumerWidget {
     await Share.shareXFiles([XFile(file.path, mimeType: 'image/png')], text: url);
   }
 
+  /// جهة اتصال vCard (.vcf) بالصورة، تُبنى على الجهاز وتُشارك/تُحفظ عبر ورقة المشاركة الأصلية.
+  Future<void> _saveContact() async {
+    final b = StringBuffer()
+      ..write('BEGIN:VCARD\r\nVERSION:3.0\r\nFN:CTO: DRS\r\nN:DRS;CTO;;;\r\nORG:CTO: DRS\r\nTITLE:App developer\r\nURL:https://cto-drs.com\r\n');
+    var n = 1;
+    for (final l in _links) {
+      if (l.$4 == 'https://cto-drs.com') continue;
+      b.write('item$n.URL:${l.$4}\r\nitem$n.X-ABLabel:${l.$1.split('_').last.toUpperCase()}\r\n');
+      n++;
+    }
+    try {
+      final data = await rootBundle.load('assets/developer/cto-drs.jpg');
+      b.write('PHOTO;ENCODING=b;TYPE=JPEG:${base64Encode(data.buffer.asUint8List())}\r\n');
+    } catch (_) {}
+    b.write('END:VCARD\r\n');
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/CTO-DRS.vcf');
+    await file.writeAsString(b.toString(), flush: true);
+    await Share.shareXFiles([XFile(file.path, mimeType: 'text/vcard')], subject: 'CTO: DRS');
+  }
+
   void _shareApp() {
     Share.share('${'settings.dev_share_app_msg'.tr()}\n$kAppSiteUrl', subject: 'NexusLink');
   }
@@ -392,6 +413,18 @@ class DeveloperCard extends ConsumerWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(46),
+                  side: const BorderSide(color: Color(0x40FFFFFF)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: _saveContact,
+                icon: const Icon(Icons.contact_page_rounded, size: 18),
+                label: Text('settings.dev_save_contact'.tr()),
+              ),
               const SizedBox(height: 12),
               const _UpdateRow(),
             ],
@@ -412,6 +445,7 @@ class _BannerCarousel extends ConsumerStatefulWidget {
 
 class _BannerCarouselState extends ConsumerState<_BannerCarousel> {
   final _ctl = PageController();
+  late final List<DeveloperBanner> _banners = activeBanners();
   Timer? _timer;
   int _i = 0;
 
@@ -423,10 +457,10 @@ class _BannerCarouselState extends ConsumerState<_BannerCarousel> {
 
   void _start() {
     _timer?.cancel();
-    if (kDeveloperBanners.length < 2) return;
+    if (_banners.length < 2) return;
     _timer = Timer.periodic(kBannerInterval, (_) {
       if (!mounted || !_ctl.hasClients) return;
-      final next = (_i + 1) % kDeveloperBanners.length;
+      final next = (_i + 1) % _banners.length;
       _ctl.animateToPage(next, duration: const Duration(milliseconds: 450), curve: Curves.easeOutCubic);
     });
   }
@@ -451,10 +485,10 @@ class _BannerCarouselState extends ConsumerState<_BannerCarousel> {
               onPointerUp: (_) => _start(),
               child: PageView.builder(
                 controller: _ctl,
-                itemCount: kDeveloperBanners.length,
+                itemCount: _banners.length,
                 onPageChanged: (v) => setState(() => _i = v),
                 itemBuilder: (ctx, idx) {
-                  final b = kDeveloperBanners[idx];
+                  final b = _banners[idx];
                   return InkWell(
                     onTap: () => ref.read(nativeBridgeProvider).openUrl(b.url),
                     child: Container(
@@ -495,7 +529,7 @@ class _BannerCarouselState extends ConsumerState<_BannerCarousel> {
                 },
               ),
             ),
-            if (kDeveloperBanners.length > 1)
+            if (_banners.length > 1)
               Positioned(
                 left: 0,
                 right: 0,
@@ -503,7 +537,7 @@ class _BannerCarouselState extends ConsumerState<_BannerCarousel> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    for (var d = 0; d < kDeveloperBanners.length; d++)
+                    for (var d = 0; d < _banners.length; d++)
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 250),
                         margin: const EdgeInsets.symmetric(horizontal: 3),

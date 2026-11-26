@@ -120,6 +120,7 @@
     "dev_view_release": "عرض الإصدار",
     "dev_update_error": "تعذّر التحقق — تأكد من اتصالك بالإنترنت",
     "dev_version": "الإصدار",
+    "dev_save_contact": "حفظ جهة الاتصال",
     "dev_web": "الموقع",
     "serviceRunning": "خدمة الاتصال الدائمة تعمل (Foreground Service)",
     "serviceStopped": "خدمة الاتصال الدائمة متوقفة",

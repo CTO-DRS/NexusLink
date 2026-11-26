@@ -120,6 +120,7 @@
     "dev_view_release": "Открыть релиз",
     "dev_update_error": "Не удалось проверить — проверьте подключение к интернету",
     "dev_version": "Версия",
+    "dev_save_contact": "Сохранить контакт",
     "dev_web": "Сайт",
     "serviceRunning": "Служимость постоянного соединения работает (Foreground Service)",
     "serviceStopped": "Служимость постоянного соединения остановлена",

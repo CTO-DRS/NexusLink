@@ -9,6 +9,10 @@ class DeveloperBanner {
   final String ctaKey;
   final String url;
   final List<Color> colors;
+
+  /// اختياري: تظهر اللافتة داخل [startsAt, endsAt] فقط (مثلاً عرض لمدة 24 ساعة).
+  final DateTime? startsAt;
+  final DateTime? endsAt;
   const DeveloperBanner({
     required this.id,
     required this.titleKey,
@@ -16,6 +20,8 @@ class DeveloperBanner {
     required this.ctaKey,
     required this.url,
     required this.colors,
+    this.startsAt,
+    this.endsAt,
   });
 }
 
@@ -42,3 +48,12 @@ const kDeveloperBanners = <DeveloperBanner>[
     colors: [Color(0xFF0F766E), Color(0xFF2563EB), Color(0xFF7C3AED)],
   ),
 ];
+
+/// اللافتات الفعّالة الآن؛ إن لم توجد فالدائمة (بلا جدولة).
+List<DeveloperBanner> activeBanners([DateTime? now]) {
+  final t = now ?? DateTime.now();
+  final live = kDeveloperBanners
+      .where((b) => (b.startsAt == null || !t.isBefore(b.startsAt!)) && (b.endsAt == null || !t.isAfter(b.endsAt!)))
+      .toList();
+  return live.isNotEmpty ? live : kDeveloperBanners.where((b) => b.startsAt == null && b.endsAt == null).toList();
+}
