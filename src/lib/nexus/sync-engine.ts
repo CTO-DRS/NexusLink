@@ -137,7 +137,7 @@ export async function runPairSync(pairId: string, emit: SyncEmit = noEmit) {
         }
         // تعارض: الطرفان تغيّرا منذ آخر مزامنة → نختار الأحدث لكن نسجل التعارض
         if (a.mtime > lastSync && b.mtime > lastSync && action) {
-          action = action === "upd-A2B" ? "conflict" : "conflict"
+          action = "conflict"
         }
       }
 

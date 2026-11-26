@@ -294,7 +294,7 @@ function DiagnosticsTab() {
           x11?: boolean; wayland?: boolean; xrandr?: boolean; hasCandidateOutput?: boolean;
           session?: { targetId: string; w: number; h: number } | null;
         }>("vdisplay_status")
-        let det = ""
+        let det: string
         let st: "pass" | "warn" | "fail" | "na" = "na"
         if (r?.platform === "windows") {
           det = r.driverInstalled
