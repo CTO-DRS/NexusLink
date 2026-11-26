@@ -10,6 +10,9 @@ import { db, dbReady } from "@/lib/db"
 import { store, ensureServicePulse } from "./devices"
 import type { NexusDevice } from "./types"
 
+/** مفاتيح لا تصلح معرّف جهاز في صفوف المخطط (تلوث النموذج الأولي). */
+const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"])
+
 export const SAMPLE_INTERVAL_MS = 30_000 // خانقة العينات لكل جهاز
 export const RETENTION_MS = 24 * 3600_000 // الاحتفاظ 24 ساعة
 export const PRUNE_EVERY_MS = 5 * 60_000 // دورية التنقية
@@ -228,10 +231,11 @@ export async function getHealthSnapshot(window: HealthWindow, deviceId: string):
 
   const s = store()
   const byId = new Map<string, NexusDevice>(s.devices.map((d) => [d.id, d]))
-  const ids: string[] = only
+  const ids: string[] = (only
     ? [only]
     : // كل الأجهزة المقترنة + أي أجهزة لها عينات (حذف اقتران لا يمحو التاريخ)
       [...new Set([...s.devices.map((d) => d.id), ...new Set(samples.map((x) => x.deviceId))])]
+  ).filter((id) => !UNSAFE_KEYS.has(id)) // المعرّف يصير مفتاح كائن في صفوف المخطط
 
   // سلاسل لكل جهاز (تصغير ≤ MAX_POINTS للملخص)
   const per = new Map<string, HealthPoint[]>()
