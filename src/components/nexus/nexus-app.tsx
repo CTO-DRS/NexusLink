@@ -85,7 +85,7 @@ function comboOf(e: KeyboardEvent): string {
 }
 
 export function NexusApp() {
-  const { view, theme, shortcuts } = useNexus()
+  const { view, shortcuts } = useNexus()
   const { lang, t } = useI18n()
   const srMode = useNexus((s) => s.srMode)
   const onboarded = useNexus((s) => s.onboarded)

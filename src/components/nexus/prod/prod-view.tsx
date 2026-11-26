@@ -4,7 +4,6 @@
 // · ملفات تعريف الشبكة · النسخ الاحتياطي والاستعادة
 import { useEffect, useState } from "react"
 import QRCode from "qrcode"
-import { toast } from "sonner"
 import {
   ClipboardCheck, FolderSync, Images, Send, Network, DatabaseBackup,
   CheckCircle2, Circle, QrCode, PartyPopper, Zap, Wifi,

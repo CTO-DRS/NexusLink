@@ -1,0 +1,5 @@
+name: NexusLink CodeQL config
+# Compiled third-party output (dart2js worker from flutter_webrtc example) kept only
+# for dependency verification. Not our source and never shipped.
+paths-ignore:
+  - scripts/deps-verify/**

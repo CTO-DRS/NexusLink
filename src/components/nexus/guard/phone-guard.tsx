@@ -14,7 +14,6 @@ import {
   Flashlight, BellOff, RotateCcw, Signal, Router, BatteryCharging, AlarmClock, CheckCircle2,
   OctagonAlert, Cpu, Fingerprint,
 } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { getGuardSocket, proxBeacon, devState, devAcked, devSyncRequest } from "@/lib/guard-socket"

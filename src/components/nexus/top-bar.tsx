@@ -8,7 +8,6 @@ import { syncDnd } from "@/hooks/use-comms"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useToast } from "@/hooks/use-toast"
 import { HandoffBell } from "@/components/nexus/handoff-bell"
 import { Sun, Moon, Link2, Smartphone, BellOff, Bell, MessageSquareText, Zap, Languages, Search, ScanSearch } from "lucide-react"
 

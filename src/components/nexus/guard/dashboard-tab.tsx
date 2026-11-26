@@ -8,22 +8,7 @@ import { useNexus, fmtSize } from "@/lib/store"
 import { GuardCard, InfoRow, RatioRing } from "./guard-bits"
 import { cn } from "@/lib/utils"
 
-const DEVICE_COLORS: Record<string, string> = {
-  "galaxy-s24": "hsl(174 62% 38%)",
-  "redmi-note13": "hsl(32 92% 48%)",
-  "pc-office": "hsl(262 60% 55%)",
-  "nexus-tv": "hsl(0 78% 56%)",
-  "ipad-pro": "hsl(210 12% 55%)",
-}
 
-const CATS = [
-  { key: "photos", label: "الصور", color: "#10b981" },
-  { key: "videos", label: "الفيديو", color: "#f43f5e" },
-  { key: "audio", label: "الصوت", color: "#f59e0b" },
-  { key: "apps", label: "التطبيقات", color: "#8b5cf6" },
-  { key: "docs", label: "المستندات", color: "#14b8a6" },
-  { key: "other", label: "أخرى", color: "#64748b" },
-]
 
 export function DashboardTab() {
   const { targetDeviceId, setTargetDevice, metrics, apps, setCheck, tickMetrics } = useGuard()

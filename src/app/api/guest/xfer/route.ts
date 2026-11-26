@@ -15,12 +15,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { DATA_ROOT } from "@/lib/nexus/fs-server"
 import { appendAudit } from "@/lib/enterprise-audit"
-import {
-  isGuestActive, guestTokenEqual, sanitizeGuestName, mimeFromName,
-  guestPageHtml, createRateLimiter, createFailGuard,
-  GUEST_RATE_PER_MIN, GUEST_FAIL_LOCK_AFTER, GUEST_FAIL_LOCK_MS, GUEST_MAX_FILE_BYTES,
-  type GuestState,
-} from "@/lib/nexus/guest-core"
+import { guestTokenEqual, sanitizeGuestName, mimeFromName, guestPageHtml, createRateLimiter, createFailGuard, GUEST_RATE_PER_MIN, GUEST_FAIL_LOCK_AFTER, GUEST_FAIL_LOCK_MS, GUEST_MAX_FILE_BYTES, type GuestState } from "@/lib/nexus/guest-core"
 
 export const dynamic = "force-dynamic"
 

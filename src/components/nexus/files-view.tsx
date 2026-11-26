@@ -11,20 +11,12 @@ import { Progress } from "@/components/ui/progress"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog"
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
-  DropdownMenuTrigger, DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu"
-import {
-  LayoutGrid, List, Search, FolderPlus, ArrowUpDown, ChevronLeft, Home,
-  Copy, Move, Trash2, Pencil, FileArchive, PackageOpen, Send, X, Loader2,
-  ArrowDownToLine, Smartphone, Monitor, HardDrive, FolderOpen, CheckSquare,
-  FileArchive as ZipIcon, Film, ExternalLink,
-} from "lucide-react"
+import { LayoutGrid, List, Search, FolderPlus, ArrowUpDown, ChevronLeft, Home, Copy, Move, Trash2, FileArchive, PackageOpen, X, Loader2, ArrowDownToLine, Smartphone, Monitor, HardDrive, FolderOpen, CheckSquare, FileArchive as ZipIcon, ExternalLink } from "lucide-react"
 import { toast } from "sonner"
 import type { FsEntry } from "@/lib/nexus/types"
 import { pickSendTarget } from "@/lib/nexus/pick-target"

@@ -263,7 +263,6 @@ export async function sealScanSession(id: string, targetFolder?: string) {
   let file = scanPdfFileName(s.title, Date.now())
   const abs = path.join(dirAbs, file)
   fs.writeFileSync(abs, built.pdf, { mode: 0o600 })
-  const sealed: ScanSession = { ...s, status: "sealed", sealedFile: file }
   removeSessionDir(id)
   await appendAudit("scan.seal", true, "local", {
     id: id.slice(0, 24), pages: items.length, bytes: built.pdf.length, filtered, file: file.slice(0, 60),

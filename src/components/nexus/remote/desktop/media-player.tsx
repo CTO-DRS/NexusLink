@@ -1,6 +1,6 @@
 "use client"
 // نافذة مشغل الوسائط — تستجيب لأوامر التشغيل/التخطي/الصوت من الهاتف
-import { Music4, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react"
+import { Music4, Volume2, VolumeX } from "lucide-react"
 import { useDesktop } from "@/lib/remote-store"
 
 function fmt(sec: number) {

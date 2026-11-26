@@ -68,8 +68,6 @@ export function deriveSessionKey(shared: Uint8Array, idA: string, idB: string): 
 // ---------- AES-256-GCM ----------
 export interface SealedFrame { iv: string; ct: string; seq: number }
 
-let gcmKey: CryptoKey | null = null
-
 export async function importSessionKey(raw: Uint8Array): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", raw as unknown as ArrayBuffer, "AES-GCM", false, ["encrypt", "decrypt"])
 }

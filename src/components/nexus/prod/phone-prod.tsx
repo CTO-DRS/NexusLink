@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { getProdSocket } from "@/lib/prod-socket"
-import { useProd, type ProdClipItem, type HandoffItemT } from "@/lib/prod-store"
+import { type ProdClipItem, type HandoffItemT } from "@/lib/prod-store"
 import { cn } from "@/lib/utils"
 
 const SAMPLE = "مقابلة الساعة ٣ عصراً غداً — لا تنسَ تقرير المبيعات"

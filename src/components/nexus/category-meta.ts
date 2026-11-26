@@ -1,8 +1,5 @@
 import type { FsCategory } from "@/lib/nexus/types"
-import {
-  FileImage, FileVideo, FileAudio, FileText, File as FileIco,
-  FileArchive, Package, FileQuestion, Folder,
-} from "lucide-react"
+import { FileImage, FileVideo, FileAudio, FileText, FileArchive, Package, FileQuestion, Folder } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
 export const categoryIcon = (c: FsCategory | "dir"): LucideIcon => {

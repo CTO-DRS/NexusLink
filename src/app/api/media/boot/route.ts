@@ -1,5 +1,5 @@
 // تشغيل جسر الوسائط والكاميرا (idempotent) — يُستدعى من الصفحات عند الإقلاع
-import { ensureMediaBridge, mediaBridgeStatus } from "@/lib/nexus/media-bridge"
+import { ensureMediaBridge } from "@/lib/nexus/media-bridge"
 
 export const dynamic = "force-dynamic"
 

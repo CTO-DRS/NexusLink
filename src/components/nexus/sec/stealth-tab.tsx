@@ -1,7 +1,6 @@
 "use client"
 // تبويب وضع التخفي — نقل ملفات بلا أي أثر: لا سجل، لا تاريخ، صفرنة ذاكرة
 import { useEffect, useState } from "react"
-import { toast } from "sonner"
 import { EyeOff, Ghost, FileQuestion, ScrollText, ShieldCheck, Eraser } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"

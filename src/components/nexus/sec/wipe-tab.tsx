@@ -9,12 +9,12 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { useSec } from "@/lib/sec-store"
 import { getSecSocket } from "@/lib/sec-socket"
-import { fmtSize, fmtDate } from "@/lib/store"
+import { fmtSize } from "@/lib/store"
 
 interface WipableFile { deviceId: string; name: string; vPath: string; size: number; mtime: number }
 
 export function WipeTab() {
-  const { wipeJob, wipeResult, setCheck } = useSec()
+  const { wipeJob, wipeResult } = useSec()
   const [files, setFiles] = useState<WipableFile[]>([])
   const [picked, setPicked] = useState("")
   const [passes, setPasses] = useState(3)

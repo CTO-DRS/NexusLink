@@ -1,5 +1,5 @@
 // تشغيل جسر الأمان (idempotent) + بذر الصلاحيات الافتراضية
-import { ensureSecurityBridge, securityBridgeStatus } from "@/lib/nexus/security-bridge"
+import { ensureSecurityBridge } from "@/lib/nexus/security-bridge"
 import { db } from "@/lib/db"
 import { isDemoMode } from "@/lib/nexus/demo-mode"
 

@@ -5,7 +5,6 @@ import { useComms } from "@/lib/comms-store"
 import { dial } from "./dialer"
 import { CallLogList } from "./call-log-list"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Delete, Phone, Keyboard } from "lucide-react"
 
 const KEYS = [

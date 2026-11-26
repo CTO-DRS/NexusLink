@@ -11,9 +11,7 @@
 //  - cancel: { id } — حذف الجلسة وصفحاتها
 // رفع الصفحات: POST /api/scan/page (multipart حقل file) + ?id=…
 import { NextResponse } from "next/server"
-import {
-  openScanSession, getScanSession, addScanPage, actScanPage, cancelScanSession, sealScanSession, openSessions,
-} from "@/lib/nexus/scan-server"
+import { openScanSession, getScanSession, actScanPage, cancelScanSession, sealScanSession, openSessions } from "@/lib/nexus/scan-server"
 import { guardPcOnly } from "@/lib/nexus/http-guard"
 
 export const dynamic = "force-dynamic"

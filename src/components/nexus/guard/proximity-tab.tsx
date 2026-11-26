@@ -9,7 +9,7 @@ import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { useGuard } from "@/lib/guard-store"
 import { guardSettings, proxManualLock, proxManualUnlock } from "@/lib/guard-socket"
-import { GuardCard, InfoRow, RssiMeter, ProxStateBadge, LogList } from "./guard-bits"
+import { GuardCard, RssiMeter, ProxStateBadge, LogList } from "./guard-bits"
 import { cn } from "@/lib/utils"
 import { useDemoMode } from "@/lib/demo-client"
 
