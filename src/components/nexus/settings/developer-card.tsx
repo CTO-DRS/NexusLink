@@ -3,7 +3,10 @@
 // The card keeps its own dark palette in both themes; links open only on click.
 import { useEffect, useState } from "react"
 import Image from "next/image"
-import { Globe, Check, X as XIcon } from "lucide-react"
+import { createPortal } from "react-dom"
+import QRCode from "qrcode"
+import { toast } from "sonner"
+import { Globe, Check, X as XIcon, Copy, ExternalLink } from "lucide-react"
 import { useI18n } from "@/lib/i18n"
 import { BRAND_PATHS, DEVELOPER } from "@/lib/developer-links"
 import pkg from "../../../../package.json"
@@ -20,6 +23,20 @@ function Glyph({ id }: { id: string }) {
 export function DeveloperCard() {
   const { t } = useI18n()
   const [viewer, setViewer] = useState(false)
+  const [sel, setSel] = useState<(typeof DEVELOPER.links)[number] | null>(null)
+  const [qr, setQr] = useState<{ url: string; data: string } | null>(null)
+  useEffect(() => {
+    if (!sel) return
+    let alive = true
+    // QR is generated on-device; nothing leaves the machine.
+    QRCode.toDataURL(sel.url, { width: 280, margin: 1, errorCorrectionLevel: "M" }).then((u) => alive && setQr({ url: sel.url, data: u })).catch(() => {})
+    const h = (e: KeyboardEvent) => e.key === "Escape" && setSel(null)
+    window.addEventListener("keydown", h)
+    return () => { alive = false; window.removeEventListener("keydown", h) }
+  }, [sel])
+  const copy = async (url: string) => {
+    try { await navigator.clipboard.writeText(url); toast.success(t("نُسخ الرابط")) } catch { /* clipboard blocked */ }
+  }
   useEffect(() => {
     if (!viewer) return
     const h = (e: KeyboardEvent) => e.key === "Escape" && setViewer(false)
@@ -72,11 +89,11 @@ export function DeveloperCard() {
 
           <nav aria-label={t("حسابات المطوّر")} className="mt-5 grid w-full max-w-sm grid-cols-4 gap-x-2 gap-y-4">
             {DEVELOPER.links.map((l) => (
-              <a
+              <button
+                type="button"
                 key={l.id}
-                href={l.url}
-                target="_blank"
-                rel="noopener noreferrer"
+                onClick={() => setSel(l)}
+                aria-haspopup="dialog"
                 data-testid={`dev-link-${l.id}`}
                 className="group flex flex-col items-center gap-1.5 focus-visible:outline-none"
               >
@@ -87,7 +104,7 @@ export function DeveloperCard() {
                   <Glyph id={l.id} />
                 </span>
                 <span className="text-[11px]" style={{ color: "#CBD5E1" }}>{l.id === "github" ? "GitHub" : t(l.label)}</span>
-              </a>
+              </button>
             ))}
           </nav>
 
@@ -95,7 +112,61 @@ export function DeveloperCard() {
         </div>
       </div>
 
-      {viewer && (
+
+      {sel && typeof document !== "undefined" && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={t(sel.label)}
+          data-testid="dev-qr-sheet"
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/55 p-4 backdrop-blur-md sm:items-center"
+          onClick={() => setSel(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-sm overflow-hidden rounded-3xl p-5 text-center text-white"
+            style={{
+              background: "linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.04)), rgba(11,12,36,.82)",
+              backdropFilter: "blur(24px) saturate(140%)",
+              boxShadow: "0 0 0 1px rgba(142,91,208,.40), 0 24px 60px -12px rgba(0,0,0,.6)",
+            }}
+          >
+            <button type="button" aria-label={t("إغلاق")} onClick={() => setSel(null)} className="absolute end-3 top-3 rounded-full bg-white/10 p-1.5 hover:bg-white/20">
+              <XIcon className="h-4 w-4" />
+            </button>
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full" style={{ background: sel.color, boxShadow: "0 0 0 1px rgba(255,255,255,.25)" }}>
+              <Glyph id={sel.id} />
+            </div>
+            <div className="mt-2 text-base font-bold">{sel.id === "github" ? "GitHub" : t(sel.label)}</div>
+            <div className="mx-auto mt-3 flex h-[200px] w-[200px] items-center justify-center rounded-2xl bg-white p-2.5">
+              {qr && qr.url === sel.url ? <img src={qr.data} alt={sel.url} className="h-full w-full" /> : <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />}
+            </div>
+            <p className="mt-3 text-[12px]" style={{ color: "#CBD5E1" }}>{t("امسح الرمز بهاتفك لفتح الحساب")}</p>
+            <div className="mt-1 truncate text-[11px]" style={{ color: "#64748B" }} dir="ltr" data-no-i18n>{sel.url}</div>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <a
+                href={sel.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setSel(null)}
+                className="flex h-11 items-center justify-center gap-2 rounded-2xl text-sm font-semibold text-white"
+                style={{ background: "linear-gradient(135deg,#6366F1,#A855F7)" }}
+              >
+                <ExternalLink className="h-4 w-4" /> {t("فتح")}
+              </a>
+              <button
+                type="button"
+                onClick={() => copy(sel.url)}
+                className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 text-sm font-semibold text-white hover:bg-white/15"
+              >
+                <Copy className="h-4 w-4" /> {t("نسخ الرابط")}
+              </button>
+            </div>
+          </div>
+        </div>
+      , document.body)}
+
+      {viewer && typeof document !== "undefined" && createPortal(
         <div
           role="dialog"
           aria-modal="true"
@@ -108,7 +179,7 @@ export function DeveloperCard() {
           </button>
           <img src={DEVELOPER.photo} alt={DEVELOPER.name} className="max-h-full max-w-full rounded-2xl object-contain shadow-2xl" />
         </div>
-      )}
+      , document.body)}
     </section>
   )
 }
