@@ -3955,5 +3955,12 @@
   "يُرسَل إلى الخدمة ويُحفظ فيها: عدد زيارات الصفحة والنقرات ومصدر الزيارة (اسم الموقع المُحيل فقط) وبلد الزائر التقريبي وساعة الزيارة. لا تُحفظ عناوين IP ولا ملفات تعريف الارتباط.": "Se envía y guarda en el servicio: visitas a la página, clics, origen del tráfico (solo el nombre del sitio de referencia), país aproximado del visitante y hora de la visita. No se guardan direcciones IP ni cookies.", 
   "إن فعّلتَ نموذج جمع البيانات، يُحفظ البريد أو الرقم الذي يرسله الزائر بنفسه على الخدمة، وأنت مسؤول عن إشعار الخصوصية في صفحتك.": "Si activas el formulario de recogida, el correo o número que envíe el visitante se guarda en el servicio, y eres responsable del aviso de privacidad de tu página.", 
   "يمكنك الإيقاف وحذف الصفحة وكل بياناتها في أي وقت. وبقية التطبيق يبقى محليًا بالكامل.": "Puedes desactivarlo y eliminar la página y todos sus datos en cualquier momento. El resto de la app sigue siendo totalmente local.", 
-  "أفهم أن بيانات زيارات الصفحة تُرسَل إلى الخدمة المستضافة": "Entiendo que los datos de visitas de la página se envían al servicio alojado"
+  "أفهم أن بيانات زيارات الصفحة تُرسَل إلى الخدمة المستضافة": "Entiendo que los datos de visitas de la página se envían al servicio alojado", 
+  "إحصاءات آخر 30 يومًا": "Últimos 30 días", 
+  "زيارات": "Visitas", 
+  "نقرات": "Clics", 
+  "المصادر": "Orígenes", 
+  "الدول": "Países", 
+  "ساعة الذروة (UTC)": "Hora pico (UTC)", 
+  "تصدير جهات الاتصال (CSV)": "Exportar contactos (CSV)"
 }

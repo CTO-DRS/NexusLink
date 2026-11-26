@@ -3955,5 +3955,12 @@
   "يُرسَل إلى الخدمة ويُحفظ فيها: عدد زيارات الصفحة والنقرات ومصدر الزيارة (اسم الموقع المُحيل فقط) وبلد الزائر التقريبي وساعة الزيارة. لا تُحفظ عناوين IP ولا ملفات تعريف الارتباط.": "Sent to and stored on the service: page views, clicks, the traffic source (referring site name only), the visitor's approximate country and the hour of the visit. IP addresses and cookies are not stored.", 
   "إن فعّلتَ نموذج جمع البيانات، يُحفظ البريد أو الرقم الذي يرسله الزائر بنفسه على الخدمة، وأنت مسؤول عن إشعار الخصوصية في صفحتك.": "If you turn on the collection form, the email or number a visitor submits is stored on the service, and you are responsible for the privacy notice on your page.", 
   "يمكنك الإيقاف وحذف الصفحة وكل بياناتها في أي وقت. وبقية التطبيق يبقى محليًا بالكامل.": "You can turn it off and delete the page and all its data at any time. The rest of the app stays fully local.", 
-  "أفهم أن بيانات زيارات الصفحة تُرسَل إلى الخدمة المستضافة": "I understand that page-visit data is sent to the hosted service"
+  "أفهم أن بيانات زيارات الصفحة تُرسَل إلى الخدمة المستضافة": "I understand that page-visit data is sent to the hosted service", 
+  "إحصاءات آخر 30 يومًا": "Last 30 days", 
+  "زيارات": "Views", 
+  "نقرات": "Clicks", 
+  "المصادر": "Sources", 
+  "الدول": "Countries", 
+  "ساعة الذروة (UTC)": "Peak hour (UTC)", 
+  "تصدير جهات الاتصال (CSV)": "Export contacts (CSV)"
 }

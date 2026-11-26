@@ -6,7 +6,7 @@ import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
 
-const ENDPOINT = (process.env.NEXUSLINK_CLOUD_ENDPOINT || "").replace(/\/+$/, "")
+const ENDPOINT = (process.env.NEXUSLINK_CLOUD_ENDPOINT || "https://nexuslink-cloud.nexus-link.workers.dev").replace(/\/+$/, "")
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{1,30})[a-z0-9]$/
 
 type Op = "publish" | "delete" | "stats" | "leads"

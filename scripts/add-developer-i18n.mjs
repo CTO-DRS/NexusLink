@@ -78,6 +78,13 @@ const T = [
   ["أفهم أن بيانات زيارات الصفحة تُرسَل إلى الخدمة المستضافة", "I understand that page-visit data is sent to the hosted service", "Je comprends que les données de visite de la page sont envoyées au service hébergé", "Entiendo que los datos de visitas de la página se envían al servicio alojado", "Ich verstehe, dass Besuchsdaten der Seite an den gehosteten Dienst gesendet werden", "Я понимаю, что данные о посещениях страницы отправляются в размещённый сервис"],
   ["إلغاء", "Cancel", "Annuler", "Cancelar", "Abbrechen", "Отмена"],
   ["تفعيل", "Enable", "Activer", "Activar", "Aktivieren", "Включить"],
+  ["إحصاءات آخر 30 يومًا", "Last 30 days", "30 derniers jours", "Últimos 30 días", "Letzte 30 Tage", "Последние 30 дней"],
+  ["زيارات", "Views", "Vues", "Visitas", "Aufrufe", "Просмотры"],
+  ["نقرات", "Clicks", "Clics", "Clics", "Klicks", "Клики"],
+  ["المصادر", "Sources", "Sources", "Orígenes", "Quellen", "Источники"],
+  ["الدول", "Countries", "Pays", "Países", "Länder", "Страны"],
+  ["ساعة الذروة (UTC)", "Peak hour (UTC)", "Heure de pointe (UTC)", "Hora pico (UTC)", "Spitzenstunde (UTC)", "Час пик (UTC)"],
+  ["تصدير جهات الاتصال (CSV)", "Export contacts (CSV)", "Exporter les contacts (CSV)", "Exportar contactos (CSV)", "Kontakte exportieren (CSV)", "Экспорт контактов (CSV)"],
   ["حساب موثّق", "Verified account", "Compte vérifié", "Cuenta verificada", "Verifiziertes Konto", "Подтверждённый аккаунт"],
 ]
 const langs = ["en", "fr", "es", "de", "ru"]

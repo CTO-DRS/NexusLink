@@ -59,3 +59,13 @@ export const cloudStats = (s: CloudState, days = 30) => call("stats", s, { days 
 export async function cloudDeployed(): Promise<boolean> {
   try { return !!(await (await fetch("/api/cloud")).json()).deployed } catch { return false }
 }
+
+export type CloudStats = { days: number; views: number; clicks: number; perLink: { id: string; n: number }[]; sources: { source: string; n: number }[]; countries: { country: string; n: number }[]; hours: { hour: number; n: number }[] }
+export const cloudStatsTyped = (s: CloudState, days = 30) => cloudStats(s, days) as Promise<CloudStats>
+/** Downloads the captured leads as CSV (through the same-origin proxy). */
+export async function cloudLeadsCsv(s: CloudState): Promise<Blob> {
+  if (!s.enabled || !s.acceptedAt) throw new Error("cloud_disabled")
+  const r = await fetch("/api/cloud", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "leads", handle: s.handle, token: s.token }) })
+  if (!r.ok) throw new Error(String(r.status))
+  return r.blob()
+}

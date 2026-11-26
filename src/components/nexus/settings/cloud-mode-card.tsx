@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useI18n } from "@/lib/i18n"
 import { DEVELOPER } from "@/lib/developer-links"
 import { DEVELOPER_BANNERS } from "@/lib/developer-banners"
-import { buildCloudPage, cloudDeployed, cloudDelete, cloudPublish, handleOk, loadCloud, newToken, saveCloud, type CloudState } from "@/lib/cloud-mode"
+import { buildCloudPage, cloudDeployed, cloudDelete, cloudPublish, cloudStatsTyped, cloudLeadsCsv, type CloudStats, handleOk, loadCloud, newToken, saveCloud, type CloudState } from "@/lib/cloud-mode"
 
 async function photoDataUrl(): Promise<string> {
   try {
@@ -32,6 +32,7 @@ export function CloudModeCard() {
   const [ask, setAsk] = useState(false)
   const [agree, setAgree] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [stats, setStats] = useState<CloudStats | null>(null)
   const update = (p: Partial<CloudState>) => setS((cur) => { const n = { ...cur, ...p }; saveCloud(n); return n })
 
   useEffect(() => {
@@ -45,6 +46,22 @@ export function CloudModeCard() {
   const turnOn = () => { setAgree(false); setAsk(true) }
   const confirm = () => { update({ enabled: true, acceptedAt: Date.now(), token: s.token || newToken() }); setAsk(false) }
   const turnOff = () => update({ enabled: false })
+
+  useEffect(() => {
+    if (!s.enabled || !s.publishedUrl) return
+    let alive = true
+    cloudStatsTyped(s, 30).then((d) => alive && setStats(d)).catch(() => {})
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.enabled, s.publishedUrl])
+
+  const exportLeads = async () => {
+    try {
+      const blob = await cloudLeadsCsv(s)
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${s.handle}-leads.csv`; a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+    } catch { toast.error(t("تعذّر الاتصال بالخدمة")) }
+  }
 
   const publish = async () => {
     if (!handleOk(s.handle)) { toast.error(t("معرّف غير صالح (حروف إنجليزية صغيرة وأرقام وشرطة، من 3 إلى 32)")); return }
@@ -117,6 +134,25 @@ export function CloudModeCard() {
               <a href={s.publishedUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-primary underline" dir="ltr">
                 <ExternalLink className="h-3.5 w-3.5" /> {s.publishedUrl}
               </a>
+            )}
+            {stats && s.publishedUrl && (
+              <div className="space-y-3 border-t pt-4" data-testid="cloud-stats">
+                <div className="text-xs font-semibold">{t("إحصاءات آخر 30 يومًا")}</div>
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="rounded-lg bg-muted/50 p-2.5"><div className="text-lg font-bold">{stats.views}</div><div className="text-[11px] text-muted-foreground">{t("زيارات")}</div></div>
+                  <div className="rounded-lg bg-muted/50 p-2.5"><div className="text-lg font-bold">{stats.clicks}</div><div className="text-[11px] text-muted-foreground">{t("نقرات")}</div></div>
+                </div>
+                {([[t("المصادر"), stats.sources.map((x) => [x.source, x.n] as const)], [t("الدول"), stats.countries.map((x) => [x.country, x.n] as const)]] as const).map(([title, rows]) => rows.length > 0 && (
+                  <div key={title}>
+                    <div className="mb-1 text-[11px] text-muted-foreground">{title}</div>
+                    {rows.slice(0, 5).map(([k, n]) => (
+                      <div key={k} className="flex justify-between text-xs" dir="ltr"><span>{k}</span><span className="tabular-nums">{n}</span></div>
+                    ))}
+                  </div>
+                ))}
+                {stats.hours.length > 0 && (() => { const top = [...stats.hours].sort((a, b) => b.n - a.n)[0]; return <div className="text-xs text-muted-foreground">{t("ساعة الذروة (UTC)")}: <span dir="ltr" className="font-semibold text-foreground">{String(top.hour).padStart(2, "0")}:00</span></div> })()}
+                {s.capture && <Button size="sm" variant="outline" onClick={exportLeads}>{t("تصدير جهات الاتصال (CSV)")}</Button>}
+              </div>
             )}
           </div>
         )}
