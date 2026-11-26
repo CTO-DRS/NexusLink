@@ -31,6 +31,16 @@ const KIND: Record<string, { label: string; icon: typeof Link2 }> = {
   link: { label: "رابط", icon: Link2 },
 }
 
+/** مضيف YouTube حرفيًا (لا مطابقة نص جزئية — evil.com/?youtube.com لا تمر). */
+function isYouTube(link: string): boolean {
+  try {
+    const h = new URL(link).hostname.toLowerCase()
+    return h === "youtube.com" || h.endsWith(".youtube.com") || h === "youtu.be"
+  } catch {
+    return false
+  }
+}
+
 export function HandoffTab() {
   const { handoff, setHandoff, patchHandoff, setCheck } = useProd()
   const devices = useNexus((s) => s.devices)
@@ -44,7 +54,7 @@ export function HandoffTab() {
 
   /** أكمل هنا — يفتح الرابط فعلياً على الكمبيوتر ويعلم الهاتف */
   function continueHere(id: string, kind: string, link: string, position: number) {
-    const finalUrl = kind === "video" && position > 0 && link.includes("youtube.com")
+    const finalUrl = kind === "video" && position > 0 && isYouTube(link)
       ? `${link}${link.includes("?") ? "&" : "?"}t=${position}`
       : link
     try {

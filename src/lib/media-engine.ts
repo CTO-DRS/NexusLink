@@ -29,7 +29,7 @@ export class SyntheticCamera {
   private droneX = 0.15
   private droneDir = 1
   private droneDown = false
-  facing: Facing = "back"
+  facing: Facing
   torch = false
 
   constructor(facing: Facing = "back") {
@@ -330,7 +330,6 @@ export function retargetSyntheticFacing(deviceId: string, facing: Facing) {
   const ex = sources.get(`cam:${deviceId}`)
   if (ex?.synthCam) {
     ex.synthCam.facing = facing
-    ex.synthCam.torch = ex.synthCam.torch
   }
 }
 

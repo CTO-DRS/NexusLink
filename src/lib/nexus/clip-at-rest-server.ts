@@ -323,7 +323,7 @@ export async function rotateClipRestKey(): Promise<{ ok: boolean; error?: string
   }
   // مفاتيح جديدة لكل جهاز مرسوخ سلفًا (والجديدة لاحقًا تتولد عند كتابتها)
   const newDev = new Map<string, { key: string; kid: string }>()
-  for (const [dev, e] of oldRing.byDevice) {
+  for (const dev of oldRing.byDevice.keys()) {
     const nk = newLocalKey()
     const settingKey = deviceSettingKey(dev)
     if (!settingKey) continue

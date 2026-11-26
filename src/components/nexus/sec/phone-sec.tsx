@@ -38,7 +38,7 @@ function parseCfgRaw(raw: string): LockCfg {
   try { return { autoLockSec: 60, ...JSON.parse(raw) } } catch { return DEFAULT_CFG }
 }
 function readCfg(): LockCfg {
-  let raw = "{}"
+  let raw: string
   try { raw = localStorage.getItem("nl-sec-lock") || "{}" } catch { raw = "{}" }
   if (!cfgCache || cfgCache.raw !== raw) cfgCache = { raw, val: parseCfgRaw(raw) }
   return cfgCache.val

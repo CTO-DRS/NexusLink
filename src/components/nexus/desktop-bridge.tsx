@@ -72,7 +72,7 @@ export function DesktopBridge() {
     // 2) مزامنة خريطة الاختصارات إلى السيرفر (المخزن نفسه — صفر تكرار حقيقة)
     const putShortcuts = (map: Record<string, string>) => {
       const payload: Record<string, string> = { ...DESKTOP_DEFAULTS }
-      for (const [k, v] of Object.entries(DESKTOP_DEFAULTS)) {
+      for (const k of Object.keys(DESKTOP_DEFAULTS)) {
         if (map[k]) payload[k] = map[k]
       }
       void fetch("/api/desktop/shortcuts", {
