@@ -24,6 +24,10 @@ const T = [
   ["الموقع", "Website", "Site web", "Sitio web", "Webseite", "Сайт"],
   ["صورة المطوّر", "Developer photo", "Photo du développeur", "Foto del desarrollador", "Foto des Entwicklers", "Фото разработчика"],
   ["إغلاق", "Close", "Fermer", "Cerrar", "Schließen", "Закрыть"],
+  ["فتح", "Open", "Ouvrir", "Abrir", "Öffnen", "Открыть"],
+  ["نسخ الرابط", "Copy link", "Copier le lien", "Copiar enlace", "Link kopieren", "Копировать ссылку"],
+  ["نُسخ الرابط", "Link copied", "Lien copié", "Enlace copiado", "Link kopiert", "Ссылка скопирована"],
+  ["امسح الرمز بهاتفك لفتح الحساب", "Scan the code with your phone to open the account", "Scannez le code avec votre téléphone pour ouvrir le compte", "Escanea el código con tu teléfono para abrir la cuenta", "Scanne den Code mit deinem Telefon, um das Konto zu öffnen", "Отсканируйте код телефоном, чтобы открыть аккаунт"],
   ["حساب موثّق", "Verified account", "Compte vérifié", "Cuenta verificada", "Verifiziertes Konto", "Подтверждённый аккаунт"],
 ]
 const langs = ["en", "fr", "es", "de", "ru"]

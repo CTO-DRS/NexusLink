@@ -2,8 +2,10 @@ import 'dart:ui' as ui;
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../state/transfer_providers.dart';
 
@@ -41,6 +43,122 @@ class DeveloperCard extends ConsumerWidget {
     );
   }
 
+  /// ورقة زجاجية: QR مُولَّد على الجهاز + «فتح» و«نسخ الرابط».
+  void _showQr(BuildContext context, WidgetRef ref, (String, IconData, Color, String) l) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
+      isScrollControlled: true,
+      builder: (ctx) => ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Container(
+            padding: EdgeInsets.fromLTRB(20, 14, 20, 20 + MediaQuery.of(ctx).viewPadding.bottom),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xD9181A3E), Color(0xE60B0C24)],
+              ),
+              border: Border.all(color: const Color(0x668E5BD0)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(color: const Color(0x40FFFFFF), borderRadius: BorderRadius.circular(2)),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: 48,
+                  height: 48,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: l.$3,
+                    border: Border.all(color: const Color(0x40FFFFFF)),
+                  ),
+                  child: FaIcon(l.$2, size: 24, color: Colors.white),
+                ),
+                const SizedBox(height: 8),
+                Text(l.$1.tr(),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+                  child: QrImageView(
+                    data: l.$4,
+                    size: 200,
+                    backgroundColor: Colors.white,
+                    eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Colors.black),
+                    dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text('settings.dev_scan'.tr(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1))),
+                const SizedBox(height: 4),
+                Text(l.$4,
+                    textDirection: ui.TextDirection.ltr,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF6D3FC9),
+                          minimumSize: const Size.fromHeight(46),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed: () {
+                          final bridge = ref.read(nativeBridgeProvider);
+                          Navigator.of(ctx).pop();
+                          bridge.openUrl(l.$4);
+                        },
+                        icon: const Icon(Icons.open_in_new, size: 18),
+                        label: Text('settings.dev_open'.tr()),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(46),
+                          side: const BorderSide(color: Color(0x40FFFFFF)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          final msg = 'settings.dev_copied'.tr();
+                          await Clipboard.setData(ClipboardData(text: l.$4));
+                          if (ctx.mounted) Navigator.of(ctx).pop();
+                          messenger.showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
+                        },
+                        icon: const Icon(Icons.copy_rounded, size: 18),
+                        label: Text('settings.dev_copy'.tr()),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
@@ -52,7 +170,7 @@ class DeveloperCard extends ConsumerWidget {
             Expanded(
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
-                onTap: () => ref.read(nativeBridgeProvider).openUrl(l.$4),
+                onTap: () => _showQr(context, ref, l),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Column(
