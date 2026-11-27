@@ -22,6 +22,9 @@ import '../state/transfer_providers.dart';
 class DeveloperCard extends ConsumerWidget {
   const DeveloperCard({super.key});
 
+  /// يُستعمل لبناء صفحة الوضع السحابي من نفس الروابط.
+  static List<(String, IconData, Color, String)> get linkData => _links;
+
   static const _links = <(String, IconData, Color, String)>[
     ('settings.dev_wa', FontAwesomeIcons.whatsapp, Color(0xFF25D366), 'https://wa.me/message/MVTVWPOPFOVFF1'),
     ('settings.dev_tg', FontAwesomeIcons.telegram, Color(0xFF229ED9), 'https://t.me/CTO_DRS'),
