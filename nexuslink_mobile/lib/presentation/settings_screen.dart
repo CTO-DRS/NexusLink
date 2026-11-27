@@ -12,6 +12,7 @@ import '../state/transfer_providers.dart';
 import 'control_screen.dart';
 import 'phone_remote_screen.dart';
 import 'unblock_center_screen.dart';
+import 'cloud_mode_card.dart';
 import 'developer_card.dart';
 import 'language_chips.dart';
 
@@ -272,6 +273,8 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
           ),
+          const SizedBox(height: 14),
+          const CloudModeCard(),
           const SizedBox(height: 14),
           const DeveloperCard(),
         ],
