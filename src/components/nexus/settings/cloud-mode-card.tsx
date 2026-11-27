@@ -2,7 +2,7 @@
 // Cloud Mode: optional hosted link-in-bio page with analytics. OFF by default.
 // Enabling requires accepting an explicit disclosure; while off, no cloud request is ever made.
 import { useEffect, useState } from "react"
-import { Cloud, ShieldAlert, ExternalLink } from "lucide-react"
+import { Cloud, ShieldAlert, ExternalLink, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -47,11 +47,23 @@ export function CloudModeCard() {
   const confirm = () => { update({ enabled: true, acceptedAt: Date.now(), token: s.token || newToken() }); setAsk(false) }
   const turnOff = () => update({ enabled: false })
 
+  const [statsBusy, setStatsBusy] = useState(false)
+  const [statsErr, setStatsErr] = useState(false)
+  const loadStats = (alive: () => boolean = () => true) => {
+    setStatsBusy(true)
+    cloudStatsTyped(s, 30)
+      .then((d) => { if (alive()) { setStats(d); setStatsErr(false) } })
+      .catch(() => { if (alive()) setStatsErr(true) })
+      .finally(() => { if (alive()) setStatsBusy(false) })
+  }
   useEffect(() => {
     if (!s.enabled || !s.publishedUrl) return
-    let alive = true
-    cloudStatsTyped(s, 30).then((d) => alive && setStats(d)).catch(() => {})
-    return () => { alive = false }
+    let live = true
+    const alive = () => live
+    const first = setTimeout(() => loadStats(alive), 0)
+    // Refresh once a minute while the tab is visible; requests only happen with Cloud Mode on and a published page.
+    const id = setInterval(() => { if (document.visibilityState === "visible") loadStats(alive) }, 60000)
+    return () => { live = false; clearTimeout(first); clearInterval(id) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.enabled, s.publishedUrl])
 
@@ -135,9 +147,22 @@ export function CloudModeCard() {
                 <ExternalLink className="h-3.5 w-3.5" /> {s.publishedUrl}
               </a>
             )}
+            {s.publishedUrl && !stats && (
+              <div className="flex items-center justify-between gap-2 border-t pt-4 text-[11px] text-muted-foreground" data-testid="cloud-stats-state">
+                <span>{statsErr ? t("تعذّر تحميل الإحصاءات") : t("جارٍ تحميل الإحصاءات…")}</span>
+                {statsErr && <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => loadStats()} disabled={statsBusy}>{t("تحديث")}</Button>}
+              </div>
+            )}
             {stats && s.publishedUrl && (
               <div className="space-y-3 border-t pt-4" data-testid="cloud-stats">
-                <div className="text-xs font-semibold">{t("إحصاءات آخر 30 يومًا")}</div>
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-semibold">{t("إحصاءات آخر 30 يومًا")}</div>
+                  <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[11px]" onClick={() => loadStats()} disabled={statsBusy} aria-label={t("تحديث")} data-testid="cloud-stats-refresh">
+                    <RefreshCw className={`h-3.5 w-3.5 ${statsBusy ? "animate-spin" : ""}`} /> {t("تحديث")}
+                  </Button>
+                </div>
+                {statsErr && <p className="text-[11px] text-amber-700 dark:text-amber-300">{t("تعذّر تحميل الإحصاءات")}</p>}
+                {stats.views === 0 && stats.clicks === 0 && <p className="rounded-lg bg-muted/40 p-2.5 text-[11px] leading-5 text-muted-foreground">{t("لا زيارات بعد. شارك رابط صفحتك لتظهر الإحصاءات هنا.")}</p>}
                 <div className="grid grid-cols-2 gap-2 text-center">
                   <div className="rounded-lg bg-muted/50 p-2.5"><div className="text-lg font-bold">{stats.views}</div><div className="text-[11px] text-muted-foreground">{t("زيارات")}</div></div>
                   <div className="rounded-lg bg-muted/50 p-2.5"><div className="text-lg font-bold">{stats.clicks}</div><div className="text-[11px] text-muted-foreground">{t("نقرات")}</div></div>

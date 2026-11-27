@@ -3962,5 +3962,8 @@
   "المصادر": "Sources", 
   "الدول": "Pays", 
   "ساعة الذروة (UTC)": "Heure de pointe (UTC)", 
-  "تصدير جهات الاتصال (CSV)": "Exporter les contacts (CSV)"
+  "تصدير جهات الاتصال (CSV)": "Exporter les contacts (CSV)", 
+  "تعذّر تحميل الإحصاءات": "Impossible de charger les statistiques", 
+  "جارٍ تحميل الإحصاءات…": "Chargement des statistiques…", 
+  "لا زيارات بعد. شارك رابط صفحتك لتظهر الإحصاءات هنا.": "Aucune visite pour l'instant. Partagez le lien de votre page pour voir les statistiques ici."
 }
