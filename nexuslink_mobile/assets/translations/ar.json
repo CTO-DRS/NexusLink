@@ -170,7 +170,14 @@
     "cloud_export": "تصدير جهات الاتصال (CSV)",
     "dev_theme_violet": "بنفسجي",
     "dev_theme_ocean": "محيط",
-    "dev_theme_sunset": "غروب"
+    "dev_theme_sunset": "غروب",
+    "cloud_copy_key": "نسخ مفتاح الصفحة",
+    "cloud_use_key": "استخدام مفتاح موجود",
+    "cloud_use_key_hint": "الصق مفتاح الصفحة الذي نسخته من الويب أو من جهاز آخر لتدير نفس الصفحة من هنا. المفتاح سرّي، لا تشاركه مع أحد.",
+    "cloud_use_key_ok": "حفظ",
+    "cloud_key_copied": "نُسخ مفتاح الصفحة",
+    "cloud_key_saved": "حُفظ المفتاح",
+    "cloud_key_bad": "مفتاح غير صالح"
   },
   "perms": {
     "notificationsTitle": "إذن الإشعارات",

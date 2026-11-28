@@ -170,7 +170,14 @@
     "cloud_export": "Export contacts (CSV)",
     "dev_theme_violet": "Violet",
     "dev_theme_ocean": "Ocean",
-    "dev_theme_sunset": "Sunset"
+    "dev_theme_sunset": "Sunset",
+    "cloud_copy_key": "Copy page key",
+    "cloud_use_key": "Use an existing key",
+    "cloud_use_key_hint": "Paste the page key you copied from the web app or another device to manage the same page from here. The key is secret; share it with no one.",
+    "cloud_use_key_ok": "Save",
+    "cloud_key_copied": "Page key copied",
+    "cloud_key_saved": "Key saved",
+    "cloud_key_bad": "Invalid key"
   },
   "perms": {
     "notificationsTitle": "Notification permission",
