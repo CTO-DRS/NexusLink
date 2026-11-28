@@ -60,3 +60,19 @@
 - Every UI string in all 6 languages; screenshots (light + dark where relevant) committed under `docs/screenshots/`.
 - Anything costing money, needing paid accounts/certificates, or changing product direction goes back to the owner first.
 - Tags and releases are never deleted; versions continue on the v0.1.x line.
+
+---
+
+## Progress log
+
+| Date | Item | Status |
+|---|---|---|
+| 2026-11-27 | Roadmap written (#81) | Done |
+| 2026-11-27 | Phase 1.1 Web polish: Cloud stats auto-refresh, refresh button, loading/error/empty states (#82) | Done |
+| 2026-11-28 | Phase 1.2 Android developer card themes (#83) | Done (device QA pending) |
+| 2026-11-28 | Phase 2.4 Worker rate limits (per handle, no IP) + owner JSON export, deployed (#84) | Done |
+| 2026-11-28 | Phase 2.1 Copy/reuse page key across web and Android (#85) | Done (Android device QA pending) |
+| 2026-11-28 | Phase 4.2 Accessibility pass on the developer card (#86) | Done (web); Android TalkBack pass pending |
+
+**Waiting on the owner or hardware:** v0.1.0 release publish go-ahead, custom domain (cost), payment buttons (merchant account), NFC writing (hardware), Google Play listing (paid account), device-QA run on a real phone.
+**Next, not blocked:** landing page refresh, Cloud Mode security review, localization review.
