@@ -90,6 +90,20 @@ footer{margin-top:22px;font-size:11px;color:#64748B}</style></head><body><main>
 ${page.photo ? `<div class="av"><img src="${esc(page.photo)}" alt="${esc(page.name)}"></div>` : ""}<h1>${esc(page.name)}</h1><p class="role">${esc(page.role)}</p>${b0}${lk}${form}<footer>${esc(L.notice)}</footer></main></body></html>`
 }
 
+// Fixed-window counters keyed by handle+action (never by IP, so the no-IP promise holds). Fails open if the table is missing.
+const LIMITS = { lead: [30, 3600], publish: [60, 3600], newpage: [100, 3600] }
+export async function limited(env, key, action) {
+  const [max, win] = LIMITS[action]
+  const w = Math.floor(now() / win)
+  const k = `${action}:${key}`
+  try {
+    await env.DB.prepare("INSERT INTO ratelimit(k,w,n) VALUES(?,?,1) ON CONFLICT(k) DO UPDATE SET n=CASE WHEN w=excluded.w THEN n+1 ELSE 1 END, w=excluded.w").bind(k, w).run()
+    const row = await env.DB.prepare("SELECT n FROM ratelimit WHERE k=?").bind(k).first()
+    return (row?.n ?? 0) > max
+  } catch { return false }
+}
+const tooMany = () => json({ error: "rate_limited" }, 429, { "retry-after": "3600" })
+
 async function authOwner(env, handle, req) {
   const tok = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "")
   if (tok.length < 32) return false
@@ -152,6 +166,8 @@ export default {
           const existing = await env.DB.prepare("SELECT token_hash FROM pages WHERE handle=?").bind(hh).first()
           const th = await sha256Hex(tok)
           if (existing && !safeEqual(existing.token_hash, th)) return json({ error: "forbidden" }, 403)
+          if (await limited(env, hh, "publish")) return tooMany()
+          if (!existing && (await limited(env, "all", "newpage"))) return tooMany()
           const t = now()
           if (existing) await env.DB.prepare("UPDATE pages SET json=?, updated_at=? WHERE handle=?").bind(JSON.stringify(v.page), t, hh).run()
           else await env.DB.prepare("INSERT INTO pages(handle,token_hash,json,created_at,updated_at) VALUES(?,?,?,?,?)").bind(hh, th, JSON.stringify(v.page), t, t).run()
@@ -164,6 +180,11 @@ export default {
           const rows = (await env.DB.prepare("SELECT ts,value FROM leads WHERE handle=? ORDER BY ts DESC").bind(handle).all()).results
           const csv = "\ufeff" + ["time_utc,value", ...rows.map((r) => `${csvCell(new Date(r.ts * 1000).toISOString())},${csvCell(r.value)}`)].join("\r\n") + "\r\n"
           return new Response(csv, { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="${handle}-leads.csv"`, "cache-control": "no-store" } })
+        }
+        if (parts[1] === "export" && m === "GET") {
+          const one = async (sql) => (await env.DB.prepare(sql).bind(handle).all()).results
+          const page = await env.DB.prepare("SELECT json, created_at, updated_at FROM pages WHERE handle=?").bind(handle).first()
+          return json({ handle, exportedAt: now(), page: page ? { ...page, json: JSON.parse(page.json) } : null, events: await one("SELECT ts,kind,link_id,ref_host,country,hour FROM events WHERE handle=? ORDER BY ts"), leads: await one("SELECT ts,value FROM leads WHERE handle=? ORDER BY ts") }, 200, { "content-disposition": `attachment; filename="${handle}-export.json"` })
         }
         if (parts[1] === "pages" && m === "DELETE") {
           for (const tbl of ["events", "leads", "pages"]) await env.DB.prepare(`DELETE FROM ${tbl} WHERE handle=?`).bind(handle).run()
@@ -193,6 +214,7 @@ export default {
         const okEmail = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(v)
         const okPhone = /^\+?[0-9 ()-]{7,20}$/.test(v)
         if (b?.consent !== true || !(okEmail || okPhone)) return json({ error: "invalid" }, 400)
+        if (await limited(env, handle, "lead")) return tooMany()
         await env.DB.prepare("INSERT INTO leads(handle,ts,value) VALUES(?,?,?)").bind(handle, now(), v.slice(0, 120)).run()
         return json({ ok: true })
       }
