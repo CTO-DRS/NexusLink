@@ -13,12 +13,44 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/developer_banners.dart';
 import '../state/transfer_providers.dart';
 
 /// بطاقة «عن المطوّر» — زجاج داكن، حلقة تدرّج حول الصورة، شارة توثيق، شبكة 4×2 بألوان العلامات.
 /// الروابط تُفتح بنقرة المستخدم فقط عبر الجسر الأصلي (openUrl)، بلا أي طلب خلفي.
+/// Card themes (accent presets), same ids and colors as the web card. Stored locally only.
+class DevCardTheme {
+  const DevCardTheme(this.id, this.label, this.ring, this.button, this.swatch);
+  final String id;
+  final String label;
+  final List<Color> ring;
+  final Color button;
+  final Color swatch;
+}
+
+const devCardThemes = <DevCardTheme>[
+  DevCardTheme('violet', 'settings.dev_theme_violet', [Color(0xFF6366F1), Color(0xFF06B6D4), Color(0xFFA855F7)], Color(0xFF6D3FC9), Color(0xFF6D3FC9)),
+  DevCardTheme('ocean', 'settings.dev_theme_ocean', [Color(0xFF0EA5E9), Color(0xFF14B8A6), Color(0xFF6366F1)], Color(0xFF0B7FB8), Color(0xFF0EA5E9)),
+  DevCardTheme('sunset', 'settings.dev_theme_sunset', [Color(0xFFF97316), Color(0xFFEC4899), Color(0xFF8B5CF6)], Color(0xFFC2306F), Color(0xFFEC4899)),
+];
+
+class DevThemeNotifier extends StateNotifier<String> {
+  DevThemeNotifier() : super('violet') {
+    SharedPreferences.getInstance().then((p) {
+      final v = p.getString('nexus.devcard.theme');
+      if (v != null && devCardThemes.any((t) => t.id == v)) state = v;
+    });
+  }
+  Future<void> pick(String id) async {
+    state = id;
+    (await SharedPreferences.getInstance()).setString('nexus.devcard.theme', id);
+  }
+}
+
+final devThemeProvider = StateNotifierProvider<DevThemeNotifier, String>((ref) => DevThemeNotifier());
+
 class DeveloperCard extends ConsumerWidget {
   const DeveloperCard({super.key});
 
@@ -261,6 +293,7 @@ class DeveloperCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
+    final theme = devCardThemes.firstWhere((t) => t.id == ref.watch(devThemeProvider), orElse: () => devCardThemes.first);
     final rows = <Widget>[];
     for (var i = 0; i < _links.length; i += 4) {
       rows.add(Row(
@@ -341,12 +374,12 @@ class DeveloperCard extends ConsumerWidget {
                     children: [
                       Container(
                         padding: const EdgeInsets.all(3),
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [Color(0xFF6366F1), Color(0xFF06B6D4), Color(0xFFA855F7)],
+                            colors: theme.ring,
                           ),
                         ),
                         child: Container(
@@ -391,7 +424,7 @@ class DeveloperCard extends ConsumerWidget {
                   Expanded(
                     child: FilledButton.icon(
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF6D3FC9),
+                        backgroundColor: theme.button,
                         minimumSize: const Size.fromHeight(46),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
@@ -428,7 +461,35 @@ class DeveloperCard extends ConsumerWidget {
                 icon: const Icon(Icons.contact_page_rounded, size: 18),
                 label: Text('settings.dev_save_contact'.tr()),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (final t in devCardThemes)
+                    Semantics(
+                      button: true,
+                      selected: t.id == theme.id,
+                      label: t.label.tr(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: () => ref.read(devThemeProvider.notifier).pick(t.id),
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: t.swatch,
+                              border: Border.all(color: t.id == theme.id ? Colors.white : const Color(0x40FFFFFF), width: t.id == theme.id ? 2.5 : 1),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
               const _UpdateRow(),
             ],
           ),

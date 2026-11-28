@@ -167,7 +167,10 @@
     "cloud_sources": "Источники",
     "cloud_countries": "Страны",
     "cloud_peak": "Час пик (UTC)",
-    "cloud_export": "Экспорт контактов (CSV)"
+    "cloud_export": "Экспорт контактов (CSV)",
+    "dev_theme_violet": "Фиолетовый",
+    "dev_theme_ocean": "Океан",
+    "dev_theme_sunset": "Закат"
   },
   "perms": {
     "notificationsTitle": "Разрешение уведомлений",

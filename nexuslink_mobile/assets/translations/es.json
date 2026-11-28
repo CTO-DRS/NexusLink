@@ -167,7 +167,10 @@
     "cloud_sources": "Orígenes",
     "cloud_countries": "Países",
     "cloud_peak": "Hora pico (UTC)",
-    "cloud_export": "Exportar contactos (CSV)"
+    "cloud_export": "Exportar contactos (CSV)",
+    "dev_theme_violet": "Violeta",
+    "dev_theme_ocean": "Océano",
+    "dev_theme_sunset": "Atardecer"
   },
   "perms": {
     "notificationsTitle": "Permisos de notificación",
