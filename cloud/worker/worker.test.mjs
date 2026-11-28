@@ -128,3 +128,17 @@ test("render without capture has no form or script", () => {
   const html = renderPage("drs", v.page)
   assert.ok(!html.includes("<form") && !html.includes("<script"))
 })
+
+test("rate limits per handle without storing IPs, and owner export", async () => {
+  const { DB } = makeEnv(); const env = { DB }
+  await call(env, "/api/pages", { method: "PUT", headers: auth(TOKEN), body: JSON.stringify({ handle: "rlx", page }) })
+  let last
+  for (let i = 0; i < 31; i++) last = await call(env, "/lead/rlx", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ value: `a${i}@x.com`, consent: true }) })
+  assert.equal(last.status, 429)
+  let r = await call(env, "/api/export?handle=rlx", { headers: auth(OTHER) })
+  assert.equal(r.status, 401)
+  r = await call(env, "/api/export?handle=rlx", { headers: auth(TOKEN) })
+  const j = await r.json()
+  assert.equal(j.leads.length, 30)
+  assert.equal(j.page.json.theme, "ocean")
+})

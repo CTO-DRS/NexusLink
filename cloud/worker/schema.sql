@@ -25,3 +25,8 @@ CREATE TABLE IF NOT EXISTS leads (
   value   TEXT NOT NULL                -- email or phone number the visitor chose to submit
 );
 CREATE INDEX IF NOT EXISTS leads_handle ON leads(handle, ts);
+CREATE TABLE IF NOT EXISTS ratelimit (
+  k  TEXT PRIMARY KEY,                 -- action:handle (never an IP address)
+  w  INTEGER NOT NULL,                 -- window number
+  n  INTEGER NOT NULL
+);
