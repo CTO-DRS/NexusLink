@@ -73,6 +73,7 @@
 | 2026-11-28 | Phase 2.4 Worker rate limits (per handle, no IP) + owner JSON export, deployed (#84) | Done |
 | 2026-11-28 | Phase 2.1 Copy/reuse page key across web and Android (#85) | Done (Android device QA pending) |
 | 2026-11-28 | Phase 4.2 Accessibility pass on the developer card (#86) | Done (web); Android TalkBack pass pending |
+| 2026-11-28 | Phase 4.4 Cloud Mode security review (docs/security-review-cloud-mode.md) | Done, two non-blocking follow-ups |
 
 **Waiting on the owner or hardware:** v0.1.0 release publish go-ahead, custom domain (cost), payment buttons (merchant account), NFC writing (hardware), Google Play listing (paid account), device-QA run on a real phone.
 **Next, not blocked:** landing page refresh, Cloud Mode security review, localization review.
