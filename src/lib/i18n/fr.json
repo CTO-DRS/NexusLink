@@ -3965,5 +3965,12 @@
   "تصدير جهات الاتصال (CSV)": "Exporter les contacts (CSV)", 
   "تعذّر تحميل الإحصاءات": "Impossible de charger les statistiques", 
   "جارٍ تحميل الإحصاءات…": "Chargement des statistiques…", 
-  "لا زيارات بعد. شارك رابط صفحتك لتظهر الإحصاءات هنا.": "Aucune visite pour l'instant. Partagez le lien de votre page pour voir les statistiques ici."
+  "لا زيارات بعد. شارك رابط صفحتك لتظهر الإحصاءات هنا.": "Aucune visite pour l'instant. Partagez le lien de votre page pour voir les statistiques ici.", 
+  "نسخ مفتاح الصفحة": "Copier la clé de la page", 
+  "نُسخ مفتاح الصفحة": "Clé de la page copiée", 
+  "تعذّر النسخ": "Copie impossible", 
+  "استخدام مفتاح موجود": "Utiliser une clé existante", 
+  "الصق مفتاح الصفحة الذي نسخته من تطبيق آخر. المفتاح سرّي، لا تشاركه مع أحد.": "Collez la clé de page copiée depuis une autre application. La clé est secrète, ne la partagez avec personne.", 
+  "مفتاح غير صالح": "Clé invalide", 
+  "حُفظ المفتاح": "Clé enregistrée"
 }

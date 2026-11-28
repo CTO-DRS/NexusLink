@@ -50,6 +50,39 @@ class _CloudModeCardState extends ConsumerState<CloudModeCard> {
     await saveCloud(v);
   }
 
+  Future<void> _copyKey() async {
+    if (_s.token.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: _s.token));
+    _snack('settings.cloud_key_copied');
+  }
+
+  Future<void> _useKey() async {
+    final c = TextEditingController();
+    final v = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('settings.cloud_use_key'.tr()),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('settings.cloud_use_key_hint'.tr(), style: const TextStyle(fontSize: 12)),
+          const SizedBox(height: 10),
+          TextField(controller: c, obscureText: true, autocorrect: false, enableSuggestions: false, textDirection: ui.TextDirection.ltr, decoration: const InputDecoration(border: OutlineInputBorder())),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('settings.cloud_cancel'.tr())),
+          FilledButton(onPressed: () => Navigator.pop(ctx, c.text.trim()), child: Text('settings.cloud_use_key_ok'.tr())),
+        ],
+      ),
+    );
+    c.dispose();
+    if (v == null) return;
+    if (v.length < 32 || v.length > 128 || !RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(v)) {
+      _snack('settings.cloud_key_bad');
+      return;
+    }
+    await _set(_s.copy(token: v));
+    _snack('settings.cloud_key_saved');
+  }
+
   void _snack(String key) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(key.tr())));
@@ -204,6 +237,11 @@ class _CloudModeCardState extends ConsumerState<CloudModeCard> {
             Wrap(spacing: 8, runSpacing: 8, children: [
               FilledButton(onPressed: _busy ? null : _publish, child: Text('settings.cloud_publish'.tr())),
               if (url != null) OutlinedButton(onPressed: _busy ? null : _delete, child: Text('settings.cloud_delete'.tr())),
+            ]),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 4, children: [
+              TextButton.icon(onPressed: _copyKey, icon: const Icon(Icons.vpn_key_outlined, size: 16), label: Text('settings.cloud_copy_key'.tr(), style: const TextStyle(fontSize: 12))),
+              TextButton.icon(onPressed: _useKey, icon: const Icon(Icons.login_rounded, size: 16), label: Text('settings.cloud_use_key'.tr(), style: const TextStyle(fontSize: 12))),
             ]),
             if (url != null) ...[
               const SizedBox(height: 10),

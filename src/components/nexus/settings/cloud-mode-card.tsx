@@ -2,7 +2,7 @@
 // Cloud Mode: optional hosted link-in-bio page with analytics. OFF by default.
 // Enabling requires accepting an explicit disclosure; while off, no cloud request is ever made.
 import { useEffect, useState } from "react"
-import { Cloud, ShieldAlert, ExternalLink, RefreshCw } from "lucide-react"
+import { Cloud, ShieldAlert, ExternalLink, RefreshCw, KeyRound } from "lucide-react"
 import { toast } from "sonner"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -96,6 +96,15 @@ export function CloudModeCard() {
       toast.error(code === "not_deployed" ? t("الخدمة المستضافة لم تُفعَّل بعد") : code === 403 ? t("هذا المعرّف مأخوذ") : t("تعذّر الاتصال بالخدمة"))
     } finally { setBusy(false) }
   }
+  const copyKey = async () => {
+    try { await navigator.clipboard.writeText(s.token); toast.success(t("نُسخ مفتاح الصفحة")) } catch { toast.error(t("تعذّر النسخ")) }
+  }
+  const useKey = () => {
+    const v = (window.prompt(t("الصق مفتاح الصفحة الذي نسخته من تطبيق آخر. المفتاح سرّي، لا تشاركه مع أحد.")) || "").trim()
+    if (!v) return
+    if (v.length < 32 || v.length > 128 || !/^[A-Za-z0-9_-]+$/.test(v)) { toast.error(t("مفتاح غير صالح")); return }
+    update({ token: v }); toast.success(t("حُفظ المفتاح"))
+  }
   const remove = async () => {
     setBusy(true)
     try { await cloudDelete(s); update({ publishedUrl: undefined, publishedAt: undefined }); toast.success(t("حُذفت الصفحة وبياناتها")) }
@@ -141,6 +150,10 @@ export function CloudModeCard() {
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={publish} disabled={busy} data-testid="cloud-publish">{t("نشر الصفحة")}</Button>
               {s.publishedUrl && <Button size="sm" variant="outline" onClick={remove} disabled={busy}>{t("حذف الصفحة وبياناتها")}</Button>}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[11px]" onClick={copyKey} data-testid="cloud-copy-key"><KeyRound className="h-3.5 w-3.5" /> {t("نسخ مفتاح الصفحة")}</Button>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={useKey} data-testid="cloud-use-key">{t("استخدام مفتاح موجود")}</Button>
             </div>
             {s.publishedUrl && (
               <a href={s.publishedUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-primary underline" dir="ltr">

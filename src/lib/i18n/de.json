@@ -3965,5 +3965,12 @@
   "تصدير جهات الاتصال (CSV)": "Kontakte exportieren (CSV)", 
   "تعذّر تحميل الإحصاءات": "Statistiken konnten nicht geladen werden", 
   "جارٍ تحميل الإحصاءات…": "Statistiken werden geladen…", 
-  "لا زيارات بعد. شارك رابط صفحتك لتظهر الإحصاءات هنا.": "Noch keine Besuche. Teile den Link deiner Seite, dann erscheinen hier die Statistiken."
+  "لا زيارات بعد. شارك رابط صفحتك لتظهر الإحصاءات هنا.": "Noch keine Besuche. Teile den Link deiner Seite, dann erscheinen hier die Statistiken.", 
+  "نسخ مفتاح الصفحة": "Seitenschlüssel kopieren", 
+  "نُسخ مفتاح الصفحة": "Seitenschlüssel kopiert", 
+  "تعذّر النسخ": "Kopieren fehlgeschlagen", 
+  "استخدام مفتاح موجود": "Vorhandenen Schlüssel verwenden", 
+  "الصق مفتاح الصفحة الذي نسخته من تطبيق آخر. المفتاح سرّي، لا تشاركه مع أحد.": "Füge den Seitenschlüssel ein, den du aus einer anderen App kopiert hast. Der Schlüssel ist geheim; teile ihn mit niemandem.", 
+  "مفتاح غير صالح": "Ungültiger Schlüssel", 
+  "حُفظ المفتاح": "Schlüssel gespeichert"
 }

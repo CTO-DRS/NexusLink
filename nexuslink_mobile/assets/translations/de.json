@@ -170,7 +170,14 @@
     "cloud_export": "Kontakte exportieren (CSV)",
     "dev_theme_violet": "Violett",
     "dev_theme_ocean": "Ozean",
-    "dev_theme_sunset": "Sonnenuntergang"
+    "dev_theme_sunset": "Sonnenuntergang",
+    "cloud_copy_key": "Seitenschlüssel kopieren",
+    "cloud_use_key": "Vorhandenen Schlüssel verwenden",
+    "cloud_use_key_hint": "Füge den Seitenschlüssel ein, den du aus der Web-App oder von einem anderen Gerät kopiert hast, um dieselbe Seite von hier aus zu verwalten. Der Schlüssel ist geheim; teile ihn mit niemandem.",
+    "cloud_use_key_ok": "Speichern",
+    "cloud_key_copied": "Seitenschlüssel kopiert",
+    "cloud_key_saved": "Schlüssel gespeichert",
+    "cloud_key_bad": "Ungültiger Schlüssel"
   },
   "perms": {
     "notificationsTitle": "Benachrichtigungsberechtigung",
