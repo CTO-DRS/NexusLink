@@ -165,7 +165,9 @@ export function DeveloperCard() {
         {banners.length > 1 && (
           <div className="absolute inset-x-0 bottom-1.5 flex justify-center gap-1.5" dir="ltr">
             {banners.map((b, i) => (
-              <button key={b.id} type="button" aria-label={`${i + 1}`} onClick={() => setBi(i)} className={`h-1.5 rounded-full transition-all ${i === bi ? "w-4 bg-white" : "w-1.5 bg-white/50"}`} />
+              <button key={b.id} type="button" aria-label={`${i + 1}/${banners.length}: ${t(b.title)}`} aria-current={i === bi ? "true" : undefined} onClick={() => setBi(i)} className="flex h-5 items-center px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 rounded-full">
+                <span className={`block h-1.5 rounded-full transition-all ${i === bi ? "w-4 bg-white" : "w-1.5 bg-white/50"}`} />
+              </button>
             ))}
           </div>
         )}
@@ -286,7 +288,7 @@ export function DeveloperCard() {
               boxShadow: "0 0 0 1px rgba(142,91,208,.40), 0 24px 60px -12px rgba(0,0,0,.6)",
             }}
           >
-            <button type="button" aria-label={t("إغلاق")} onClick={() => setSel(null)} className="absolute end-3 top-3 rounded-full bg-white/10 p-1.5 hover:bg-white/20">
+            <button type="button" autoFocus aria-label={t("إغلاق")} onClick={() => setSel(null)} className="absolute end-3 top-3 rounded-full bg-white/10 p-1.5 hover:bg-white/20">
               <XIcon className="h-4 w-4" />
             </button>
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full" style={{ background: sel.color, boxShadow: "0 0 0 1px rgba(255,255,255,.25)" }}>
@@ -344,7 +346,7 @@ export function DeveloperCard() {
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-6 backdrop-blur-sm"
           onClick={() => setViewer(false)}
         >
-          <button type="button" aria-label={t("إغلاق")} className="absolute end-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20" onClick={() => setViewer(false)}>
+          <button type="button" autoFocus aria-label={t("إغلاق")} className="absolute end-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20" onClick={() => setViewer(false)}>
             <XIcon className="h-5 w-5" />
           </button>
           <img src={DEVELOPER.photo} alt={DEVELOPER.name} className="max-h-full max-w-full rounded-2xl object-contain shadow-2xl" />
