@@ -167,7 +167,10 @@
     "cloud_sources": "المصادر",
     "cloud_countries": "الدول",
     "cloud_peak": "ساعة الذروة (UTC)",
-    "cloud_export": "تصدير جهات الاتصال (CSV)"
+    "cloud_export": "تصدير جهات الاتصال (CSV)",
+    "dev_theme_violet": "بنفسجي",
+    "dev_theme_ocean": "محيط",
+    "dev_theme_sunset": "غروب"
   },
   "perms": {
     "notificationsTitle": "إذن الإشعارات",

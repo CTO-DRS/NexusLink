@@ -167,7 +167,10 @@
     "cloud_sources": "Quellen",
     "cloud_countries": "Länder",
     "cloud_peak": "Spitzenstunde (UTC)",
-    "cloud_export": "Kontakte exportieren (CSV)"
+    "cloud_export": "Kontakte exportieren (CSV)",
+    "dev_theme_violet": "Violett",
+    "dev_theme_ocean": "Ozean",
+    "dev_theme_sunset": "Sonnenuntergang"
   },
   "perms": {
     "notificationsTitle": "Benachrichtigungsberechtigung",

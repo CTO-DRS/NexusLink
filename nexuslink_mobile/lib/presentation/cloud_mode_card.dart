@@ -79,7 +79,7 @@ class _CloudModeCardState extends ConsumerState<CloudModeCard> {
       'role': 'settings.cloud_role'.tr(),
       'photo': photo,
       'lang': lang,
-      'theme': 'violet',
+      'theme': ref.read(devThemeProvider),
       'animated': true,
       'capture': {'enabled': _s.capture, 'label': 'settings.cloud_form_label'.tr(), 'consent': 'settings.cloud_form_consent'.tr()},
       'links': [
